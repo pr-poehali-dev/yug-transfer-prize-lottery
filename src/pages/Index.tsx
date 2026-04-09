@@ -1,13 +1,37 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
-import { Section, NAV_ITEMS, TICKER_ITEMS, RAFFLES } from "@/components/raffle-types";
+import { Section, NAV_ITEMS, TICKER_ITEMS } from "@/components/raffle-types";
+
+const STATS_URL = "https://functions.poehali.dev/60522b1d-07ea-44fd-8d82-ca79a4e092c6";
+
+interface SiteStats {
+  participants: number;
+  winners: number;
+  total_prizes: number;
+  active_raffles: number;
+  users: number;
+}
 import { RafflesSection, CabinetSection, HistorySection, ContactsSection } from "@/components/PageSections";
 import { AuthModal } from "@/components/AuthModal";
+
+function formatNum(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".0", "") + " млн";
+  if (n >= 1_000) return (n / 1_000).toFixed(0) + " тыс.";
+  return n.toString();
+}
 
 export default function Index() {
   const [activeSection, setActiveSection] = useState<Section>("raffles");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [stats, setStats] = useState<SiteStats | null>(null);
+
+  useEffect(() => {
+    fetch(STATS_URL)
+      .then(r => r.json())
+      .then(d => { if (d.ok) setStats(d); })
+      .catch(() => {});
+  }, []);
 
   const SECTION_COMPONENTS: Record<Section, JSX.Element> = {
     raffles: <RafflesSection />,
@@ -120,7 +144,7 @@ export default function Index() {
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass neon-border text-xs font-medium text-purple-300 mb-5 animate-fade-in-up">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                {RAFFLES.filter(r => r.status === "active").length} активных розыгрыша прямо сейчас
+                {stats ? stats.active_raffles : "..."} активных розыгрыша прямо сейчас
               </div>
 
               <h1
@@ -157,9 +181,18 @@ export default function Index() {
                 style={{ animationFillMode: "forwards" }}
               >
                 {[
-                  { value: "150 000+", label: "Участников" },
-                  { value: "2 400+", label: "Победителей" },
-                  { value: "850 млн ₽", label: "Призов роздано" },
+                  {
+                    value: stats ? formatNum(stats.participants) : "—",
+                    label: "Участников",
+                  },
+                  {
+                    value: stats ? formatNum(stats.winners) : "—",
+                    label: "Победителей",
+                  },
+                  {
+                    value: stats ? formatNum(stats.total_prizes) + " ₽" : "—",
+                    label: "Призов роздано",
+                  },
                 ].map((s) => (
                   <div key={s.label}>
                     <p className="font-oswald text-2xl font-bold grad-text">{s.value}</p>
