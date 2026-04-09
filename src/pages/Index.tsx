@@ -194,12 +194,18 @@ export default function Index() {
             <span className="font-oswald text-lg font-bold grad-text"> ТРАНСФЕР</span>
           </div>
           <p className="text-xs text-muted-foreground">© 2026 ЮГ ТРАНСФЕР — Все права защищены</p>
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
             {["Правила", "Конфиденциальность", "Поддержка"].map(l => (
               <button key={l} className="text-xs text-muted-foreground hover:text-white transition-colors">
                 {l}
               </button>
             ))}
+            <a
+              href="/admin"
+              className="text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+            >
+              Админ
+            </a>
           </div>
         </div>
       </footer>
