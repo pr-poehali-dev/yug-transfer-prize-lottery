@@ -45,8 +45,8 @@ export default function Index() {
               <span className="text-lg">🎰</span>
             </div>
             <div>
-              <span className="font-oswald text-xl font-bold text-white tracking-wide">УДАЧА</span>
-              <span className="font-oswald text-xl font-bold grad-text tracking-wide">.РФ</span>
+              <span className="font-oswald text-xl font-bold text-white tracking-wide">ЮГ</span>
+              <span className="font-oswald text-xl font-bold grad-text tracking-wide"> ТРАНСФЕР</span>
             </div>
           </div>
 
@@ -190,10 +190,10 @@ export default function Index() {
       <footer className="border-t border-white/5 py-8 mt-12">
         <div className="max-w-7xl mx-auto px-4 md:px-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-oswald text-lg font-bold text-white">УДАЧА</span>
-            <span className="font-oswald text-lg font-bold grad-text">.РФ</span>
+            <span className="font-oswald text-lg font-bold text-white">ЮГ</span>
+            <span className="font-oswald text-lg font-bold grad-text"> ТРАНСФЕР</span>
           </div>
-          <p className="text-xs text-muted-foreground">© 2026 УДАЧА.РФ — Все права защищены</p>
+          <p className="text-xs text-muted-foreground">© 2026 ЮГ ТРАНСФЕР — Все права защищены</p>
           <div className="flex gap-4">
             {["Правила", "Конфиденциальность", "Поддержка"].map(l => (
               <button key={l} className="text-xs text-muted-foreground hover:text-white transition-colors">
