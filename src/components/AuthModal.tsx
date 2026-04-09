@@ -1,7 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 
+const TELEGRAM_BOT_USERNAME = "registersbot";
+const TELEGRAM_AUTH_URL = "https://functions.poehali.dev/4f5fad1d-038c-4bc7-9488-0747551c3978";
+
 type AuthMode = "login" | "register" | "forgot";
+
+interface TelegramUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
+}
+
+declare global {
+  interface Window {
+    onTelegramAuth: (user: TelegramUser) => void;
+  }
+}
 
 function formatPhone(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -21,7 +40,10 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
   const [phone, setPhone] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [tgLoading, setTgLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [user, setUser] = useState<TelegramUser | null>(null);
+  const tgWidgetRef = useRef<HTMLDivElement>(null);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(formatPhone(e.target.value));
@@ -32,6 +54,42 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     setLoading(true);
     setTimeout(() => { setLoading(false); setDone(true); }, 1400);
   };
+
+  // Обработчик данных от Telegram
+  useEffect(() => {
+    window.onTelegramAuth = async (tgUser: TelegramUser) => {
+      setTgLoading(true);
+      try {
+        const res = await fetch(TELEGRAM_AUTH_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...tgUser }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setUser(tgUser);
+          setDone(true);
+        }
+      } finally {
+        setTgLoading(false);
+      }
+    };
+    return () => { delete (window as Window & typeof globalThis).onTelegramAuth; };
+  }, []);
+
+  // Вставляем скрипт Telegram Login Widget
+  useEffect(() => {
+    if (!tgWidgetRef.current) return;
+    tgWidgetRef.current.innerHTML = "";
+    const script = document.createElement("script");
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.setAttribute("data-telegram-login", TELEGRAM_BOT_USERNAME);
+    script.setAttribute("data-size", "large");
+    script.setAttribute("data-onauth", "onTelegramAuth(user)");
+    script.setAttribute("data-request-access", "write");
+    script.async = true;
+    tgWidgetRef.current.appendChild(script);
+  }, []);
 
   return (
     <div
@@ -47,7 +105,6 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 rounded-3xl blur-lg opacity-40" />
 
         <div className="relative glass rounded-3xl overflow-hidden border border-white/10">
-          {/* Top gradient bar */}
           <div className="h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400" />
 
           <div className="p-8">
@@ -63,13 +120,18 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               <div className="text-center py-6">
                 <div className="text-6xl mb-4 animate-float inline-block">🎉</div>
                 <h2 className="font-oswald text-3xl font-bold text-white mb-2">
-                  {mode === "forgot" ? "Письмо отправлено!" : mode === "register" ? "Добро пожаловать!" : "С возвращением!"}
+                  {user ? `Привет, ${user.first_name}!` : mode === "forgot" ? "Код отправлен!" : mode === "register" ? "Добро пожаловать!" : "С возвращением!"}
                 </h2>
                 <p className="text-muted-foreground text-sm mb-6">
-                  {mode === "forgot"
+                  {user
+                    ? "Ты успешно вошёл через Telegram. Удача на твоей стороне!"
+                    : mode === "forgot"
                     ? "Код отправлен на твой номер телефона."
                     : "Теперь ты в игре. Удача на твоей стороне!"}
                 </p>
+                {user?.photo_url && (
+                  <img src={user.photo_url} alt="avatar" className="w-16 h-16 rounded-2xl mx-auto mb-4 border-2 border-purple-500/50" />
+                )}
                 <button onClick={onClose} className="grad-btn rounded-xl px-8 py-3 font-semibold">
                   Вперёд!
                 </button>
@@ -91,9 +153,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                         key={m}
                         onClick={() => setMode(m)}
                         className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
-                          mode === m
-                            ? "grad-btn shadow-lg"
-                            : "text-muted-foreground hover:text-white"
+                          mode === m ? "grad-btn shadow-lg" : "text-muted-foreground hover:text-white"
                         }`}
                       >
                         {m === "login" ? "Войти" : "Регистрация"}
@@ -209,12 +269,12 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                     ) : (
                       <>
                         <Icon name={mode === "forgot" ? "Send" : mode === "register" ? "UserPlus" : "LogIn"} size={16} />
-                        {mode === "forgot" ? "Отправить письмо" : mode === "register" ? "Создать аккаунт" : "Войти"}
+                        {mode === "forgot" ? "Отправить код" : mode === "register" ? "Создать аккаунт" : "Войти"}
                       </>
                     )}
                   </button>
 
-                  {/* Social */}
+                  {/* Telegram */}
                   {mode !== "forgot" && (
                     <div>
                       <div className="flex items-center gap-3 my-4">
@@ -222,15 +282,18 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                         <span className="text-xs text-muted-foreground">или войди через</span>
                         <div className="flex-1 h-px bg-white/10" />
                       </div>
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[#2AABEE]/30 bg-[#2AABEE]/10 hover:bg-[#2AABEE]/20 hover:border-[#2AABEE]/60 text-[#2AABEE] transition-all text-sm font-semibold"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
-                        </svg>
-                        Войти через Telegram
-                      </button>
+
+                      {tgLoading ? (
+                        <div className="w-full flex items-center justify-center gap-2 py-3 text-[#2AABEE] text-sm">
+                          <div className="w-4 h-4 border-2 border-[#2AABEE]/30 border-t-[#2AABEE] rounded-full animate-spin" />
+                          Подключение к Telegram...
+                        </div>
+                      ) : (
+                        <div
+                          ref={tgWidgetRef}
+                          className="flex justify-center [&>iframe]:rounded-xl [&>iframe]:w-full"
+                        />
+                      )}
                     </div>
                   )}
                 </form>
