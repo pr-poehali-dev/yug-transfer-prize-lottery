@@ -49,7 +49,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                 </h2>
                 <p className="text-muted-foreground text-sm mb-6">
                   {mode === "forgot"
-                    ? "Проверь почту — там инструкция по восстановлению."
+                    ? "Код отправлен на твой номер телефона."
                     : "Теперь ты в игре. Удача на твоей стороне!"}
                 </p>
                 <button onClick={onClose} className="grad-btn rounded-xl px-8 py-3 font-semibold">
@@ -94,7 +94,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                       Назад
                     </button>
                     <h2 className="font-oswald text-2xl font-bold text-white mb-1">Забыли пароль?</h2>
-                    <p className="text-muted-foreground text-sm">Введите email — пришлём ссылку для сброса</p>
+                    <p className="text-muted-foreground text-sm">Введите номер телефона — пришлём код для сброса</p>
                   </div>
                 )}
 
@@ -115,13 +115,13 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                   )}
 
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1.5 block font-medium uppercase tracking-wider">Email</label>
+                    <label className="text-xs text-muted-foreground mb-1.5 block font-medium uppercase tracking-wider">Номер телефона</label>
                     <div className="relative">
-                      <Icon name="Mail" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Icon name="Phone" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <input
-                        type="email"
+                        type="tel"
                         required
-                        placeholder="your@email.ru"
+                        placeholder="+7 (___) ___-__-__"
                         className="w-full bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl pl-10 pr-4 py-3 text-white placeholder-muted-foreground text-sm outline-none transition-colors"
                       />
                     </div>
