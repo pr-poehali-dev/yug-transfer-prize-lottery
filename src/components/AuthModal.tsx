@@ -3,11 +3,29 @@ import Icon from "@/components/ui/icon";
 
 type AuthMode = "login" | "register" | "forgot";
 
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (!digits) return "";
+  const d = digits.startsWith("8") ? "7" + digits.slice(1) : digits.startsWith("7") ? digits : "7" + digits;
+  const p = d.slice(1);
+  let result = "+7";
+  if (p.length > 0) result += " (" + p.slice(0, 3);
+  if (p.length >= 3) result += ") " + p.slice(3, 6);
+  if (p.length >= 6) result += "-" + p.slice(6, 8);
+  if (p.length >= 8) result += "-" + p.slice(8, 10);
+  return result;
+}
+
 export function AuthModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<AuthMode>("login");
+  const [phone, setPhone] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhone(formatPhone(e.target.value));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +139,8 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                       <input
                         type="tel"
                         required
+                        value={phone}
+                        onChange={handlePhoneChange}
                         placeholder="+7 (___) ___-__-__"
                         className="w-full bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl pl-10 pr-4 py-3 text-white placeholder-muted-foreground text-sm outline-none transition-colors"
                       />
