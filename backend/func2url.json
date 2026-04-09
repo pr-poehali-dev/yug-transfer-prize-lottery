@@ -1,4 +1,5 @@
 {
+  "raffles": "https://functions.poehali.dev/39a7b356-ef83-46dd-81a0-581903229de9",
   "admin-auth": "https://functions.poehali.dev/cc8cbc36-edde-42f3-9196-fbfc8a6e8946",
   "telegram-auth": "https://functions.poehali.dev/4f5fad1d-038c-4bc7-9488-0747551c3978"
 }

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
-import { RAFFLES, Raffle, RaffleStatus } from "@/components/raffle-types";
+import { Raffle, RaffleStatus } from "@/components/raffle-types";
+
+const RAFFLES_URL = "https://functions.poehali.dev/39a7b356-ef83-46dd-81a0-581903229de9";
 
 // ─── StatusBadge ────────────────────────────────────────────────────────────
 
@@ -122,6 +124,28 @@ export function RafflesSection() {
   const [statusFilter, setStatusFilter] = useState<RaffleStatus>("all");
   const [sortBy, setSortBy] = useState<"date" | "prize" | "amount" | "participants">("date");
   const [minAmount, setMinAmount] = useState(0);
+  const [rawRaffles, setRawRaffles] = useState<Raffle[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+
+  useEffect(() => {
+    fetch(RAFFLES_URL)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          setRawRaffles(data.raffles.map((r: {
+            id: number; title: string; prize: string; prize_icon: string;
+            end_date: string; participants: number; min_amount: number;
+            status: "active" | "ended" | "upcoming"; gradient: string; winner?: string;
+          }) => ({
+            id: r.id, title: r.title, prize: r.prize,
+            prizeIcon: r.prize_icon, endDate: r.end_date,
+            participants: r.participants, minAmount: r.min_amount,
+            status: r.status, gradient: r.gradient, winner: r.winner,
+          })));
+        }
+      })
+      .finally(() => setLoadingList(false));
+  }, []);
 
   const statusOptions: { value: RaffleStatus; label: string }[] = [
     { value: "all", label: "Все" },
@@ -130,7 +154,7 @@ export function RafflesSection() {
     { value: "ended", label: "Завершённые" },
   ];
 
-  const filtered = RAFFLES
+  const filtered = rawRaffles
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
     .filter((r) => r.minAmount >= minAmount)
     .sort((a, b) => {
@@ -208,17 +232,23 @@ export function RafflesSection() {
         Найдено: <span className="text-white font-medium">{filtered.length}</span> розыгрышей
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {filtered.map((r, i) => (
-          <RaffleCard key={r.id} raffle={r} idx={i} />
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-3 text-center py-16 text-muted-foreground">
-            <Icon name="SearchX" size={48} className="mx-auto mb-3 opacity-30" />
-            <p>Розыгрыши не найдены</p>
-          </div>
-        )}
-      </div>
+      {loadingList ? (
+        <div className="flex justify-center py-20">
+          <div className="w-10 h-10 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filtered.map((r, i) => (
+            <RaffleCard key={r.id} raffle={r} idx={i} />
+          ))}
+          {filtered.length === 0 && (
+            <div className="col-span-3 text-center py-16 text-muted-foreground">
+              <Icon name="SearchX" size={48} className="mx-auto mb-3 opacity-30" />
+              <p>Розыгрыши не найдены</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
