@@ -71,11 +71,44 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
           setUser(tgUser);
           setDone(true);
           // Загружаем полный профиль из кабинета
-          const profileRes = await fetch(CABINET_URL, {
-            headers: { 'X-User-Id': String(data.user.id) },
-          });
-          const profile = await profileRes.json();
-          if (profile.ok && onLogin) onLogin(profile.user as AppUser);
+          try {
+            const profileRes = await fetch(CABINET_URL, {
+              headers: { 'X-User-Id': String(data.user.id) },
+            });
+            const profile = await profileRes.json();
+            if (profile.ok && onLogin) {
+              onLogin(profile.user as AppUser);
+            } else if (onLogin) {
+              // Fallback — используем минимальные данные
+              onLogin({
+                id: data.user.id,
+                telegram_id: data.user.telegram_id,
+                first_name: data.user.first_name || tgUser.first_name,
+                last_name: data.user.last_name,
+                username: data.user.username,
+                photo_url: data.user.photo_url || tgUser.photo_url,
+                balance: 0,
+                total_entries: 0,
+                total_spent: 0,
+                wins: 0,
+              });
+            }
+          } catch {
+            if (onLogin) {
+              onLogin({
+                id: data.user.id,
+                telegram_id: data.user.telegram_id,
+                first_name: data.user.first_name || tgUser.first_name,
+                last_name: data.user.last_name,
+                username: data.user.username,
+                photo_url: data.user.photo_url || tgUser.photo_url,
+                balance: 0,
+                total_entries: 0,
+                total_spent: 0,
+                wins: 0,
+              });
+            }
+          }
         }
       } finally {
         setTgLoading(false);
@@ -125,7 +158,7 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
                 {user?.photo_url && (
                   <img src={user.photo_url} alt="avatar" className="w-16 h-16 rounded-2xl mx-auto mb-4 border-2 border-purple-500/50" />
                 )}
-                <button onClick={onClose} className="grad-btn rounded-xl px-8 py-3 font-semibold">
+                <button onClick={() => { onClose(); }} className="grad-btn rounded-xl px-8 py-3 font-semibold">
                   Вперёд!
                 </button>
               </div>
