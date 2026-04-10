@@ -13,6 +13,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<RaffleDB | undefined>();
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [finishing, setFinishing] = useState<number | null>(null);
 
   // Stats
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -130,6 +131,21 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
       return idx >= 0 ? prev.map(x => x.id === r.id ? r : x) : [r, ...prev];
     });
     setFormOpen(false); setEditTarget(undefined);
+  };
+
+  const handleFinish = async (r: RaffleDB) => {
+    const winner = prompt(`Завершить розыгрыш "${r.title}"?\n\nВведи имя победителя (или оставь пустым):`);
+    if (winner === null) return;
+    setFinishing(r.id);
+    try {
+      const res = await fetch(RAFFLES_URL, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ ...r, id: r.id, status: "ended", winner: winner || "" }),
+      });
+      const data = await res.json();
+      if (data.ok) setRaffles(prev => prev.map(x => x.id === r.id ? data.raffle : x));
+    } finally { setFinishing(null); }
   };
 
   const handleDelete = async (id: number) => {
@@ -437,6 +453,15 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
                         <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${statusCls[r.status]}`}>
                           {statusLabel[r.status]}
                         </span>
+                        {r.status === "active" && (
+                          <button onClick={() => handleFinish(r)} disabled={finishing === r.id}
+                            className="h-8 px-2.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 flex items-center gap-1.5 text-orange-400 transition-colors disabled:opacity-40 text-xs font-medium">
+                            {finishing === r.id
+                              ? <div className="w-3 h-3 border border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                              : <Icon name="FlagTriangleRight" size={13} />}
+                            Завершить
+                          </button>
+                        )}
                         <button onClick={() => { setEditTarget(r); setFormOpen(true); }}
                           className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
                           <Icon name="Pencil" size={14} />
