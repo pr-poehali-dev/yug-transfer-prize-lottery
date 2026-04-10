@@ -64,7 +64,7 @@ def notify_channel_new_raffle(raffle: dict):
         f"<a href=\"https://ug-gift.ru\">👉 ug-gift.ru</a>"
     )
 
-    photo_url = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/4a95e66e-ab14-42ee-b8d9-ea9a9369d5f4.jpg"
+    photo_url = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/4be15897-c9ea-4e8c-a28f-3d9f2a91fdd7.png"
 
     payload = json.dumps({
         'chat_id': channel_id,
