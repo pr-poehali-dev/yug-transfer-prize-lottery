@@ -1,12 +1,14 @@
 """
 CRUD для розыгрышей. GET — список, POST — создать, PUT — обновить, DELETE — удалить.
 Изменение данных требует заголовок X-Admin-Token.
+При создании нового розыгрыша отправляет сообщение в Telegram-канал.
 При завершении розыгрыша с победителем рассылает push-уведомления всем подписчикам.
 """
 import os
 import json
 import hashlib
 import threading
+import urllib.request
 import psycopg2
 from pywebpush import webpush, WebPushException
 
@@ -42,6 +44,38 @@ def row_to_dict(row):
         'gradient': row[8],
         'winner': row[9],
     }
+
+
+def notify_channel_new_raffle(raffle: dict):
+    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    channel_id = os.environ.get('TELEGRAM_CHANNEL_ID', '')
+    if not bot_token or not channel_id:
+        return
+
+    end_date = raffle.get('end_date', '')[:10] if raffle.get('end_date') else '—'
+    text = (
+        f"🎰 <b>Новый розыгрыш!</b>\n\n"
+        f"🏆 <b>{raffle['title']}</b>\n"
+        f"🎁 Приз: <b>{raffle['prize']}</b>\n"
+        f"💰 Минимальный взнос: <b>{raffle['min_amount']} ₽</b>\n"
+        f"📅 До: <b>{end_date}</b>\n\n"
+        f"👉 Участвуй на <a href=\"https://ug-gift.ru\">ug-gift.ru</a>"
+    )
+
+    payload = json.dumps({
+        'chat_id': channel_id,
+        'text': text,
+        'parse_mode': 'HTML',
+        'disable_web_page_preview': False,
+    }).encode()
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except Exception:
+        pass
 
 
 def send_winner_push(raffle_title: str, prize: str, winner: str):
@@ -125,7 +159,14 @@ def handler(event: dict, context) -> dict:
         conn.commit()
         cur.close()
         conn.close()
-        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'raffle': row_to_dict(row)})}
+
+        raffle = row_to_dict(row)
+
+        # Уведомление в Telegram-канал о новом розыгрыше
+        t = threading.Thread(target=notify_channel_new_raffle, args=(raffle,), daemon=True)
+        t.start()
+
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'raffle': raffle})}
 
     if method == 'PUT':
         rid = body.get('id')
