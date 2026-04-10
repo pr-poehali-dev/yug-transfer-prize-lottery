@@ -26,10 +26,15 @@ declare global {
 }
 
 function TelegramLoginWidget({ onAuth }: { onAuth: (user: TelegramUser) => void }) {
-  const ref = useEffect(() => {
+  useEffect(() => {
+    window.onTelegramAuth = onAuth;
+  }, [onAuth]);
+
+  useEffect(() => {
     window.onTelegramAuth = onAuth;
     const container = document.getElementById('tg-login-widget-container');
-    if (!container || container.querySelector('script')) return;
+    if (!container) return;
+    container.innerHTML = '';
     const script = document.createElement('script');
     script.src = 'https://telegram.org/js/telegram-widget.js?22';
     script.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME);
@@ -38,9 +43,10 @@ function TelegramLoginWidget({ onAuth }: { onAuth: (user: TelegramUser) => void 
     script.setAttribute('data-request-access', 'write');
     script.async = true;
     container.appendChild(script);
-  }, [onAuth]);
-  void ref;
-  return <div id="tg-login-widget-container" />;
+    return () => { container.innerHTML = ''; };
+  }, []);
+
+  return <div id="tg-login-widget-container" className="flex justify-center" />;
 }
 
 function formatPhone(value: string): string {
