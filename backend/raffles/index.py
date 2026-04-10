@@ -7,8 +7,10 @@ CRUD для розыгрышей. GET — список, POST — создать,
 import os
 import json
 import hashlib
+import base64
 import urllib.request
 import psycopg2
+import boto3
 from pywebpush import webpush, WebPushException
 
 CORS = {
@@ -22,6 +24,19 @@ SCHEMA = 't_p67171637_yug_transfer_prize_l'
 
 def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
+
+
+def upload_raffle_photo(data_url: str, raffle_id: int) -> str:
+    header, encoded = data_url.split(',', 1)
+    ext = 'jpg' if 'jpeg' in header else 'png'
+    data = base64.b64decode(encoded)
+    s3 = boto3.client('s3',
+        endpoint_url='https://bucket.poehali.dev',
+        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+    key = f'raffles/raffle_{raffle_id}.{ext}'
+    s3.put_object(Bucket='files', Key=key, Body=data, ContentType=f'image/{ext}')
+    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
 def get_token():
@@ -42,6 +57,7 @@ def row_to_dict(row):
         'status': row[7],
         'gradient': row[8],
         'winner': row[9],
+        'photo_url': row[10] if len(row) > 10 else None,
     }
 
 
@@ -63,7 +79,8 @@ def notify_channel_new_raffle(raffle: dict):
         f"<a href=\"https://ug-gift.ru\">👉 ug-gift.ru</a>"
     )
 
-    photo_url = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/4be15897-c9ea-4e8c-a28f-3d9f2a91fdd7.png"
+    # Используем фото розыгрыша или дефолтное
+    photo_url = raffle.get('photo_url') or "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/4be15897-c9ea-4e8c-a28f-3d9f2a91fdd7.png"
 
     payload = json.dumps({
         'chat_id': channel_id,
@@ -144,7 +161,7 @@ def handler(event: dict, context) -> dict:
     if method == 'GET':
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute(f"SELECT id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner FROM {SCHEMA}.raffles ORDER BY created_at DESC")
+        cur.execute(f"SELECT id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner, photo_url FROM {SCHEMA}.raffles ORDER BY created_at DESC")
         rows = cur.fetchall()
         cur.close()
         conn.close()
@@ -167,18 +184,32 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""INSERT INTO {SCHEMA}.raffles (title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner""",
+                RETURNING id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner, photo_url""",
             (body['title'], body['prize'], body.get('prize_icon', 'Gift'),
              body['end_date'], body.get('participants', 0), body['min_amount'],
              body.get('status', 'active'), body.get('gradient', 'from-purple-600 via-pink-500 to-orange-400'),
              body.get('winner'))
         )
         row = cur.fetchone()
+        raffle_id = row[0]
+
+        # Загружаем фото если есть
+        photo_url = None
+        photo_data = body.get('photo_data', '')
+        if photo_data and photo_data.startswith('data:'):
+            try:
+                photo_url = upload_raffle_photo(photo_data, raffle_id)
+                cur.execute(f"UPDATE {SCHEMA}.raffles SET photo_url = %s WHERE id = %s", (photo_url, raffle_id))
+            except Exception as e:
+                print(f"Photo upload error: {e}")
+
         conn.commit()
         cur.close()
         conn.close()
 
         raffle = row_to_dict(row)
+        if photo_url:
+            raffle['photo_url'] = photo_url
 
         # Уведомление в Telegram-канал о новом розыгрыше (синхронно)
         notify_channel_new_raffle(raffle)

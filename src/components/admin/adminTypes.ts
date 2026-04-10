@@ -34,6 +34,7 @@ export interface RaffleDB {
   status: "active" | "ended" | "upcoming";
   gradient: string;
   winner?: string;
+  photo_url?: string;
 }
 
 export type AdminTab = "dashboard" | "raffles" | "clients" | "notify";

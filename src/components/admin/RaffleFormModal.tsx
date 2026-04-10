@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { RAFFLES_URL, GRADIENTS, ICONS, EMPTY_FORM, RaffleDB } from "./adminTypes";
 
@@ -10,17 +10,34 @@ export function RaffleFormModal({ initial, token, onSave, onClose }: {
     title: initial.title, prize: initial.prize, prize_icon: initial.prize_icon,
     end_date: initial.end_date, participants: initial.participants, min_amount: initial.min_amount,
     status: initial.status, gradient: initial.gradient, winner: initial.winner || "",
-  } : { ...EMPTY_FORM });
+    photo_url: initial.photo_url || "",
+  } : { ...EMPTY_FORM, photo_url: "" });
+  const [photoPreview, setPhotoPreview] = useState<string>(initial?.photo_url || "");
+  const [photoData, setPhotoData] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const set = (k: string, v: string | number) => setForm(f => ({ ...f, [k]: v }));
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const data = ev.target?.result as string;
+      setPhotoPreview(data);
+      setPhotoData(data);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError("");
     try {
       const method = initial ? "PUT" : "POST";
       const body = initial ? { ...form, id: initial.id } : form;
+      if (photoData) (body as Record<string, string>).photo_data = photoData;
       const res = await fetch(RAFFLES_URL, {
         method, headers: { "Content-Type": "application/json", "X-Admin-Token": token },
         body: JSON.stringify(body),
@@ -49,6 +66,42 @@ export function RaffleFormModal({ initial, token, onSave, onClose }: {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
+
+              {/* Фото розыгрыша */}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Фото розыгрыша</label>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-24 h-24 rounded-xl border-2 border-dashed border-white/20 flex items-center justify-center cursor-pointer hover:border-purple-500/60 transition-colors overflow-hidden shrink-0"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {photoPreview ? (
+                      <img src={photoPreview} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="text-center">
+                        <Icon name="ImagePlus" size={24} className="text-muted-foreground mx-auto mb-1" />
+                        <p className="text-xs text-muted-foreground">Загрузить</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-white mb-1">Фото для карточки и поста в канал</p>
+                    <p className="text-xs text-muted-foreground mb-2">JPG или PNG, до 5 МБ</p>
+                    <button type="button" onClick={() => fileRef.current?.click()}
+                      className="text-xs px-3 py-1.5 rounded-xl border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors">
+                      {photoPreview ? "Изменить фото" : "Выбрать фото"}
+                    </button>
+                    {photoPreview && (
+                      <button type="button" onClick={() => { setPhotoPreview(""); setPhotoData(""); set("photo_url", ""); }}
+                        className="ml-2 text-xs px-3 py-1.5 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors">
+                        Удалить
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              </div>
+
               <div>
                 <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Название</label>
                 <input required value={form.title} onChange={e => set("title", e.target.value)} placeholder="Например: Розыгрыш iPhone" className={inputCls} />
