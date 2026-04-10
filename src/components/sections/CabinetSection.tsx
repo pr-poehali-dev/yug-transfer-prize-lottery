@@ -40,8 +40,9 @@ function formatDate(iso: string) {
 
 function Avatar({ user, size = 80 }: { user: AppUser; size?: number }) {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
-  if (user.photo_url) {
-    return <img src={user.photo_url} alt={fullName} className="rounded-2xl object-cover border-2 border-purple-500/40" style={{ width: size, height: size }} />;
+  const [imgError, setImgError] = useState(false);
+  if (user.photo_url && !imgError) {
+    return <img src={user.photo_url} alt={fullName} onError={() => setImgError(true)} className="rounded-2xl object-cover border-2 border-purple-500/40" style={{ width: size, height: size }} />;
   }
   return (
     <div className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-white"
@@ -74,28 +75,35 @@ function TgLinkWidget({ userId, onLinked }: { userId: number; onLinked: (tgId: n
       finally { setLoading(false); }
     };
 
-    const container = document.getElementById('tg-link-widget');
-    if (!container || container.querySelector('script')) return;
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.setAttribute('data-telegram-login', 'UG_GIFTBOT');
-    script.setAttribute('data-size', 'small');
-    script.setAttribute('data-onauth', 'onTgLink(user)');
-    script.setAttribute('data-request-access', 'write');
-    script.setAttribute('data-lang', 'ru');
-    script.async = true;
-    container.appendChild(script);
-    return () => { delete (window as Window & typeof globalThis).onTgLink; };
+    const handleMsg = (e: MessageEvent) => {
+      if (!String(e.origin).includes('telegram.org')) return;
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (data?.id) window.onTgLink(data as TgUser);
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => {
+      window.removeEventListener('message', handleMsg);
+      delete (window as Window & typeof globalThis).onTgLink;
+    };
   }, [userId]);
 
-  if (loading) return (
-    <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 text-[#2AABEE]">
-      <div className="w-3 h-3 border border-[#2AABEE]/30 border-t-[#2AABEE] rounded-full animate-spin" />
-      Привязка...
-    </div>
-  );
+  const handleClick = () => {
+    const origin = encodeURIComponent(window.location.origin);
+    window.open(`https://oauth.telegram.org/auth?bot_id=8567041422&origin=${origin}&request_access=write&lang=ru`, 'tg_link', 'width=550,height=470,scrollbars=no');
+  };
 
-  return <div id="tg-link-widget" className="scale-90 origin-right" />;
+  return (
+    <button onClick={handleClick} disabled={loading}
+      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-[#2AABEE]/30 text-[#2AABEE] bg-[#2AABEE]/10 hover:bg-[#2AABEE]/20 transition-all disabled:opacity-50">
+      {loading
+        ? <div className="w-3 h-3 border border-[#2AABEE]/30 border-t-[#2AABEE] rounded-full animate-spin" />
+        : <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/></svg>
+      }
+      Привязать Telegram
+    </button>
+  );
 }
 
 function EditProfileModal({ user, onClose, onSave }: { user: AppUser; onClose: () => void; onSave: (u: AppUser) => void }) {
