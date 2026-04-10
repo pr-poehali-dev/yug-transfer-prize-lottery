@@ -58,6 +58,15 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
 
   // Обработчик данных от Telegram
   useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.origin !== 'https://oauth.telegram.org') return;
+      try {
+        const tgUser = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (tgUser && tgUser.id) window.onTelegramAuth(tgUser);
+      } catch (_) { /* ignore */ }
+    };
+    window.addEventListener('message', handleMessage);
+
     window.onTelegramAuth = async (tgUser: TelegramUser) => {
       setTgLoading(true);
       try {
@@ -114,7 +123,10 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
         setTgLoading(false);
       }
     };
-    return () => { delete (window as Window & typeof globalThis).onTelegramAuth; };
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      delete (window as Window & typeof globalThis).onTelegramAuth;
+    };
   }, []);
 
   return (
