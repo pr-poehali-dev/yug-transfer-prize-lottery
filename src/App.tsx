@@ -10,6 +10,10 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>

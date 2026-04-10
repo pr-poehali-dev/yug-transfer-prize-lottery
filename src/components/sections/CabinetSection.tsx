@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import type { AppUser } from "@/pages/Index";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const CABINET_URL = "https://functions.poehali.dev/0ad2d0a9-bb39-4116-9934-9460e7841500";
 const PAYMENT_URL = "https://functions.poehali.dev/81f8c74e-7d9c-47ff-8dfc-8f0e3dd7a155";
@@ -85,6 +86,7 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [showDeposit, setShowDeposit] = useState(false);
   const [tab, setTab] = useState<"active" | "all">("active");
+  const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, isSupported: pushSupported } = usePushNotifications(user?.id);
 
   useEffect(() => {
     if (!user) return;
@@ -184,6 +186,31 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
           </div>
         ))}
       </div>
+
+      {/* Push-уведомления */}
+      {pushSupported && pushStatus !== "unsupported" && (
+        <div className="glass rounded-2xl p-4 mb-6 flex items-center gap-4">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${pushStatus === "subscribed" ? "bg-emerald-500/20" : "bg-purple-500/20"}`}>
+            <Icon name={pushStatus === "subscribed" ? "BellRing" : "Bell"} size={18} className={pushStatus === "subscribed" ? "text-emerald-400" : "text-purple-400"} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-medium">
+              {pushStatus === "subscribed" ? "Уведомления включены" : pushStatus === "denied" ? "Уведомления заблокированы" : "Уведомления о розыгрышах"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {pushStatus === "subscribed" ? "Вы получите уведомление о новых акциях и результатах" : pushStatus === "denied" ? "Разрешите уведомления в настройках браузера" : "Включите, чтобы не пропустить новые розыгрыши"}
+            </p>
+          </div>
+          {pushStatus !== "denied" && (
+            <button
+              disabled={pushStatus === "loading"}
+              onClick={pushStatus === "subscribed" ? pushUnsubscribe : pushSubscribe}
+              className={`shrink-0 px-3 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 ${pushStatus === "subscribed" ? "border border-white/10 text-muted-foreground hover:text-white hover:border-white/30" : "grad-btn"}`}>
+              {pushStatus === "loading" ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : pushStatus === "subscribed" ? "Выкл." : "Включить"}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Участия */}
       <div className="card-glow rounded-2xl p-5 mb-4">

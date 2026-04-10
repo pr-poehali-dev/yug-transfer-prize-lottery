@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { RaffleFormModal } from "./RaffleFormModal";
 import {
-  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL,
+  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL, PUSH_URL,
   AdminTab, AdminStats, Client, Notification, RaffleDB,
 } from "./adminTypes";
 
@@ -34,6 +34,9 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   const [notifyResult, setNotifyResult] = useState<{ sent: number; total: number } | null>(null);
   const [notifyHistory, setNotifyHistory] = useState<Notification[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [sendPush, setSendPush] = useState(true);
+  const [pushCount, setPushCount] = useState<number | null>(null);
+  const [pushResult, setPushResult] = useState<{ sent: number; total: number } | null>(null);
 
   const fetchRaffles = async () => {
     setLoadingRaffles(true);
@@ -78,17 +81,36 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     } finally { setLoadingHistory(false); }
   };
 
+  const fetchPushCount = async () => {
+    try {
+      const res = await fetch(PUSH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ action: "count" }),
+      });
+      const data = await res.json();
+      if (data.ok) setPushCount(data.count);
+    } catch { /**/ }
+  };
+
   const handleSendNotify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!notifyTitle.trim() || !notifyMsg.trim()) return;
-    setSendingNotify(true); setNotifyResult(null);
+    setSendingNotify(true); setNotifyResult(null); setPushResult(null);
     try {
-      const res = await fetch(ADMIN_NOTIFY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ title: notifyTitle, message: notifyMsg, type: notifyType }),
-      });
-      const data = await res.json();
+      const [tgRes] = await Promise.all([
+        fetch(ADMIN_NOTIFY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+          body: JSON.stringify({ title: notifyTitle, message: notifyMsg, type: notifyType }),
+        }),
+        sendPush ? fetch(PUSH_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+          body: JSON.stringify({ action: "send", title: notifyTitle, message: notifyMsg, url: "/" }),
+        }).then(r => r.json()).then(d => { if (d.ok) setPushResult({ sent: d.sent, total: d.total }); }) : Promise.resolve(),
+      ]);
+      const data = await tgRes.json();
       if (data.ok) {
         setNotifyResult({ sent: data.sent, total: data.total });
         setNotifyTitle(""); setNotifyMsg("");
@@ -100,7 +122,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   useEffect(() => { fetchRaffles(); }, []);
   useEffect(() => { if (tab === "dashboard") fetchStats(); }, [tab]);
   useEffect(() => { if (tab === "clients") fetchClients(1, clientsSearch); }, [tab]);
-  useEffect(() => { if (tab === "notify") fetchNotifyHistory(); }, [tab]);
+  useEffect(() => { if (tab === "notify") { fetchNotifyHistory(); fetchPushCount(); } }, [tab]);
 
   const handleSave = (r: RaffleDB) => {
     setRaffles(prev => {
@@ -328,9 +350,22 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
                       <textarea required value={notifyMsg} onChange={e => setNotifyMsg(e.target.value)} rows={4} placeholder="Текст который получат все клиенты в Telegram..."
                         className="w-full bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-white placeholder-muted-foreground text-sm outline-none resize-none" />
                     </div>
+                    <label className="flex items-center gap-3 cursor-pointer select-none">
+                      <div className={`w-10 h-6 rounded-full transition-colors relative ${sendPush ? "bg-purple-500" : "bg-white/10"}`}
+                        onClick={() => setSendPush(v => !v)}>
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${sendPush ? "translate-x-5" : "translate-x-1"}`} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-white">Browser Push</p>
+                        <p className="text-xs text-muted-foreground">
+                          {pushCount !== null ? `${pushCount} подписчиков в браузере` : "Загрузка..."}
+                        </p>
+                      </div>
+                    </label>
                     {notifyResult && (
                       <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 text-emerald-400 text-sm flex items-center gap-2">
-                        <Icon name="CheckCircle" size={16} />Отправлено {notifyResult.sent} из {notifyResult.total} клиентов
+                        <Icon name="CheckCircle" size={16} />Telegram: {notifyResult.sent} из {notifyResult.total}
+                        {pushResult && <span className="ml-2 text-purple-300">· Browser Push: {pushResult.sent}</span>}
                       </div>
                     )}
                     <button type="submit" disabled={sendingNotify}
