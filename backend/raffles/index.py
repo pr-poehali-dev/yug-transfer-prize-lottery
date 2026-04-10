@@ -64,14 +64,16 @@ def notify_channel_new_raffle(raffle: dict):
         f"<a href=\"https://ug-gift.ru\">👉 ug-gift.ru</a>"
     )
 
+    photo_url = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/4a95e66e-ab14-42ee-b8d9-ea9a9369d5f4.jpg"
+
     payload = json.dumps({
         'chat_id': channel_id,
-        'text': text,
+        'photo': photo_url,
+        'caption': text,
         'parse_mode': 'HTML',
-        'disable_web_page_preview': False,
     }).encode()
 
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
     req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
     try:
         with urllib.request.urlopen(req, timeout=10):
