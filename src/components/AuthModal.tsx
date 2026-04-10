@@ -25,6 +25,24 @@ declare global {
   }
 }
 
+function TelegramLoginWidget({ onAuth }: { onAuth: (user: TelegramUser) => void }) {
+  const ref = useEffect(() => {
+    window.onTelegramAuth = onAuth;
+    const container = document.getElementById('tg-login-widget-container');
+    if (!container || container.querySelector('script')) return;
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME);
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    script.setAttribute('data-request-access', 'write');
+    script.async = true;
+    container.appendChild(script);
+  }, [onAuth]);
+  void ref;
+  return <div id="tg-login-widget-container" />;
+}
+
 function formatPhone(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (!digits) return "";
@@ -111,22 +129,6 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
         setTgLoading(false);
       }
   };
-
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      if (!e.origin.includes('telegram.org')) return;
-      try {
-        const tgUser = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (tgUser && tgUser.id) handleTgAuth(tgUser);
-      } catch (_) { /* ignore */ }
-    };
-    window.addEventListener('message', handleMessage);
-    window.onTelegramAuth = handleTgAuth;
-    return () => {
-      window.removeEventListener('message', handleMessage);
-      delete (window as Window & typeof globalThis).onTelegramAuth;
-    };
-  }, [onLogin]);
 
   return (
     <div
@@ -326,23 +328,9 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
                           Подключение к Telegram...
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const origin = window.location.origin;
-                            const url = `https://oauth.telegram.org/auth?bot_id=8567041422&origin=${encodeURIComponent(origin)}&request_access=write`;
-                            const popup = window.open(url, "telegram_oauth", "width=550,height=470,scrollbars=no,resizable=no,toolbar=no,location=no");
-                            const timer = setInterval(() => {
-                              if (popup?.closed) clearInterval(timer);
-                            }, 500);
-                          }}
-                          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[#2AABEE]/30 bg-[#2AABEE]/10 hover:bg-[#2AABEE]/20 hover:border-[#2AABEE]/60 text-[#2AABEE] transition-all text-sm font-semibold"
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
-                          </svg>
-                          Войти через Telegram
-                        </button>
+                        <div className="flex justify-center">
+                          <TelegramLoginWidget onAuth={handleTgAuth} />
+                        </div>
                       )}
                     </div>
                   )}
