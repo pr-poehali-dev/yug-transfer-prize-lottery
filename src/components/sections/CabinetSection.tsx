@@ -51,7 +51,52 @@ function Avatar({ user, size = 80 }: { user: AppUser; size?: number }) {
   );
 }
 
-const TG_BOT_ID = 8567041422;
+const AUTH_LINK_URL = "https://functions.poehali.dev/3668a161-208c-46c4-8691-84fa9d9586b0";
+
+interface TgUser { id: number; first_name: string; username?: string; hash: string; auth_date: number; }
+declare global { interface Window { onTgLink: (u: TgUser) => void; } }
+
+function TgLinkWidget({ userId, onLinked }: { userId: number; onLinked: (tgId: number, username?: string) => void }) {
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    window.onTgLink = async (tgUser: TgUser) => {
+      setLoading(true);
+      try {
+        const res = await fetch(AUTH_LINK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'link_telegram', user_id: String(userId), telegram_id: String(tgUser.id), username: tgUser.username || '', hash: tgUser.hash }),
+        });
+        const data = await res.json();
+        if (data.ok) onLinked(tgUser.id, tgUser.username);
+      } catch { /* ignore */ }
+      finally { setLoading(false); }
+    };
+
+    const container = document.getElementById('tg-link-widget');
+    if (!container || container.querySelector('script')) return;
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.setAttribute('data-telegram-login', 'UG_GIFTBOT');
+    script.setAttribute('data-size', 'small');
+    script.setAttribute('data-onauth', 'onTgLink(user)');
+    script.setAttribute('data-request-access', 'write');
+    script.setAttribute('data-lang', 'ru');
+    script.async = true;
+    container.appendChild(script);
+    return () => { delete (window as Window & typeof globalThis).onTgLink; };
+  }, [userId]);
+
+  if (loading) return (
+    <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 text-[#2AABEE]">
+      <div className="w-3 h-3 border border-[#2AABEE]/30 border-t-[#2AABEE] rounded-full animate-spin" />
+      Привязка...
+    </div>
+  );
+
+  return <div id="tg-link-widget" className="scale-90 origin-right" />;
+}
 
 function EditProfileModal({ user, onClose, onSave }: { user: AppUser; onClose: () => void; onSave: (u: AppUser) => void }) {
   const [name, setName] = useState(user.first_name || '');
@@ -291,17 +336,9 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
                 Telegram привязан ✓
               </div>
             ) : (
-              <button
-                onClick={() => {
-                  localStorage.setItem('tg_link_user_id', String(user.id));
-                  const origin = encodeURIComponent(window.location.origin);
-                  window.location.href = `https://oauth.telegram.org/auth?bot_id=8567041422&origin=${origin}&request_access=write&lang=ru`;
-                }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-[#2AABEE]/30 text-[#2AABEE] bg-[#2AABEE]/10 hover:bg-[#2AABEE]/20 transition-all"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/></svg>
-                Привязать Telegram
-              </button>
+              <TgLinkWidget userId={user.id} onLinked={(tgId, username) => {
+                onUserUpdate({ ...user, telegram_id: tgId, username: username || user.username });
+              }} />
             )}
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-1.5">
               <Icon name="Clock" size={13} />

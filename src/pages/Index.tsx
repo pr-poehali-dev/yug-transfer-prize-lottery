@@ -52,9 +52,19 @@ export default function Index() {
 
   // Обработка возврата после Telegram OAuth redirect
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.replace('#', '?'));
     const urlParams = new URLSearchParams(window.location.search);
-    const allParams = new URLSearchParams([...urlParams, ...params]);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+    // Telegram может вернуть данные в tgAuthResult (base64)
+    const tgAuthResult = urlParams.get('tgAuthResult') || hashParams.get('tgAuthResult');
+    let allParams = new URLSearchParams([...urlParams, ...hashParams]);
+    if (tgAuthResult) {
+      try {
+        const decoded = JSON.parse(atob(tgAuthResult));
+        allParams = new URLSearchParams(Object.entries(decoded).map(([k, v]) => [k, String(v)]));
+      } catch { /* ignore */ }
+    }
+
     const tgId = allParams.get('id');
     const hash = allParams.get('hash');
     if (tgId && hash) {
