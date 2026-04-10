@@ -113,6 +113,47 @@ def notify_channel_new_raffle(raffle: dict):
             print(f"[TG sendMessage] ERROR: {e2}")
 
 
+def notify_channel_winner(raffle: dict):
+    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    channel_id = os.environ.get('TELEGRAM_CHANNEL_ID', '@UG_DRIVER')
+    if not bot_token or not channel_id:
+        return
+
+    winner = raffle.get('winner', '—')
+    text = (
+        f"🏆 <b>Розыгрыш завершён!</b>\n\n"
+        f"🎰 <b>{raffle['title']}</b>\n"
+        f"🎁 Приз: <b>{raffle['prize']}</b>\n\n"
+        f"🥇 Победитель: <b>{winner}</b>\n\n"
+        f"🔥 Следи за новыми розыгрышами:\n"
+        f"<a href=\"https://ug-gift.ru\">👉 ug-gift.ru</a>"
+    )
+
+    photo_url = raffle.get('photo_url') or "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/4be15897-c9ea-4e8c-a28f-3d9f2a91fdd7.png"
+
+    payload = json.dumps({
+        'chat_id': channel_id,
+        'photo': photo_url,
+        'caption': text,
+        'parse_mode': 'HTML',
+    }).encode()
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"[TG winner] OK: {resp.read().decode()[:200]}")
+    except Exception as e:
+        print(f"[TG winner] ERROR: {e}")
+        try:
+            msg_payload = json.dumps({'chat_id': channel_id, 'text': text, 'parse_mode': 'HTML'}).encode()
+            msg_req = urllib.request.Request(f"https://api.telegram.org/bot{bot_token}/sendMessage", data=msg_payload, headers={'Content-Type': 'application/json'}, method='POST')
+            with urllib.request.urlopen(msg_req, timeout=10):
+                pass
+        except Exception as e2:
+            print(f"[TG winner msg] ERROR: {e2}")
+
+
 def send_winner_push(raffle_title: str, prize: str, winner: str):
     vapid_private = os.environ.get('VAPID_PRIVATE_KEY', '')
     vapid_public = os.environ.get('VAPID_PUBLIC_KEY', '')
@@ -245,16 +286,14 @@ def handler(event: dict, context) -> dict:
 
         raffle = row_to_dict(row)
 
-        # Push только если розыгрыш только что завершён и добавлен победитель
+        # Если розыгрыш только что завершён и добавлен победитель
         new_status = raffle.get('status')
         new_winner = raffle.get('winner')
         if new_status == 'ended' and new_winner and (prev_status != 'ended' or prev_winner != new_winner):
-            t = threading.Thread(
-                target=send_winner_push,
-                args=(raffle['title'], raffle['prize'], new_winner),
-                daemon=True,
-            )
-            t.start()
+            # Отправляем в канал
+            notify_channel_winner(raffle)
+            # Push-уведомления
+            send_winner_push(raffle['title'], raffle['prize'], new_winner)
 
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'raffle': raffle})}
 
