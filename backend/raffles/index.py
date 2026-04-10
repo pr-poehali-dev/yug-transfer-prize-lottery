@@ -59,7 +59,9 @@ def notify_channel_new_raffle(raffle: dict):
         f"🎁 Приз: <b>{raffle['prize']}</b>\n"
         f"💰 Минимальный взнос: <b>{raffle['min_amount']} ₽</b>\n"
         f"📅 До: <b>{end_date}</b>\n\n"
-        f"👉 Участвуй на <a href=\"https://ug-gift.ru\">ug-gift.ru</a>"
+        f"🔥 Залетай и испытай удачу — может именно ты заберёшь приз!\n\n"
+        f"👇 Участвовать прямо сейчас:\n"
+        f"<a href=\"https://ug-gift.ru\">👉 ug-gift.ru</a>"
     )
 
     payload = json.dumps({
