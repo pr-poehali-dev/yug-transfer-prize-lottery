@@ -75,10 +75,25 @@ def notify_channel_new_raffle(raffle: dict):
     url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
     req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
     try:
-        with urllib.request.urlopen(req, timeout=10):
-            pass
-    except Exception:
-        pass
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = resp.read().decode()
+            print(f"[TG sendPhoto] OK: {result[:200]}")
+    except Exception as e:
+        print(f"[TG sendPhoto] ERROR: {e}")
+        # Fallback — пробуем sendMessage без фото
+        try:
+            msg_payload = json.dumps({
+                'chat_id': channel_id,
+                'text': text,
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': False,
+            }).encode()
+            msg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            msg_req = urllib.request.Request(msg_url, data=msg_payload, headers={'Content-Type': 'application/json'}, method='POST')
+            with urllib.request.urlopen(msg_req, timeout=10) as resp2:
+                print(f"[TG sendMessage] OK: {resp2.read().decode()[:200]}")
+        except Exception as e2:
+            print(f"[TG sendMessage] ERROR: {e2}")
 
 
 def send_winner_push(raffle_title: str, prize: str, winner: str):
