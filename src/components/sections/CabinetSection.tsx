@@ -344,14 +344,23 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
               <Icon name="Clock" size={13} />
               Пополнение скоро
             </div>
-            {pushSupported && (
+            {pushSupported && pushStatus !== "denied" && (
               <button
                 onClick={pushStatus === "subscribed" ? pushUnsubscribe : pushSubscribe}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-all ${pushStatus === "subscribed" ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" : "border-white/10 text-muted-foreground glass hover:text-white"}`}
+                disabled={pushStatus === "loading"}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-all disabled:opacity-50 ${pushStatus === "subscribed" ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" : "border-white/10 text-muted-foreground glass hover:text-white"}`}
               >
-                <Icon name={pushStatus === "subscribed" ? "Bell" : "BellOff"} size={13} />
-                {pushStatus === "subscribed" ? "Уведомления вкл" : "Включить уведомления"}
+                {pushStatus === "loading"
+                  ? <><div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />Подключение...</>
+                  : <><Icon name={pushStatus === "subscribed" ? "Bell" : "BellOff"} size={13} />{pushStatus === "subscribed" ? "Уведомления вкл" : "Включить уведомления"}</>
+                }
               </button>
+            )}
+            {pushStatus === "denied" && (
+              <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-red-500/20 text-red-400/70 bg-red-500/5">
+                <Icon name="BellOff" size={13} />
+                Уведомления заблокированы
+              </div>
             )}
           </div>
         </div>
