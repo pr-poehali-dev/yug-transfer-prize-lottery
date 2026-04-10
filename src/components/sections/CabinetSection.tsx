@@ -4,14 +4,12 @@ import type { AppUser } from "@/pages/Index";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const CABINET_URL = "https://functions.poehali.dev/0ad2d0a9-bb39-4116-9934-9460e7841500";
-const PAYMENT_URL = "https://functions.poehali.dev/81f8c74e-7d9c-47ff-8dfc-8f0e3dd7a155";
 
 interface Entry {
   id: number;
   raffle_title: string;
   raffle_prize: string;
   raffle_icon: string;
-  raffle_gradient: string;
   raffle_status: string;
   winner: string | null;
   tickets: number;
@@ -19,59 +17,13 @@ interface Entry {
   created_at: string;
 }
 
-interface DepositModalProps {
-  userId: number;
-  onClose: () => void;
-  onSuccess: (amount: number) => void;
-}
-
-function DepositModal({ onClose }: DepositModalProps) {
-  const PRESETS = [100, 500, 1000, 3000, 5000];
-  const [amount, setAmount] = useState(500);
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative w-full max-w-sm">
-        <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 rounded-3xl blur-lg opacity-40" />
-        <div className="relative glass rounded-3xl p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="font-oswald text-xl font-bold text-white">Пополнить баланс</h3>
-            <button onClick={onClose} className="w-8 h-8 rounded-full glass flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
-              <Icon name="X" size={16} />
-            </button>
-          </div>
-
-          <p className="text-sm text-muted-foreground mb-4">Выбери сумму или введи свою:</p>
-
-          <div className="flex flex-wrap gap-2 mb-4">
-            {PRESETS.map(p => (
-              <button key={p} onClick={() => setAmount(p)}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${amount === p ? "grad-btn" : "glass text-white hover:bg-white/10"}`}>
-                {p.toLocaleString("ru")} ₽
-              </button>
-            ))}
-          </div>
-
-          <div className="relative mb-4">
-            <input
-              type="number" min={100} step={50}
-              value={amount}
-              onChange={e => setAmount(Number(e.target.value))}
-              className="w-full glass rounded-xl px-4 py-3 text-white text-right text-lg font-bold pr-10 outline-none focus:ring-1 focus:ring-purple-500"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₽</span>
-          </div>
-
-          <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-4 text-center">
-            <div className="text-2xl mb-2">🔧</div>
-            <p className="text-yellow-300 font-semibold text-sm mb-1">Оплата скоро будет доступна</p>
-            <p className="text-muted-foreground text-xs">Подключаем ЮKassa — совсем скоро сможешь пополнять баланс онлайн</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+interface Transaction {
+  id: number;
+  type: string;
+  amount: number;
+  description: string;
+  status: string;
+  created_at: string;
 }
 
 interface CabinetSectionProps {
@@ -81,24 +33,42 @@ interface CabinetSectionProps {
   onUserUpdate: (user: AppUser) => void;
 }
 
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function Avatar({ user, size = 80 }: { user: AppUser; size?: number }) {
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
+  if (user.photo_url) {
+    return <img src={user.photo_url} alt={fullName} className="rounded-2xl object-cover border-2 border-purple-500/40" style={{ width: size, height: size }} />;
+  }
+  return (
+    <div className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-white"
+      style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {user.first_name[0]?.toUpperCase() || "?"}
+    </div>
+  );
+}
+
 export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: CabinetSectionProps) {
+  const [tab, setTab] = useState<"entries" | "transactions" | "wins">("entries");
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [loadingEntries, setLoadingEntries] = useState(false);
-  const [showDeposit, setShowDeposit] = useState(false);
-  const [tab, setTab] = useState<"active" | "all">("active");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(false);
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, isSupported: pushSupported } = usePushNotifications(user?.id);
 
   useEffect(() => {
     if (!user) return;
-    setLoadingEntries(true);
-    fetch(`${CABINET_URL}?entries`, { headers: { "X-User-Id": String(user.id) } })
-      .then(r => r.json())
-      .then(d => { if (d.ok) setEntries(d.entries); })
-      .catch(() => {})
-      .finally(() => setLoadingEntries(false));
+    setLoading(true);
+    Promise.all([
+      fetch(`${CABINET_URL}?entries`, { headers: { "X-User-Id": String(user.id) } }).then(r => r.json()),
+      fetch(`${CABINET_URL}?transactions`, { headers: { "X-User-Id": String(user.id) } }).then(r => r.json()),
+    ]).then(([e, t]) => {
+      if (e.ok) setEntries(e.entries || []);
+      if (t.ok) setTransactions(t.transactions || []);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [user?.id]);
 
-  // Обновляем профиль при возврате со страницы оплаты
   useEffect(() => {
     if (!user) return;
     const params = new URLSearchParams(window.location.search);
@@ -112,10 +82,10 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
 
   if (!user) {
     return (
-      <div className="max-w-3xl mx-auto text-center py-20">
-        <div className="text-6xl mb-6 animate-float inline-block">🔐</div>
-        <h2 className="font-oswald text-3xl font-bold text-white mb-3">Войди в кабинет</h2>
-        <p className="text-muted-foreground mb-8">Чтобы видеть свой баланс и участия — войди через Telegram</p>
+      <div className="max-w-3xl mx-auto text-center py-24">
+        <div className="text-7xl mb-6 animate-float inline-block">🔐</div>
+        <h2 className="font-oswald text-3xl font-bold text-white mb-3">Личный кабинет</h2>
+        <p className="text-muted-foreground mb-8 text-base">Войди через Telegram — это быстро и безопасно</p>
         <button onClick={onLogin} className="grad-btn rounded-2xl px-10 py-4 font-bold text-base flex items-center gap-2 mx-auto">
           <Icon name="LogIn" size={20} />
           Войти через Telegram
@@ -125,168 +95,189 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
   }
 
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
+  const wins = entries.filter(e => e.raffle_status === "ended" && e.winner);
+  const myWins = wins.filter(e => e.winner === user.username || e.winner === fullName);
   const activeEntries = entries.filter(e => e.raffle_status === "active");
-  const shownEntries = tab === "active" ? activeEntries : entries;
+
+  const TABS = [
+    { key: "entries", label: "Участия", icon: "Ticket", count: entries.length },
+    { key: "transactions", label: "Транзакции", icon: "CreditCard", count: transactions.length },
+    { key: "wins", label: "Выигрыши", icon: "Trophy", count: myWins.length },
+  ] as const;
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto space-y-5">
+
       {/* Профиль */}
-      <div className="glass rounded-3xl p-6 mb-6 relative overflow-hidden">
+      <div className="glass rounded-3xl p-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-cyan-500/10 pointer-events-none" />
-        <div className="flex items-center gap-5 relative">
+        <div className="flex items-center gap-4 relative">
           <div className="relative shrink-0">
-            {user.photo_url ? (
-              <img src={user.photo_url} alt={fullName} className="w-20 h-20 rounded-2xl object-cover border-2 border-purple-500/40" />
-            ) : (
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl animate-float">
-                {user.first_name[0]?.toUpperCase() || "?"}
-              </div>
-            )}
+            <Avatar user={user} size={76} />
             <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-400 rounded-full border-2 border-background" />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="font-oswald text-2xl font-bold text-white truncate">{fullName}</h2>
-            {user.username && <p className="text-muted-foreground text-sm mb-2">@{user.username}</p>}
-            <span className="text-xs px-3 py-1 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30 font-medium">
+            {user.username && <p className="text-muted-foreground text-sm">@{user.username}</p>}
+            <span className="inline-block mt-1.5 text-xs px-3 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-medium">
               Участник
             </span>
           </div>
-          <div className="ml-auto text-right hidden md:block shrink-0">
-            <p className="text-muted-foreground text-xs mb-1">Баланс</p>
-            <p className="font-oswald text-3xl font-bold grad-text">{user.balance.toLocaleString("ru")} ₽</p>
-          </div>
+          <button onClick={onLogout} className="shrink-0 p-2.5 rounded-xl glass text-muted-foreground hover:text-red-400 transition-colors" title="Выйти">
+            <Icon name="LogOut" size={18} />
+          </button>
         </div>
-        {/* Баланс на мобиле */}
-        <div className="md:hidden mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
+
+        {/* Баланс + пополнение */}
+        <div className="mt-5 pt-5 border-t border-white/10 flex items-center justify-between">
           <div>
             <p className="text-muted-foreground text-xs mb-0.5">Баланс</p>
-            <p className="font-oswald text-2xl font-bold grad-text">{user.balance.toLocaleString("ru")} ₽</p>
+            <p className="font-oswald text-3xl font-bold grad-text">{user.balance.toLocaleString("ru")} ₽</p>
           </div>
-          <button onClick={() => setShowDeposit(true)} className="grad-btn rounded-xl px-4 py-2 text-sm font-semibold flex items-center gap-1.5">
-            <Icon name="Plus" size={16} /> Пополнить
-          </button>
+          <div className="flex flex-col gap-2 items-end">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-1.5">
+              <Icon name="Clock" size={13} />
+              Пополнение скоро
+            </div>
+            {pushSupported && (
+              <button
+                onClick={pushStatus === "subscribed" ? pushUnsubscribe : pushSubscribe}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-all ${pushStatus === "subscribed" ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" : "border-white/10 text-muted-foreground glass hover:text-white"}`}
+              >
+                <Icon name={pushStatus === "subscribed" ? "Bell" : "BellOff"} size={13} />
+                {pushStatus === "subscribed" ? "Уведомления вкл" : "Включить уведомления"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Статистика */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Участий", value: user.total_entries, icon: "Ticket", color: "from-purple-500 to-pink-500" },
-          { label: "Побед", value: user.wins, icon: "Trophy", color: "from-yellow-500 to-orange-500" },
-          { label: "Потрачено", value: `${user.total_spent.toLocaleString("ru")} ₽`, icon: "CreditCard", color: "from-cyan-500 to-blue-500" },
-          { label: "Баланс", value: `${user.balance.toLocaleString("ru")} ₽`, icon: "Wallet", color: "from-green-500 to-emerald-500" },
+          { label: "Участий", value: user.total_entries, icon: "Ticket", from: "from-purple-500", to: "to-pink-500" },
+          { label: "Выигрышей", value: myWins.length, icon: "Trophy", from: "from-yellow-500", to: "to-orange-500" },
+          { label: "Потрачено", value: `${user.total_spent.toLocaleString("ru")} ₽`, icon: "CreditCard", from: "from-cyan-500", to: "to-blue-500" },
+          { label: "Активных", value: activeEntries.length, icon: "Zap", from: "from-green-500", to: "to-emerald-500" },
         ].map((s, i) => (
-          <div key={s.label} className="card-glow rounded-2xl p-4 text-center opacity-0-init animate-fade-in-up"
-            style={{ animationDelay: `${i * 0.1}s`, animationFillMode: "forwards" }}>
-            <div className={`w-10 h-10 mx-auto mb-3 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center`}>
-              <Icon name={s.icon} size={18} className="text-white" fallback="Star" />
+          <div key={s.label} className="glass rounded-2xl p-4 text-center opacity-0 animate-fade-in-up"
+            style={{ animationDelay: `${i * 0.08}s`, animationFillMode: "forwards" }}>
+            <div className={`w-10 h-10 mx-auto mb-2.5 rounded-xl bg-gradient-to-br ${s.from} ${s.to} flex items-center justify-center`}>
+              <Icon name={s.icon as "Ticket"} size={18} className="text-white" />
             </div>
             <p className="font-oswald text-xl font-bold text-white">{s.value}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+            <p className="text-muted-foreground text-xs mt-0.5">{s.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Push-уведомления */}
-      {pushSupported && pushStatus !== "unsupported" && (
-        <div className="glass rounded-2xl p-4 mb-6 flex items-center gap-4">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${pushStatus === "subscribed" ? "bg-emerald-500/20" : "bg-purple-500/20"}`}>
-            <Icon name={pushStatus === "subscribed" ? "BellRing" : "Bell"} size={18} className={pushStatus === "subscribed" ? "text-emerald-400" : "text-purple-400"} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium">
-              {pushStatus === "subscribed" ? "Уведомления включены" : pushStatus === "denied" ? "Уведомления заблокированы" : "Уведомления о розыгрышах"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {pushStatus === "subscribed" ? "Вы получите уведомление о новых акциях и результатах" : pushStatus === "denied" ? "Разрешите уведомления в настройках браузера" : "Включите, чтобы не пропустить новые розыгрыши"}
-            </p>
-          </div>
-          {pushStatus !== "denied" && (
-            <button
-              disabled={pushStatus === "loading"}
-              onClick={pushStatus === "subscribed" ? pushUnsubscribe : pushSubscribe}
-              className={`shrink-0 px-3 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 ${pushStatus === "subscribed" ? "border border-white/10 text-muted-foreground hover:text-white hover:border-white/30" : "grad-btn"}`}>
-              {pushStatus === "loading" ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : pushStatus === "subscribed" ? "Выкл." : "Включить"}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Участия */}
-      <div className="card-glow rounded-2xl p-5 mb-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-oswald text-xl font-semibold text-white flex items-center gap-2">
-            <Icon name="Zap" size={20} className="text-yellow-400" />
-            Мои участия
-          </h3>
-          <div className="flex gap-1">
-            {(["active", "all"] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${tab === t ? "bg-purple-500/30 text-purple-300" : "text-muted-foreground hover:text-white"}`}>
-                {t === "active" ? "Активные" : "Все"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {loadingEntries ? (
-          <div className="py-8 text-center text-muted-foreground text-sm">
-            <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-2" />
-            Загружаем участия...
-          </div>
-        ) : shownEntries.length === 0 ? (
-          <div className="py-8 text-center">
-            <div className="text-4xl mb-3">🎟️</div>
-            <p className="text-muted-foreground text-sm">
-              {tab === "active" ? "Нет активных участий" : "Ты ещё не участвовал ни в одном розыгрыше"}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {shownEntries.map(e => (
-              <div key={e.id} className="glass rounded-xl p-4 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${e.raffle_gradient} flex items-center justify-center shrink-0`}>
-                  <Icon name={e.raffle_icon} size={18} className="text-white" fallback="Gift" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-medium text-sm truncate">{e.raffle_title}</p>
-                  <p className="text-xs text-muted-foreground">{e.tickets} билет · {e.amount.toLocaleString("ru")} ₽</p>
-                </div>
-                <div className="text-right shrink-0">
-                  {e.raffle_status === "ended" ? (
-                    <span className={`text-xs px-2 py-1 rounded-full ${e.winner ? "bg-yellow-500/20 text-yellow-300" : "bg-white/10 text-muted-foreground"}`}>
-                      {e.winner ? "🏆 Завершён" : "Завершён"}
-                    </span>
-                  ) : (
-                    <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400">Активен</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex gap-3 mt-4">
-          <button onClick={() => setShowDeposit(true)}
-            className="flex-1 py-3 rounded-xl grad-btn font-semibold text-sm flex items-center justify-center gap-2">
-            <Icon name="Plus" size={16} /> Пополнить баланс
+      {/* Табы */}
+      <div className="glass rounded-2xl p-1.5 flex gap-1">
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${tab === t.key ? "grad-btn" : "text-muted-foreground hover:text-white"}`}>
+            <Icon name={t.icon as "Ticket"} size={15} />
+            <span className="hidden sm:inline">{t.label}</span>
+            {t.count > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${tab === t.key ? "bg-white/20" : "bg-white/10"}`}>{t.count}</span>}
           </button>
-          <button onClick={onLogout}
-            className="px-4 py-3 rounded-xl border border-white/10 text-muted-foreground hover:text-white hover:border-white/30 transition-all text-sm">
-            <Icon name="LogOut" size={16} />
-          </button>
-        </div>
+        ))}
       </div>
 
-      {showDeposit && (
-        <DepositModal
-          userId={user.id}
-          onClose={() => setShowDeposit(false)}
-          onSuccess={(amount) => {
-            onUserUpdate({ ...user, balance: user.balance + amount });
-            setShowDeposit(false);
-          }}
-        />
+      {/* Контент табов */}
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+        </div>
+      ) : (
+        <>
+          {/* Участия */}
+          {tab === "entries" && (
+            <div className="space-y-3">
+              {entries.length === 0 ? (
+                <div className="glass rounded-2xl p-10 text-center">
+                  <div className="text-5xl mb-3">🎫</div>
+                  <p className="text-muted-foreground">Ты ещё не участвовал в розыгрышах</p>
+                </div>
+              ) : entries.map(e => (
+                <div key={e.id} className="glass rounded-2xl p-4 flex items-center gap-4">
+                  <div className="text-3xl shrink-0">{e.raffle_icon || "🎁"}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-white text-sm truncate">{e.raffle_title}</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">{e.raffle_prize}</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">{formatDate(e.created_at)}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-oswald text-lg font-bold text-white">{e.amount.toLocaleString("ru")} ₽</p>
+                    <p className="text-xs text-muted-foreground">{e.tickets} билет{e.tickets === 1 ? "" : e.tickets < 5 ? "а" : "ов"}</p>
+                    <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full font-medium ${e.raffle_status === "active" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-white/5 text-muted-foreground border border-white/10"}`}>
+                      {e.raffle_status === "active" ? "Активен" : "Завершён"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Транзакции */}
+          {tab === "transactions" && (
+            <div className="space-y-3">
+              {transactions.length === 0 ? (
+                <div className="glass rounded-2xl p-10 text-center">
+                  <div className="text-5xl mb-3">💳</div>
+                  <p className="text-muted-foreground">Транзакций пока нет</p>
+                </div>
+              ) : transactions.map(t => (
+                <div key={t.id} className="glass rounded-2xl p-4 flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.amount > 0 ? "bg-emerald-500/20" : "bg-red-500/20"}`}>
+                    <Icon name={t.amount > 0 ? "ArrowDownLeft" : "ArrowUpRight"} size={18} className={t.amount > 0 ? "text-emerald-400" : "text-red-400"} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-white text-sm">{t.description || (t.type === "deposit" ? "Пополнение" : "Списание")}</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">{formatDate(t.created_at)}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={`font-oswald text-xl font-bold ${t.amount > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {t.amount > 0 ? "+" : ""}{t.amount.toLocaleString("ru")} ₽
+                    </p>
+                    <span className={`text-xs ${t.status === "completed" ? "text-emerald-400/70" : "text-yellow-400/70"}`}>
+                      {t.status === "completed" ? "Выполнено" : "В обработке"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Выигрыши */}
+          {tab === "wins" && (
+            <div className="space-y-3">
+              {myWins.length === 0 ? (
+                <div className="glass rounded-2xl p-10 text-center">
+                  <div className="text-5xl mb-3">🏆</div>
+                  <p className="text-white font-semibold mb-1">Выигрышей пока нет</p>
+                  <p className="text-muted-foreground text-sm">Участвуй в розыгрышах — удача на твоей стороне!</p>
+                </div>
+              ) : myWins.map(e => (
+                <div key={e.id} className="glass rounded-2xl p-4 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 via-transparent to-orange-500/10 pointer-events-none" />
+                  <div className="flex items-center gap-4 relative">
+                    <div className="text-4xl shrink-0">{e.raffle_icon || "🏆"}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-white">{e.raffle_title}</p>
+                      <p className="text-yellow-400 text-sm font-medium mt-0.5">🎁 {e.raffle_prize}</p>
+                      <p className="text-muted-foreground text-xs mt-1">{formatDate(e.created_at)}</p>
+                    </div>
+                    <div className="shrink-0">
+                      <span className="text-xs px-3 py-1.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 font-bold">
+                        ПОБЕДА
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
