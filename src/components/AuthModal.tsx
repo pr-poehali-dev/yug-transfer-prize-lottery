@@ -154,28 +154,6 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
               <Icon name="X" size={16} />
             </button>
 
-            {done ? (
-              <div className="text-center py-6">
-                <div className="text-6xl mb-4 animate-float inline-block">🎉</div>
-                <h2 className="font-oswald text-3xl font-bold text-white mb-2">
-                  {user ? `Привет, ${user.first_name}!` : mode === "forgot" ? "Код отправлен!" : mode === "register" ? "Добро пожаловать!" : "С возвращением!"}
-                </h2>
-                <p className="text-muted-foreground text-sm mb-6">
-                  {user
-                    ? "Ты успешно вошёл через Telegram. Удача на твоей стороне!"
-                    : mode === "forgot"
-                    ? "Код отправлен на твой номер телефона."
-                    : "Теперь ты в игре. Удача на твоей стороне!"}
-                </p>
-                {user?.photo_url && (
-                  <img src={user.photo_url} alt="avatar" className="w-16 h-16 rounded-2xl mx-auto mb-4 border-2 border-purple-500/50" />
-                )}
-                <button onClick={() => { onClose(); }} className="grad-btn rounded-xl px-8 py-3 font-semibold">
-                  Вперёд!
-                </button>
-              </div>
-            ) : (
-              <>
                 {/* Logo */}
                 <div className="flex justify-center mb-6">
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl animate-float">
@@ -332,8 +310,6 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
                     </div>
                   )}
                 </form>
-              </>
-            )}
           </div>
         </div>
       </div>
