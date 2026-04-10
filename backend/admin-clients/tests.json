@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "Unauthorized without token",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401
+    }
+  ]
+}
