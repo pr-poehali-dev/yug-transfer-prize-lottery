@@ -4,7 +4,7 @@ import type { AppUser } from "@/pages/Index";
 
 const CABINET_URL = "https://functions.poehali.dev/0ad2d0a9-bb39-4116-9934-9460e7841500";
 
-const TELEGRAM_BOT_USERNAME = "registersbot";
+const TELEGRAM_BOT_USERNAME = "UG_GIFTBOT";
 const TELEGRAM_AUTH_URL = "https://functions.poehali.dev/4f5fad1d-038c-4bc7-9488-0747551c3978";
 
 type AuthMode = "login" | "register" | "forgot";
@@ -331,7 +331,7 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
                           type="button"
                           onClick={() => {
                             const origin = window.location.origin;
-                            const url = `https://oauth.telegram.org/auth?bot_id=8736215444&origin=${encodeURIComponent(origin)}&request_access=write`;
+                            const url = `https://oauth.telegram.org/auth?bot_id=8567041422&origin=${encodeURIComponent(origin)}&request_access=write`;
                             const popup = window.open(url, "telegram_oauth", "width=550,height=470,scrollbars=no,resizable=no");
                             const timer = setInterval(() => {
                               if (popup?.closed) clearInterval(timer);
