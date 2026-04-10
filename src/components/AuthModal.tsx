@@ -56,32 +56,20 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
     setTimeout(() => { setLoading(false); setDone(true); }, 1400);
   };
 
-  // Обработчик данных от Telegram
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      if (e.origin !== 'https://oauth.telegram.org') return;
-      try {
-        const tgUser = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (tgUser && tgUser.id) window.onTelegramAuth(tgUser);
-      } catch (_) { /* ignore */ }
-    };
-    window.addEventListener('message', handleMessage);
-
-    window.onTelegramAuth = async (tgUser: TelegramUser) => {
-      setTgLoading(true);
-      try {
-        const res = await fetch(TELEGRAM_AUTH_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...tgUser }),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          setUser(tgUser);
-          setDone(true);
-          // Загружаем полный профиль из кабинета
-          try {
-            const profileRes = await fetch(CABINET_URL, {
+  const handleTgAuth = async (tgUser: TelegramUser) => {
+    setTgLoading(true);
+    try {
+      const res = await fetch(TELEGRAM_AUTH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...tgUser }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setUser(tgUser);
+        setDone(true);
+        try {
+          const profileRes = await fetch(CABINET_URL, {
               headers: { 'X-User-Id': String(data.user.id) },
             });
             const profile = await profileRes.json();
@@ -122,12 +110,23 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
       } finally {
         setTgLoading(false);
       }
+  };
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (!e.origin.includes('telegram.org')) return;
+      try {
+        const tgUser = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (tgUser && tgUser.id) handleTgAuth(tgUser);
+      } catch (_) { /* ignore */ }
     };
+    window.addEventListener('message', handleMessage);
+    window.onTelegramAuth = handleTgAuth;
     return () => {
       window.removeEventListener('message', handleMessage);
       delete (window as Window & typeof globalThis).onTelegramAuth;
     };
-  }, []);
+  }, [onLogin]);
 
   return (
     <div
@@ -331,8 +330,8 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
                           type="button"
                           onClick={() => {
                             const origin = window.location.origin;
-                            const url = `https://oauth.telegram.org/auth?bot_id=8567041422&origin=${encodeURIComponent(origin)}&request_access=write`;
-                            const popup = window.open(url, "telegram_oauth", "width=550,height=470,scrollbars=no,resizable=no");
+                            const url = `https://oauth.telegram.org/auth?bot_id=8567041422&origin=${encodeURIComponent(origin)}&return_to=${encodeURIComponent(origin)}&request_access=write`;
+                            const popup = window.open(url, "telegram_oauth", "width=550,height=470,scrollbars=no,resizable=no,toolbar=no,location=no");
                             const timer = setInterval(() => {
                               if (popup?.closed) clearInterval(timer);
                             }, 500);
