@@ -115,8 +115,9 @@ def notify_channel_new_raffle(raffle: dict):
 
 def notify_channel_winner(raffle: dict):
     bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-    channel_id = os.environ.get('TELEGRAM_CHANNEL_ID', '@UG_DRIVER')
-    if not bot_token or not channel_id:
+    channel_id = os.environ.get('TELEGRAM_CHANNEL_ID', '')
+    group_id = os.environ.get('TELEGRAM_GROUP_ID', '')
+    if not bot_token:
         return
 
     winner = raffle.get('winner', '—')
@@ -128,30 +129,34 @@ def notify_channel_winner(raffle: dict):
         f"🔥 Следи за новыми розыгрышами:\n"
         f"<a href=\"https://ug-gift.ru\">👉 ug-gift.ru</a>"
     )
-
     photo_url = raffle.get('photo_url') or "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/4be15897-c9ea-4e8c-a28f-3d9f2a91fdd7.png"
 
-    payload = json.dumps({
-        'chat_id': channel_id,
-        'photo': photo_url,
-        'caption': text,
-        'parse_mode': 'HTML',
-    }).encode()
-
-    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            print(f"[TG winner] OK: {resp.read().decode()[:200]}")
-    except Exception as e:
-        print(f"[TG winner] ERROR: {e}")
+    def send_to(chat_id):
+        payload = json.dumps({'chat_id': chat_id, 'photo': photo_url, 'caption': text, 'parse_mode': 'HTML'}).encode()
+        req = urllib.request.Request(f"https://api.telegram.org/bot{bot_token}/sendPhoto",
+            data=payload, headers={'Content-Type': 'application/json'}, method='POST')
         try:
-            msg_payload = json.dumps({'chat_id': channel_id, 'text': text, 'parse_mode': 'HTML'}).encode()
-            msg_req = urllib.request.Request(f"https://api.telegram.org/bot{bot_token}/sendMessage", data=msg_payload, headers={'Content-Type': 'application/json'}, method='POST')
-            with urllib.request.urlopen(msg_req, timeout=10):
-                pass
-        except Exception as e2:
-            print(f"[TG winner msg] ERROR: {e2}")
+            with urllib.request.urlopen(req, timeout=10) as r:
+                print(f"[TG winner {chat_id}] OK: {r.read().decode()[:100]}")
+        except Exception as e:
+            print(f"[TG winner {chat_id}] ERROR: {e}")
+            try:
+                mp = json.dumps({'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}).encode()
+                mr = urllib.request.Request(f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    data=mp, headers={'Content-Type': 'application/json'}, method='POST')
+                urllib.request.urlopen(mr, timeout=10)
+            except Exception as e2:
+                print(f"[TG winner msg {chat_id}] ERROR: {e2}")
+
+    if channel_id:
+        send_to(channel_id)
+    if group_id:
+        send_to(group_id)
+
+    return  # старый код заменён выше
+
+
+
 
 
 def send_winner_push(raffle_title: str, prize: str, winner: str):
@@ -266,16 +271,37 @@ def handler(event: dict, context) -> dict:
         prev_status = prev[0] if prev else None
         prev_winner = prev[1] if prev else None
 
-        cur.execute(
-            f"""UPDATE {SCHEMA}.raffles SET title=%s, prize=%s, prize_icon=%s, end_date=%s,
-                participants=%s, min_amount=%s, status=%s, gradient=%s, winner=%s
-                WHERE id=%s
-                RETURNING id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner""",
-            (body['title'], body['prize'], body.get('prize_icon', 'Gift'),
-             body['end_date'], body.get('participants', 0), body['min_amount'],
-             body.get('status', 'active'), body.get('gradient', 'from-purple-600 via-pink-500 to-orange-400'),
-             body.get('winner'), rid)
-        )
+        # Загружаем фото если есть
+        photo_url_put = None
+        photo_data = body.get('photo_data', '')
+        if photo_data and photo_data.startswith('data:'):
+            try:
+                photo_url_put = upload_raffle_photo(photo_data, rid)
+            except Exception as e:
+                print(f"Photo upload error: {e}")
+
+        if photo_url_put:
+            cur.execute(
+                f"""UPDATE {SCHEMA}.raffles SET title=%s, prize=%s, prize_icon=%s, end_date=%s,
+                    participants=%s, min_amount=%s, status=%s, gradient=%s, winner=%s, photo_url=%s
+                    WHERE id=%s
+                    RETURNING id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner, photo_url""",
+                (body['title'], body['prize'], body.get('prize_icon', 'Gift'),
+                 body['end_date'], body.get('participants', 0), body['min_amount'],
+                 body.get('status', 'active'), body.get('gradient', 'from-purple-600 via-pink-500 to-orange-400'),
+                 body.get('winner'), photo_url_put, rid)
+            )
+        else:
+            cur.execute(
+                f"""UPDATE {SCHEMA}.raffles SET title=%s, prize=%s, prize_icon=%s, end_date=%s,
+                    participants=%s, min_amount=%s, status=%s, gradient=%s, winner=%s
+                    WHERE id=%s
+                    RETURNING id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner, photo_url""",
+                (body['title'], body['prize'], body.get('prize_icon', 'Gift'),
+                 body['end_date'], body.get('participants', 0), body['min_amount'],
+                 body.get('status', 'active'), body.get('gradient', 'from-purple-600 via-pink-500 to-orange-400'),
+                 body.get('winner'), rid)
+            )
         row = cur.fetchone()
         conn.commit()
         cur.close()
