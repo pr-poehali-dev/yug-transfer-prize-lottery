@@ -7,7 +7,6 @@ CRUD для розыгрышей. GET — список, POST — создать,
 import os
 import json
 import hashlib
-import threading
 import urllib.request
 import psycopg2
 from pywebpush import webpush, WebPushException
@@ -166,9 +165,8 @@ def handler(event: dict, context) -> dict:
 
         raffle = row_to_dict(row)
 
-        # Уведомление в Telegram-канал о новом розыгрыше
-        t = threading.Thread(target=notify_channel_new_raffle, args=(raffle,), daemon=True)
-        t.start()
+        # Уведомление в Telegram-канал о новом розыгрыше (синхронно)
+        notify_channel_new_raffle(raffle)
 
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'raffle': raffle})}
 
