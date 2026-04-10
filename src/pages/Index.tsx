@@ -81,10 +81,16 @@ export default function Index() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'link_telegram', user_id: linkUserId, telegram_id: tgId, username: allParams.get('username'), photo_url: allParams.get('photo_url'), hash }),
         }).then(r => r.json()).then(data => {
-          if (data.ok && appUser) {
-            const updated = { ...appUser, telegram_id: Number(tgId), username: allParams.get('username') || appUser.username };
-            setAppUser(updated);
-            localStorage.setItem('app_user', JSON.stringify(updated));
+          if (data.ok) {
+            // Читаем пользователя из localStorage (appUser может быть null в замыкании)
+            try {
+              const stored = JSON.parse(localStorage.getItem('app_user') || 'null');
+              if (stored) {
+                const updated = { ...stored, telegram_id: Number(tgId), username: allParams.get('username') || stored.username };
+                setAppUser(updated);
+                localStorage.setItem('app_user', JSON.stringify(updated));
+              }
+            } catch { /* ignore */ }
             setActiveSection('cabinet');
           }
         }).catch(() => {});
