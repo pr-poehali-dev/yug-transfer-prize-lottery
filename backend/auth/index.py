@@ -43,6 +43,30 @@ def handler(event: dict, context) -> dict:
     action = body.get('action', 'login')
     schema = os.environ.get('MAIN_DB_SCHEMA', 'public')
 
+    # Привязка Telegram к существующему аккаунту
+    if action == 'link_telegram':
+        user_id = int(body.get('user_id', 0))
+        telegram_id = int(body.get('telegram_id', 0))
+        username = body.get('username', '')
+        photo_url = body.get('photo_url', '')
+        if not user_id or not telegram_id:
+            return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'Нет данных'})}
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        updates = ['telegram_id = %s', 'updated_at = NOW()']
+        params = [telegram_id]
+        if username:
+            updates.append('username = %s')
+            params.append(username)
+        if photo_url:
+            updates.append('photo_url = %s')
+            params.append(photo_url)
+        params.append(user_id)
+        cur.execute(f"UPDATE {schema}.users SET {', '.join(updates)} WHERE id = %s", params)
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True})}
+
     # Обновление профиля
     if action == 'update_profile':
         user_id = int(body.get('user_id', 0))

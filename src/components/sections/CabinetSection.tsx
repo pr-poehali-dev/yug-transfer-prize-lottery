@@ -51,6 +51,8 @@ function Avatar({ user, size = 80 }: { user: AppUser; size?: number }) {
   );
 }
 
+const TG_BOT_ID = 8567041422;
+
 function EditProfileModal({ user, onClose, onSave }: { user: AppUser; onClose: () => void; onSave: (u: AppUser) => void }) {
   const [name, setName] = useState(user.first_name || '');
   const [phone, setPhone] = useState((user as AppUser & {phone?: string}).phone || '');
@@ -58,9 +60,11 @@ function EditProfileModal({ user, onClose, onSave }: { user: AppUser; onClose: (
   const [oldPassword, setOldPassword] = useState('');
   const [photoUrl, setPhotoUrl] = useState(user.photo_url || '');
   const [loading, setLoading] = useState(false);
+  const [tgLinking, setTgLinking] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const hasTg = !!(user.telegram_id && user.telegram_id !== 0);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,6 +72,15 @@ function EditProfileModal({ user, onClose, onSave }: { user: AppUser; onClose: (
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoUrl(ev.target?.result as string);
     reader.readAsDataURL(file);
+  };
+
+  const handleLinkTelegram = () => {
+    setTgLinking(true);
+    setError(''); setSuccess('');
+    const origin = encodeURIComponent(window.location.origin);
+    // Сохраняем user_id чтобы после редиректа привязать TG к аккаунту
+    localStorage.setItem('tg_link_user_id', String(user.id));
+    window.location.href = `https://oauth.telegram.org/auth?bot_id=${TG_BOT_ID}&origin=${origin}&request_access=write&lang=ru`;
   };
 
   const handleSave = async () => {
@@ -138,6 +151,26 @@ function EditProfileModal({ user, onClose, onSave }: { user: AppUser; onClose: (
               <input value={newPassword} onChange={e => setNewPassword(e.target.value)} type="password" placeholder="Новый пароль"
                 className="w-full bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-white text-sm outline-none" />
             </div>
+          </div>
+
+          {/* Привязка Telegram */}
+          <div className="border-t border-white/10 pt-3 mt-1">
+            <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">Telegram</p>
+            {hasTg ? (
+              <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#2AABEE"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/></svg>
+                <span className="text-emerald-400 text-sm font-medium">Telegram привязан</span>
+                <Icon name="Check" size={14} className="text-emerald-400 ml-auto" />
+              </div>
+            ) : (
+              <button onClick={handleLinkTelegram} disabled={tgLinking}
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 rounded-xl border border-[#2AABEE]/40 bg-[#2AABEE]/10 hover:bg-[#2AABEE]/20 text-[#2AABEE] transition-all text-sm font-semibold disabled:opacity-70">
+                {tgLinking ? <div className="w-4 h-4 border-2 border-[#2AABEE]/30 border-t-[#2AABEE] rounded-full animate-spin" /> : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/></svg>
+                )}
+                Привязать Telegram
+              </button>
+            )}
           </div>
 
           {error && <p className="text-red-400 text-sm text-center mt-3">{error}</p>}

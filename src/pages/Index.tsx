@@ -70,6 +70,27 @@ export default function Index() {
       const TELEGRAM_AUTH_URL = "https://functions.poehali.dev/4f5fad1d-038c-4bc7-9488-0747551c3978";
       const CABINET_URL = "https://functions.poehali.dev/0ad2d0a9-bb39-4116-9934-9460e7841500";
       window.history.replaceState({}, '', window.location.pathname);
+
+      // Проверяем — это привязка TG к существующему аккаунту или новый вход
+      const linkUserId = localStorage.getItem('tg_link_user_id');
+      if (linkUserId) {
+        localStorage.removeItem('tg_link_user_id');
+        const AUTH_URL = "https://functions.poehali.dev/3668a161-208c-46c4-8691-84fa9d9586b0";
+        fetch(AUTH_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'link_telegram', user_id: linkUserId, telegram_id: tgId, username: allParams.get('username'), photo_url: allParams.get('photo_url'), hash }),
+        }).then(r => r.json()).then(data => {
+          if (data.ok && appUser) {
+            const updated = { ...appUser, telegram_id: Number(tgId), username: allParams.get('username') || appUser.username };
+            setAppUser(updated);
+            localStorage.setItem('app_user', JSON.stringify(updated));
+            setActiveSection('cabinet');
+          }
+        }).catch(() => {});
+        return;
+      }
+
       fetch(TELEGRAM_AUTH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tgUser) })
         .then(r => r.json())
         .then(data => {
