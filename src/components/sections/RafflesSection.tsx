@@ -68,15 +68,32 @@ function RaffleCard({ raffle, idx }: { raffle: Raffle; idx: number }) {
       onMouseLeave={() => setHovered(false)}
     >
       <div className={`h-2 bg-gradient-to-r ${raffle.gradient}`} />
-      <div className="p-5">
-        <div className="flex justify-between items-start mb-4">
-          <div
-            className={`w-12 h-12 rounded-xl bg-gradient-to-br ${raffle.gradient} flex items-center justify-center transition-transform duration-300 ${hovered ? "scale-110 rotate-3" : ""}`}
-          >
-            <Icon name={raffle.prizeIcon as string} size={22} className="text-white" fallback="Gift" />
+
+      {/* Фото розыгрыша */}
+      {raffle.photoUrl && (
+        <div className="relative overflow-hidden" style={{ height: 180 }}>
+          <img
+            src={raffle.photoUrl}
+            alt={raffle.title}
+            className={`w-full h-full object-cover transition-transform duration-500 ${hovered ? "scale-105" : "scale-100"}`}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className="absolute top-3 right-3">
+            <StatusBadge status={raffle.status} />
           </div>
-          <StatusBadge status={raffle.status} />
         </div>
+      )}
+
+      <div className="p-5">
+        {!raffle.photoUrl && (
+          <div className="flex justify-between items-start mb-4">
+            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${raffle.gradient} flex items-center justify-center transition-transform duration-300 ${hovered ? "scale-110 rotate-3" : ""}`}>
+              <Icon name={raffle.prizeIcon as string} size={22} className="text-white" fallback="Gift" />
+            </div>
+            <StatusBadge status={raffle.status} />
+          </div>
+        )}
+        {raffle.photoUrl && <div className="mb-3" />}
 
         <h3 className="font-oswald text-xl font-semibold text-white mb-1 leading-tight">{raffle.title}</h3>
         <p className={`text-sm bg-gradient-to-r ${raffle.gradient} bg-clip-text text-transparent font-semibold mb-4`}>
@@ -135,12 +152,13 @@ export function RafflesSection() {
           setRawRaffles(data.raffles.map((r: {
             id: number; title: string; prize: string; prize_icon: string;
             end_date: string; participants: number; min_amount: number;
-            status: "active" | "ended" | "upcoming"; gradient: string; winner?: string;
+            status: "active" | "ended" | "upcoming"; gradient: string; winner?: string; photo_url?: string;
           }) => ({
             id: r.id, title: r.title, prize: r.prize,
             prizeIcon: r.prize_icon, endDate: r.end_date,
             participants: r.participants, minAmount: r.min_amount,
             status: r.status, gradient: r.gradient, winner: r.winner,
+            photoUrl: r.photo_url,
           })));
         }
       })

@@ -12,6 +12,7 @@ export interface Raffle {
   status: "active" | "ended" | "upcoming";
   gradient: string;
   winner?: string;
+  photoUrl?: string;
 }
 
 export const RAFFLES: Raffle[] = [];
