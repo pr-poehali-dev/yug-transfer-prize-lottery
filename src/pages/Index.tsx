@@ -121,13 +121,29 @@ export default function Index() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setAuthOpen(true)}
-              className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl neon-border text-sm font-medium text-white hover:bg-white/5 transition-colors"
-            >
-              <Icon name="LogIn" size={16} />
-              Войти
-            </button>
+            {appUser ? (
+              <button
+                onClick={() => setActiveSection("cabinet")}
+                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl neon-border text-sm font-medium text-white hover:bg-white/5 transition-colors"
+              >
+                {appUser.photo_url ? (
+                  <img src={appUser.photo_url} alt="" className="w-6 h-6 rounded-lg object-cover" />
+                ) : (
+                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
+                    {appUser.first_name[0]?.toUpperCase()}
+                  </div>
+                )}
+                {appUser.first_name}
+              </button>
+            ) : (
+              <button
+                onClick={() => setAuthOpen(true)}
+                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl neon-border text-sm font-medium text-white hover:bg-white/5 transition-colors"
+              >
+                <Icon name="LogIn" size={16} />
+                Войти
+              </button>
+            )}
             <button
               className="md:hidden p-2 text-muted-foreground hover:text-white"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -151,13 +167,23 @@ export default function Index() {
                 {item.label}
               </button>
             ))}
-            <button
-              onClick={() => { setAuthOpen(true); setMobileMenuOpen(false); }}
-              className="w-full flex items-center gap-3 px-6 py-4 text-sm font-medium text-purple-400 border-t border-white/5"
-            >
-              <Icon name="LogIn" size={18} />
-              Войти / Регистрация
-            </button>
+            {appUser ? (
+              <button
+                onClick={() => { setActiveSection("cabinet"); setMobileMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-6 py-4 text-sm font-medium text-purple-400 border-t border-white/5"
+              >
+                <Icon name="User" size={18} />
+                {appUser.first_name} — Кабинет
+              </button>
+            ) : (
+              <button
+                onClick={() => { setAuthOpen(true); setMobileMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-6 py-4 text-sm font-medium text-purple-400 border-t border-white/5"
+              >
+                <Icon name="LogIn" size={18} />
+                Войти / Регистрация
+              </button>
+            )}
           </div>
         )}
       </header>
