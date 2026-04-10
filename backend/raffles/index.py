@@ -48,7 +48,7 @@ def row_to_dict(row):
 
 def notify_channel_new_raffle(raffle: dict):
     bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-    channel_id = os.environ.get('TELEGRAM_CHANNEL_ID', '')
+    channel_id = os.environ.get('TELEGRAM_CHANNEL_ID', '@UG_DRIVER')
     if not bot_token or not channel_id:
         return
 
