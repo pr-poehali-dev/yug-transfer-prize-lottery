@@ -25,28 +25,39 @@ declare global {
   }
 }
 
-function TelegramLoginWidget({ onAuth }: { onAuth: (user: TelegramUser) => void }) {
+function TelegramLoginButton({ onAuth }: { onAuth: (user: TelegramUser) => void }) {
+  const openPopup = () => {
+    window.onTelegramAuth = onAuth;
+    const origin = encodeURIComponent(window.location.origin);
+    const url = `https://oauth.telegram.org/auth?bot_id=8567041422&origin=${origin}&request_access=write&lang=ru`;
+    const w = 550, h = 470;
+    const left = window.screenX + (window.outerWidth - w) / 2;
+    const top = window.screenY + (window.outerHeight - h) / 2;
+    window.open(url, 'tg_auth', `width=${w},height=${h},left=${left},top=${top},scrollbars=no`);
+  };
+
   useEffect(() => {
     window.onTelegramAuth = onAuth;
+    const handleMsg = (e: MessageEvent) => {
+      if (!String(e.origin).includes('telegram.org')) return;
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (data?.id) onAuth(data as TelegramUser);
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
   }, [onAuth]);
 
-  useEffect(() => {
-    window.onTelegramAuth = onAuth;
-    const container = document.getElementById('tg-login-widget-container');
-    if (!container) return;
-    container.innerHTML = '';
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME);
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-    script.setAttribute('data-request-access', 'write');
-    script.async = true;
-    container.appendChild(script);
-    return () => { container.innerHTML = ''; };
-  }, []);
-
-  return <div id="tg-login-widget-container" className="flex justify-center" />;
+  return (
+    <button type="button" onClick={openPopup}
+      className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[#2AABEE]/40 bg-[#2AABEE]/10 hover:bg-[#2AABEE]/20 text-[#2AABEE] transition-all text-sm font-semibold">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
+      </svg>
+      Войти через Telegram
+    </button>
+  );
 }
 
 function formatPhone(value: string): string {
@@ -334,9 +345,7 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
                           Подключение к Telegram...
                         </div>
                       ) : (
-                        <div className="flex justify-center">
-                          <TelegramLoginWidget onAuth={handleTgAuth} />
-                        </div>
+                        <TelegramLoginButton onAuth={handleTgAuth} />
                       )}
                     </div>
                   )}
