@@ -2,6 +2,20 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { Section, NAV_ITEMS, TICKER_ITEMS } from "@/components/raffle-types";
 
+export interface AppUser {
+  id: number;
+  telegram_id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  balance: number;
+  created_at?: string;
+  total_entries: number;
+  total_spent: number;
+  wins: number;
+}
+
 const STATS_URL = "https://functions.poehali.dev/60522b1d-07ea-44fd-8d82-ca79a4e092c6";
 
 interface SiteStats {
@@ -25,6 +39,9 @@ export default function Index() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [stats, setStats] = useState<SiteStats | null>(null);
+  const [appUser, setAppUser] = useState<AppUser | null>(() => {
+    try { return JSON.parse(localStorage.getItem("app_user") || "null"); } catch { return null; }
+  });
 
   useEffect(() => {
     fetch(STATS_URL)
@@ -33,9 +50,21 @@ export default function Index() {
       .catch(() => {});
   }, []);
 
+  const handleLogin = (user: AppUser) => {
+    setAppUser(user);
+    localStorage.setItem("app_user", JSON.stringify(user));
+    setAuthOpen(false);
+    setActiveSection("cabinet");
+  };
+
+  const handleLogout = () => {
+    setAppUser(null);
+    localStorage.removeItem("app_user");
+  };
+
   const SECTION_COMPONENTS: Record<Section, JSX.Element> = {
     raffles: <RafflesSection />,
-    cabinet: <CabinetSection />,
+    cabinet: <CabinetSection user={appUser} onLogin={() => setAuthOpen(true)} onLogout={handleLogout} onUserUpdate={setAppUser} />,
     history: <HistorySection />,
     contacts: <ContactsSection />,
   };
@@ -243,7 +272,7 @@ export default function Index() {
         </div>
       </footer>
 
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} />}
     </div>
   );
 }

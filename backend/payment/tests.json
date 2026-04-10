@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Create without user → 401",
+      "method": "POST",
+      "path": "/?action=create",
+      "body": {"amount": 500},
+      "expectedStatus": 401
+    }
+  ]
+}

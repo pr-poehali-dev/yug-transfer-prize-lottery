@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
+import type { AppUser } from "@/pages/Index";
+
+const CABINET_URL = "https://functions.poehali.dev/0ad2d0a9-bb39-4116-9934-9460e7841500";
 
 const TELEGRAM_BOT_USERNAME = "registersbot";
 const TELEGRAM_AUTH_URL = "https://functions.poehali.dev/4f5fad1d-038c-4bc7-9488-0747551c3978";
@@ -35,7 +38,7 @@ function formatPhone(value: string): string {
   return result;
 }
 
-export function AuthModal({ onClose }: { onClose: () => void }) {
+export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?: (user: AppUser) => void }) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [phone, setPhone] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -67,6 +70,12 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         if (data.ok) {
           setUser(tgUser);
           setDone(true);
+          // Загружаем полный профиль из кабинета
+          const profileRes = await fetch(CABINET_URL, {
+            headers: { 'X-User-Id': String(data.user.id) },
+          });
+          const profile = await profileRes.json();
+          if (profile.ok && onLogin) onLogin(profile.user as AppUser);
         }
       } finally {
         setTgLoading(false);
