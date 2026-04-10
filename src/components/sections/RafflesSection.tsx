@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { Raffle, RaffleStatus } from "@/components/raffle-types";
+import type { AppUser } from "@/pages/Index";
 
 const RAFFLES_URL = "https://functions.poehali.dev/39a7b356-ef83-46dd-81a0-581903229de9";
 
@@ -57,8 +58,21 @@ export function CountdownTimer({ endDate }: { endDate: string }) {
 
 // ─── RaffleCard ──────────────────────────────────────────────────────────────
 
-function RaffleCard({ raffle, idx }: { raffle: Raffle; idx: number }) {
+function RaffleCard({ raffle, idx, user, onLoginRequired, onGoToCabinet }: {
+  raffle: Raffle; idx: number;
+  user: AppUser | null;
+  onLoginRequired: () => void;
+  onGoToCabinet: () => void;
+}) {
   const [hovered, setHovered] = useState(false);
+
+  const handleParticipate = () => {
+    if (!user) {
+      onLoginRequired();
+    } else {
+      onGoToCabinet();
+    }
+  };
 
   return (
     <div
@@ -126,8 +140,9 @@ function RaffleCard({ raffle, idx }: { raffle: Raffle; idx: number }) {
         )}
 
         {raffle.status !== "ended" && (
-          <button className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos">
-            {raffle.status === "upcoming" ? "Напомнить мне" : "Участвовать"}
+          <button onClick={handleParticipate} className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2">
+            <Icon name={user ? "ArrowRight" : "LogIn"} size={15} />
+            {raffle.status === "upcoming" ? "Напомнить мне" : user ? "Участвовать" : "Войти и участвовать"}
           </button>
         )}
       </div>
@@ -137,7 +152,11 @@ function RaffleCard({ raffle, idx }: { raffle: Raffle; idx: number }) {
 
 // ─── RafflesSection ──────────────────────────────────────────────────────────
 
-export function RafflesSection() {
+export function RafflesSection({ user, onLoginRequired, onGoToCabinet }: {
+  user?: AppUser | null;
+  onLoginRequired?: () => void;
+  onGoToCabinet?: () => void;
+}) {
   const [statusFilter, setStatusFilter] = useState<RaffleStatus>("all");
   const [sortBy, setSortBy] = useState<"date" | "prize" | "amount" | "participants">("date");
   const [minAmount, setMinAmount] = useState(0);
@@ -257,7 +276,7 @@ export function RafflesSection() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filtered.map((r, i) => (
-            <RaffleCard key={r.id} raffle={r} idx={i} />
+            <RaffleCard key={r.id} raffle={r} idx={i} user={user ?? null} onLoginRequired={onLoginRequired ?? (() => {})} onGoToCabinet={onGoToCabinet ?? (() => {})} />
           ))}
           {filtered.length === 0 && (
             <div className="col-span-3 text-center py-16 text-muted-foreground">

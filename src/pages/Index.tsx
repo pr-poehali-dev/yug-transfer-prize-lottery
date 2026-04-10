@@ -138,7 +138,7 @@ export default function Index() {
   };
 
   const SECTION_COMPONENTS: Record<Section, JSX.Element> = {
-    raffles: <RafflesSection />,
+    raffles: <RafflesSection user={appUser} onLoginRequired={() => setAuthOpen(true)} onGoToCabinet={() => setActiveSection("cabinet")} />,
     cabinet: <CabinetSection user={appUser} onLogin={() => setAuthOpen(true)} onLogout={handleLogout} onUserUpdate={setAppUser} />,
     history: <HistorySection />,
     contacts: <ContactsSection />,
