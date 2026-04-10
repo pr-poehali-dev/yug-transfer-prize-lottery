@@ -23,9 +23,9 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors, 'body': ''}
 
-    path = event.get('path', '/')
     body = json.loads(event.get('body') or '{}')
 
+    action = body.get('action', 'login')  # 'login' or 'register'
     phone = body.get('phone', '').strip().replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
     password = body.get('password', '').strip()
     first_name = body.get('first_name', '').strip()
@@ -37,7 +37,7 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
 
-    if path.endswith('/register'):
+    if action == 'register':
         if not first_name:
             return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'Введи имя'})}
         if len(password) < 6:

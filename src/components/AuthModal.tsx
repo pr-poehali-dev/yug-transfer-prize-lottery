@@ -77,8 +77,8 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
     setLoading(true);
     setError('');
     try {
-      const endpoint = mode === 'register' ? `${AUTH_URL}/register` : `${AUTH_URL}/login`;
-      const body: Record<string, string> = { phone: phone.replace(/\D/g, ''), password };
+      const endpoint = AUTH_URL;
+      const body: Record<string, string> = { action: mode, phone: phone.replace(/\D/g, ''), password };
       if (mode === 'register') body.first_name = name;
       const res = await fetch(endpoint, {
         method: 'POST',
