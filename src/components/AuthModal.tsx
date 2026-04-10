@@ -330,7 +330,7 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
                           type="button"
                           onClick={() => {
                             const origin = window.location.origin;
-                            const url = `https://oauth.telegram.org/auth?bot_id=8567041422&origin=${encodeURIComponent(origin)}&return_to=${encodeURIComponent(origin)}&request_access=write`;
+                            const url = `https://oauth.telegram.org/auth?bot_id=8567041422&origin=${encodeURIComponent(origin)}&request_access=write`;
                             const popup = window.open(url, "telegram_oauth", "width=550,height=470,scrollbars=no,resizable=no,toolbar=no,location=no");
                             const timer = setInterval(() => {
                               if (popup?.closed) clearInterval(timer);
