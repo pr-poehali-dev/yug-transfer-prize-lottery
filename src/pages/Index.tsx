@@ -50,6 +50,44 @@ export default function Index() {
       .catch(() => {});
   }, []);
 
+  // Обработка возврата после Telegram OAuth redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace('#', '?'));
+    const urlParams = new URLSearchParams(window.location.search);
+    const allParams = new URLSearchParams([...urlParams, ...params]);
+    const tgId = allParams.get('id');
+    const hash = allParams.get('hash');
+    if (tgId && hash) {
+      const tgUser = {
+        id: Number(tgId),
+        first_name: allParams.get('first_name') || '',
+        last_name: allParams.get('last_name') || undefined,
+        username: allParams.get('username') || undefined,
+        photo_url: allParams.get('photo_url') || undefined,
+        auth_date: Number(allParams.get('auth_date')),
+        hash,
+      };
+      const TELEGRAM_AUTH_URL = "https://functions.poehali.dev/4f5fad1d-038c-4bc7-9488-0747551c3978";
+      const CABINET_URL = "https://functions.poehali.dev/0ad2d0a9-bb39-4116-9934-9460e7841500";
+      window.history.replaceState({}, '', window.location.pathname);
+      fetch(TELEGRAM_AUTH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tgUser) })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            return fetch(CABINET_URL, { headers: { 'X-User-Id': String(data.user.id) } })
+              .then(r => r.json())
+              .then(profile => {
+                const user = profile.ok ? profile.user : data.user;
+                setAppUser(user);
+                localStorage.setItem('app_user', JSON.stringify(user));
+                setActiveSection('cabinet');
+              });
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   const handleLogin = (user: AppUser) => {
     setAppUser(user);
     localStorage.setItem("app_user", JSON.stringify(user));
