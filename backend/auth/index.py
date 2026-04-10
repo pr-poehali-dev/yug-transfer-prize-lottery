@@ -26,7 +26,7 @@ def upload_photo(data_url: str, user_id: int) -> str:
         aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
     key = f'avatars/user_{user_id}.{ext}'
     s3.put_object(Bucket='files', Key=key, Body=data, ContentType=f'image/{ext}')
-    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/files/{key}"
+    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
 def handler(event: dict, context) -> dict:
