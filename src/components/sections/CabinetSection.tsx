@@ -24,34 +24,9 @@ interface DepositModalProps {
   onSuccess: (amount: number) => void;
 }
 
-function DepositModal({ userId, onClose, onSuccess }: DepositModalProps) {
-  const [amount, setAmount] = useState(500);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+function DepositModal({ onClose }: DepositModalProps) {
   const PRESETS = [100, 500, 1000, 3000, 5000];
-
-  const handlePay = async () => {
-    if (amount < 100) { setError("Минимальная сумма — 100 ₽"); return; }
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${PAYMENT_URL}?action=create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-Id": String(userId) },
-        body: JSON.stringify({ amount, return_url: window.location.href }),
-      });
-      const data = await res.json();
-      if (data.ok && data.confirmation_url) {
-        window.location.href = data.confirmation_url;
-      } else {
-        setError(data.error || "Ошибка при создании платежа");
-      }
-    } catch {
-      setError("Сетевая ошибка");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [amount, setAmount] = useState(500);
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -87,18 +62,11 @@ function DepositModal({ userId, onClose, onSuccess }: DepositModalProps) {
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₽</span>
           </div>
 
-          {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-
-          <button onClick={handlePay} disabled={loading}
-            className="w-full grad-btn rounded-xl py-3 font-bold flex items-center justify-center gap-2 disabled:opacity-60">
-            {loading ? (
-              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Перенаправление...</>
-            ) : (
-              <><Icon name="CreditCard" size={18} /> Оплатить через ЮKassa</>
-            )}
-          </button>
-
-          <p className="text-xs text-muted-foreground text-center mt-3">Оплата через защищённый сервис ЮKassa</p>
+          <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-4 text-center">
+            <div className="text-2xl mb-2">🔧</div>
+            <p className="text-yellow-300 font-semibold text-sm mb-1">Оплата скоро будет доступна</p>
+            <p className="text-muted-foreground text-xs">Подключаем ЮKassa — совсем скоро сможешь пополнять баланс онлайн</p>
+          </div>
         </div>
       </div>
     </div>
