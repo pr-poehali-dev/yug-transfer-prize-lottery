@@ -146,7 +146,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
       const spinRes = await fetch(SPIN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ raffle_id: r.id, raffle_title: r.title }),
+        body: JSON.stringify({ raffle_id: r.id, raffle_title: r.title, photo_url: r.photo_url || "" }),
       });
       const spinData = await spinRes.json();
       if (!spinData.ok) { alert("Ошибка запуска спина: " + (spinData.error || "")); return; }

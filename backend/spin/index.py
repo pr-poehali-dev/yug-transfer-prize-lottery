@@ -42,7 +42,27 @@ def send_tg(chat_id: str, text: str, bot_token: str):
         print(f"[TG spin {chat_id}] ERROR: {e}")
 
 
-def notify_spin_start(raffle_title: str):
+def send_tg_photo(chat_id: str, photo_url: str, caption: str, bot_token: str):
+    payload = json.dumps({
+        'chat_id': chat_id,
+        'photo': photo_url,
+        'caption': caption,
+        'parse_mode': 'HTML',
+    }).encode()
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{bot_token}/sendPhoto",
+        data=payload, headers={'Content-Type': 'application/json'}, method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            print(f"[TG photo {chat_id}] OK: {r.read().decode()[:100]}")
+            return True
+    except Exception as e:
+        print(f"[TG photo {chat_id}] ERROR: {e}")
+        return False
+
+
+def notify_spin_start(raffle_title: str, photo_url: str = ''):
     bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
     channel_id = os.environ.get('TELEGRAM_CHANNEL_ID', '')
     group_id = os.environ.get('TELEGRAM_GROUP_ID', '')
@@ -58,7 +78,12 @@ def notify_spin_start(raffle_title: str):
     )
 
     for chat_id in filter(None, [channel_id, group_id]):
-        send_tg(chat_id, text, bot_token)
+        if photo_url:
+            sent = send_tg_photo(chat_id, photo_url, text, bot_token)
+            if not sent:
+                send_tg(chat_id, text, bot_token)
+        else:
+            send_tg(chat_id, text, bot_token)
 
 
 def handler(event: dict, context) -> dict:
@@ -107,6 +132,7 @@ def handler(event: dict, context) -> dict:
 
     raffle_id = body.get('raffle_id')
     raffle_title = body.get('raffle_title', '')
+    photo_url = body.get('photo_url', '')
 
     conn = get_conn()
     cur = conn.cursor()
@@ -151,8 +177,8 @@ def handler(event: dict, context) -> dict:
     cur.close()
     conn.close()
 
-    # Уведомление в Telegram
-    notify_spin_start(raffle_title)
+    # Уведомление в Telegram с фото розыгрыша
+    notify_spin_start(raffle_title, photo_url)
 
     return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
         'ok': True,
