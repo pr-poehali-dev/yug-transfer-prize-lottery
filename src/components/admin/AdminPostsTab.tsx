@@ -18,7 +18,7 @@ function toLocalInput(iso: string | null | undefined) {
 
 const EMPTY: PostFormData = {
   title: "", text: "", photo_url: "", button_text: "", button_url: "",
-  status: "draft", scheduled_at: null,
+  status: "draft", scheduled_at: null, chat: "main",
 };
 
 export function AdminPostsTab({ token }: AdminPostsTabProps) {
@@ -74,6 +74,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
       title: post.title, text: post.text, photo_url: post.photo_url,
       button_text: post.button_text, button_url: post.button_url,
       status: post.status, scheduled_at: post.scheduled_at,
+      chat: (post as PostFormData & { chat?: "main" | "kurilka" }).chat ?? "main",
     });
     setScheduledAt(toLocalInput(post.scheduled_at));
     setEditInTg(false);
@@ -141,7 +142,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
       const pubRes = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ post_id: postId }),
+        body: JSON.stringify({ post_id: postId, chat: form.chat }),
       });
       const pubData = await pubRes.json();
       if (!pubData.ok) throw new Error(pubData.error || "Ошибка публикации");
@@ -165,7 +166,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
       const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ post_id: post.id }),
+        body: JSON.stringify({ post_id: post.id, chat: form.chat }),
       });
       const data = await res.json();
       if (data.ok) {

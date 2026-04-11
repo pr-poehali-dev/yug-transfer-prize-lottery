@@ -10,7 +10,13 @@ export interface PostFormData {
   button_url: string;
   status: "draft" | "scheduled" | "published" | "failed";
   scheduled_at: string | null;
+  chat: "main" | "kurilka";
 }
+
+const CHATS = [
+  { value: "main",    label: "ЮГ ТРАНСФЕР",  sub: "@ug_transfer_gift" },
+  { value: "kurilka", label: "КУРИЛКА",       sub: "@KURILKA_GIFT" },
+] as const;
 
 interface PostFormProps {
   form: PostFormData;
@@ -58,6 +64,31 @@ export function PostForm({
       </div>
 
       <div className="p-5 space-y-4">
+
+        {/* Выбор чата */}
+        <div>
+          <label className="text-xs text-white/50 mb-1.5 block">Канал публикации</label>
+          <div className="grid grid-cols-2 gap-2">
+            {CHATS.map(ch => (
+              <button
+                key={ch.value}
+                type="button"
+                onClick={() => onFormChange({ chat: ch.value })}
+                className={`flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all ${
+                  form.chat === ch.value
+                    ? "border-blue-500/60 bg-blue-500/10"
+                    : "border-white/10 bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                <span className={`text-sm font-semibold ${form.chat === ch.value ? "text-blue-300" : "text-white"}`}>
+                  {ch.label}
+                </span>
+                <span className="text-xs text-white/30">{ch.sub}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Название */}
         <div>
           <label className="text-xs text-white/50 mb-1.5 block">Название <span className="text-white/20">(для архива)</span></label>

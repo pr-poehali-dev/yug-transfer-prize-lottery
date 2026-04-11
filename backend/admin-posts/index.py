@@ -127,7 +127,8 @@ def handler(event: dict, context) -> dict:
     action = qs.get('action', '')
 
     bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-    channel_id = os.environ.get('TELEGRAM_CHANNEL_ID', '')
+    channel_main = os.environ.get('TELEGRAM_CHANNEL_ID', '')
+    channel_kurilka = os.environ.get('TELEGRAM_CHANNEL_ID_2', '')
 
     # ── GET — список постов ─────────────────────────────────────────────────
     if method == 'GET':
@@ -169,8 +170,11 @@ def handler(event: dict, context) -> dict:
     if method == 'POST' and action == 'publish':
         body = json.loads(event.get('body') or '{}')
         post_id = body.get('post_id')
+        chat = body.get('chat', 'main')
         if not post_id:
             return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'post_id обязателен'})}
+
+        channel_id = channel_kurilka if chat == 'kurilka' else channel_main
 
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
