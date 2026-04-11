@@ -35,6 +35,7 @@ export interface RaffleDB {
   gradient: string;
   winner?: string;
   winner_phone?: string;
+  winner_username?: string;
   photo_url?: string;
   target_amount?: number;
 }

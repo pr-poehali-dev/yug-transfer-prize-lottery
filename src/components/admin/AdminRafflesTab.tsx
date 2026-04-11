@@ -69,14 +69,29 @@ export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, 
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">🎁 {r.prize} · {r.min_amount.toLocaleString("ru")} ₽</p>
                 <p className="text-xs text-muted-foreground mt-0.5">📅 до {formatDate(r.end_date)}</p>
                 {r.status === "ended" && r.winner && (
-                  <p className="text-xs text-yellow-400 mt-1 flex items-center gap-1.5 flex-wrap">
-                    <span>🏆</span>
-                    <span className="font-medium">{r.winner}</span>
-                    {r.winner_phone && (
-                      <span className="text-muted-foreground">📱 +{r.winner_phone}</span>
-                    )}
-                    <span className="text-muted-foreground">· {formatDate(r.end_date)}</span>
-                  </p>
+                  <div className="mt-1.5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2 flex flex-col gap-1">
+                    <p className="text-xs text-yellow-400 flex items-center gap-1.5 font-semibold">
+                      🏆 {r.winner}
+                      <span className="text-muted-foreground font-normal">· {formatDate(r.end_date)}</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {r.winner_phone && (
+                        <a href={`tel:+${r.winner_phone}`}
+                          className="flex items-center gap-1 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-0.5 hover:bg-emerald-500/20 transition-colors">
+                          📱 +{r.winner_phone}
+                        </a>
+                      )}
+                      {r.winner_username && (
+                        <a href={`https://t.me/${r.winner_username}`} target="_blank" rel="noreferrer"
+                          className="flex items-center gap-1 text-xs text-[#2AABEE] bg-[#2AABEE]/10 border border-[#2AABEE]/20 rounded-lg px-2 py-0.5 hover:bg-[#2AABEE]/20 transition-colors">
+                          ✈️ @{r.winner_username}
+                        </a>
+                      )}
+                      {!r.winner_phone && !r.winner_username && (
+                        <span className="text-xs text-muted-foreground">контакты не указаны</span>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
 

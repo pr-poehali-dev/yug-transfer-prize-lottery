@@ -59,6 +59,7 @@ def row_to_dict(row):
         'photo_url': row[10] if len(row) > 10 else None,
         'target_amount': row[11] if len(row) > 11 else 0,
         'winner_phone': row[12] if len(row) > 12 else None,
+        'winner_username': row[13] if len(row) > 13 else None,
     }
 
 
@@ -217,7 +218,14 @@ def handler(event: dict, context) -> dict:
                         AND (u.first_name = r.winner
                              OR u.first_name || ' ' || COALESCE(u.last_name, '') = r.winner
                              OR u.username = r.winner)
-                        LIMIT 1) as winner_phone
+                        LIMIT 1) as winner_phone,
+                       (SELECT u.username FROM {SCHEMA}.users u
+                        JOIN {SCHEMA}.entries e ON e.user_id = u.id
+                        WHERE e.raffle_id = r.id
+                        AND (u.first_name = r.winner
+                             OR u.first_name || ' ' || COALESCE(u.last_name, '') = r.winner
+                             OR u.username = r.winner)
+                        LIMIT 1) as winner_username
                 FROM {SCHEMA}.raffles r
                 ORDER BY r.created_at DESC
             """)
