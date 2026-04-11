@@ -218,6 +218,7 @@ def handler(event: dict, context) -> dict:
                         AND (u.first_name = r.winner
                              OR u.first_name || ' ' || COALESCE(u.last_name, '') = r.winner
                              OR u.username = r.winner)
+                        AND u.phone IS NOT NULL AND u.phone != ''
                         LIMIT 1) as winner_phone,
                        (SELECT u.username FROM {SCHEMA}.users u
                         JOIN {SCHEMA}.entries e ON e.user_id = u.id
