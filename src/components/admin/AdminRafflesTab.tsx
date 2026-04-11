@@ -69,9 +69,10 @@ export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, 
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">🎁 {r.prize} · {r.min_amount.toLocaleString("ru")} ₽</p>
                 <p className="text-xs text-muted-foreground mt-0.5">📅 до {formatDate(r.end_date)}</p>
                 {r.status === "ended" && r.winner && (
-                  <p className="text-xs text-yellow-400 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-yellow-400 mt-1 flex items-center gap-1.5">
                     <span>🏆</span>
                     <span className="font-medium">{r.winner}</span>
+                    <span className="text-muted-foreground">· {formatDate(r.end_date)}</span>
                   </p>
                 )}
               </div>
