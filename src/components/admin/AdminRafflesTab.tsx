@@ -19,6 +19,13 @@ const statusCls: Record<string, string> = {
   ended: "bg-slate-500/20 text-slate-400 border-slate-500/30",
 };
 
+function formatDate(dateStr: string) {
+  if (!dateStr) return "—";
+  try {
+    return new Date(dateStr).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+  } catch { return dateStr; }
+}
+
 export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, onAdd, onEdit, onFinish, onDelete }: AdminRafflesTabProps) {
   return (
     <div>
@@ -30,7 +37,7 @@ export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, 
       </div>
 
       {loadingRaffles ? (
-        <div className="flex justify-center py-20 text-muted-foreground">
+        <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
         </div>
       ) : raffles.length === 0 ? (
@@ -45,13 +52,31 @@ export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, 
         <div className="space-y-3">
           {raffles.map(r => (
             <div key={r.id} className="card-glow rounded-2xl p-4 flex items-center gap-4">
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${r.gradient} flex items-center justify-center shrink-0`}>
-                <Icon name={r.prize_icon as string} size={18} className="text-white" fallback="Gift" />
+
+              {/* Фото приза */}
+              <div className="w-14 h-14 rounded-xl shrink-0 overflow-hidden bg-white/5 flex items-center justify-center">
+                {r.photo_url
+                  ? <img src={r.photo_url} alt={r.title} className="w-full h-full object-cover" />
+                  : <div className={`w-full h-full bg-gradient-to-br ${r.gradient} flex items-center justify-center`}>
+                      <Icon name={r.prize_icon as string} size={22} className="text-white" fallback="Gift" />
+                    </div>
+                }
               </div>
+
+              {/* Основная инфо */}
               <div className="flex-1 min-w-0">
-                <p className="text-white font-medium text-sm truncate">{r.title}</p>
-                <p className="text-xs text-muted-foreground">{r.prize} · до {r.end_date} · {r.min_amount} ₽</p>
+                <p className="text-white font-semibold text-sm truncate">{r.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">🎁 {r.prize} · {r.min_amount.toLocaleString("ru")} ₽</p>
+                <p className="text-xs text-muted-foreground mt-0.5">📅 до {formatDate(r.end_date)}</p>
+                {r.status === "ended" && r.winner && (
+                  <p className="text-xs text-yellow-400 mt-1 flex items-center gap-1">
+                    <span>🏆</span>
+                    <span className="font-medium">{r.winner}</span>
+                  </p>
+                )}
               </div>
+
+              {/* Статус и кнопки */}
               <div className="flex items-center gap-2 shrink-0">
                 <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${statusCls[r.status]}`}>
                   {statusLabel[r.status]}
