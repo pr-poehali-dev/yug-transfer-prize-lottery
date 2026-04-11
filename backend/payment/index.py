@@ -1,7 +1,7 @@
 """
 Платежи через ЮKassa.
-POST /create  — создать платёж на пополнение баланса
-POST /webhook — вебхук от ЮKassa, зачисляет баланс после успешной оплаты
+POST ?action=create  — создать платёж за участие в розыгрыше
+POST ?action=webhook — вебхук от ЮKassa, записывает участие после успешной оплаты
 """
 import os
 import json
@@ -18,19 +18,16 @@ CORS = {
 }
 
 YOOKASSA_URL = 'https://api.yookassa.ru/v3/payments'
+SCHEMA = 't_p67171637_yug_transfer_prize_l'
 
 
 def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
 
-def get_schema():
-    return os.environ.get('MAIN_DB_SCHEMA', 'public')
-
-
 def yk_auth_header():
-    shop_id = os.environ.get('YOOKASSA_SHOP_ID', '')
-    secret = os.environ.get('YOOKASSA_SECRET_KEY', '')
+    shop_id = os.environ.get('YUKASSA_SHOP_ID', '')
+    secret = os.environ.get('YUKASSA_SECRET_KEY', '')
     token = base64.b64encode(f"{shop_id}:{secret}".encode()).decode()
     return f"Basic {token}"
 
@@ -50,28 +47,49 @@ def handler(event: dict, context) -> dict:
     except Exception:
         return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Invalid JSON'})}
 
-    schema = get_schema()
-
-    # Создать платёж
+    # Создать платёж за участие в розыгрыше
     if action == 'create':
         headers = event.get('headers') or {}
         user_id = headers.get('X-User-Id') or headers.get('x-user-id')
         if not user_id:
             return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
 
+        raffle_id = body.get('raffle_id')
+        raffle_title = body.get('raffle_title', 'Розыгрыш')
         amount = int(body.get('amount', 0))
-        if amount < 100:
-            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Минимальная сумма 100 ₽'})}
+        return_url = body.get('return_url', 'https://ug-gift.ru?payment=success')
+
+        if not raffle_id:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'raffle_id обязателен'})}
+        if amount < 1:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Некорректная сумма'})}
+
+        # Проверяем что пользователь ещё не участвует
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT id FROM {SCHEMA}.entries WHERE user_id = %s AND raffle_id = %s",
+            (user_id, raffle_id)
+        )
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Вы уже участвуете в этом розыгрыше'})}
+        cur.close()
+        conn.close()
 
         idempotency_key = str(uuid.uuid4())
-        return_url = body.get('return_url', 'https://poehali.dev')
-
         payload = {
             'amount': {'value': f'{amount}.00', 'currency': 'RUB'},
             'confirmation': {'type': 'redirect', 'return_url': return_url},
             'capture': True,
-            'description': f'Пополнение баланса на {amount} ₽',
-            'metadata': {'user_id': str(user_id)},
+            'description': f'Участие в розыгрыше: {raffle_title}',
+            'metadata': {
+                'user_id': str(user_id),
+                'raffle_id': str(raffle_id),
+                'raffle_title': raffle_title,
+                'amount': str(amount),
+            },
         }
 
         req = urllib.request.Request(
@@ -89,18 +107,20 @@ def handler(event: dict, context) -> dict:
                 yk_data = json.loads(resp.read())
         except urllib.error.HTTPError as e:
             err = e.read().decode()
+            print(f"[YK error] {err}")
             return {'statusCode': 502, 'headers': CORS, 'body': json.dumps({'error': 'ЮKassa error', 'detail': err})}
 
         payment_id = yk_data['id']
         confirm_url = yk_data['confirmation']['confirmation_url']
 
-        # Сохраняем транзакцию со статусом pending
+        # Сохраняем транзакцию pending
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute(f"""
-            INSERT INTO {schema}.transactions (user_id, type, amount, description, payment_id, status)
-            VALUES (%s, 'deposit', %s, %s, %s, 'pending')
-        """, (user_id, amount, f'Пополнение баланса на {amount} ₽', payment_id))
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.transactions (user_id, type, amount, description, payment_id, status) "
+            f"VALUES (%s, 'entry', %s, %s, %s, 'pending')",
+            (user_id, amount, f'Участие: {raffle_title}', payment_id)
+        )
         conn.commit()
         cur.close()
         conn.close()
@@ -116,27 +136,50 @@ def handler(event: dict, context) -> dict:
         status = obj.get('status', '')
         metadata = obj.get('metadata', {})
         user_id = metadata.get('user_id')
+        raffle_id = metadata.get('raffle_id')
+        raffle_title = metadata.get('raffle_title', '')
         amount_val = obj.get('amount', {})
         amount = int(float(amount_val.get('value', 0)))
 
-        if event_type == 'payment.succeeded' and status == 'succeeded' and user_id:
+        if event_type == 'payment.succeeded' and status == 'succeeded' and user_id and raffle_id:
             conn = get_conn()
             cur = conn.cursor()
-            # Проверяем, не обработан ли уже этот платёж
-            cur.execute(f"SELECT status FROM {schema}.transactions WHERE payment_id = %s", (payment_id,))
+
+            # Идемпотентность — не обрабатываем дважды
+            cur.execute(f"SELECT status FROM {SCHEMA}.transactions WHERE payment_id = %s", (payment_id,))
             row = cur.fetchone()
             if row and row[0] != 'succeeded':
-                # Зачисляем баланс
-                cur.execute(f"UPDATE {schema}.users SET balance = balance + %s WHERE id = %s", (amount, user_id))
-                cur.execute(f"UPDATE {schema}.transactions SET status = 'succeeded' WHERE payment_id = %s", (payment_id,))
+                # Записываем участие в розыгрыше
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.entries (user_id, raffle_id, tickets, amount) "
+                    f"VALUES (%s, %s, 1, %s) ON CONFLICT DO NOTHING",
+                    (user_id, raffle_id, amount)
+                )
+                # Увеличиваем счётчик участников розыгрыша
+                cur.execute(
+                    f"UPDATE {SCHEMA}.raffles SET participants = participants + 1 WHERE id = %s",
+                    (raffle_id,)
+                )
+                # Обновляем статистику пользователя
+                cur.execute(
+                    f"UPDATE {SCHEMA}.users SET total_entries = total_entries + 1, total_spent = total_spent + %s WHERE id = %s",
+                    (amount, user_id)
+                )
+                # Обновляем транзакцию
+                cur.execute(
+                    f"UPDATE {SCHEMA}.transactions SET status = 'completed', description = %s WHERE payment_id = %s",
+                    (f'Участие: {raffle_title}', payment_id)
+                )
                 conn.commit()
+                print(f"[PAYMENT] user {user_id} entered raffle {raffle_id} for {amount}₽")
+
             cur.close()
             conn.close()
 
         if event_type == 'payment.canceled':
             conn = get_conn()
             cur = conn.cursor()
-            cur.execute(f"UPDATE {schema}.transactions SET status = 'canceled' WHERE payment_id = %s", (payment_id,))
+            cur.execute(f"UPDATE {SCHEMA}.transactions SET status = 'canceled' WHERE payment_id = %s", (payment_id,))
             conn.commit()
             cur.close()
             conn.close()
