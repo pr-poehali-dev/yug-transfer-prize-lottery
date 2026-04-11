@@ -73,6 +73,7 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
     if (!user) { onLoginRequired(); return; }
     if (raffle.status === "upcoming") return;
     setPaying(true); setError("");
+    console.log("[Pay] start", { raffle_id: raffle.id, amount: raffle.minAmount, user_id: user.id });
     try {
       const res = await fetch(`${PAYMENT_URL}?action=create`, {
         method: "POST",
@@ -85,12 +86,16 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
         }),
       });
       const data = await res.json();
+      console.log("[Pay] response", res.status, data);
       if (data.ok && data.confirmation_url) {
         window.location.href = data.confirmation_url;
       } else {
         setError(data.error || "Ошибка оплаты");
       }
-    } catch { setError("Нет соединения"); }
+    } catch (e) {
+      console.error("[Pay] error", e);
+      setError("Нет соединения");
+    }
     finally { setPaying(false); }
   };
 
