@@ -1,0 +1,1 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.users DROP CONSTRAINT users_telegram_id_key;
