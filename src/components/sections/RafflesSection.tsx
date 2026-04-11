@@ -232,6 +232,8 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
               </div>
               <a
                 href={confirmUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={() => { if (paymentId) sessionStorage.setItem("pending_payment_id", paymentId); }}
                 className="w-full grad-btn rounded-2xl py-4 font-bold text-lg font-golos flex items-center justify-center gap-2 text-white text-center no-underline"
               >
