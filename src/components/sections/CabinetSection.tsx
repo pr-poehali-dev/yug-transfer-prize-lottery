@@ -36,7 +36,7 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
       fetch(CABINET_URL, { headers: { "X-User-Id": String(uid) } }).then(r => r.json()),
     ]).then(([e, t, u]) => {
       if (e.ok) setEntries(e.entries || []);
-      if (t.ok) setTransactions((t.transactions || []).filter((tx: Transaction) => tx.status !== "pending"));
+      if (t.ok) setTransactions((t.transactions || []).filter((tx: Transaction) => tx.status === "completed"));
       if (u.ok) onUserUpdate(u.user as AppUser);
     }).catch(() => {});
   };
@@ -75,7 +75,7 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
       fetch(`${CABINET_URL}?transactions`, { headers: { "X-User-Id": String(user.id) } }).then(r => r.json()),
     ]).then(([e, t]) => {
       if (e.ok) setEntries(e.entries || []);
-      if (t.ok) setTransactions((t.transactions || []).filter((tx: Transaction) => tx.status !== "pending"));
+      if (t.ok) setTransactions((t.transactions || []).filter((tx: Transaction) => tx.status === "completed"));
     }).catch(() => {}).finally(() => setLoading(false));
   }, [user?.id]);
 
