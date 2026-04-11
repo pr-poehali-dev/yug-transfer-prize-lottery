@@ -97,14 +97,11 @@ def notify_channel_new_raffle(raffle: dict):
         return
 
     end_date = raffle.get('end_date', '')[:10] if raffle.get('end_date') else '—'
-    target = raffle.get('target_amount', 0)
-    target_line = f"🎯 Цель сбора: <b>{target:,} ₽</b>\n".replace(',', ' ') if target else ''
     text = (
         f"🎰 <b>Новый розыгрыш!</b>\n\n"
         f"🏆 <b>{raffle['title']}</b>\n"
         f"🎁 Приз: <b>{raffle['prize']}</b>\n"
         f"💰 Взнос: <b>{raffle['min_amount']} ₽</b>\n"
-        f"{target_line}"
         f"📅 До: <b>{end_date}</b>\n\n"
         f"🔥 Залетай и испытай удачу!\n"
         f"<a href=\"https://ug-gift.ru\">👉 ug-gift.ru</a>"
