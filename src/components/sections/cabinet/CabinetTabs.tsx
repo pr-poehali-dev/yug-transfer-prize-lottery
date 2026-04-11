@@ -47,7 +47,12 @@ export function CabinetTabs({ tab, setTab, entries, transactions, myWins, loadin
                 </div>
               ) : entries.map(e => (
                 <div key={e.id} className="glass rounded-2xl p-4 flex items-center gap-4">
-                  <div className="text-3xl shrink-0">{e.raffle_icon || "🎁"}</div>
+                  <div className="w-16 h-16 rounded-xl shrink-0 overflow-hidden bg-white/5 flex items-center justify-center">
+                    {e.raffle_photo
+                      ? <img src={e.raffle_photo} alt={e.raffle_title} className="w-full h-full object-cover" />
+                      : <span className="text-3xl">{e.raffle_icon || "🎁"}</span>
+                    }
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-white text-sm truncate">{e.raffle_title}</p>
                     <p className="text-muted-foreground text-xs mt-0.5">{e.raffle_prize}</p>
@@ -106,7 +111,12 @@ export function CabinetTabs({ tab, setTab, entries, transactions, myWins, loadin
                 <div key={e.id} className="glass rounded-2xl p-4 relative overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 via-transparent to-orange-500/10 pointer-events-none" />
                   <div className="flex items-center gap-4 relative">
-                    <div className="text-4xl shrink-0">{e.raffle_icon || "🏆"}</div>
+                    <div className="w-16 h-16 rounded-xl shrink-0 overflow-hidden bg-white/5 flex items-center justify-center">
+                      {e.raffle_photo
+                        ? <img src={e.raffle_photo} alt={e.raffle_title} className="w-full h-full object-cover" />
+                        : <span className="text-4xl">{e.raffle_icon || "🏆"}</span>
+                      }
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-white">{e.raffle_title}</p>
                       <p className="text-yellow-400 text-sm font-medium mt-0.5">🎁 {e.raffle_prize}</p>

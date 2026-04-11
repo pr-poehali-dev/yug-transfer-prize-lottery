@@ -41,7 +41,7 @@ def handler(event: dict, context) -> dict:
     if 'entries' in params:
         cur.execute(f"""
             SELECT e.id, r.title, r.prize, r.prize_icon, r.gradient, r.status, r.winner,
-                   e.tickets, e.amount, e.created_at
+                   e.tickets, e.amount, e.created_at, r.photo_url
             FROM {schema}.entries e
             JOIN {schema}.raffles r ON r.id = e.raffle_id
             WHERE e.user_id = %s
@@ -57,6 +57,7 @@ def handler(event: dict, context) -> dict:
             'raffle_status': r[5], 'winner': r[6],
             'tickets': r[7], 'amount': r[8],
             'created_at': r[9].isoformat() if r[9] else None,
+            'raffle_photo': r[10],
         } for r in rows]
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'entries': entries})}
 

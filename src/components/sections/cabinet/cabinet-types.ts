@@ -8,6 +8,7 @@ export interface Entry {
   raffle_title: string;
   raffle_prize: string;
   raffle_icon: string;
+  raffle_photo?: string | null;
   raffle_status: string;
   winner: string | null;
   tickets: number;
