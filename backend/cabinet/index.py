@@ -37,15 +37,16 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
-    # История участий
+    # История участий (группируем по розыгрышу, суммируем билеты и сумму)
     if 'entries' in params:
         cur.execute(f"""
-            SELECT e.id, r.title, r.prize, r.prize_icon, r.gradient, r.status, r.winner,
-                   e.tickets, e.amount, e.created_at, r.photo_url
+            SELECT MIN(e.id), r.title, r.prize, r.prize_icon, r.gradient, r.status, r.winner,
+                   SUM(e.tickets), SUM(e.amount), MAX(e.created_at), r.photo_url, r.id
             FROM {schema}.entries e
             JOIN {schema}.raffles r ON r.id = e.raffle_id
             WHERE e.user_id = %s
-            ORDER BY e.created_at DESC
+            GROUP BY r.id, r.title, r.prize, r.prize_icon, r.gradient, r.status, r.winner, r.photo_url
+            ORDER BY MAX(e.created_at) DESC
             LIMIT 50
         """, (user_id,))
         rows = cur.fetchall()
