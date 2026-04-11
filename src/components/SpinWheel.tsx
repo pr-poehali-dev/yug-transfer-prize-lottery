@@ -165,7 +165,7 @@ function WheelCanvas({ participants, spinning, winnerIndex }: { participants: Pa
       ref={canvasRef}
       width={320}
       height={320}
-      className="rounded-full"
+      className="rounded-full w-full max-w-[280px] h-auto"
       style={{ filter: "drop-shadow(0 0 32px rgba(168,85,247,0.5))" }}
     />
   );
@@ -228,14 +228,14 @@ export function SpinWheel() {
   const participants = spin.participants || [];
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-3">
       <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
 
-      <div className="relative w-full max-w-md animate-scale-in" style={{ animationFillMode: "forwards" }}>
+      <div className="relative w-full max-w-md max-h-[95dvh] flex flex-col animate-scale-in" style={{ animationFillMode: "forwards" }}>
         {/* Свечение */}
-        <div className="absolute -inset-4 bg-gradient-to-r from-purple-600/40 via-pink-600/40 to-orange-500/40 rounded-[2rem] blur-2xl animate-pulse" />
+        <div className="absolute -inset-4 bg-gradient-to-r from-purple-600/40 via-pink-600/40 to-orange-500/40 rounded-[2rem] blur-2xl animate-pulse pointer-events-none" />
 
-        <div className="relative glass rounded-3xl p-6 border border-purple-500/30 text-center">
+        <div className="relative glass rounded-3xl p-5 border border-purple-500/30 text-center overflow-y-auto flex-1">
           {/* Заголовок */}
           <div className="mb-4">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-bold uppercase tracking-wider mb-3 animate-pulse">
@@ -247,7 +247,7 @@ export function SpinWheel() {
           </div>
 
           {/* Колесо */}
-          <div className="flex justify-center mb-5">
+          <div className="flex justify-center mb-4">
             {participants.length > 1 ? (
               <WheelCanvas
                 participants={participants}
@@ -255,7 +255,7 @@ export function SpinWheel() {
                 winnerIndex={winnerIndex}
               />
             ) : (
-              <div className="w-80 h-80 rounded-full bg-gradient-to-br from-purple-600 to-pink-500 flex items-center justify-center">
+              <div className="w-full max-w-[280px] aspect-square rounded-full bg-gradient-to-br from-purple-600 to-pink-500 flex items-center justify-center mx-auto">
                 <p className="text-white font-bold text-xl px-4 text-center">
                   {participants[0]?.name || "—"}
                 </p>
