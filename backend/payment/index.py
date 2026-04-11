@@ -65,20 +65,6 @@ def handler(event: dict, context) -> dict:
         if amount < 1:
             return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Некорректная сумма'})}
 
-        # Проверяем что пользователь ещё не участвует
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"SELECT id FROM {SCHEMA}.entries WHERE user_id = %s AND raffle_id = %s",
-            (user_id, raffle_id)
-        )
-        if cur.fetchone():
-            cur.close()
-            conn.close()
-            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Вы уже участвуете в этом розыгрыше'})}
-        cur.close()
-        conn.close()
-
         idempotency_key = str(uuid.uuid4())
         payload = {
             'amount': {'value': f'{amount}.00', 'currency': 'RUB'},
