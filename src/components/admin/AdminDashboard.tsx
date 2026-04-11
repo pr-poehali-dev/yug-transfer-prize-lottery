@@ -2,103 +2,14 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { RaffleFormModal } from "./RaffleFormModal";
 import {
-  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL, PUSH_URL, JACKPOT_URL,
+  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL, PUSH_URL,
   AdminTab, AdminStats, Client, Notification, RaffleDB,
 } from "./adminTypes";
-
-function JackpotAdminTab({ token }: { token: string }) {
-  const [data, setData] = useState<{ balance: number; next_draw_at: string | null; last_winner: string | null } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [drawing, setDrawing] = useState(false);
-  const [result, setResult] = useState<{ winner: string; amount: number } | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    fetch(JACKPOT_URL)
-      .then(r => r.json())
-      .then(d => { if (d.ok) setData(d); })
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleDraw = async () => {
-    if (!confirm("Провести розыгрыш джекпота? Это действие необратимо — баланс обнулится и будет выбран победитель.")) return;
-    setDrawing(true); setError(""); setResult(null);
-    try {
-      const res = await fetch(JACKPOT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({}),
-      });
-      const d = await res.json();
-      if (d.ok) {
-        setResult({ winner: d.winner, amount: d.amount });
-        setData(prev => prev ? { ...prev, balance: 0, last_winner: d.winner } : prev);
-      } else {
-        setError(d.error || "Ошибка");
-      }
-    } catch { setError("Нет соединения"); }
-    finally { setDrawing(false); }
-  };
-
-  return (
-    <div className="max-w-xl">
-      <h2 className="font-oswald text-3xl font-bold text-white mb-6">Джекпот</h2>
-
-      <div className="glass rounded-2xl p-6 mb-4 border border-yellow-500/20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-orange-500/5 pointer-events-none" />
-        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Текущий баланс</p>
-        {loading ? (
-          <div className="w-6 h-6 border-2 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin my-2" />
-        ) : (
-          <p className="font-oswald text-4xl font-bold"
-            style={{ background: "linear-gradient(135deg,#fbbf24,#f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            {(data?.balance ?? 0).toLocaleString("ru")} ₽
-          </p>
-        )}
-        {data?.next_draw_at && (
-          <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
-            <Icon name="Calendar" size={13} />
-            Следующий розыгрыш: {new Date(data.next_draw_at).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
-          </p>
-        )}
-        {data?.last_winner && (
-          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
-            <Icon name="Trophy" size={13} className="text-yellow-400" />
-            Последний победитель: <span className="text-yellow-400 font-medium">{data.last_winner}</span>
-          </p>
-        )}
-      </div>
-
-      {result && (
-        <div className="glass rounded-2xl p-5 mb-4 border border-emerald-500/30 bg-emerald-500/5">
-          <div className="flex items-center gap-3">
-            <div className="text-4xl">🏆</div>
-            <div>
-              <p className="text-emerald-400 font-bold text-lg">{result.winner}</p>
-              <p className="text-muted-foreground text-sm">Выиграл {result.amount.toLocaleString("ru")} ₽</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-
-      <button
-        onClick={handleDraw}
-        disabled={drawing || (data?.balance ?? 0) <= 0}
-        className="w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:opacity-90 transition-opacity disabled:opacity-50"
-      >
-        {drawing
-          ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Розыгрыш...</>
-          : <><Icon name="Gem" size={18} />Провести розыгрыш джекпота</>
-        }
-      </button>
-      {(data?.balance ?? 0) <= 0 && !loading && (
-        <p className="text-xs text-muted-foreground text-center mt-2">Баланс пуст — розыгрыш недоступен</p>
-      )}
-    </div>
-  );
-}
+import { AdminDashboardTab } from "./AdminDashboardTab";
+import { AdminClientsTab } from "./AdminClientsTab";
+import { AdminNotifyTab } from "./AdminNotifyTab";
+import { AdminRafflesTab } from "./AdminRafflesTab";
+import { AdminJackpotTab } from "./AdminJackpotTab";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("raffles");
@@ -254,8 +165,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     } finally { setDeleting(null); }
   };
 
-  const active = raffles.filter(r => r.status === "active").length;
-
   const TABS = [
     { id: "dashboard" as AdminTab, label: "Обзор", icon: "LayoutDashboard" },
     { id: "raffles" as AdminTab, label: "Розыгрыши", icon: "Gift" },
@@ -263,13 +172,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     { id: "notify" as AdminTab, label: "Рассылка", icon: "Bell" },
     { id: "jackpot" as AdminTab, label: "Джекпот", icon: "Gem" },
   ];
-
-  const statusLabel: Record<string, string> = { active: "Активен", upcoming: "Скоро", ended: "Завершён" };
-  const statusCls: Record<string, string> = {
-    active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    upcoming: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-    ended: "bg-slate-500/20 text-slate-400 border-slate-500/30",
-  };
 
   return (
     <div className="min-h-screen mesh-bg">
@@ -316,267 +218,57 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
 
           {tab === "dashboard" && (
-            <div>
-              <h2 className="font-oswald text-3xl font-bold text-white mb-6">Обзор</h2>
-              {loadingStats ? (
-                <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    {[
-                      { label: "Всего клиентов", value: stats?.users.total ?? raffles.length, sub: `+${stats?.users.new_week ?? 0} за неделю`, icon: "Users", grad: "from-purple-500 to-pink-500" },
-                      { label: "Платежей", value: stats?.payments.total_count ?? 0, sub: `${(stats?.payments.month_amount ?? 0).toLocaleString("ru")} ₽ за месяц`, icon: "CreditCard", grad: "from-cyan-500 to-blue-500" },
-                      { label: "Оборот всего", value: `${(stats?.payments.total_amount ?? 0).toLocaleString("ru")} ₽`, sub: "все платежи", icon: "Banknote", grad: "from-orange-500 to-red-500" },
-                      { label: "Активных розыгрышей", value: stats?.raffles.active ?? active, sub: `всего ${stats?.raffles.total ?? raffles.length}`, icon: "Gift", grad: "from-green-500 to-teal-500" },
-                    ].map((s, i) => (
-                      <div key={i} className="card-glow rounded-2xl p-5">
-                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.grad} flex items-center justify-center mb-3`}>
-                          <Icon name={s.icon as string} size={18} className="text-white" fallback="Star" />
-                        </div>
-                        <p className="font-oswald text-2xl font-bold text-white">{s.value}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
-                        <p className="text-xs text-purple-400 mt-1">{s.sub}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="card-glow rounded-2xl p-5">
-                      <h3 className="font-semibold text-white mb-3 flex items-center gap-2"><Icon name="TrendingUp" size={16} className="text-purple-400" />Новые клиенты</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">За 7 дней</span><span className="text-white font-medium">{stats?.users.new_week ?? 0}</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">За 30 дней</span><span className="text-white font-medium">{stats?.users.new_month ?? 0}</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Всего</span><span className="text-white font-medium">{stats?.users.total ?? 0}</span></div>
-                      </div>
-                    </div>
-                    <div className="card-glow rounded-2xl p-5">
-                      <h3 className="font-semibold text-white mb-3 flex items-center gap-2"><Icon name="Wallet" size={16} className="text-cyan-400" />Финансы</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Платежей за месяц</span><span className="text-white font-medium">{(stats?.payments.month_amount ?? 0).toLocaleString("ru")} ₽</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Кол-во транзакций</span><span className="text-white font-medium">{stats?.payments.total_count ?? 0}</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Участий в розыгрышах</span><span className="text-white font-medium">{stats?.entries.total ?? 0}</span></div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <AdminDashboardTab stats={stats} loadingStats={loadingStats} raffles={raffles} />
           )}
 
           {tab === "clients" && (
-            <div>
-              <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-                <h2 className="font-oswald text-3xl font-bold text-white">Клиенты <span className="text-muted-foreground text-xl">({clientsTotal})</span></h2>
-                <div className="relative">
-                  <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    value={clientsSearch}
-                    onChange={e => { setClientsSearch(e.target.value); fetchClients(1, e.target.value); }}
-                    placeholder="Поиск по имени, @username..."
-                    className="bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl pl-9 pr-4 py-2 text-white placeholder-muted-foreground text-sm outline-none w-64"
-                  />
-                </div>
-              </div>
-              {loadingClients ? (
-                <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div>
-              ) : clients.length === 0 ? (
-                <div className="text-center py-20 text-muted-foreground">
-                  <Icon name="Users" size={48} className="mx-auto mb-3 opacity-20" />
-                  <p>Клиентов пока нет</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2 mb-4">
-                    {clients.map(c => (
-                      <div key={c.id} className="card-glow rounded-2xl p-4 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm shrink-0 overflow-hidden">
-                          {c.photo_url ? <img src={c.photo_url} alt="" className="w-full h-full object-cover" /> : (c.first_name[0] || "?").toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white font-medium text-sm">{c.first_name} {c.last_name}</p>
-                          <p className="text-xs text-muted-foreground">{c.username ? `@${c.username}` : `TG: ${c.telegram_id}`} · {c.created_at.slice(0, 10)}</p>
-                        </div>
-                        <div className="hidden md:flex items-center gap-4 text-xs shrink-0">
-                          <div className="text-center">
-                            <p className="text-white font-semibold">{c.total_paid.toLocaleString("ru")} ₽</p>
-                            <p className="text-muted-foreground">оплачено</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-white font-semibold">{c.payments_count}</p>
-                            <p className="text-muted-foreground">платежей</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-white font-semibold">{c.entries_count}</p>
-                            <p className="text-muted-foreground">участий</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-white font-semibold">{c.balance.toLocaleString("ru")} ₽</p>
-                            <p className="text-muted-foreground">баланс</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {clientsPages > 1 && (
-                    <div className="flex items-center justify-center gap-2">
-                      <button disabled={clientsPage <= 1} onClick={() => fetchClients(clientsPage - 1, clientsSearch)}
-                        className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-white disabled:opacity-30 text-sm transition-colors">
-                        <Icon name="ChevronLeft" size={16} />
-                      </button>
-                      <span className="text-sm text-muted-foreground">стр. {clientsPage} из {clientsPages}</span>
-                      <button disabled={clientsPage >= clientsPages} onClick={() => fetchClients(clientsPage + 1, clientsSearch)}
-                        className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-white disabled:opacity-30 text-sm transition-colors">
-                        <Icon name="ChevronRight" size={16} />
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            <AdminClientsTab
+              clients={clients}
+              clientsTotal={clientsTotal}
+              clientsPage={clientsPage}
+              clientsPages={clientsPages}
+              clientsSearch={clientsSearch}
+              loadingClients={loadingClients}
+              onSearchChange={search => { setClientsSearch(search); fetchClients(1, search); }}
+              onPageChange={page => fetchClients(page, clientsSearch)}
+            />
           )}
 
           {tab === "notify" && (
-            <div>
-              <h2 className="font-oswald text-3xl font-bold text-white mb-6">Рассылка уведомлений</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="card-glow rounded-2xl p-6">
-                  <h3 className="font-semibold text-white mb-4 flex items-center gap-2"><Icon name="Send" size={16} className="text-purple-400" />Новое сообщение</h3>
-                  <form onSubmit={handleSendNotify} className="space-y-4">
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Тип</label>
-                      <select value={notifyType} onChange={e => setNotifyType(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-white text-sm outline-none">
-                        <option value="info">ℹ️ Информация</option>
-                        <option value="promo">🎁 Акция / Предложение</option>
-                        <option value="raffle">🎰 Новый розыгрыш</option>
-                        <option value="winner">🏆 Победитель</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Заголовок</label>
-                      <input required value={notifyTitle} onChange={e => setNotifyTitle(e.target.value)} placeholder="Например: Новый розыгрыш iPhone!"
-                        className="w-full bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-white placeholder-muted-foreground text-sm outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Текст сообщения</label>
-                      <textarea required value={notifyMsg} onChange={e => setNotifyMsg(e.target.value)} rows={4} placeholder="Текст который получат все клиенты в Telegram..."
-                        className="w-full bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl px-4 py-2.5 text-white placeholder-muted-foreground text-sm outline-none resize-none" />
-                    </div>
-                    <label className="flex items-center gap-3 cursor-pointer select-none">
-                      <div className={`w-10 h-6 rounded-full transition-colors relative ${sendPush ? "bg-purple-500" : "bg-white/10"}`}
-                        onClick={() => setSendPush(v => !v)}>
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${sendPush ? "translate-x-5" : "translate-x-1"}`} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-white">Browser Push</p>
-                        <p className="text-xs text-muted-foreground">
-                          {pushCount !== null ? `${pushCount} подписчиков в браузере` : "Загрузка..."}
-                        </p>
-                      </div>
-                    </label>
-                    {notifyResult && (
-                      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 text-emerald-400 text-sm flex items-center gap-2">
-                        <Icon name="CheckCircle" size={16} />Telegram: {notifyResult.sent} из {notifyResult.total}
-                        {pushResult && <span className="ml-2 text-purple-300">· Browser Push: {pushResult.sent}</span>}
-                      </div>
-                    )}
-                    <button type="submit" disabled={sendingNotify}
-                      className="w-full grad-btn rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-70">
-                      {sendingNotify ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Отправка...</> : <><Icon name="Send" size={15} />Разослать всем клиентам</>}
-                    </button>
-                  </form>
-                </div>
-                <div className="card-glow rounded-2xl p-6">
-                  <h3 className="font-semibold text-white mb-4 flex items-center gap-2"><Icon name="History" size={16} className="text-cyan-400" />История рассылок</h3>
-                  {loadingHistory ? (
-                    <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div>
-                  ) : notifyHistory.length === 0 ? (
-                    <p className="text-muted-foreground text-sm text-center py-8">Рассылок ещё не было</p>
-                  ) : (
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                      {notifyHistory.map(n => (
-                        <div key={n.id} className="bg-white/5 rounded-xl p-3">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-white text-sm font-medium">{n.title}</p>
-                            <span className="text-xs text-muted-foreground shrink-0">{n.sent_at.slice(0, 10)}</span>
-                          </div>
-                          <p className="text-muted-foreground text-xs line-clamp-2 mb-1.5">{n.message}</p>
-                          <p className="text-xs text-purple-400">Получили: {n.recipients_count} чел.</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+            <AdminNotifyTab
+              notifyTitle={notifyTitle}
+              setNotifyTitle={setNotifyTitle}
+              notifyMsg={notifyMsg}
+              setNotifyMsg={setNotifyMsg}
+              notifyType={notifyType}
+              setNotifyType={setNotifyType}
+              sendingNotify={sendingNotify}
+              notifyResult={notifyResult}
+              notifyHistory={notifyHistory}
+              loadingHistory={loadingHistory}
+              sendPush={sendPush}
+              setSendPush={setSendPush}
+              pushCount={pushCount}
+              pushResult={pushResult}
+              onSubmit={handleSendNotify}
+            />
           )}
 
           {tab === "raffles" && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="font-oswald text-3xl font-bold text-white">Розыгрыши</h2>
-                <button onClick={() => { setEditTarget(undefined); setFormOpen(true); }}
-                  className="grad-btn rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center gap-2">
-                  <Icon name="Plus" size={15} />Добавить
-                </button>
-              </div>
-
-              {loadingRaffles ? (
-                <div className="flex justify-center py-20 text-muted-foreground">
-                  <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                </div>
-              ) : raffles.length === 0 ? (
-                <div className="text-center py-20 text-muted-foreground">
-                  <Icon name="Gift" size={48} className="mx-auto mb-3 opacity-20" />
-                  <p className="mb-4">Розыгрышей пока нет</p>
-                  <button onClick={() => { setEditTarget(undefined); setFormOpen(true); }}
-                    className="grad-btn rounded-xl px-6 py-2.5 text-sm font-semibold">
-                    Создать первый
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {raffles.map(r => (
-                    <div key={r.id} className="card-glow rounded-2xl p-4 flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${r.gradient} flex items-center justify-center shrink-0`}>
-                        <Icon name={r.prize_icon as string} size={18} className="text-white" fallback="Gift" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium text-sm truncate">{r.title}</p>
-                        <p className="text-xs text-muted-foreground">{r.prize} · до {r.end_date} · {r.min_amount} ₽</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${statusCls[r.status]}`}>
-                          {statusLabel[r.status]}
-                        </span>
-                        {r.status === "active" && (
-                          <button onClick={() => handleFinish(r)} disabled={finishing === r.id}
-                            className="h-8 px-2.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 flex items-center gap-1.5 text-orange-400 transition-colors disabled:opacity-40 text-xs font-medium">
-                            {finishing === r.id
-                              ? <div className="w-3 h-3 border border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
-                              : <Icon name="FlagTriangleRight" size={13} />}
-                            Завершить
-                          </button>
-                        )}
-                        <button onClick={() => { setEditTarget(r); setFormOpen(true); }}
-                          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
-                          <Icon name="Pencil" size={14} />
-                        </button>
-                        <button onClick={() => handleDelete(r.id)} disabled={deleting === r.id}
-                          className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-colors disabled:opacity-40">
-                          {deleting === r.id
-                            ? <div className="w-3 h-3 border border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                            : <Icon name="Trash2" size={14} />}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <AdminRafflesTab
+              raffles={raffles}
+              loadingRaffles={loadingRaffles}
+              finishing={finishing}
+              deleting={deleting}
+              onAdd={() => { setEditTarget(undefined); setFormOpen(true); }}
+              onEdit={r => { setEditTarget(r); setFormOpen(true); }}
+              onFinish={handleFinish}
+              onDelete={handleDelete}
+            />
           )}
 
           {tab === "jackpot" && (
-            <JackpotAdminTab token={token} />
+            <AdminJackpotTab token={token} />
           )}
 
         </main>
