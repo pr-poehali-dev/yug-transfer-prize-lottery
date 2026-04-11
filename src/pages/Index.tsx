@@ -168,12 +168,20 @@ export default function Index() {
     jackpot: { title: "Джекпот", subtitle: "Накопленный приз для всех участников" },
   };
 
+  const tickerItems = stats ? [
+    `🔥 ${stats.participants.toLocaleString("ru")} участников в розыгрышах`,
+    `🏆 ${stats.winners} победителей уже получили призы`,
+    `💰 ${stats.total_prizes.toLocaleString("ru")} ₽ разыграно`,
+    `🎁 ${stats.active_raffles} активных розыгрыша прямо сейчас`,
+    `👥 ${stats.users.toLocaleString("ru")} участников зарегистрировано`,
+  ] : TICKER_ITEMS;
+
   return (
     <div className="min-h-screen mesh-bg">
       {/* Ticker */}
       <div className="bg-gradient-to-r from-purple-900/60 via-pink-900/60 to-purple-900/60 border-b border-purple-500/20 py-2 overflow-hidden">
         <div className="flex gap-12 animate-ticker whitespace-nowrap">
-          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+          {[...tickerItems, ...tickerItems].map((item, i) => (
             <span key={i} className="text-sm text-purple-200 font-medium flex-shrink-0">
               {item}
               <span className="mx-6 text-purple-500">◆</span>
