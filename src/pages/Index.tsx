@@ -244,6 +244,15 @@ export default function Index() {
                 Войти
               </button>
             )}
+            <a
+              href="https://t.me/KURILKA_GIFT"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="md:hidden flex flex-col items-center gap-0.5 text-sky-400 hover:text-sky-300 transition-colors"
+            >
+              <Icon name="Send" size={20} />
+              <span className="text-[9px] font-medium leading-none">Общение</span>
+            </a>
             <button
               className="md:hidden p-2 text-muted-foreground hover:text-white"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
