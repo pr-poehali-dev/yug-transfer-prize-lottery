@@ -54,9 +54,8 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
 
       <div className="relative w-full max-w-md animate-scale-in" style={{ animationFillMode: "forwards" }}>
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 rounded-3xl blur-lg opacity-40" />
@@ -75,12 +74,14 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
             </div>
 
             <div className="flex bg-white/10 rounded-2xl p-1 mb-5">
-              {(["login", "register"] as const).map((m) => (
-                <button key={m} onClick={() => { setMode(m); setError(""); }}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${mode === m ? "grad-btn shadow-lg" : "text-muted-foreground hover:text-white"}`}>
-                  {m === "login" ? "Войти" : "Регистрация"}
-                </button>
-              ))}
+              <button onClick={() => { setMode("login"); setError(""); }}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${mode === "login" ? "grad-btn shadow-lg" : "text-muted-foreground hover:text-white"}`}>
+                Войти
+              </button>
+              <button onClick={() => { setMode("register"); setError(""); }}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${mode === "register" ? "grad-btn shadow-lg" : "text-muted-foreground hover:text-white"}`}>
+                Регистрация
+              </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3">
