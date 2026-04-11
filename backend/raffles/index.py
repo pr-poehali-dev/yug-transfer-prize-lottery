@@ -211,17 +211,14 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"""
                 SELECT r.id, r.title, r.prize, r.prize_icon, r.end_date, r.participants,
                        r.min_amount, r.status, r.gradient, r.winner, r.photo_url, r.target_amount,
-                       u.phone
+                       (SELECT u.phone FROM {SCHEMA}.users u
+                        JOIN {SCHEMA}.entries e ON e.user_id = u.id
+                        WHERE e.raffle_id = r.id
+                        AND (u.first_name = r.winner
+                             OR u.first_name || ' ' || COALESCE(u.last_name, '') = r.winner
+                             OR u.username = r.winner)
+                        LIMIT 1) as winner_phone
                 FROM {SCHEMA}.raffles r
-                LEFT JOIN {SCHEMA}.users u ON u.id = (
-                    SELECT e.user_id FROM {SCHEMA}.entries e
-                    JOIN {SCHEMA}.users wu ON wu.id = e.user_id
-                    WHERE e.raffle_id = r.id
-                    AND (wu.first_name || COALESCE(' ' || wu.last_name, '') = r.winner
-                         OR wu.first_name = r.winner
-                         OR wu.username = r.winner)
-                    LIMIT 1
-                )
                 ORDER BY r.created_at DESC
             """)
         else:
