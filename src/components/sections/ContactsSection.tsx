@@ -10,7 +10,7 @@ export function ContactsSection() {
         {[
           { icon: "Phone", label: "Телефон", value: "+7 (918) 029-56-72", color: "from-green-500 to-emerald-600" },
           { icon: "Mail", label: "Email", value: "help@ug-transfer.com", color: "from-purple-500 to-pink-600" },
-          { icon: "MessageSquare", label: "Telegram", value: "@raffle_support", color: "from-cyan-500 to-blue-600" },
+          { icon: "MessageSquare", label: "Telegram", value: "@ug_transfer_online", color: "from-cyan-500 to-blue-600" },
         ].map((c, i) => (
           <div
             key={c.label}
