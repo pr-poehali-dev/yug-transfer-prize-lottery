@@ -8,8 +8,8 @@ export function ContactsSection() {
     <div className="max-w-2xl mx-auto">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         {[
-          { icon: "Phone", label: "Телефон", value: "+7 (800) 555-35-35", color: "from-green-500 to-emerald-600" },
-          { icon: "Mail", label: "Email", value: "support@raffle.ru", color: "from-purple-500 to-pink-600" },
+          { icon: "Phone", label: "Телефон", value: "+7 (918) 029-56-72", color: "from-green-500 to-emerald-600" },
+          { icon: "Mail", label: "Email", value: "help@ug-transfer.com", color: "from-purple-500 to-pink-600" },
           { icon: "MessageSquare", label: "Telegram", value: "@raffle_support", color: "from-cyan-500 to-blue-600" },
         ].map((c, i) => (
           <div
@@ -73,6 +73,26 @@ export function ContactsSection() {
             </button>
           </form>
         )}
+      </div>
+
+      <div className="mt-6 card-glow rounded-2xl p-6">
+        <h3 className="font-oswald text-xl font-semibold text-white mb-4 flex items-center gap-2">
+          <Icon name="Building2" size={20} className="text-purple-400" />
+          Реквизиты
+        </h3>
+        <div className="space-y-2">
+          {[
+            { label: "Наименование", value: "ИП Хоменко Владимир Владимирович" },
+            { label: "ИНН", value: "910238307053" },
+            { label: "ОГРНИП", value: "322911200095120" },
+            { label: "Дата регистрации", value: "20.12.2022" },
+          ].map(r => (
+            <div key={r.label} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+              <span className="text-muted-foreground text-sm">{r.label}</span>
+              <span className="text-white text-sm font-medium">{r.value}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="mt-6 card-glow rounded-2xl p-6">
