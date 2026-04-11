@@ -200,7 +200,9 @@ def handler(event: dict, context) -> dict:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Бот или канал не настроен'})}
 
+        print(f"[POSTS] publishing post {post_id} to channel={channel_id}, chat={chat}")
         result = publish_post(bot_token, channel_id, post)
+        print(f"[POSTS] publish result: {result}")
         if not result['ok']:
             cur.close(); conn.close()
             return {'statusCode': 500, 'headers': CORS, 'body': json.dumps({'error': result.get('error', 'Ошибка Telegram')})}
