@@ -358,6 +358,8 @@ def handler(event: dict, context) -> dict:
 
     if method == 'DELETE':
         rid = body.get('id')
+        cur.execute(f"DELETE FROM {SCHEMA}.entries WHERE raffle_id=%s", (rid,))
+        cur.execute(f"DELETE FROM {SCHEMA}.raffle_spin WHERE raffle_id=%s", (rid,))
         cur.execute(f"DELETE FROM {SCHEMA}.raffles WHERE id=%s", (rid,))
         conn.commit()
         cur.close()
