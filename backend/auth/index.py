@@ -112,9 +112,12 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'photo_url': photo_url})}
 
-    phone = body.get('phone', '').strip().replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    raw_phone = body.get('phone', '')
+    phone = raw_phone.strip().replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
     password = body.get('password', '').strip()
     first_name = body.get('first_name', '').strip()
+
+    print(f"[AUTH] action={action} raw_phone={raw_phone!r} phone={phone!r}")
 
     if not phone or not password:
         return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'Заполни все поля'})}
@@ -130,6 +133,9 @@ def handler(event: dict, context) -> dict:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'Пароль минимум 6 символов'})}
 
+        cur.execute(f"SELECT id, phone FROM {schema}.users", )
+        all_phones = cur.fetchall()
+        print(f"[AUTH] all phones in DB: {all_phones}")
         cur.execute(f"SELECT id FROM {schema}.users WHERE phone = %s", (phone,))
         if cur.fetchone():
             cur.close(); conn.close()

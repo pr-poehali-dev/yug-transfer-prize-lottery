@@ -9,8 +9,8 @@
     {
       "name": "Login missing fields",
       "method": "POST",
-      "path": "/login",
-      "body": {},
+      "path": "/",
+      "body": {"action": "login"},
       "expectedStatus": 400,
       "expectedBody": {"ok": false},
       "bodyMatcher": "partial"
