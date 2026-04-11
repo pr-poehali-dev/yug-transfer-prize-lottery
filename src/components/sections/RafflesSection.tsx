@@ -69,6 +69,7 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
   const [confirmUrl, setConfirmUrl] = useState("");
+  const [paymentId, setPaymentId] = useState("");
 
   const handleParticipate = async () => {
     if (!user) { onLoginRequired(); return; }
@@ -88,6 +89,7 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
       const data = await res.json();
       if (data.ok && data.confirmation_url) {
         setConfirmUrl(data.confirmation_url);
+        setPaymentId(data.payment_id || "");
       } else {
         setError(data.error || "Ошибка оплаты");
       }
@@ -191,7 +193,10 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
                 <p className="text-white font-bold text-2xl mt-3">{raffle.minAmount.toLocaleString("ru")} ₽</p>
               </div>
               <button
-                onClick={() => { window.location.href = confirmUrl; }}
+                onClick={() => {
+                  if (paymentId) sessionStorage.setItem("pending_payment_id", paymentId);
+                  window.location.href = confirmUrl;
+                }}
                 className="w-full grad-btn rounded-2xl py-4 font-bold text-lg font-golos flex items-center justify-center gap-2 text-white text-center"
               >
                 🔐 Перейти к оплате

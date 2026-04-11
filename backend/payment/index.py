@@ -1,7 +1,8 @@
 """
-Платежи через ЮKassa. v2
+Платежи через ЮKassa. v3
 POST ?action=create  — создать платёж за участие в розыгрыше
 POST ?action=webhook — вебхук от ЮKassa, записывает участие после успешной оплаты
+GET  ?action=check&payment_id=XXX — проверить статус платежа
 """
 import os
 import json
@@ -13,7 +14,7 @@ import base64
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
 }
 
@@ -196,5 +197,41 @@ def handler(event: dict, context) -> dict:
             conn.close()
 
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
+
+    # Проверить статус платежа по payment_id
+    if action == 'check':
+        payment_id = qs.get('payment_id', '')
+        if not payment_id:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'payment_id обязателен'})}
+
+        # Сначала проверяем в нашей БД
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT status FROM {SCHEMA}.transactions WHERE payment_id = %s LIMIT 1",
+            (payment_id,)
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if row and row[0] == 'completed':
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'status': 'succeeded'})}
+
+        # Если в БД ещё pending — проверяем напрямую у ЮКассы
+        req = urllib.request.Request(
+            f"{YOOKASSA_URL}/{payment_id}",
+            headers={'Authorization': yk_auth_header()},
+            method='GET',
+        )
+        try:
+            with urllib.request.urlopen(req) as resp:
+                yk_data = json.loads(resp.read())
+            yk_status = yk_data.get('status', '')
+            print(f"[YK check] payment_id={payment_id} status={yk_status}")
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'status': yk_status})}
+        except urllib.error.HTTPError as e:
+            err = e.read().decode()
+            return {'statusCode': 502, 'headers': CORS, 'body': json.dumps({'ok': False, 'error': f'ЮKassa: {err}'})}
 
     return {'statusCode': 404, 'headers': CORS, 'body': json.dumps({'error': 'Not found'})}

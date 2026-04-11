@@ -12,6 +12,12 @@
       "path": "/?action=create",
       "body": {"amount": 500},
       "expectedStatus": 401
+    },
+    {
+      "name": "Check without payment_id → 400",
+      "method": "GET",
+      "path": "/?action=check",
+      "expectedStatus": 400
     }
   ]
 }
