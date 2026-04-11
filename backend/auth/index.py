@@ -72,6 +72,7 @@ def handler(event: dict, context) -> dict:
         user_id = int(body.get('user_id', 0))
         first_name = body.get('first_name', '').strip()
         phone = body.get('phone', '').strip()
+        username = body.get('username', '').strip()
         new_password = body.get('new_password', '').strip()
         old_password = body.get('old_password', '').strip()
         photo_data = body.get('photo_data', '')
@@ -89,6 +90,10 @@ def handler(event: dict, context) -> dict:
         if phone:
             updates.append('phone = %s')
             params.append(phone)
+
+        if username:
+            updates.append('username = %s')
+            params.append(username)
 
         if photo_url:
             updates.append('photo_url = %s')
