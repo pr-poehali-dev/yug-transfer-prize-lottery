@@ -86,6 +86,15 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
 
   useEffect(() => { loadMyTickets(); }, [loadMyTickets]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || detail.raffleId === raffle.id) loadMyTickets();
+    };
+    window.addEventListener("payment:success", handler);
+    return () => window.removeEventListener("payment:success", handler);
+  }, [raffle.id, loadMyTickets]);
+
   const handleParticipate = async () => {
     if (!user) { onLoginRequired(); return; }
     if (raffle.status === "upcoming") return;
@@ -98,7 +107,7 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
           raffle_id: raffle.id,
           raffle_title: raffle.title,
           amount: raffle.minAmount,
-          return_url: `${window.location.origin}?payment=success`,
+          return_url: `${window.location.origin}?payment=success&raffle_id=${raffle.id}`,
         }),
       });
       const data = await res.json();
@@ -256,6 +265,14 @@ export function RafflesSection({ user, onLoginRequired, onGoToCabinet }: {
   const [minAmount, setMinAmount] = useState(0);
   const [rawRaffles, setRawRaffles] = useState<Raffle[]>([]);
   const [loadingList, setLoadingList] = useState(true);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success") {
+      const raffleId = params.get("raffle_id") ? Number(params.get("raffle_id")) : undefined;
+      window.dispatchEvent(new CustomEvent("payment:success", { detail: { raffleId } }));
+    }
+  }, []);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
