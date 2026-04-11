@@ -68,12 +68,13 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
   const [hovered, setHovered] = useState(false);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
+  const [confirmUrl, setConfirmUrl] = useState("");
 
   const handleParticipate = async () => {
     if (!user) { onLoginRequired(); return; }
     if (raffle.status === "upcoming") return;
+    if (confirmUrl) { window.location.href = confirmUrl; return; }
     setPaying(true); setError("");
-    console.log("[Pay] start", { raffle_id: raffle.id, amount: raffle.minAmount, user_id: user.id });
     try {
       const res = await fetch(`${PAYMENT_URL}?action=create`, {
         method: "POST",
@@ -86,14 +87,12 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
         }),
       });
       const data = await res.json();
-      console.log("[Pay] response", res.status, data);
       if (data.ok && data.confirmation_url) {
-        window.location.href = data.confirmation_url;
+        setConfirmUrl(data.confirmation_url);
       } else {
         setError(data.error || "Ошибка оплаты");
       }
-    } catch (e) {
-      console.error("[Pay] error", e);
+    } catch {
       setError("Нет соединения");
     }
     finally { setPaying(false); }
@@ -166,21 +165,30 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
 
         {error && <p className="text-red-400 text-xs text-center mb-2">{error}</p>}
         {raffle.status !== "ended" && (
-          <button
-            onClick={handleParticipate}
-            disabled={paying}
-            className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2 disabled:opacity-70"
-          >
-            {paying ? (
-              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Переход к оплате...</>
-            ) : raffle.status === "upcoming" ? (
-              <><Icon name="Bell" size={15} />Напомнить мне</>
-            ) : user ? (
-              <><Icon name="CreditCard" size={15} />Участвовать — {raffle.minAmount.toLocaleString("ru")} ₽</>
-            ) : (
-              <><Icon name="LogIn" size={15} />Войти и участвовать</>
-            )}
-          </button>
+          confirmUrl ? (
+            <a
+              href={confirmUrl}
+              className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2 text-white no-underline"
+            >
+              <Icon name="CreditCard" size={15} />Перейти к оплате — {raffle.minAmount.toLocaleString("ru")} ₽
+            </a>
+          ) : (
+            <button
+              onClick={handleParticipate}
+              disabled={paying}
+              className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2 disabled:opacity-70"
+            >
+              {paying ? (
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Создаём платёж...</>
+              ) : raffle.status === "upcoming" ? (
+                <><Icon name="Bell" size={15} />Напомнить мне</>
+              ) : user ? (
+                <><Icon name="CreditCard" size={15} />Участвовать — {raffle.minAmount.toLocaleString("ru")} ₽</>
+              ) : (
+                <><Icon name="LogIn" size={15} />Войти и участвовать</>
+              )}
+            </button>
+          )
         )}
       </div>
     </div>
