@@ -190,12 +190,12 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
                 <p className="text-muted-foreground text-sm">Нажмите кнопку ниже для перехода к оплате</p>
                 <p className="text-white font-bold text-2xl mt-3">{raffle.minAmount.toLocaleString("ru")} ₽</p>
               </div>
-              <a
-                href={confirmUrl}
-                className="w-full grad-btn rounded-2xl py-4 font-bold text-lg font-golos flex items-center justify-center gap-2 text-white no-underline text-center"
+              <button
+                onClick={() => { window.location.href = confirmUrl; }}
+                className="w-full grad-btn rounded-2xl py-4 font-bold text-lg font-golos flex items-center justify-center gap-2 text-white text-center"
               >
                 🔐 Перейти к оплате
-              </a>
+              </button>
               <button
                 onClick={() => setConfirmUrl("")}
                 className="text-muted-foreground text-sm hover:text-white transition-colors"

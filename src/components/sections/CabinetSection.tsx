@@ -28,7 +28,7 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
       fetch(`${CABINET_URL}?transactions`, { headers: { "X-User-Id": String(user.id) } }).then(r => r.json()),
     ]).then(([e, t]) => {
       if (e.ok) setEntries(e.entries || []);
-      if (t.ok) setTransactions(t.transactions || []);
+      if (t.ok) setTransactions((t.transactions || []).filter((tx: Transaction) => tx.status !== "pending"));
     }).catch(() => {}).finally(() => setLoading(false));
   }, [user?.id]);
 
