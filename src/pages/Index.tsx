@@ -137,7 +137,7 @@ export default function Index() {
     setAppUser(user);
     localStorage.setItem("app_user", JSON.stringify(user));
     setAuthOpen(false);
-    setActiveSection("raffles");
+    setActiveSection("cabinet");
   };
 
   const handleLogout = () => {
@@ -357,7 +357,7 @@ export default function Index() {
       {/* Main content */}
       <main id="main-content" className="max-w-7xl mx-auto px-4 md:px-6 py-8">
         {activeSection !== "raffles" && (
-          <div className="mb-8 opacity-0-init animate-fade-in-up" style={{ animationFillMode: "forwards" }}>
+          <div className="mb-8 animate-fade-in-up" style={{ animationFillMode: "forwards" }}>
             <h2 className="font-oswald text-4xl font-bold text-white">
               {SECTION_TITLES[activeSection].title}
             </h2>
