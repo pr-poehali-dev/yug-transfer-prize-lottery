@@ -31,9 +31,14 @@ interface SiteStats {
   active_raffles: number;
   users: number;
 }
-import { RafflesSection, CabinetSection, HistorySection, ContactsSection, JackpotSection } from "@/components/PageSections";
-import { AuthModal } from "@/components/AuthModal";
-import { SpinWheel } from "@/components/SpinWheel";
+import { lazy, Suspense } from "react";
+const RafflesSection = lazy(() => import("@/components/sections/RafflesSection").then(m => ({ default: m.RafflesSection })));
+const CabinetSection = lazy(() => import("@/components/sections/CabinetSection").then(m => ({ default: m.CabinetSection })));
+const HistorySection = lazy(() => import("@/components/sections/HistorySection").then(m => ({ default: m.HistorySection })));
+const ContactsSection = lazy(() => import("@/components/sections/ContactsSection").then(m => ({ default: m.ContactsSection })));
+const JackpotSection = lazy(() => import("@/components/sections/JackpotSection").then(m => ({ default: m.JackpotSection })));
+const AuthModal = lazy(() => import("@/components/AuthModal").then(m => ({ default: m.AuthModal })));
+const SpinWheel = lazy(() => import("@/components/SpinWheel").then(m => ({ default: m.SpinWheel })));
 
 function formatNum(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".0", "") + " млн";
@@ -145,12 +150,14 @@ export default function Index() {
     localStorage.removeItem("app_user");
   };
 
-  const SECTION_COMPONENTS: Record<Section, JSX.Element> = {
-    raffles: <RafflesSection user={appUser} onLoginRequired={() => setAuthOpen(true)} onGoToCabinet={() => setActiveSection("cabinet")} />,
-    cabinet: <CabinetSection user={appUser} onLogin={() => setAuthOpen(true)} onLogout={handleLogout} onUserUpdate={setAppUser} />,
-    history: <HistorySection user={appUser} onLogin={() => setAuthOpen(true)} />,
-    contacts: <ContactsSection />,
-    jackpot: <JackpotSection />,
+  const renderSection = () => {
+    switch (activeSection) {
+      case "raffles": return <RafflesSection user={appUser} onLoginRequired={() => setAuthOpen(true)} onGoToCabinet={() => setActiveSection("cabinet")} />;
+      case "cabinet": return <CabinetSection user={appUser} onLogin={() => setAuthOpen(true)} onLogout={handleLogout} onUserUpdate={setAppUser} />;
+      case "history": return <HistorySection user={appUser} onLogin={() => setAuthOpen(true)} />;
+      case "contacts": return <ContactsSection />;
+      case "jackpot": return <JackpotSection />;
+    }
   };
 
   const SECTION_TITLES: Record<Section, { title: string; subtitle: string }> = {
@@ -365,7 +372,9 @@ export default function Index() {
           </div>
         )}
 
-        {SECTION_COMPONENTS[activeSection]}
+        <Suspense fallback={<div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div>}>
+          {renderSection()}
+        </Suspense>
       </main>
 
       {/* Footer */}
@@ -392,8 +401,10 @@ export default function Index() {
         </div>
       </footer>
 
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} />}
-      <SpinWheel />
+      <Suspense fallback={null}>
+        {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} />}
+        <SpinWheel />
+      </Suspense>
     </div>
   );
 }
