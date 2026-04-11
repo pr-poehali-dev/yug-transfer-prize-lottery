@@ -38,7 +38,9 @@ export interface RaffleDB {
   target_amount?: number;
 }
 
-export type AdminTab = "dashboard" | "raffles" | "clients" | "notify";
+export const JACKPOT_URL = "https://functions.poehali.dev/f43fd2b9-63b6-433a-9a57-6c363cea9728";
+
+export type AdminTab = "dashboard" | "raffles" | "clients" | "notify" | "jackpot";
 
 export interface AdminStats {
   users: { total: number; new_week: number; new_month: number };
