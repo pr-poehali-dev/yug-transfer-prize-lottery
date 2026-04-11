@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Client, ADMIN_CLIENTS_URL } from "./adminTypes";
 import { ClientEntriesModal } from "./ClientEntriesModal";
+import { ClientEditModal } from "./ClientEditModal";
 
 interface AdminClientsTabProps {
   clients: Client[];
@@ -22,6 +23,7 @@ export function AdminClientsTab({
 }: AdminClientsTabProps) {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [viewClient, setViewClient] = useState<Client | null>(null);
+  const [editClient, setEditClient] = useState<Client | null>(null);
 
   const handleDelete = async (c: Client) => {
     if (!confirm(`Удалить клиента "${[c.first_name, c.last_name].filter(Boolean).join(" ") || c.username}"?\n\nБудут удалены все его участия в розыгрышах.`)) return;
@@ -43,6 +45,14 @@ export function AdminClientsTab({
           client={viewClient}
           token={token}
           onClose={() => setViewClient(null)}
+        />
+      )}
+      {editClient && (
+        <ClientEditModal
+          client={editClient}
+          token={token}
+          onClose={() => setEditClient(null)}
+          onSaved={(updated) => setEditClient(c => c ? { ...c, ...updated } : null)}
         />
       )}
 
@@ -101,6 +111,13 @@ export function AdminClientsTab({
                     <p className="text-muted-foreground">баланс</p>
                   </div>
                 </div>
+                <button
+                  onClick={() => setEditClient(c)}
+                  title="Редактировать клиента"
+                  className="w-8 h-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 flex items-center justify-center text-blue-400 transition-colors shrink-0"
+                >
+                  <Icon name="Pencil" size={14} />
+                </button>
                 <button
                   onClick={() => setViewClient(c)}
                   title="Посмотреть участия"

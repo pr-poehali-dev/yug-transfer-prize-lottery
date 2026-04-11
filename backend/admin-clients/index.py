@@ -1,6 +1,7 @@
 """
 База клиентов для админ-панели: список пользователей с полными данными, платежами и участиями.
 DELETE — удаление клиента из системы и всех его участий.
+PATCH — изменение данных клиента (имя, телефон, пароль).
 """
 import os
 import json
@@ -9,7 +10,7 @@ import psycopg2
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, DELETE, PATCH, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
 }
 
@@ -69,6 +70,51 @@ def handler(event: dict, context) -> dict:
         conn.close()
 
         print(f"[ADMIN] deleted user {user_id}, raffle entries: {raffle_ids}")
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
+
+    # PATCH — редактирование клиента (имя, телефон, пароль)
+    if method == 'PATCH':
+        try:
+            body = json.loads(event.get('body') or '{}')
+        except Exception:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Invalid JSON'})}
+
+        user_id = body.get('user_id')
+        if not user_id:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'user_id обязателен'})}
+
+        fields = []
+        values = []
+
+        if 'first_name' in body:
+            fields.append('first_name = %s')
+            values.append(body['first_name'])
+        if 'last_name' in body:
+            fields.append('last_name = %s')
+            values.append(body['last_name'])
+        if 'phone' in body:
+            phone = body['phone'].replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+            fields.append('phone = %s')
+            values.append(phone)
+        if 'password' in body and body['password']:
+            pw_hash = hashlib.sha256(body['password'].encode()).hexdigest()
+            fields.append('password_hash = %s')
+            values.append(pw_hash)
+        if 'balance' in body:
+            fields.append('balance = %s')
+            values.append(int(body['balance']))
+
+        if not fields:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Нет полей для обновления'})}
+
+        values.append(user_id)
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.users SET {', '.join(fields)} WHERE id = %s", values)
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"[ADMIN] updated user {user_id}: {[f.split(' =')[0] for f in fields]}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
 
     # GET /?action=entries&user_id=X — участия конкретного клиента
