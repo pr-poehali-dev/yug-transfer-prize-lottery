@@ -105,13 +105,15 @@ def handler(event: dict, context) -> dict:
         try:
             with urllib.request.urlopen(req) as resp:
                 yk_data = json.loads(resp.read())
+            print(f"[YK] payment created: id={yk_data.get('id')} status={yk_data.get('status')} url={yk_data.get('confirmation', {}).get('confirmation_url', '')[:80]}")
         except urllib.error.HTTPError as e:
             err = e.read().decode()
-            print(f"[YK error] {err}")
-            return {'statusCode': 502, 'headers': CORS, 'body': json.dumps({'error': 'ЮKassa error', 'detail': err})}
+            print(f"[YK error] status={e.code} body={err}")
+            return {'statusCode': 502, 'headers': CORS, 'body': json.dumps({'ok': False, 'error': f'ЮKassa: {err}'})}
 
         payment_id = yk_data['id']
         confirm_url = yk_data['confirmation']['confirmation_url']
+        print(f"[YK] confirm_url={confirm_url}")
 
         # Сохраняем транзакцию pending
         conn = get_conn()
