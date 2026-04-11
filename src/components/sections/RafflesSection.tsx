@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { Raffle, RaffleStatus } from "@/components/raffle-types";
 import type { AppUser } from "@/pages/Index";
@@ -69,11 +69,12 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
   const [confirmUrl, setConfirmUrl] = useState("");
+  const linkRef = useRef<HTMLAnchorElement>(null);
 
   const handleParticipate = async () => {
     if (!user) { onLoginRequired(); return; }
     if (raffle.status === "upcoming") return;
-    if (confirmUrl) { window.location.href = confirmUrl; return; }
+    if (confirmUrl) { linkRef.current?.click(); return; }
     setPaying(true); setError("");
     try {
       const res = await fetch(`${PAYMENT_URL}?action=create`, {
@@ -89,6 +90,7 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
       const data = await res.json();
       if (data.ok && data.confirmation_url) {
         setConfirmUrl(data.confirmation_url);
+        setTimeout(() => linkRef.current?.click(), 50);
       } else {
         setError(data.error || "Ошибка оплаты");
       }
@@ -164,6 +166,7 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
         )}
 
         {error && <p className="text-red-400 text-xs text-center mb-2">{error}</p>}
+        <a ref={linkRef} href={confirmUrl} className="hidden" />
         {raffle.status !== "ended" && (
           confirmUrl ? (
             <a
