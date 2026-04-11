@@ -24,6 +24,7 @@ const EMPTY: PostFormData = {
 export function AdminPostsTab({ token }: AdminPostsTabProps) {
   // ── форма ──
   const [form, setForm] = useState<PostFormData>({ ...EMPTY });
+  const [savedForm, setSavedForm] = useState<PostFormData>({ ...EMPTY });
   const [editId, setEditId] = useState<number | null>(null);
   const [scheduledAt, setScheduledAt] = useState("");
   const [editInTg, setEditInTg] = useState(false);
@@ -69,13 +70,15 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
 
   // ── начать редактирование поста ──
   const startEdit = (post: Post) => {
-    setEditId(post.id);
-    setForm({
+    const newForm: PostFormData = {
       title: post.title, text: post.text, photo_url: post.photo_url,
       button_text: post.button_text, button_url: post.button_url,
       status: post.status, scheduled_at: post.scheduled_at,
       chat: (post as PostFormData & { chat?: "main" | "kurilka" }).chat ?? "main",
-    });
+    };
+    setEditId(post.id);
+    setForm(newForm);
+    setSavedForm(newForm);
     setScheduledAt(toLocalInput(post.scheduled_at));
     setEditInTg(false);
     setFormError(""); setFormSuccess("");
@@ -85,9 +88,16 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
   const resetForm = () => {
     setEditId(null);
     setForm({ ...EMPTY });
+    setSavedForm({ ...EMPTY });
     setScheduledAt("");
     setEditInTg(false);
     setFormError(""); setFormSuccess("");
+  };
+
+  // ── сохранить черновик (без аргументов, для confirmLeave) ──
+  const handleSaveDraft = async () => {
+    if (!form.text.trim()) return;
+    await handleSave("draft");
   };
 
   // ── сохранить черновик / запланировать ──
@@ -110,6 +120,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Ошибка");
       setFormSuccess(saveStatus === "scheduled" ? "Пост запланирован!" : "Черновик сохранён!");
+      setSavedForm({ ...form });
       setPosts(prev => {
         const idx = prev.findIndex(p => p.id === data.post.id);
         return idx >= 0 ? prev.map(p => p.id === data.post.id ? data.post : p) : [data.post, ...prev];
@@ -119,6 +130,18 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Ошибка");
     } finally { setSaving(false); }
+  };
+
+  const isDirty = form.text.trim() !== savedForm.text.trim() || form.title !== savedForm.title;
+
+  const confirmLeave = (callback: () => void) => {
+    if (!isDirty || !form.text.trim()) { callback(); return; }
+    const choice = window.confirm("Есть несохранённые изменения. Сохранить черновик перед выходом?");
+    if (choice) {
+      handleSaveDraft().then(callback);
+    } else {
+      callback();
+    }
   };
 
   // ── опубликовать сейчас из формы ──
@@ -218,7 +241,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
           onPhotoUpload={handlePhotoUpload}
           onSave={handleSave}
           onPublishNow={handlePublishNow}
-          onReset={resetForm}
+          onReset={() => confirmLeave(resetForm)}
         />
 
         <PostList
@@ -231,9 +254,9 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
           onFilterChange={sf => setStatusFilter(sf)}
           onRefresh={() => fetchPosts(statusFilter)}
           onPublish={handlePublishFromList}
-          onEdit={startEdit}
+          onEdit={post => confirmLeave(() => startEdit(post))}
           onDelete={handleDelete}
-          onResetEdit={resetForm}
+          onResetEdit={() => confirmLeave(resetForm)}
         />
       </div>
     </div>
