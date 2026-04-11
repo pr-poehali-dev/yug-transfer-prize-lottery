@@ -1,5 +1,6 @@
 """
 База клиентов для админ-панели: список пользователей с полными данными, платежами и участиями.
+DELETE — удаление клиента из системы и всех его участий.
 """
 import os
 import json
@@ -8,7 +9,7 @@ import psycopg2
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
 }
 
@@ -30,6 +31,47 @@ def handler(event: dict, context) -> dict:
     if not verify_token(token):
         return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
 
+    method = event.get('httpMethod', 'GET')
+
+    # Удаление клиента
+    if method == 'DELETE':
+        try:
+            body = json.loads(event.get('body') or '{}')
+        except Exception:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Invalid JSON'})}
+
+        user_id = body.get('user_id')
+        if not user_id:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'user_id обязателен'})}
+
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+
+        # Считаем участия которые нужно отнять у розыгрышей
+        cur.execute(f"SELECT raffle_id FROM {SCHEMA}.entries WHERE user_id = %s", (user_id,))
+        raffle_ids = [r[0] for r in cur.fetchall()]
+
+        # Уменьшаем счётчик участников в розыгрышах
+        for rid in raffle_ids:
+            cur.execute(
+                f"UPDATE {SCHEMA}.raffles SET participants = GREATEST(0, participants - 1) WHERE id = %s",
+                (rid,)
+            )
+
+        # Удаляем все записи пользователя
+        cur.execute(f"DELETE FROM {SCHEMA}.entries WHERE user_id = %s", (user_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.transactions WHERE user_id = %s", (user_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.push_subscriptions WHERE user_id = %s", (user_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        print(f"[ADMIN] deleted user {user_id}, raffle entries: {raffle_ids}")
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
+
+    # GET — список клиентов
     params = event.get('queryStringParameters') or {}
     page = int(params.get('page', 1))
     limit = int(params.get('limit', 50))
@@ -53,8 +95,8 @@ def handler(event: dict, context) -> dict:
         SELECT
             u.id, u.telegram_id, u.first_name, u.last_name, u.username,
             u.photo_url, u.balance, u.created_at,
-            COALESCE(SUM(CASE WHEN t.type='deposit' AND t.status='completed' THEN t.amount ELSE 0 END), 0) as total_paid,
-            COUNT(DISTINCT t.id) FILTER (WHERE t.type='deposit' AND t.status='completed') as payments_count,
+            COALESCE(SUM(CASE WHEN t.type='entry' AND t.status='completed' THEN t.amount ELSE 0 END), 0) as total_paid,
+            COUNT(DISTINCT t.id) FILTER (WHERE t.status='completed') as payments_count,
             COUNT(DISTINCT e.id) as entries_count
         FROM {SCHEMA}.users u
         LEFT JOIN {SCHEMA}.transactions t ON t.user_id = u.id

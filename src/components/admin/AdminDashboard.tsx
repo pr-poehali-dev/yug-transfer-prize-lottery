@@ -243,8 +243,10 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               clientsPages={clientsPages}
               clientsSearch={clientsSearch}
               loadingClients={loadingClients}
+              token={token}
               onSearchChange={search => { setClientsSearch(search); fetchClients(1, search); }}
               onPageChange={page => fetchClients(page, clientsSearch)}
+              onDeleted={id => { setClients(prev => prev.filter(c => c.id !== id)); setClientsTotal(t => t - 1); }}
             />
           )}
 

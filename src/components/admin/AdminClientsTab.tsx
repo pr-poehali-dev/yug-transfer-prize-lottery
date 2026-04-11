@@ -1,5 +1,6 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
-import { Client } from "./adminTypes";
+import { Client, ADMIN_CLIENTS_URL } from "./adminTypes";
 
 interface AdminClientsTabProps {
   clients: Client[];
@@ -8,14 +9,31 @@ interface AdminClientsTabProps {
   clientsPages: number;
   clientsSearch: string;
   loadingClients: boolean;
+  token: string;
   onSearchChange: (search: string) => void;
   onPageChange: (page: number) => void;
+  onDeleted: (id: number) => void;
 }
 
 export function AdminClientsTab({
   clients, clientsTotal, clientsPage, clientsPages, clientsSearch,
-  loadingClients, onSearchChange, onPageChange,
+  loadingClients, token, onSearchChange, onPageChange, onDeleted,
 }: AdminClientsTabProps) {
+  const [deleting, setDeleting] = useState<number | null>(null);
+
+  const handleDelete = async (c: Client) => {
+    if (!confirm(`Удалить клиента "${c.first_name} ${c.last_name}".trim() || c.username"?\n\nБудут удалены все его участия в розыгрышах.`)) return;
+    setDeleting(c.id);
+    try {
+      await fetch(ADMIN_CLIENTS_URL, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ user_id: c.id }),
+      });
+      onDeleted(c.id);
+    } finally { setDeleting(null); }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
@@ -67,6 +85,15 @@ export function AdminClientsTab({
                     <p className="text-muted-foreground">баланс</p>
                   </div>
                 </div>
+                <button
+                  onClick={() => handleDelete(c)}
+                  disabled={deleting === c.id}
+                  className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-colors disabled:opacity-40 shrink-0"
+                >
+                  {deleting === c.id
+                    ? <div className="w-3 h-3 border border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                    : <Icon name="Trash2" size={14} />}
+                </button>
               </div>
             ))}
           </div>
