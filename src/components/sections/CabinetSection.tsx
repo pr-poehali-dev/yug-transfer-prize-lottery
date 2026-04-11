@@ -52,6 +52,7 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
       .then(d => {
         if (d.status === "succeeded") {
           setNotice("success");
+          setTab("entries");
           sessionStorage.removeItem("pending_payment_id");
           reloadCabinet(uid);
         } else if (d.status === "canceled") {
