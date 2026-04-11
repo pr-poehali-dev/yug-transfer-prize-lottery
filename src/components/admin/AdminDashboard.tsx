@@ -47,7 +47,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   const fetchRaffles = async () => {
     setLoadingRaffles(true);
     try {
-      const res = await fetch(RAFFLES_URL);
+      const res = await fetch(RAFFLES_URL, { headers: { 'X-Admin-Token': token } });
       const data = await res.json();
       if (data.ok) setRaffles(data.raffles);
     } finally { setLoadingRaffles(false); }
