@@ -175,12 +175,9 @@ export default function Index() {
       {/* Nav */}
       <header className="sticky top-0 z-50 glass border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between h-16">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
-            setActiveSection("raffles");
-            setLogoIdx(i => (i + 1) % LOGO_IMGS.length);
-          }}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveSection("raffles")}>
             <div className="w-9 h-9 rounded-xl overflow-hidden animate-pulse-glow shrink-0">
-              <img src={LOGO_IMGS[logoIdx]} alt="logo" className="w-full h-full object-cover" />
+              <img src="https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/94997fc2-898b-4145-b074-5e363a301f08.jpg" alt="logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <span className="font-oswald text-xl font-bold text-white tracking-wide">ЮГ</span>
