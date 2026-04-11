@@ -2,10 +2,6 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import type { AppUser } from "@/pages/Index";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { AUTH_LINK_URL, TgUser } from "./cabinet-types";
-
-declare global { interface Window { onTgLink: (u: TgUser) => void; } }
-
 function Avatar({ user, size = 80 }: { user: AppUser; size?: number }) {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
   const [imgError, setImgError] = useState(false);
@@ -20,54 +16,6 @@ function Avatar({ user, size = 80 }: { user: AppUser; size?: number }) {
   );
 }
 
-function TgLinkWidget({ userId, onLinked }: { userId: number; onLinked: (tgId: number, username?: string) => void }) {
-  const [loading, setLoading] = useState(false);
-
-  useState(() => {
-    window.onTgLink = async (tgUser: TgUser) => {
-      setLoading(true);
-      try {
-        const res = await fetch(AUTH_LINK_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "link_telegram", user_id: String(userId), telegram_id: String(tgUser.id), username: tgUser.username || "", hash: tgUser.hash }),
-        });
-        const data = await res.json();
-        if (data.ok) onLinked(tgUser.id, tgUser.username);
-      } catch { /* ignore */ }
-      finally { setLoading(false); }
-    };
-
-    const handleMsg = (e: MessageEvent) => {
-      if (!String(e.origin).includes("telegram.org")) return;
-      try {
-        const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
-        if (data?.id) window.onTgLink(data as TgUser);
-      } catch { /* ignore */ }
-    };
-    window.addEventListener("message", handleMsg);
-    return () => {
-      window.removeEventListener("message", handleMsg);
-      delete (window as Window & typeof globalThis).onTgLink;
-    };
-  });
-
-  const handleClick = () => {
-    const origin = encodeURIComponent(window.location.origin);
-    window.open(`https://oauth.telegram.org/auth?bot_id=8567041422&origin=${origin}&request_access=write&lang=ru`, "tg_link", "width=550,height=470,scrollbars=no");
-  };
-
-  return (
-    <button onClick={handleClick} disabled={loading}
-      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-[#2AABEE]/30 text-[#2AABEE] bg-[#2AABEE]/10 hover:bg-[#2AABEE]/20 transition-all disabled:opacity-50">
-      {loading
-        ? <div className="w-3 h-3 border border-[#2AABEE]/30 border-t-[#2AABEE] rounded-full animate-spin" />
-        : <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/></svg>
-      }
-      Привязать Telegram
-    </button>
-  );
-}
 
 interface CabinetProfileProps {
   user: AppUser;
@@ -116,16 +64,6 @@ export function CabinetProfile({ user, myWinsCount, activeEntriesCount, onEdit, 
             <p className="font-oswald text-3xl font-bold grad-text">{user.balance.toLocaleString("ru")} ₽</p>
           </div>
           <div className="flex flex-col gap-2 items-end">
-            {user.telegram_id && user.telegram_id !== 0 ? (
-              <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border border-[#2AABEE]/30 text-[#2AABEE] bg-[#2AABEE]/10">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/></svg>
-                Telegram привязан ✓
-              </div>
-            ) : (
-              <TgLinkWidget userId={user.id} onLinked={(tgId, username) => {
-                onUserUpdate({ ...user, telegram_id: tgId, username: username || user.username });
-              }} />
-            )}
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-1.5">
               <Icon name="Clock" size={13} />
               Пополнение скоро
