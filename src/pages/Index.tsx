@@ -308,7 +308,7 @@ export default function Index() {
                   className="grad-btn rounded-2xl px-8 py-4 font-bold text-base font-golos flex items-center gap-2"
                   onClick={() => {
                     if (appUser) {
-                      setActiveSection("raffles");
+                      document.getElementById("main-content")?.scrollIntoView({ behavior: "smooth" });
                     } else {
                       setAuthOpen(true);
                     }
@@ -352,7 +352,7 @@ export default function Index() {
       )}
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+      <main id="main-content" className="max-w-7xl mx-auto px-4 md:px-6 py-8">
         {activeSection !== "raffles" && (
           <div className="mb-8 opacity-0-init animate-fade-in-up" style={{ animationFillMode: "forwards" }}>
             <h2 className="font-oswald text-4xl font-bold text-white">
