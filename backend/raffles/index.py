@@ -58,6 +58,7 @@ def row_to_dict(row):
         'winner': row[9],
         'photo_url': row[10] if len(row) > 10 else None,
         'target_amount': row[11] if len(row) > 11 else 0,
+        'winner_phone': row[12] if len(row) > 12 else None,
     }
 
 
@@ -198,14 +199,36 @@ def handler(event: dict, context) -> dict:
 
     method = event.get('httpMethod', 'GET')
 
-    # GET — публичный список
+    # GET — список розыгрышей
     if method == 'GET':
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute(
-            f"SELECT id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner, photo_url, target_amount "
-            f"FROM {SCHEMA}.raffles ORDER BY created_at DESC"
-        )
+        qs = event.get('queryStringParameters') or {}
+        is_admin = event.get('headers', {}).get('X-Admin-Token', '') == get_token()
+
+        if is_admin:
+            # Для админа — с телефоном победителя
+            cur.execute(f"""
+                SELECT r.id, r.title, r.prize, r.prize_icon, r.end_date, r.participants,
+                       r.min_amount, r.status, r.gradient, r.winner, r.photo_url, r.target_amount,
+                       u.phone
+                FROM {SCHEMA}.raffles r
+                LEFT JOIN {SCHEMA}.users u ON u.id = (
+                    SELECT e.user_id FROM {SCHEMA}.entries e
+                    JOIN {SCHEMA}.users wu ON wu.id = e.user_id
+                    WHERE e.raffle_id = r.id
+                    AND (wu.first_name || COALESCE(' ' || wu.last_name, '') = r.winner
+                         OR wu.first_name = r.winner
+                         OR wu.username = r.winner)
+                    LIMIT 1
+                )
+                ORDER BY r.created_at DESC
+            """)
+        else:
+            cur.execute(
+                f"SELECT id, title, prize, prize_icon, end_date, participants, min_amount, status, gradient, winner, photo_url, target_amount "
+                f"FROM {SCHEMA}.raffles ORDER BY created_at DESC"
+            )
         rows = cur.fetchall()
         cur.close()
         conn.close()

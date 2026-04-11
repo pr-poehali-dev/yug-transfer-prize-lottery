@@ -34,6 +34,7 @@ export interface RaffleDB {
   status: "active" | "ended" | "upcoming";
   gradient: string;
   winner?: string;
+  winner_phone?: string;
   photo_url?: string;
   target_amount?: number;
 }
