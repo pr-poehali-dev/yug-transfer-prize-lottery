@@ -208,26 +208,14 @@ def handler(event: dict, context) -> dict:
         is_admin = event.get('headers', {}).get('X-Admin-Token', '') == get_token()
 
         if is_admin:
-            # Для админа — с телефоном победителя
+            # Для админа — с контактами победителя через winner_user_id
             cur.execute(f"""
                 SELECT r.id, r.title, r.prize, r.prize_icon, r.end_date, r.participants,
                        r.min_amount, r.status, r.gradient, r.winner, r.photo_url, r.target_amount,
-                       (SELECT u.phone FROM {SCHEMA}.users u
-                        JOIN {SCHEMA}.entries e ON e.user_id = u.id
-                        WHERE e.raffle_id = r.id
-                        AND (u.first_name = r.winner
-                             OR u.first_name || ' ' || COALESCE(u.last_name, '') = r.winner
-                             OR u.username = r.winner)
-                        AND u.phone IS NOT NULL AND u.phone != ''
-                        LIMIT 1) as winner_phone,
-                       (SELECT u.username FROM {SCHEMA}.users u
-                        JOIN {SCHEMA}.entries e ON e.user_id = u.id
-                        WHERE e.raffle_id = r.id
-                        AND (u.first_name = r.winner
-                             OR u.first_name || ' ' || COALESCE(u.last_name, '') = r.winner
-                             OR u.username = r.winner)
-                        LIMIT 1) as winner_username
+                       u.phone as winner_phone,
+                       u.username as winner_username
                 FROM {SCHEMA}.raffles r
+                LEFT JOIN {SCHEMA}.users u ON u.id = r.winner_user_id
                 ORDER BY r.created_at DESC
             """)
         else:
@@ -340,8 +328,19 @@ def handler(event: dict, context) -> dict:
         new_winner = raffle.get('winner')
         surplus = 0
 
-        # Если розыгрыш только что завершён — считаем излишек и пишем в джекпот
+        # Если розыгрыш только что завершён — сохраняем winner_user_id и считаем джекпот
         if new_status == 'ended' and new_winner and (prev_status != 'ended' or prev_winner != new_winner):
+            # Находим user_id победителя через raffle_spin
+            cur2 = conn.cursor()
+            cur2.execute(f"""
+                UPDATE {SCHEMA}.raffles SET winner_user_id = (
+                    SELECT u.id FROM {SCHEMA}.raffle_spin rs
+                    JOIN {SCHEMA}.users u ON u.first_name = rs.winner_name
+                    JOIN {SCHEMA}.entries e ON e.user_id = u.id AND e.raffle_id = %s
+                    WHERE rs.raffle_id = %s ORDER BY rs.id DESC LIMIT 1
+                ) WHERE id = %s
+            """, (rid, rid, rid))
+            cur2.close()
             surplus = calc_jackpot_surplus(conn, rid, raffle.get('target_amount', 0))
             if surplus > 0:
                 add_to_jackpot(conn, surplus, raffle['title'])
