@@ -4,6 +4,7 @@ import { Raffle, RaffleStatus } from "@/components/raffle-types";
 import type { AppUser } from "@/pages/Index";
 
 const RAFFLES_URL = "https://functions.poehali.dev/39a7b356-ef83-46dd-81a0-581903229de9";
+const PAYMENT_URL = "https://functions.poehali.dev/81f8c74e-7d9c-47ff-8dfc-8f0e3dd7a155";
 
 // ─── StatusBadge ────────────────────────────────────────────────────────────
 
@@ -58,20 +59,39 @@ export function CountdownTimer({ endDate }: { endDate: string }) {
 
 // ─── RaffleCard ──────────────────────────────────────────────────────────────
 
-function RaffleCard({ raffle, idx, user, onLoginRequired, onGoToCabinet }: {
+function RaffleCard({ raffle, idx, user, onLoginRequired }: {
   raffle: Raffle; idx: number;
   user: AppUser | null;
   onLoginRequired: () => void;
   onGoToCabinet: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleParticipate = () => {
-    if (!user) {
-      onLoginRequired();
-    } else {
-      onGoToCabinet();
-    }
+  const handleParticipate = async () => {
+    if (!user) { onLoginRequired(); return; }
+    if (raffle.status === "upcoming") return;
+    setPaying(true); setError("");
+    try {
+      const res = await fetch(`${PAYMENT_URL}?action=create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-User-Id": String(user.id) },
+        body: JSON.stringify({
+          raffle_id: raffle.id,
+          raffle_title: raffle.title,
+          amount: raffle.minAmount,
+          return_url: `${window.location.origin}?payment=success`,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok && data.confirmation_url) {
+        window.location.href = data.confirmation_url;
+      } else {
+        setError(data.error || "Ошибка оплаты");
+      }
+    } catch { setError("Нет соединения"); }
+    finally { setPaying(false); }
   };
 
   return (
@@ -139,10 +159,22 @@ function RaffleCard({ raffle, idx, user, onLoginRequired, onGoToCabinet }: {
           </div>
         )}
 
+        {error && <p className="text-red-400 text-xs text-center mb-2">{error}</p>}
         {raffle.status !== "ended" && (
-          <button onClick={handleParticipate} className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2">
-            <Icon name={user ? "ArrowRight" : "LogIn"} size={15} />
-            {raffle.status === "upcoming" ? "Напомнить мне" : user ? "Участвовать" : "Войти и участвовать"}
+          <button
+            onClick={handleParticipate}
+            disabled={paying}
+            className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2 disabled:opacity-70"
+          >
+            {paying ? (
+              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Переход к оплате...</>
+            ) : raffle.status === "upcoming" ? (
+              <><Icon name="Bell" size={15} />Напомнить мне</>
+            ) : user ? (
+              <><Icon name="CreditCard" size={15} />Участвовать — {raffle.minAmount.toLocaleString("ru")} ₽</>
+            ) : (
+              <><Icon name="LogIn" size={15} />Войти и участвовать</>
+            )}
           </button>
         )}
       </div>
