@@ -42,13 +42,13 @@ def handler(event: dict, context) -> dict:
     cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE created_at >= now() - interval '30 days'")
     new_users_month = cur.fetchone()[0]
 
-    cur.execute(f"SELECT COALESCE(SUM(amount), 0) FROM {SCHEMA}.transactions WHERE type='deposit' AND status='completed'")
+    cur.execute(f"SELECT COALESCE(SUM(amount), 0) FROM {SCHEMA}.transactions WHERE type='entry' AND status='completed'")
     total_payments = cur.fetchone()[0]
 
-    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.transactions WHERE type='deposit' AND status='completed'")
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.transactions WHERE type='entry' AND status='completed'")
     payments_count = cur.fetchone()[0]
 
-    cur.execute(f"SELECT COALESCE(SUM(amount), 0) FROM {SCHEMA}.transactions WHERE type='deposit' AND status='completed' AND created_at >= now() - interval '30 days'")
+    cur.execute(f"SELECT COALESCE(SUM(amount), 0) FROM {SCHEMA}.transactions WHERE type='entry' AND status='completed' AND created_at >= now() - interval '30 days'")
     payments_month = cur.fetchone()[0]
 
     cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.entries")
@@ -63,7 +63,7 @@ def handler(event: dict, context) -> dict:
     cur.execute(f"""
         SELECT DATE(created_at) as day, COUNT(*) as cnt, COALESCE(SUM(amount),0) as total
         FROM {SCHEMA}.transactions
-        WHERE type='deposit' AND status='completed' AND created_at >= now() - interval '30 days'
+        WHERE type='entry' AND status='completed' AND created_at >= now() - interval '30 days'
         GROUP BY day ORDER BY day
     """)
     payments_chart = [{'date': str(r[0]), 'count': r[1], 'amount': r[2]} for r in cur.fetchall()]
