@@ -186,7 +186,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     { id: "clients" as AdminTab, label: "Клиенты", icon: "Users" },
     { id: "notify" as AdminTab, label: "Рассылка", icon: "Bell" },
     { id: "jackpot" as AdminTab, label: "Джекпот", icon: "Gem" },
-    { id: "posts" as AdminTab, label: "Посты", icon: "Send" },
+    { id: "posts" as AdminTab, label: "Посты в канал", icon: "Send" },
   ];
 
   return (
