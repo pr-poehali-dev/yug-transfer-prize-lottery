@@ -37,6 +37,20 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
+    # Билеты пользователя в конкретном розыгрыше
+    if 'tickets' in params:
+        raffle_id = params.get('raffle_id')
+        if not raffle_id:
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'raffle_id required'})}
+        cur.execute(f"""
+            SELECT COALESCE(SUM(tickets), 0), COALESCE(SUM(amount), 0)
+            FROM {schema}.entries WHERE user_id = %s AND raffle_id = %s
+        """, (user_id, raffle_id))
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'tickets': row[0], 'spent': row[1]})}
+
     # История участий (группируем по розыгрышу, суммируем билеты и сумму)
     if 'entries' in params:
         cur.execute(f"""

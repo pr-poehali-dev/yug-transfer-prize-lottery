@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { Raffle, RaffleStatus } from "@/components/raffle-types";
 import type { AppUser } from "@/pages/Index";
+import { CABINET_URL } from "@/components/sections/cabinet/cabinet-types";
 
 const RAFFLES_URL = "https://functions.poehali.dev/39a7b356-ef83-46dd-81a0-581903229de9";
 const PAYMENT_URL = "https://functions.poehali.dev/81f8c74e-7d9c-47ff-8dfc-8f0e3dd7a155";
@@ -70,6 +71,20 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
   const [error, setError] = useState("");
   const [confirmUrl, setConfirmUrl] = useState("");
   const [paymentId, setPaymentId] = useState("");
+  const [myTickets, setMyTickets] = useState<number>(0);
+
+  const loadMyTickets = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${CABINET_URL}?tickets&raffle_id=${raffle.id}`, {
+        headers: { "X-User-Id": String(user.id) },
+      });
+      const data = await res.json();
+      if (data.ok) setMyTickets(data.tickets);
+    } catch (e) { /* ignore */ }
+  }, [user, raffle.id]);
+
+  useEffect(() => { loadMyTickets(); }, [loadMyTickets]);
 
   const handleParticipate = async () => {
     if (!user) { onLoginRequired(); return; }
@@ -164,6 +179,18 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
           </div>
         )}
 
+        {myTickets > 0 && raffle.status === "active" && (
+          <div className="mb-3 flex items-center justify-between px-3 py-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
+            <div className="flex items-center gap-2">
+              <Icon name="Ticket" size={15} className="text-purple-400" />
+              <span className="text-sm text-purple-300 font-medium">
+                У тебя {myTickets} билет{myTickets === 1 ? "" : myTickets < 5 ? "а" : "ов"}
+              </span>
+            </div>
+            <span className="text-xs text-purple-400/70">Купи ещё ↓</span>
+          </div>
+        )}
+
         {error && <p className="text-red-400 text-xs text-center mb-2">{error}</p>}
         {raffle.status !== "ended" && (
           <button
@@ -175,6 +202,8 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
               <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Создаём платёж...</>
             ) : raffle.status === "upcoming" ? (
               <><Icon name="Bell" size={15} />Напомнить мне</>
+            ) : user && myTickets > 0 ? (
+              <><Icon name="Plus" size={15} />Купить ещё билет — {raffle.minAmount.toLocaleString("ru")} ₽</>
             ) : user ? (
               <><Icon name="CreditCard" size={15} />Участвовать — {raffle.minAmount.toLocaleString("ru")} ₽</>
             ) : (
