@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { Raffle, RaffleStatus } from "@/components/raffle-types";
 import type { AppUser } from "@/pages/Index";
@@ -69,12 +69,10 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
   const [confirmUrl, setConfirmUrl] = useState("");
-  const linkRef = useRef<HTMLAnchorElement>(null);
 
   const handleParticipate = async () => {
     if (!user) { onLoginRequired(); return; }
     if (raffle.status === "upcoming") return;
-    if (confirmUrl) { linkRef.current?.click(); return; }
     setPaying(true); setError("");
     try {
       const res = await fetch(`${PAYMENT_URL}?action=create`, {
@@ -90,7 +88,6 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
       const data = await res.json();
       if (data.ok && data.confirmation_url) {
         setConfirmUrl(data.confirmation_url);
-        setTimeout(() => linkRef.current?.click(), 50);
       } else {
         setError(data.error || "Ошибка оплаты");
       }
@@ -166,32 +163,47 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
         )}
 
         {error && <p className="text-red-400 text-xs text-center mb-2">{error}</p>}
-        <a ref={linkRef} href={confirmUrl} className="hidden" />
         {raffle.status !== "ended" && (
-          confirmUrl ? (
-            <a
-              href={confirmUrl}
-              className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2 text-white no-underline"
-            >
-              <Icon name="CreditCard" size={15} />Перейти к оплате — {raffle.minAmount.toLocaleString("ru")} ₽
-            </a>
-          ) : (
-            <button
-              onClick={handleParticipate}
-              disabled={paying}
-              className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2 disabled:opacity-70"
-            >
-              {paying ? (
-                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Создаём платёж...</>
-              ) : raffle.status === "upcoming" ? (
-                <><Icon name="Bell" size={15} />Напомнить мне</>
-              ) : user ? (
-                <><Icon name="CreditCard" size={15} />Участвовать — {raffle.minAmount.toLocaleString("ru")} ₽</>
-              ) : (
-                <><Icon name="LogIn" size={15} />Войти и участвовать</>
-              )}
-            </button>
-          )
+          <button
+            onClick={handleParticipate}
+            disabled={paying}
+            className="w-full grad-btn rounded-xl py-2.5 font-semibold text-sm font-golos flex items-center justify-center gap-2 disabled:opacity-70"
+          >
+            {paying ? (
+              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Создаём платёж...</>
+            ) : raffle.status === "upcoming" ? (
+              <><Icon name="Bell" size={15} />Напомнить мне</>
+            ) : user ? (
+              <><Icon name="CreditCard" size={15} />Участвовать — {raffle.minAmount.toLocaleString("ru")} ₽</>
+            ) : (
+              <><Icon name="LogIn" size={15} />Войти и участвовать</>
+            )}
+          </button>
+        )}
+
+        {confirmUrl && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-[#1a1025] rounded-3xl p-8 flex flex-col items-center gap-6 border border-white/10 shadow-2xl">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl">💳</div>
+              <div className="text-center">
+                <p className="text-white font-bold text-xl mb-1">Оплата готова</p>
+                <p className="text-muted-foreground text-sm">Нажмите кнопку ниже для перехода к оплате</p>
+                <p className="text-white font-bold text-2xl mt-3">{raffle.minAmount.toLocaleString("ru")} ₽</p>
+              </div>
+              <a
+                href={confirmUrl}
+                className="w-full grad-btn rounded-2xl py-4 font-bold text-lg font-golos flex items-center justify-center gap-2 text-white no-underline text-center"
+              >
+                🔐 Перейти к оплате
+              </a>
+              <button
+                onClick={() => setConfirmUrl("")}
+                className="text-muted-foreground text-sm hover:text-white transition-colors"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
