@@ -53,7 +53,7 @@ export function EditProfileModal({ user, onClose, onSave }: { user: AppUser; onC
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" />
       <div className="relative w-full max-w-sm">
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 rounded-3xl blur-lg opacity-40" />
         <div className="relative glass rounded-3xl p-6">

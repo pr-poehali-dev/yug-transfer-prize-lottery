@@ -239,7 +239,7 @@ export default function Index() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-white/5 bg-background/95 backdrop-blur-xl">
+          <div className="md:hidden border-t border-white/5 bg-background">
             {NAV_ITEMS.map((item) => (
               <button
                 key={item.id}

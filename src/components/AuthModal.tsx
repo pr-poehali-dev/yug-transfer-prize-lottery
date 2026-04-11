@@ -57,7 +57,7 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] animate-fade-in" onClick={onClose} />
 
       <div className="relative w-full max-w-md animate-scale-in" style={{ animationFillMode: "forwards" }}>
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 rounded-3xl blur-lg opacity-40" />
