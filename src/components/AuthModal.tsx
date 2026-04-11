@@ -74,7 +74,7 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl animate-float">🎰</div>
             </div>
 
-            <div className="flex bg-secondary rounded-2xl p-1 mb-5">
+            <div className="flex bg-white/10 rounded-2xl p-1 mb-5">
               {(["login", "register"] as const).map((m) => (
                 <button key={m} onClick={() => { setMode(m); setError(""); }}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${mode === m ? "grad-btn shadow-lg" : "text-muted-foreground hover:text-white"}`}>
