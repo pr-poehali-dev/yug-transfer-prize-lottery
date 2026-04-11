@@ -42,8 +42,24 @@ export interface RaffleDB {
 
 export const JACKPOT_URL = "https://functions.poehali.dev/f43fd2b9-63b6-433a-9a57-6c363cea9728";
 export const SPIN_URL = "https://functions.poehali.dev/9eba717e-47b3-4a6b-add1-02c8a4a67974";
+export const ADMIN_POSTS_URL = "https://functions.poehali.dev/0813e498-5f2e-4090-b643-15c885d057c8";
 
-export type AdminTab = "dashboard" | "raffles" | "clients" | "notify" | "jackpot";
+export type AdminTab = "dashboard" | "raffles" | "clients" | "notify" | "jackpot" | "posts";
+
+export interface Post {
+  id: number;
+  title: string;
+  text: string;
+  photo_url: string;
+  button_text: string;
+  button_url: string;
+  status: "draft" | "scheduled" | "published" | "failed";
+  scheduled_at: string | null;
+  published_at: string | null;
+  telegram_message_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
 
 export interface AdminStats {
   users: { total: number; new_week: number; new_month: number };
