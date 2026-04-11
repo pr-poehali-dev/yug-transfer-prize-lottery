@@ -41,8 +41,10 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
         body: JSON.stringify(body),
       });
       const data = await res.json();
+      console.log("[Auth] response:", res.status, data);
       if (data.ok && onLogin) {
         onLogin(data.user as AppUser);
+        onClose();
       } else {
         setError(data.error || "Ошибка входа");
       }
