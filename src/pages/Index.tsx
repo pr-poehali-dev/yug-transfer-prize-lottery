@@ -33,6 +33,7 @@ interface SiteStats {
 }
 import { RafflesSection, CabinetSection, HistorySection, ContactsSection, JackpotSection } from "@/components/PageSections";
 import { AuthModal } from "@/components/AuthModal";
+import { SpinWheel } from "@/components/SpinWheel";
 
 function formatNum(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".0", "") + " млн";
@@ -392,6 +393,7 @@ export default function Index() {
       </footer>
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} />}
+      <SpinWheel />
     </div>
   );
 }

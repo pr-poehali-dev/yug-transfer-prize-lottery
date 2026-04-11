@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { RaffleFormModal } from "./RaffleFormModal";
 import {
-  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL, PUSH_URL,
+  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL, PUSH_URL, SPIN_URL,
   AdminTab, AdminStats, Client, Notification, RaffleDB,
 } from "./adminTypes";
 import { AdminDashboardTab } from "./AdminDashboardTab";
@@ -139,17 +139,31 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   };
 
   const handleFinish = async (r: RaffleDB) => {
-    const winner = prompt(`Завершить розыгрыш "${r.title}"?\n\nВведи имя победителя (или оставь пустым):`);
-    if (winner === null) return;
+    if (!confirm(`Запустить колесо рулетки для розыгрыша "${r.title}"?\n\nКолесо будет крутиться 60 секунд на сайте в реальном времени. Победитель выбирается автоматически из участников.`)) return;
     setFinishing(r.id);
     try {
-      const res = await fetch(RAFFLES_URL, {
-        method: "PUT",
+      // 1. Запускаем спин — колесо крутится на сайте, победитель выбирается случайно
+      const spinRes = await fetch(SPIN_URL, {
+        method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ ...r, id: r.id, status: "ended", winner: winner || "" }),
+        body: JSON.stringify({ raffle_id: r.id, raffle_title: r.title }),
       });
-      const data = await res.json();
-      if (data.ok) setRaffles(prev => prev.map(x => x.id === r.id ? data.raffle : x));
+      const spinData = await spinRes.json();
+      if (!spinData.ok) { alert("Ошибка запуска спина: " + (spinData.error || "")); return; }
+
+      // 2. Ждём 62 секунды, потом сохраняем победителя в розыгрыш
+      const winner = spinData.winner_name || "";
+      setTimeout(async () => {
+        const res = await fetch(RAFFLES_URL, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+          body: JSON.stringify({ ...r, id: r.id, status: "ended", winner }),
+        });
+        const data = await res.json();
+        if (data.ok) setRaffles(prev => prev.map(x => x.id === r.id ? data.raffle : x));
+      }, 62_000);
+
+      alert(`✅ Колесо запущено! Победитель будет объявлен через 60 секунд.\nИмя победителя: ${winner}`);
     } finally { setFinishing(null); }
   };
 
