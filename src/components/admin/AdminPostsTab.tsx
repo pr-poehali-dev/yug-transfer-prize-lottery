@@ -55,15 +55,30 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
 
   useEffect(() => { fetchPosts(statusFilter); }, [statusFilter]);
 
-  // ── загрузка фото ──
+  // ── загрузка фото через S3 ──
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     const reader = new FileReader();
-    reader.onload = () => {
-      setForm(f => ({ ...f, photo_url: reader.result as string }));
-      setUploading(false);
+    reader.onload = async () => {
+      try {
+        const res = await fetch(`${ADMIN_POSTS_URL}?action=upload_photo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+          body: JSON.stringify({ image: reader.result }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setForm(f => ({ ...f, photo_url: data.url }));
+        } else {
+          setFormError("Ошибка загрузки фото: " + (data.error || "?"));
+        }
+      } catch {
+        setFormError("Ошибка загрузки фото");
+      } finally {
+        setUploading(false);
+      }
     };
     reader.readAsDataURL(file);
   };

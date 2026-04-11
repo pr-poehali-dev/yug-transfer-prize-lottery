@@ -5,14 +5,18 @@ POST — создать пост (черновик или запланирова
 PUT — обновить пост.
 DELETE — удалить пост.
 POST ?action=publish — немедленно опубликовать пост.
+POST ?action=upload_photo — загрузить фото в S3, вернуть CDN URL.
 POST ?action=check_scheduled — проверить и опубликовать запланированные посты (cron-like).
 """
 import os
 import json
 import hashlib
+import base64
+import uuid
 import psycopg2
 import urllib.request
 import urllib.parse
+import boto3
 from datetime import datetime, timezone
 
 CORS = {
@@ -172,6 +176,41 @@ def handler(event: dict, context) -> dict:
             'ok': True, 'posts': posts, 'total': total,
             'page': page, 'pages': max(1, (total + limit - 1) // limit)
         })}
+
+    # ── POST ?action=upload_photo — загрузка фото в S3 ──────────────────────
+    if method == 'POST' and action == 'upload_photo':
+        body = json.loads(event.get('body') or '{}')
+        data_url = body.get('image', '')
+        if not data_url:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'image обязателен'})}
+
+        if ',' in data_url:
+            header, encoded = data_url.split(',', 1)
+            ext = 'jpg'
+            if 'png' in header:
+                ext = 'png'
+            elif 'gif' in header:
+                ext = 'gif'
+            elif 'webp' in header:
+                ext = 'webp'
+        else:
+            encoded = data_url
+            ext = 'jpg'
+
+        image_bytes = base64.b64decode(encoded)
+        key = f"posts/{uuid.uuid4()}.{ext}"
+        content_type = f"image/{ext}"
+
+        s3 = boto3.client(
+            's3',
+            endpoint_url='https://bucket.poehali.dev',
+            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+        )
+        s3.put_object(Bucket='files', Key=key, Body=image_bytes, ContentType=content_type)
+        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        print(f"[POSTS] uploaded photo: {cdn_url}")
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'url': cdn_url})}
 
     # ── POST ?action=publish — немедленная публикация ───────────────────────
     if method == 'POST' and action == 'publish':
