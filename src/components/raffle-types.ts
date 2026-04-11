@@ -1,4 +1,4 @@
-export type Section = "raffles" | "cabinet" | "history" | "contacts";
+export type Section = "raffles" | "cabinet" | "history" | "contacts" | "jackpot";
 export type RaffleStatus = "all" | "active" | "ended" | "upcoming";
 
 export interface Raffle {
@@ -21,6 +21,7 @@ export const HISTORY: { id: number; raffle: string; date: string; amount: number
 
 export const NAV_ITEMS = [
   { id: "raffles" as Section, label: "Розыгрыши", icon: "Gift" },
+  { id: "jackpot" as Section, label: "Джекпот", icon: "Gem" },
   { id: "cabinet" as Section, label: "Кабинет", icon: "User" },
   { id: "history" as Section, label: "История", icon: "Clock" },
   { id: "contacts" as Section, label: "Контакты", icon: "MessageCircle" },

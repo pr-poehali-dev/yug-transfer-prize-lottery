@@ -2,3 +2,4 @@ export { RafflesSection, CountdownTimer } from "@/components/sections/RafflesSec
 export { CabinetSection } from "@/components/sections/CabinetSection";
 export { HistorySection } from "@/components/sections/HistorySection";
 export { ContactsSection } from "@/components/sections/ContactsSection";
+export { JackpotSection } from "@/components/sections/JackpotSection";

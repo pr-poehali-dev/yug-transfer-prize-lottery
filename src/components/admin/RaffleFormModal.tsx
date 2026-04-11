@@ -10,7 +10,7 @@ export function RaffleFormModal({ initial, token, onSave, onClose }: {
     title: initial.title, prize: initial.prize, prize_icon: initial.prize_icon,
     end_date: initial.end_date, participants: initial.participants, min_amount: initial.min_amount,
     status: initial.status, gradient: initial.gradient, winner: initial.winner || "",
-    photo_url: initial.photo_url || "",
+    photo_url: initial.photo_url || "", target_amount: initial.target_amount || 0,
   } : { ...EMPTY_FORM, photo_url: "" });
   const [photoPreview, setPhotoPreview] = useState<string>(initial?.photo_url || "");
   const [photoData, setPhotoData] = useState<string>("");
@@ -119,6 +119,14 @@ export function RaffleFormModal({ initial, token, onSave, onClose }: {
                   <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Дата окончания</label>
                   <input required type="date" value={form.end_date} onChange={e => set("end_date", e.target.value)} className={inputCls} />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">
+                  Цель сбора (₽) — <span className="text-purple-400">излишек идёт в джекпот</span>
+                </label>
+                <input type="number" min={0} value={form.target_amount} onChange={e => set("target_amount", Number(e.target.value))}
+                  placeholder="0 — без цели" className={inputCls} />
+                <p className="text-xs text-muted-foreground mt-1">Суммарная сумма взносов всех участников. Всё сверх этой суммы уйдёт в джекпот.</p>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Статус</label>

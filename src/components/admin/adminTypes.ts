@@ -20,7 +20,7 @@ export const ICONS = ["Gift", "Smartphone", "Plane", "Car", "Headphones", "Bankn
 export const EMPTY_FORM = {
   title: "", prize: "", prize_icon: "Gift", end_date: "",
   participants: 0, min_amount: 100, status: "active" as const,
-  gradient: GRADIENTS[0], winner: "",
+  gradient: GRADIENTS[0], winner: "", target_amount: 0,
 };
 
 export interface RaffleDB {
@@ -35,6 +35,7 @@ export interface RaffleDB {
   gradient: string;
   winner?: string;
   photo_url?: string;
+  target_amount?: number;
 }
 
 export type AdminTab = "dashboard" | "raffles" | "clients" | "notify";

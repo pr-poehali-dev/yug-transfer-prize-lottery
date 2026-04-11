@@ -31,7 +31,7 @@ interface SiteStats {
   active_raffles: number;
   users: number;
 }
-import { RafflesSection, CabinetSection, HistorySection, ContactsSection } from "@/components/PageSections";
+import { RafflesSection, CabinetSection, HistorySection, ContactsSection, JackpotSection } from "@/components/PageSections";
 import { AuthModal } from "@/components/AuthModal";
 
 function formatNum(n: number): string {
@@ -149,6 +149,7 @@ export default function Index() {
     cabinet: <CabinetSection user={appUser} onLogin={() => setAuthOpen(true)} onLogout={handleLogout} onUserUpdate={setAppUser} />,
     history: <HistorySection />,
     contacts: <ContactsSection />,
+    jackpot: <JackpotSection />,
   };
 
   const SECTION_TITLES: Record<Section, { title: string; subtitle: string }> = {
@@ -156,6 +157,7 @@ export default function Index() {
     cabinet: { title: "Личный кабинет", subtitle: "Управляй участиями и балансом" },
     history: { title: "История участий", subtitle: "Все твои ставки в одном месте" },
     contacts: { title: "Контакты", subtitle: "Мы всегда на связи" },
+    jackpot: { title: "Джекпот", subtitle: "Накопленный приз для всех участников" },
   };
 
   return (
