@@ -143,6 +143,7 @@ def handler(event: dict, context) -> dict:
 
         pw_hash = hash_password(password)
         try:
+            print(f"[AUTH] inserting phone={phone!r} first_name={first_name!r}")
             cur.execute(f"""
                 INSERT INTO {schema}.users (phone, password_hash, first_name)
                 VALUES (%s, %s, %s)
@@ -150,10 +151,12 @@ def handler(event: dict, context) -> dict:
             """, (phone, pw_hash, first_name))
             row = cur.fetchone()
             conn.commit()
+            print(f"[AUTH] insert ok, row={row}")
         except Exception as e:
             conn.rollback()
+            print(f"[AUTH] insert ERROR: {type(e).__name__}: {e}")
             cur.close(); conn.close()
-            return {'statusCode': 409, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'Этот номер уже зарегистрирован'})}
+            return {'statusCode': 500, 'headers': cors, 'body': json.dumps({'ok': False, 'error': f'Ошибка БД: {type(e).__name__}: {str(e)}'})}
         cur.close(); conn.close()
         user = {'id': row[0], 'telegram_id': 0, 'phone': row[1], 'first_name': row[2], 'balance': row[3], 'total_entries': 0, 'total_spent': 0, 'wins': 0}
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'user': user})}
