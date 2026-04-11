@@ -145,33 +145,42 @@ def handler(event: dict, context) -> dict:
             conn = get_conn()
             cur = conn.cursor()
 
-            # Идемпотентность — не обрабатываем дважды
+            # Идемпотентность — не обрабатываем дважды по payment_id
             cur.execute(f"SELECT status FROM {SCHEMA}.transactions WHERE payment_id = %s", (payment_id,))
             row = cur.fetchone()
             if row and row[0] != 'succeeded':
-                # Записываем участие в розыгрыше
+                # Проверяем что entry ещё не создан (дополнительная защита от дублей)
                 cur.execute(
-                    f"INSERT INTO {SCHEMA}.entries (user_id, raffle_id, tickets, amount) "
-                    f"VALUES (%s, %s, 1, %s) ON CONFLICT DO NOTHING",
-                    (user_id, raffle_id, amount)
+                    f"SELECT id FROM {SCHEMA}.entries WHERE payment_id = %s",
+                    (payment_id,)
                 )
-                # Увеличиваем счётчик участников розыгрыша
-                cur.execute(
-                    f"UPDATE {SCHEMA}.raffles SET participants = participants + 1 WHERE id = %s",
-                    (raffle_id,)
-                )
-                # Обновляем статистику пользователя
-                cur.execute(
-                    f"UPDATE {SCHEMA}.users SET total_entries = total_entries + 1, total_spent = total_spent + %s WHERE id = %s",
-                    (amount, user_id)
-                )
-                # Обновляем транзакцию
+                already_exists = cur.fetchone()
+                if not already_exists:
+                    # Записываем участие в розыгрыше
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.entries (user_id, raffle_id, tickets, amount, payment_id) "
+                        f"VALUES (%s, %s, 1, %s, %s)",
+                        (user_id, raffle_id, amount, payment_id)
+                    )
+                    # Увеличиваем счётчик участников розыгрыша
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.raffles SET participants = participants + 1 WHERE id = %s",
+                        (raffle_id,)
+                    )
+                    # Обновляем статистику пользователя
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.users SET total_entries = total_entries + 1, total_spent = total_spent + %s WHERE id = %s",
+                        (amount, user_id)
+                    )
+                    print(f"[PAYMENT] user {user_id} entered raffle {raffle_id} for {amount}₽")
+                else:
+                    print(f"[PAYMENT] duplicate webhook skipped for payment {payment_id}")
+                # Обновляем транзакцию в любом случае
                 cur.execute(
                     f"UPDATE {SCHEMA}.transactions SET status = 'completed', description = %s WHERE payment_id = %s",
                     (f'Участие: {raffle_title}', payment_id)
                 )
                 conn.commit()
-                print(f"[PAYMENT] user {user_id} entered raffle {raffle_id} for {amount}₽")
 
             cur.close()
             conn.close()
