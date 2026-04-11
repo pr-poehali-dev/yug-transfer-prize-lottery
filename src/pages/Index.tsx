@@ -18,6 +18,12 @@ export interface AppUser {
 
 const STATS_URL = "https://functions.poehali.dev/60522b1d-07ea-44fd-8d82-ca79a4e092c6";
 
+const LOGO_IMGS = [
+  "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/901006bc-4c75-4393-a3f7-cb70f556bd14.jpg",
+  "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/94997fc2-898b-4145-b074-5e363a301f08.jpg",
+  "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/4f8ef3f6-0b79-4eef-9aba-6ee312b808cb.jpg",
+];
+
 interface SiteStats {
   participants: number;
   winners: number;
@@ -38,6 +44,7 @@ export default function Index() {
   const [activeSection, setActiveSection] = useState<Section>("raffles");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [logoIdx, setLogoIdx] = useState(0);
   const [stats, setStats] = useState<SiteStats | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(() => {
     try { return JSON.parse(localStorage.getItem("app_user") || "null"); } catch { return null; }
