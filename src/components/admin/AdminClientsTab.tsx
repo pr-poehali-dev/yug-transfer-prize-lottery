@@ -65,7 +65,10 @@ export function AdminClientsTab({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-medium text-sm">{c.first_name} {c.last_name}</p>
-                  <p className="text-xs text-muted-foreground">{c.username ? `@${c.username}` : `TG: ${c.telegram_id}`} · {c.created_at.slice(0, 10)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {c.phone ? `📱 +${c.phone}` : c.username ? `@${c.username}` : `TG: ${c.telegram_id}`}
+                    {" · "}{c.created_at.slice(0, 10)}
+                  </p>
                 </div>
                 <div className="hidden md:flex items-center gap-4 text-xs shrink-0">
                   <div className="text-center">

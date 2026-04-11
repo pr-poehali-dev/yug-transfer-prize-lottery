@@ -84,8 +84,8 @@ def handler(event: dict, context) -> dict:
     where = ""
     args = []
     if search:
-        where = "WHERE u.first_name ILIKE %s OR u.last_name ILIKE %s OR u.username ILIKE %s OR CAST(u.telegram_id AS TEXT) LIKE %s"
-        args = [f'%{search}%', f'%{search}%', f'%{search}%', f'%{search}%']
+        where = "WHERE u.first_name ILIKE %s OR u.last_name ILIKE %s OR u.username ILIKE %s OR CAST(u.telegram_id AS TEXT) LIKE %s OR u.phone LIKE %s"
+        args = [f'%{search}%', f'%{search}%', f'%{search}%', f'%{search}%', f'%{search.replace("+", "").replace(" ", "").replace("-", "")}%']
 
     count_sql = f"SELECT COUNT(*) FROM {SCHEMA}.users u {where}"
     cur.execute(count_sql, args)
@@ -94,7 +94,7 @@ def handler(event: dict, context) -> dict:
     sql = f"""
         SELECT
             u.id, u.telegram_id, u.first_name, u.last_name, u.username,
-            u.photo_url, u.balance, u.created_at,
+            u.photo_url, u.balance, u.created_at, u.phone,
             COALESCE(SUM(CASE WHEN t.type='entry' AND t.status='completed' THEN t.amount ELSE 0 END), 0) as total_paid,
             COUNT(DISTINCT t.id) FILTER (WHERE t.status='completed') as payments_count,
             COUNT(DISTINCT e.id) as entries_count
@@ -120,9 +120,10 @@ def handler(event: dict, context) -> dict:
             'photo_url': r[5] or '',
             'balance': r[6],
             'created_at': str(r[7]) if r[7] else '',
-            'total_paid': int(r[8]),
-            'payments_count': int(r[9]),
-            'entries_count': int(r[10]),
+            'phone': r[8] or '',
+            'total_paid': int(r[9]),
+            'payments_count': int(r[10]),
+            'entries_count': int(r[11]),
         })
 
     cur.close()
