@@ -38,6 +38,12 @@ def tg_request(bot_token: str, method: str, payload: dict) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read())
+            return {'ok': False, 'description': body.get('description', str(e))}
+        except Exception:
+            return {'ok': False, 'description': str(e)}
     except Exception as e:
         return {'ok': False, 'description': str(e)}
 
@@ -53,25 +59,26 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     if button_text and button_url:
         reply_markup = {'inline_keyboard': [[{'text': button_text, 'url': button_url}]]}
 
-    if photo_url:
-        payload = {
-            'chat_id': channel_id,
-            'photo': photo_url,
-            'caption': text,
-            'parse_mode': 'HTML',
-        }
-        if reply_markup:
-            payload['reply_markup'] = reply_markup
-        result = tg_request(bot_token, 'sendPhoto', payload)
-    else:
-        payload = {
-            'chat_id': channel_id,
-            'text': text,
-            'parse_mode': 'HTML',
-        }
-        if reply_markup:
-            payload['reply_markup'] = reply_markup
-        result = tg_request(bot_token, 'sendMessage', payload)
+    def try_send(parse_mode=None):
+        if photo_url:
+            payload = {'chat_id': channel_id, 'photo': photo_url, 'caption': text}
+            if parse_mode:
+                payload['parse_mode'] = parse_mode
+            if reply_markup:
+                payload['reply_markup'] = reply_markup
+            return tg_request(bot_token, 'sendPhoto', payload)
+        else:
+            payload = {'chat_id': channel_id, 'text': text}
+            if parse_mode:
+                payload['parse_mode'] = parse_mode
+            if reply_markup:
+                payload['reply_markup'] = reply_markup
+            return tg_request(bot_token, 'sendMessage', payload)
+
+    result = try_send('HTML')
+    if not result.get('ok'):
+        print(f"[POSTS] HTML parse failed: {result.get('description')}, retrying without parse_mode")
+        result = try_send(None)
 
     if result.get('ok'):
         msg_id = result.get('result', {}).get('message_id')
