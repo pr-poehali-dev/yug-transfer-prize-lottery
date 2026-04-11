@@ -136,7 +136,7 @@ export default function Index() {
     setAppUser(user);
     localStorage.setItem("app_user", JSON.stringify(user));
     setAuthOpen(false);
-    setActiveSection("cabinet");
+    setActiveSection("raffles");
   };
 
   const handleLogout = () => {
@@ -304,7 +304,16 @@ export default function Index() {
                 className="flex flex-wrap gap-3 opacity-0-init animate-fade-in-up delay-300"
                 style={{ animationFillMode: "forwards" }}
               >
-                <button className="grad-btn rounded-2xl px-8 py-4 font-bold text-base font-golos flex items-center gap-2">
+                <button
+                  className="grad-btn rounded-2xl px-8 py-4 font-bold text-base font-golos flex items-center gap-2"
+                  onClick={() => {
+                    if (appUser) {
+                      setActiveSection("raffles");
+                    } else {
+                      setAuthOpen(true);
+                    }
+                  }}
+                >
                   <Icon name="Zap" size={18} />
                   Участвовать сейчас
                 </button>
