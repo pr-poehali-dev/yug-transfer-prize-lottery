@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Client, ADMIN_CLIENTS_URL } from "./adminTypes";
+import { ClientEntriesModal } from "./ClientEntriesModal";
 
 interface AdminClientsTabProps {
   clients: Client[];
@@ -20,9 +21,10 @@ export function AdminClientsTab({
   loadingClients, token, onSearchChange, onPageChange, onDeleted,
 }: AdminClientsTabProps) {
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [viewClient, setViewClient] = useState<Client | null>(null);
 
   const handleDelete = async (c: Client) => {
-    if (!confirm(`Удалить клиента "${c.first_name} ${c.last_name}".trim() || c.username"?\n\nБудут удалены все его участия в розыгрышах.`)) return;
+    if (!confirm(`Удалить клиента "${[c.first_name, c.last_name].filter(Boolean).join(" ") || c.username}"?\n\nБудут удалены все его участия в розыгрышах.`)) return;
     setDeleting(c.id);
     try {
       await fetch(ADMIN_CLIENTS_URL, {
@@ -36,6 +38,14 @@ export function AdminClientsTab({
 
   return (
     <div>
+      {viewClient && (
+        <ClientEntriesModal
+          client={viewClient}
+          token={token}
+          onClose={() => setViewClient(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h2 className="font-oswald text-3xl font-bold text-white">Клиенты <span className="text-muted-foreground text-xl">({clientsTotal})</span></h2>
         <div className="relative">
@@ -43,13 +53,16 @@ export function AdminClientsTab({
           <input
             value={clientsSearch}
             onChange={e => onSearchChange(e.target.value)}
-            placeholder="Поиск по имени, @username..."
+            placeholder="Поиск по имени, телефону..."
             className="bg-white/5 border border-white/10 focus:border-purple-500/60 rounded-xl pl-9 pr-4 py-2 text-white placeholder-muted-foreground text-sm outline-none w-64"
           />
         </div>
       </div>
+
       {loadingClients ? (
-        <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div>
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+        </div>
       ) : clients.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <Icon name="Users" size={48} className="mx-auto mb-3 opacity-20" />
@@ -88,6 +101,13 @@ export function AdminClientsTab({
                     <p className="text-muted-foreground">баланс</p>
                   </div>
                 </div>
+                <button
+                  onClick={() => setViewClient(c)}
+                  title="Посмотреть участия"
+                  className="w-8 h-8 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 flex items-center justify-center text-purple-400 transition-colors shrink-0"
+                >
+                  <Icon name="Ticket" size={14} />
+                </button>
                 <button
                   onClick={() => handleDelete(c)}
                   disabled={deleting === c.id}

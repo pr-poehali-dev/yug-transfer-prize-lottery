@@ -71,8 +71,36 @@ def handler(event: dict, context) -> dict:
         print(f"[ADMIN] deleted user {user_id}, raffle entries: {raffle_ids}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
 
+    # GET /?action=entries&user_id=X — участия конкретного клиента
+    qs = event.get('queryStringParameters') or {}
+    if qs.get('action') == 'entries':
+        user_id = qs.get('user_id')
+        if not user_id:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'user_id обязателен'})}
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT e.id, r.title, r.prize, r.prize_icon, r.status, r.winner,
+                   e.tickets, e.amount, e.created_at, r.photo_url, r.gradient
+            FROM {SCHEMA}.entries e
+            JOIN {SCHEMA}.raffles r ON r.id = e.raffle_id
+            WHERE e.user_id = %s
+            ORDER BY e.created_at DESC
+        """, (user_id,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        entries = [{
+            'id': r[0], 'raffle_title': r[1], 'raffle_prize': r[2],
+            'raffle_icon': r[3], 'raffle_status': r[4], 'winner': r[5],
+            'tickets': r[6], 'amount': r[7],
+            'created_at': r[8].isoformat() if r[8] else None,
+            'raffle_photo': r[9], 'raffle_gradient': r[10],
+        } for r in rows]
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'entries': entries})}
+
     # GET — список клиентов
-    params = event.get('queryStringParameters') or {}
+    params = qs
     page = int(params.get('page', 1))
     limit = int(params.get('limit', 50))
     search = params.get('search', '').strip()
