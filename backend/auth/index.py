@@ -136,13 +136,18 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 409, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'Этот номер уже зарегистрирован'})}
 
         pw_hash = hash_password(password)
-        cur.execute(f"""
-            INSERT INTO {schema}.users (phone, password_hash, first_name)
-            VALUES (%s, %s, %s)
-            RETURNING id, phone, first_name, balance
-        """, (phone, pw_hash, first_name))
-        row = cur.fetchone()
-        conn.commit()
+        try:
+            cur.execute(f"""
+                INSERT INTO {schema}.users (phone, password_hash, first_name)
+                VALUES (%s, %s, %s)
+                RETURNING id, phone, first_name, balance
+            """, (phone, pw_hash, first_name))
+            row = cur.fetchone()
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            cur.close(); conn.close()
+            return {'statusCode': 409, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'Этот номер уже зарегистрирован'})}
         cur.close(); conn.close()
         user = {'id': row[0], 'telegram_id': 0, 'phone': row[1], 'first_name': row[2], 'balance': row[3], 'total_entries': 0, 'total_spent': 0, 'wins': 0}
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'user': user})}
