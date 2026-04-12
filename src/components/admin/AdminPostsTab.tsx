@@ -88,6 +88,14 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
   const handleVideoNoteUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const MAX_MB = 4;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setFormError(`Видео слишком большое. Максимум ${MAX_MB} МБ (сейчас ${(file.size / 1024 / 1024).toFixed(1)} МБ)`);
+      e.target.value = "";
+      return;
+    }
+
     setUploadingVideo(true);
     const reader = new FileReader();
     reader.onload = async () => {
@@ -97,16 +105,21 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
           headers: { "Content-Type": "application/json", "X-Admin-Token": token },
           body: JSON.stringify({ video: reader.result, filename: file.name }),
         });
+        if (!res.ok) {
+          setFormError(`Ошибка загрузки видео: сервер вернул ${res.status}. Попробуйте файл меньшего размера.`);
+          return;
+        }
         const data = await res.json();
         if (data.ok) {
           setForm(f => ({ ...f, video_note_url: data.url }));
         } else {
-          setFormError("Ошибка загрузки видео: " + (data.error || "?"));
+          setFormError("Ошибка загрузки видео: " + (data.error || "неизвестная ошибка"));
         }
       } catch {
-        setFormError("Ошибка загрузки видео");
+        setFormError("Ошибка загрузки видео. Проверьте размер файла — максимум 4 МБ");
       } finally {
         setUploadingVideo(false);
+        e.target.value = "";
       }
     };
     reader.readAsDataURL(file);
