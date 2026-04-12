@@ -14,8 +14,6 @@ import hashlib
 import base64
 import uuid
 import io
-import subprocess
-import tempfile
 import psycopg2
 import urllib.request
 import urllib.parse
