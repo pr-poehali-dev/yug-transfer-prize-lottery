@@ -122,7 +122,10 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
         const start = n * CHUNK_SIZE;
         const chunk = file.slice(start, start + CHUNK_SIZE);
         const arrayBuf = await chunk.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
+        const bytes = new Uint8Array(arrayBuf);
+        let binary = "";
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = btoa(binary);
 
         const chunkRes = await fetch(`${UPLOAD_VIDEO_URL}?action=chunk&id=${uploadId}&n=${n}`, {
           method: "POST",
