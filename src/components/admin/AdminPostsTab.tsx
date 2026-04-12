@@ -85,45 +85,83 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     reader.readAsDataURL(file);
   };
 
-  // ── загрузка видео-кружка через presigned URL (прямо в S3) ──
+  // ── загрузка видео-кружка чанками (по 2 МБ) ──
   const handleVideoNoteUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const MAX_MB = 50;
+    const MAX_MB = 150;
     if (file.size > MAX_MB * 1024 * 1024) {
       setFormError(`Видео слишком большое. Максимум ${MAX_MB} МБ (сейчас ${(file.size / 1024 / 1024).toFixed(1)} МБ)`);
       e.target.value = "";
       return;
     }
 
+    const CHUNK_SIZE = 2 * 1024 * 1024; // 2 МБ
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    let uploadId = "";
+
     setUploadingVideo(true);
     try {
-      // 1. Получаем presigned PUT URL у бэкенда
-      const presignRes = await fetch(
-        `${UPLOAD_VIDEO_URL}?action=presign&filename=${encodeURIComponent(file.name)}`,
-        { headers: { "X-Admin-Token": token } }
-      );
-      if (!presignRes.ok) {
-        const err = await presignRes.json().catch(() => ({}));
-        setFormError(`Ошибка: ${err.error || `сервер вернул ${presignRes.status}`}`);
-        return;
-      }
-      const { upload_url, cdn_url } = await presignRes.json();
-
-      // 2. Загружаем файл напрямую в S3 (без ограничений платформы)
-      const uploadRes = await fetch(upload_url, {
-        method: "PUT",
-        headers: { "Content-Type": "video/mp4" },
-        body: file,
+      // 1. Init
+      const initRes = await fetch(`${UPLOAD_VIDEO_URL}?action=init`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ filename: file.name, total_chunks: totalChunks }),
       });
-      if (!uploadRes.ok) {
-        setFormError(`Ошибка загрузки в хранилище: ${uploadRes.status}`);
+      if (!initRes.ok) {
+        const err = await initRes.json().catch(() => ({}));
+        setFormError(`Ошибка: ${err.error || `сервер вернул ${initRes.status}`}`);
         return;
       }
+      const initData = await initRes.json();
+      uploadId = initData.upload_id;
 
-      setForm(f => ({ ...f, video_note_url: cdn_url }));
+      // 2. Chunks
+      for (let n = 0; n < totalChunks; n++) {
+        const start = n * CHUNK_SIZE;
+        const chunk = file.slice(start, start + CHUNK_SIZE);
+        const arrayBuf = await chunk.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
+
+        const chunkRes = await fetch(`${UPLOAD_VIDEO_URL}?action=chunk&id=${uploadId}&n=${n}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+          body: JSON.stringify({ data: b64 }),
+        });
+        if (!chunkRes.ok) {
+          const err = await chunkRes.json().catch(() => ({}));
+          setFormError(`Ошибка чанка ${n + 1}/${totalChunks}: ${err.error || chunkRes.status}`);
+          await fetch(`${UPLOAD_VIDEO_URL}?action=cancel&id=${uploadId}`, {
+            method: "POST", headers: { "X-Admin-Token": token },
+          }).catch(() => {});
+          return;
+        }
+      }
+
+      // 3. Complete
+      const completeRes = await fetch(`${UPLOAD_VIDEO_URL}?action=complete&id=${uploadId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({}),
+      });
+      if (!completeRes.ok) {
+        const err = await completeRes.json().catch(() => ({}));
+        setFormError(`Ошибка сборки: ${err.error || completeRes.status}`);
+        return;
+      }
+      const completeData = await completeRes.json();
+      if (completeData.ok) {
+        setForm(f => ({ ...f, video_note_url: completeData.url }));
+      } else {
+        setFormError("Ошибка загрузки: " + (completeData.error || "неизвестная ошибка"));
+      }
     } catch {
+      if (uploadId) {
+        await fetch(`${UPLOAD_VIDEO_URL}?action=cancel&id=${uploadId}`, {
+          method: "POST", headers: { "X-Admin-Token": token },
+        }).catch(() => {});
+      }
       setFormError("Ошибка загрузки видео. Проверьте соединение.");
     } finally {
       setUploadingVideo(false);

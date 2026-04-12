@@ -14,9 +14,10 @@
       "expectedStatus": 403
     },
     {
-      "name": "Presign no auth returns 403",
-      "method": "GET",
-      "path": "/?action=presign&filename=test.mp4",
+      "name": "Init no auth returns 403",
+      "method": "POST",
+      "path": "/?action=init",
+      "body": {"filename": "test.mp4"},
       "expectedStatus": 403
     }
   ]

@@ -1,7 +1,9 @@
 """
-Загрузка видео-кружка в S3.
-GET ?action=presign&filename=... — выдаёт presigned PUT URL для прямой загрузки
-POST (legacy base64) — оставлен для совместимости с мелкими файлами
+Загрузка видео-кружка в S3 через чанки.
+POST ?action=init              — начать загрузку, получить upload_id
+POST ?action=chunk&id=...&n=N — загрузить N-й чанк (base64)
+POST ?action=complete&id=...  — собрать все чанки, залить в S3
+POST ?action=cancel&id=...    — отменить загрузку
 """
 import os
 import json
@@ -12,9 +14,11 @@ from botocore.config import Config
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
 }
+
+CHUNK_PREFIX = "uploads/chunks"
 
 
 def _check_auth(headers: dict) -> bool:
@@ -25,7 +29,7 @@ def _check_auth(headers: dict) -> bool:
     return token == expected or token == password
 
 
-def _s3_client():
+def _s3():
     return boto3.client(
         's3',
         endpoint_url='https://bucket.poehali.dev',
@@ -36,69 +40,98 @@ def _s3_client():
 
 
 def handler(event: dict, context) -> dict:
-    """Генерирует presigned PUT URL для прямой загрузки видео в S3."""
+    """Чанковая загрузка видео: init → chunk×N → complete."""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 
     headers = {k.lower(): v for k, v in (event.get('headers') or {}).items()}
-
     if not _check_auth(headers):
         return {'statusCode': 403, 'headers': CORS, 'body': json.dumps({'error': 'Forbidden'})}
 
-    method = event.get('httpMethod', 'POST')
     params = event.get('queryStringParameters') or {}
-
-    # ── GET: выдать presigned PUT URL ──────────────────────────────────────────
-    if method == 'GET' or params.get('action') == 'presign':
-        filename = params.get('filename', 'video.mp4')
-        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'mp4'
-        key = f"posts/video_{uuid.uuid4()}.{ext}"
-        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
-
-        s3 = _s3_client()
-        presigned_url = s3.generate_presigned_url(
-            'put_object',
-            Params={'Bucket': 'files', 'Key': key, 'ContentType': 'video/mp4'},
-            ExpiresIn=300,
-        )
-        print(f"[UPLOAD-VIDEO] presigned for key: {key}")
-        return {
-            'statusCode': 200,
-            'headers': CORS,
-            'body': json.dumps({'ok': True, 'upload_url': presigned_url, 'cdn_url': cdn_url}),
-        }
-
-    # ── POST: legacy base64 (только маленькие файлы) ───────────────────────────
+    action = params.get('action', '')
     body = json.loads(event.get('body') or '{}')
-    data_url = body.get('video', '')
 
-    if not data_url:
-        return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'video обязателен'})}
+    s3 = _s3()
 
-    if ',' in data_url:
-        _, encoded = data_url.split(',', 1)
-    else:
-        encoded = data_url
+    # ── INIT: начать новую загрузку ────────────────────────────────────────────
+    if action == 'init':
+        upload_id = str(uuid.uuid4())
+        filename = body.get('filename', 'video.mp4')
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'mp4'
+        final_key = f"posts/video_{upload_id}.{ext}"
+        meta = json.dumps({'final_key': final_key, 'total_chunks': body.get('total_chunks', 0)})
+        s3.put_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/meta.json",
+                      Body=meta.encode(), ContentType='application/json')
+        print(f"[UPLOAD-VIDEO] init upload_id={upload_id} key={final_key}")
+        return {'statusCode': 200, 'headers': CORS,
+                'body': json.dumps({'ok': True, 'upload_id': upload_id})}
 
-    video_bytes = base64.b64decode(encoded)
-    size_mb = len(video_bytes) / 1024 / 1024
-    print(f"[UPLOAD-VIDEO] base64 size: {size_mb:.1f} MB")
+    # ── CHUNK: загрузить один чанк ─────────────────────────────────────────────
+    if action == 'chunk':
+        upload_id = params.get('id', '')
+        chunk_n = int(params.get('n', 0))
+        data_b64 = body.get('data', '')
+        if not upload_id or not data_b64:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'missing id or data'})}
 
-    if size_mb > 4:
-        return {'statusCode': 413, 'headers': CORS, 'body': json.dumps({'error': 'Используйте presigned URL для файлов больше 4 МБ'})}
+        chunk_bytes = base64.b64decode(data_b64)
+        s3.put_object(Bucket='files',
+                      Key=f"{CHUNK_PREFIX}/{upload_id}/chunk_{chunk_n:04d}",
+                      Body=chunk_bytes, ContentType='application/octet-stream')
+        print(f"[UPLOAD-VIDEO] chunk {chunk_n} for {upload_id}, size={len(chunk_bytes)}")
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
 
-    filename = body.get('filename', 'video.mp4')
-    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'mp4'
-    key = f"posts/video_{uuid.uuid4()}.{ext}"
+    # ── COMPLETE: собрать чанки и сохранить финальный файл ────────────────────
+    if action == 'complete':
+        upload_id = params.get('id', '')
+        if not upload_id:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'missing id'})}
 
-    s3 = _s3_client()
-    s3.put_object(Bucket='files', Key=key, Body=video_bytes, ContentType='video/mp4')
-    cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
-    print(f"[UPLOAD-VIDEO] uploaded base64: {cdn_url}")
+        meta_obj = s3.get_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/meta.json")
+        meta = json.loads(meta_obj['Body'].read())
+        final_key = meta['final_key']
 
-    return {
-        'statusCode': 200,
-        'headers': CORS,
-        'body': json.dumps({'ok': True, 'url': cdn_url}),
-    }
+        resp = s3.list_objects_v2(Bucket='files', Prefix=f"{CHUNK_PREFIX}/{upload_id}/chunk_")
+        if not resp.get('Contents'):
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'нет чанков'})}
+
+        keys = sorted(obj['Key'] for obj in resp['Contents'])
+        print(f"[UPLOAD-VIDEO] assembling {len(keys)} chunks for {upload_id}")
+
+        parts = []
+        for key in keys:
+            obj = s3.get_object(Bucket='files', Key=key)
+            parts.append(obj['Body'].read())
+
+        video_bytes = b''.join(parts)
+        size_mb = len(video_bytes) / 1024 / 1024
+        print(f"[UPLOAD-VIDEO] total size: {size_mb:.1f} MB")
+
+        if size_mb > 150:
+            return {'statusCode': 413, 'headers': CORS,
+                    'body': json.dumps({'error': f'Файл слишком большой: {size_mb:.1f} МБ. Максимум 150 МБ'})}
+
+        s3.put_object(Bucket='files', Key=final_key, Body=video_bytes, ContentType='video/mp4')
+        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{final_key}"
+
+        for key in keys:
+            s3.delete_object(Bucket='files', Key=key)
+        s3.delete_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/meta.json")
+
+        print(f"[UPLOAD-VIDEO] done: {cdn_url}")
+        return {'statusCode': 200, 'headers': CORS,
+                'body': json.dumps({'ok': True, 'url': cdn_url})}
+
+    # ── CANCEL ─────────────────────────────────────────────────────────────────
+    if action == 'cancel':
+        upload_id = params.get('id', '')
+        if upload_id:
+            resp = s3.list_objects_v2(Bucket='files', Prefix=f"{CHUNK_PREFIX}/{upload_id}/")
+            for obj in resp.get('Contents', []):
+                s3.delete_object(Bucket='files', Key=obj['Key'])
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
+
+    return {'statusCode': 400, 'headers': CORS,
+            'body': json.dumps({'error': f'unknown action: {action}'})}

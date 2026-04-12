@@ -152,7 +152,7 @@ export function PostForm({
 
         {/* Видео-кружок */}
         <div>
-          <label className="text-xs text-white/50 mb-1.5 block">Видео-кружок <span className="text-white/20">(необязательно, mp4 до 50 МБ)</span></label>
+          <label className="text-xs text-white/50 mb-1.5 block">Видео-кружок <span className="text-white/20">(необязательно, mp4 до 150 МБ)</span></label>
           {form.video_note_url ? (
             <div className="relative flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="w-12 h-12 rounded-full overflow-hidden bg-black shrink-0">
