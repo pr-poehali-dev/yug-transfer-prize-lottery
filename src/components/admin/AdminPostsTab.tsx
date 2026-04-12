@@ -85,8 +85,8 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     reader.readAsDataURL(file);
   };
 
-  // ── загрузка видео-кружка через S3 ──
-  const handleVideoNoteUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── загрузка видео-кружка через presigned URL (прямо в S3) ──
+  const handleVideoNoteUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -98,33 +98,37 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     }
 
     setUploadingVideo(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const res = await fetch(UPLOAD_VIDEO_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ video: reader.result, filename: file.name }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          setFormError(`Ошибка загрузки видео: ${err.error || `сервер вернул ${res.status}`}`);
-          return;
-        }
-        const data = await res.json();
-        if (data.ok) {
-          setForm(f => ({ ...f, video_note_url: data.url }));
-        } else {
-          setFormError("Ошибка загрузки видео: " + (data.error || "неизвестная ошибка"));
-        }
-      } catch {
-        setFormError("Ошибка загрузки видео. Проверьте размер файла — максимум 50 МБ");
-      } finally {
-        setUploadingVideo(false);
-        e.target.value = "";
+    try {
+      // 1. Получаем presigned PUT URL у бэкенда
+      const presignRes = await fetch(
+        `${UPLOAD_VIDEO_URL}?action=presign&filename=${encodeURIComponent(file.name)}`,
+        { headers: { "X-Admin-Token": token } }
+      );
+      if (!presignRes.ok) {
+        const err = await presignRes.json().catch(() => ({}));
+        setFormError(`Ошибка: ${err.error || `сервер вернул ${presignRes.status}`}`);
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+      const { upload_url, cdn_url } = await presignRes.json();
+
+      // 2. Загружаем файл напрямую в S3 (без ограничений платформы)
+      const uploadRes = await fetch(upload_url, {
+        method: "PUT",
+        headers: { "Content-Type": "video/mp4" },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        setFormError(`Ошибка загрузки в хранилище: ${uploadRes.status}`);
+        return;
+      }
+
+      setForm(f => ({ ...f, video_note_url: cdn_url }));
+    } catch {
+      setFormError("Ошибка загрузки видео. Проверьте соединение.");
+    } finally {
+      setUploadingVideo(false);
+      e.target.value = "";
+    }
   };
 
   // ── начать редактирование поста ──
