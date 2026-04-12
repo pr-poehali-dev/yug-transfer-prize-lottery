@@ -59,10 +59,17 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     video_note_url = post.get('video_note_url', '')
     button_text = post.get('button_text', '')
     button_url = post.get('button_url', '')
+    button2_text = post.get('button2_text', '')
+    button2_url = post.get('button2_url', '')
 
     reply_markup = None
+    buttons_row = []
     if button_text and button_url:
-        reply_markup = {'inline_keyboard': [[{'text': button_text, 'url': button_url}]]}
+        buttons_row.append({'text': button_text, 'url': button_url})
+    if button2_text and button2_url:
+        buttons_row.append({'text': button2_text, 'url': button2_url})
+    if buttons_row:
+        reply_markup = {'inline_keyboard': [buttons_row]}
 
     # Если есть видео-кружок — сначала отправляем его, потом текст+кнопку
     if video_note_url:
@@ -154,6 +161,8 @@ def row_to_post(r) -> dict:
         'created_at': r[10].isoformat() if r[10] else None,
         'updated_at': r[11].isoformat() if r[11] else None,
         'video_note_url': r[12] or '',
+        'button2_text': r[13] or '',
+        'button2_url': r[14] or '',
     }
 
 
@@ -195,7 +204,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT id, title, text, photo_url, button_text, button_url,
                        status, scheduled_at, published_at, telegram_message_id, created_at, updated_at,
-                       video_note_url
+                       video_note_url, button2_text, button2_url
                 FROM {SCHEMA}.posts {where}
                 ORDER BY created_at DESC LIMIT %s OFFSET %s""",
             args + [limit, offset]
@@ -284,7 +293,7 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url FROM {SCHEMA}.posts WHERE id = %s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id = %s",
             (post_id,)
         )
         row = cur.fetchone()
@@ -321,7 +330,7 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         now = datetime.now(timezone.utc)
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url FROM {SCHEMA}.posts WHERE status='scheduled' AND scheduled_at <= %s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE status='scheduled' AND scheduled_at <= %s",
             (now,)
         )
         rows = cur.fetchall()
@@ -358,6 +367,8 @@ def handler(event: dict, context) -> dict:
         video_note_url = body.get('video_note_url', '')
         button_text = body.get('button_text', '')
         button_url = body.get('button_url', '')
+        button2_text = body.get('button2_text', '')
+        button2_url = body.get('button2_url', '')
         status = body.get('status', 'draft')
         scheduled_at = body.get('scheduled_at')  # ISO string or None
 
@@ -373,15 +384,15 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, status, scheduled_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (title, text, photo_url, video_note_url, button_text, button_url, status, sched_dt)
+            f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, scheduled_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt)
         )
         new_id = cur.fetchone()[0]
         conn.commit()
 
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url FROM {SCHEMA}.posts WHERE id=%s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id=%s",
             (new_id,)
         )
         post = row_to_post(cur.fetchone())
@@ -402,6 +413,8 @@ def handler(event: dict, context) -> dict:
         video_note_url = body.get('video_note_url', '')
         button_text = body.get('button_text', '')
         button_url = body.get('button_url', '')
+        button2_text = body.get('button2_text', '')
+        button2_url = body.get('button2_url', '')
         status = body.get('status', 'draft')
         scheduled_at = body.get('scheduled_at')
         edit_in_tg = body.get('edit_in_telegram', False)
@@ -429,14 +442,14 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""UPDATE {SCHEMA}.posts
                 SET title=%s, text=%s, photo_url=%s, video_note_url=%s, button_text=%s, button_url=%s,
-                    status=%s, scheduled_at=%s, updated_at=%s
+                    button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, updated_at=%s
                 WHERE id=%s""",
-            (title, text, photo_url, video_note_url, button_text, button_url, status, sched_dt, now, post_id)
+            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, now, post_id)
         )
         conn.commit()
 
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url FROM {SCHEMA}.posts WHERE id=%s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id=%s",
             (post_id,)
         )
         post = row_to_post(cur.fetchone())

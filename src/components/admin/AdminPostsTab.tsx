@@ -18,6 +18,7 @@ function toLocalInput(iso: string | null | undefined) {
 
 const EMPTY: PostFormData = {
   title: "", text: "", photo_url: "", video_note_url: "", button_text: "", button_url: "",
+  button2_text: "", button2_url: "",
   status: "draft", scheduled_at: null, chat: "main",
 };
 
@@ -132,6 +133,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
       title: post.title, text: post.text, photo_url: post.photo_url,
       video_note_url: post.video_note_url ?? "",
       button_text: post.button_text, button_url: post.button_url,
+      button2_text: post.button2_text ?? "", button2_url: post.button2_url ?? "",
       status: post.status, scheduled_at: post.scheduled_at,
       chat: (post as PostFormData & { chat?: "main" | "kurilka" }).chat ?? "main",
     };

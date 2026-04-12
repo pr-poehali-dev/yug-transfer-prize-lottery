@@ -6,11 +6,13 @@ interface PostTelegramPreviewProps {
   video_note_url: string;
   button_text: string;
   button_url: string;
+  button2_text?: string;
+  button2_url?: string;
 }
 
 const TIME = new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
 
-export function PostTelegramPreview({ text, photo_url, video_note_url, button_text, button_url }: PostTelegramPreviewProps) {
+export function PostTelegramPreview({ text, photo_url, video_note_url, button_text, button_url, button2_text = "", button2_url = "" }: PostTelegramPreviewProps) {
   if (!text && !photo_url && !video_note_url) return null;
 
   return (
@@ -64,26 +66,48 @@ export function PostTelegramPreview({ text, photo_url, video_note_url, button_te
                   <p className="text-[#6c8998] text-[10px] text-right mt-1">{TIME}</p>
                 </div>
               )}
-              {button_text && button_url && (
-                <div className="border-t border-white/5 px-3 py-2">
-                  <div className="flex items-center justify-center gap-1.5 text-[#2ea6ff] text-sm font-medium">
-                    <Icon name="ExternalLink" size={13} />
-                    {button_text}
-                  </div>
+              {(button_text && button_url) || (button2_text && button2_url) ? (
+                <div className="border-t border-white/5 px-3 py-1.5 flex gap-1">
+                  {button_text && button_url && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 text-[#2ea6ff] text-sm font-medium py-1">
+                      <Icon name="ExternalLink" size={13} />
+                      {button_text}
+                    </div>
+                  )}
+                  {button_text && button_url && button2_text && button2_url && (
+                    <div className="w-px bg-white/10 self-stretch" />
+                  )}
+                  {button2_text && button2_url && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 text-[#2ea6ff] text-sm font-medium py-1">
+                      <Icon name="ExternalLink" size={13} />
+                      {button2_text}
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         )}
 
-        {/* Кнопка без текста (если только кружок + кнопка) */}
-        {video_note_url && !text && !photo_url && button_text && button_url && (
+        {/* Кнопки без текста (если только кружок + кнопки) */}
+        {video_note_url && !text && !photo_url && ((button_text && button_url) || (button2_text && button2_url)) && (
           <div className="flex justify-start">
-            <div className="rounded-2xl rounded-tl-sm overflow-hidden bg-[#182533] border-t border-white/5 px-4 py-2">
-              <div className="flex items-center justify-center gap-1.5 text-[#2ea6ff] text-sm font-medium">
-                <Icon name="ExternalLink" size={13} />
-                {button_text}
-              </div>
+            <div className="rounded-2xl rounded-tl-sm overflow-hidden bg-[#182533] px-3 py-1.5 flex gap-1 min-w-[140px]">
+              {button_text && button_url && (
+                <div className="flex-1 flex items-center justify-center gap-1.5 text-[#2ea6ff] text-sm font-medium py-1">
+                  <Icon name="ExternalLink" size={13} />
+                  {button_text}
+                </div>
+              )}
+              {button_text && button_url && button2_text && button2_url && (
+                <div className="w-px bg-white/10 self-stretch" />
+              )}
+              {button2_text && button2_url && (
+                <div className="flex-1 flex items-center justify-center gap-1.5 text-[#2ea6ff] text-sm font-medium py-1">
+                  <Icon name="ExternalLink" size={13} />
+                  {button2_text}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -9,6 +9,8 @@ export interface PostFormData {
   video_note_url: string;
   button_text: string;
   button_url: string;
+  button2_text: string;
+  button2_url: string;
   status: "draft" | "scheduled" | "published" | "failed";
   scheduled_at: string | null;
   chat: "main" | "kurilka";
@@ -194,23 +196,34 @@ export function PostForm({
           <input ref={videoCaptureRef} type="file" accept="video/*" capture="user" className="hidden" onChange={onVideoNoteUpload} />
         </div>
 
-        {/* Кнопка */}
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs text-white/50 mb-1.5 block">Кнопка — текст</label>
+        {/* Кнопки */}
+        <div className="space-y-2">
+          <label className="text-xs text-white/50 block">Кнопки <span className="text-white/20">(до 2 штук, в одну строку)</span></label>
+          <div className="grid grid-cols-2 gap-2">
             <input
               value={form.button_text}
               onChange={e => onFormChange({ button_text: e.target.value })}
-              placeholder="Подробнее →"
+              placeholder="Кнопка 1 — текст"
               className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/20"
             />
-          </div>
-          <div>
-            <label className="text-xs text-white/50 mb-1.5 block">Кнопка — ссылка</label>
             <input
               value={form.button_url}
               onChange={e => onFormChange({ button_url: e.target.value })}
               placeholder="https://ug-gift.ru"
+              className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/20"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={form.button2_text}
+              onChange={e => onFormChange({ button2_text: e.target.value })}
+              placeholder="Кнопка 2 — текст"
+              className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/20"
+            />
+            <input
+              value={form.button2_url}
+              onChange={e => onFormChange({ button2_url: e.target.value })}
+              placeholder="https://t.me/..."
               className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-xl px-3 py-2.5 text-white text-sm outline-none placeholder-white/20"
             />
           </div>
@@ -270,6 +283,8 @@ export function PostForm({
           video_note_url={form.video_note_url}
           button_text={form.button_text}
           button_url={form.button_url}
+          button2_text={form.button2_text}
+          button2_url={form.button2_url}
         />
 
         {/* Кнопки действий */}

@@ -55,6 +55,8 @@ export interface Post {
   video_note_url: string;
   button_text: string;
   button_url: string;
+  button2_text: string;
+  button2_url: string;
   status: "draft" | "scheduled" | "published" | "failed";
   scheduled_at: string | null;
   published_at: string | null;
