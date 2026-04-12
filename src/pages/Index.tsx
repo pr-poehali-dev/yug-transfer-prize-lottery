@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { Section, NAV_ITEMS, TICKER_ITEMS } from "@/components/raffle-types";
+import { RulesModal } from "@/components/RulesModal";
 
 export interface AppUser {
   id: number;
@@ -52,6 +53,7 @@ export default function Index() {
   const [authOpen, setAuthOpen] = useState(false);
   const [logoIdx, setLogoIdx] = useState(0);
   const [stats, setStats] = useState<SiteStats | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [appUser, setAppUser] = useState<AppUser | null>(() => {
     try { return JSON.parse(localStorage.getItem("app_user") || "null"); } catch { return null; }
   });
@@ -404,7 +406,11 @@ export default function Index() {
           <p className="text-xs text-muted-foreground">© 2026 ЮГ ТРАНСФЕР — Все права защищены</p>
           <div className="flex gap-4 items-center">
             {["Правила", "Конфиденциальность", "Поддержка"].map(l => (
-              <button key={l} className="text-xs text-muted-foreground hover:text-white transition-colors">
+              <button
+                key={l}
+                onClick={() => l === "Правила" && setRulesOpen(true)}
+                className="text-xs text-muted-foreground hover:text-white transition-colors"
+              >
                 {l}
               </button>
             ))}
@@ -422,6 +428,8 @@ export default function Index() {
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} />}
         <SpinWheel />
       </Suspense>
+
+      <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
     </div>
   );
 }
