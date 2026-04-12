@@ -20,6 +20,7 @@ import urllib.parse
 import boto3
 from datetime import datetime, timezone
 
+
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -36,48 +37,8 @@ def verify_token(token: str) -> bool:
     return token == hashlib.sha256(token_base.encode()).hexdigest()
 
 
-def crop_video_square(video_bytes: bytes) -> bytes:
-    """Обрезает видео до квадрата через ffmpeg. Возвращает оригинал если ffmpeg недоступен."""
-    fin_path = fout_path = None
-    try:
-        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as fin:
-            fin.write(video_bytes)
-            fin_path = fin.name
-        fout_path = fin_path + '_sq.mp4'
-        r = subprocess.run(
-            ['ffmpeg', '-y', '-i', fin_path,
-             '-vf', 'crop=min(iw\\,ih):min(iw\\,ih)',
-             '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-             '-c:a', 'aac', '-b:a', '128k',
-             fout_path],
-            capture_output=True, timeout=120
-        )
-        if r.returncode == 0:
-            with open(fout_path, 'rb') as f:
-                result = f.read()
-            print(f"[POSTS] ffmpeg crop ok: {len(result)//1024} KB")
-            return result
-        else:
-            print(f"[POSTS] ffmpeg error (rc={r.returncode}): {r.stderr.decode()[:300]}")
-            return video_bytes
-    except FileNotFoundError:
-        print("[POSTS] ffmpeg not found, skipping crop")
-        return video_bytes
-    except Exception as e:
-        print(f"[POSTS] crop exception: {e}")
-        return video_bytes
-    finally:
-        for p in [fin_path, fout_path]:
-            if p:
-                try:
-                    os.unlink(p)
-                except Exception:
-                    pass
-
-
 def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
-    """Скачивает видео, обрезает до квадрата и отправляет как video_note через multipart."""
-    # Скачиваем видео
+    """Скачивает видео и отправляет как video_note через multipart."""
     try:
         with urllib.request.urlopen(video_url, timeout=30) as r:
             video_bytes = r.read()
@@ -86,9 +47,6 @@ def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
         return {'ok': False, 'description': f'Не удалось скачать видео: {e}'}
 
     print(f"[POSTS] downloaded video: {len(video_bytes)} bytes")
-
-    # Обрезаем до квадрата
-    video_bytes = crop_video_square(video_bytes)
 
     # Multipart form-data
     boundary = uuid.uuid4().hex
