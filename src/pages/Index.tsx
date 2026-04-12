@@ -351,30 +351,7 @@ export default function Index() {
                 </button>
               </div>
 
-              <div
-                className="flex flex-wrap gap-8 mt-10 opacity-0-init animate-fade-in-up delay-400"
-                style={{ animationFillMode: "forwards" }}
-              >
-                {[
-                  {
-                    value: stats ? formatNum(stats.participants) : "—",
-                    label: "Участников",
-                  },
-                  {
-                    value: stats ? formatNum(stats.winners) : "—",
-                    label: "Победителей",
-                  },
-                  {
-                    value: stats ? formatNum(stats.total_prizes) + " ₽" : "—",
-                    label: "Призов роздано",
-                  },
-                ].map((s) => (
-                  <div key={s.label}>
-                    <p className="font-oswald text-2xl font-bold grad-text">{s.value}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
-                  </div>
-                ))}
-              </div>
+
             </div>
           </div>
         </div>
