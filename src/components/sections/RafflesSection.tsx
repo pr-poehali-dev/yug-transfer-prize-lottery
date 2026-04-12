@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { Raffle, RaffleStatus } from "@/components/raffle-types";
 import type { AppUser } from "@/pages/Index";
@@ -60,11 +60,13 @@ export function CountdownTimer({ endDate }: { endDate: string }) {
 
 // ─── RaffleCard ──────────────────────────────────────────────────────────────
 
-function RaffleCard({ raffle, idx, user, onLoginRequired }: {
+function RaffleCard({ raffle, idx, user, onLoginRequired, onRefreshRaffles, onRefreshUser }: {
   raffle: Raffle; idx: number;
   user: AppUser | null;
   onLoginRequired: () => void;
   onGoToCabinet: () => void;
+  onRefreshRaffles: () => void;
+  onRefreshUser: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -72,6 +74,12 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
   const [confirmUrl, setConfirmUrl] = useState("");
   const [paymentId, setPaymentId] = useState("");
   const [myTickets, setMyTickets] = useState<number>(0);
+  const [paymentStatus, setPaymentStatus] = useState<"idle" | "waiting" | "success" | "failed">("idle");
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+  }, []);
 
   const loadMyTickets = useCallback(async () => {
     if (!user) return;
@@ -81,7 +89,7 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
       });
       const data = await res.json();
       if (data.ok) setMyTickets(data.tickets);
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }, [user, raffle.id]);
 
   useEffect(() => { loadMyTickets(); }, [loadMyTickets]);
@@ -95,6 +103,36 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
     return () => window.removeEventListener("payment:success", handler);
   }, [raffle.id, loadMyTickets]);
 
+  // Очищаем polling при размонтировании
+  useEffect(() => () => { stopPolling(); }, [stopPolling]);
+
+  const startPolling = useCallback((pid: string) => {
+    setPaymentStatus("waiting");
+    let attempts = 0;
+    pollingRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`${PAYMENT_URL}?action=check&payment_id=${pid}`);
+        const data = await res.json();
+        if (data.status === "succeeded") {
+          stopPolling();
+          setPaymentStatus("success");
+          setConfirmUrl("");
+          // Обновляем всё
+          await loadMyTickets();
+          onRefreshRaffles();
+          onRefreshUser();
+          window.dispatchEvent(new CustomEvent("payment:success", { detail: { raffleId: raffle.id } }));
+          setTimeout(() => setPaymentStatus("idle"), 4000);
+        } else if (data.status === "canceled" || attempts >= 60) {
+          stopPolling();
+          setPaymentStatus("failed");
+          setTimeout(() => setPaymentStatus("idle"), 4000);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+  }, [loadMyTickets, onRefreshRaffles, onRefreshUser, raffle.id, stopPolling]);
+
   const handleParticipate = async () => {
     if (!user) { onLoginRequired(); return; }
     if (raffle.status === "upcoming") return;
@@ -107,7 +145,7 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
           raffle_id: raffle.id,
           raffle_title: raffle.title,
           amount: raffle.minAmount,
-          return_url: `${window.location.origin}?payment=success&raffle_id=${raffle.id}`,
+          return_url: `${window.location.origin}?payment=check`,
         }),
       });
       const data = await res.json();
@@ -221,30 +259,56 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
           </button>
         )}
 
+        {paymentStatus === "success" && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-[2px]">
+            <div className="w-full max-w-sm bg-[#1a1025] rounded-3xl p-8 flex flex-col items-center gap-4 border border-emerald-500/30 shadow-2xl">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-3xl">✅</div>
+              <div className="text-center">
+                <p className="text-white font-bold text-xl mb-1">Оплата прошла!</p>
+                <p className="text-emerald-400 text-sm">Ты участвуешь в розыгрыше</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {confirmUrl && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-[2px]">
             <div className="w-full max-w-sm bg-[#1a1025] rounded-3xl p-8 flex flex-col items-center gap-6 border border-white/10 shadow-2xl">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl">💳</div>
               <div className="text-center">
                 <p className="text-white font-bold text-xl mb-1">Оплата готова</p>
-                <p className="text-muted-foreground text-sm">Нажмите кнопку ниже для перехода к оплате</p>
+                <p className="text-muted-foreground text-sm">Нажми кнопку ниже для перехода к оплате</p>
                 <p className="text-white font-bold text-2xl mt-3">{raffle.minAmount.toLocaleString("ru")} ₽</p>
               </div>
-              <a
-                href={confirmUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => { if (paymentId) sessionStorage.setItem("pending_payment_id", paymentId); }}
-                className="w-full grad-btn rounded-2xl py-4 font-bold text-lg font-golos flex items-center justify-center gap-2 text-white text-center no-underline"
-              >
-                🔐 Перейти к оплате
-              </a>
-              <button
-                onClick={() => setConfirmUrl("")}
-                className="text-muted-foreground text-sm hover:text-white transition-colors"
-              >
-                Отмена
-              </button>
+
+              {paymentStatus === "waiting" ? (
+                <div className="w-full flex flex-col items-center gap-3">
+                  <div className="flex items-center gap-2 text-purple-300 text-sm">
+                    <div className="w-4 h-4 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin" />
+                    Ожидаем подтверждения оплаты...
+                  </div>
+                  <p className="text-xs text-white/30 text-center">Страница обновится автоматически</p>
+                </div>
+              ) : (
+                <a
+                  href={confirmUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => { if (paymentId) startPolling(paymentId); }}
+                  className="w-full grad-btn rounded-2xl py-4 font-bold text-lg font-golos flex items-center justify-center gap-2 text-white text-center no-underline"
+                >
+                  🔐 Перейти к оплате
+                </a>
+              )}
+
+              {paymentStatus !== "waiting" && (
+                <button
+                  onClick={() => { stopPolling(); setConfirmUrl(""); setPaymentStatus("idle"); }}
+                  className="text-muted-foreground text-sm hover:text-white transition-colors"
+                >
+                  Отмена
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -255,27 +319,20 @@ function RaffleCard({ raffle, idx, user, onLoginRequired }: {
 
 // ─── RafflesSection ──────────────────────────────────────────────────────────
 
-export function RafflesSection({ user, onLoginRequired, onGoToCabinet }: {
+export function RafflesSection({ user, onLoginRequired, onGoToCabinet, onUserUpdate }: {
   user?: AppUser | null;
   onLoginRequired?: () => void;
   onGoToCabinet?: () => void;
+  onUserUpdate?: (u: AppUser) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<RaffleStatus>("all");
   const [sortBy, setSortBy] = useState<"date" | "prize" | "amount" | "participants">("date");
   const [minAmount, setMinAmount] = useState(0);
   const [rawRaffles, setRawRaffles] = useState<Raffle[]>([]);
   const [loadingList, setLoadingList] = useState(true);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") === "success") {
-      const raffleId = params.get("raffle_id") ? Number(params.get("raffle_id")) : undefined;
-      window.dispatchEvent(new CustomEvent("payment:success", { detail: { raffleId } }));
-    }
-  }, []);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  useEffect(() => {
+  const fetchRaffles = useCallback(() => {
     fetch(RAFFLES_URL)
       .then(r => r.json())
       .then(data => {
@@ -295,6 +352,20 @@ export function RafflesSection({ user, onLoginRequired, onGoToCabinet }: {
       })
       .finally(() => setLoadingList(false));
   }, []);
+
+  useEffect(() => { fetchRaffles(); }, [fetchRaffles]);
+
+  const refreshUser = useCallback(async () => {
+    if (!user || !onUserUpdate) return;
+    try {
+      const res = await fetch(`${CABINET_URL}`, { headers: { "X-User-Id": String(user.id) } });
+      const data = await res.json();
+      if (data.ok && data.user) {
+        localStorage.setItem("app_user", JSON.stringify(data.user));
+        onUserUpdate(data.user);
+      }
+    } catch { /* ignore */ }
+  }, [user, onUserUpdate]);
 
   const statusOptions: { value: RaffleStatus; label: string }[] = [
     { value: "all", label: "Все" },
@@ -416,7 +487,7 @@ export function RafflesSection({ user, onLoginRequired, onGoToCabinet }: {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filtered.map((r, i) => (
-            <RaffleCard key={r.id} raffle={r} idx={i} user={user ?? null} onLoginRequired={onLoginRequired ?? (() => {})} onGoToCabinet={onGoToCabinet ?? (() => {})} />
+            <RaffleCard key={r.id} raffle={r} idx={i} user={user ?? null} onLoginRequired={onLoginRequired ?? (() => {})} onGoToCabinet={onGoToCabinet ?? (() => {})} onRefreshRaffles={fetchRaffles} onRefreshUser={refreshUser} />
           ))}
           {filtered.length === 0 && (
             <div className="col-span-3 text-center py-16 text-muted-foreground">

@@ -154,7 +154,7 @@ export default function Index() {
 
   const renderSection = () => {
     switch (activeSection) {
-      case "raffles": return <RafflesSection user={appUser} onLoginRequired={() => setAuthOpen(true)} onGoToCabinet={() => setActiveSection("cabinet")} />;
+      case "raffles": return <RafflesSection user={appUser} onLoginRequired={() => setAuthOpen(true)} onGoToCabinet={() => setActiveSection("cabinet")} onUserUpdate={setAppUser} />;
       case "cabinet": return <CabinetSection user={appUser} onLogin={() => setAuthOpen(true)} onLogout={handleLogout} onUserUpdate={setAppUser} />;
       case "history": return <HistorySection user={appUser} onLogin={() => setAuthOpen(true)} />;
       case "contacts": return <ContactsSection />;
