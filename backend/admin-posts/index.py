@@ -13,6 +13,7 @@ import json
 import hashlib
 import base64
 import uuid
+import io
 import psycopg2
 import urllib.request
 import urllib.parse
@@ -33,6 +34,53 @@ def verify_token(token: str) -> bool:
     admin_password = os.environ.get('ADMIN_PASSWORD', '')
     token_base = f"{admin_login}:{admin_password}:admin_secret_2026"
     return token == hashlib.sha256(token_base.encode()).hexdigest()
+
+
+def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
+    """Скачивает видео и отправляет как video_note через multipart — Telegram сам обрежет до квадрата."""
+    # Скачиваем видео
+    try:
+        with urllib.request.urlopen(video_url, timeout=30) as r:
+            video_bytes = r.read()
+    except Exception as e:
+        print(f"[POSTS] failed to download video: {e}")
+        return {'ok': False, 'description': f'Не удалось скачать видео: {e}'}
+
+    print(f"[POSTS] downloaded video: {len(video_bytes)} bytes")
+
+    # Multipart form-data
+    boundary = uuid.uuid4().hex
+    ctype = f'multipart/form-data; boundary={boundary}'
+
+    def field(name, value):
+        return (
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f'{value}\r\n'
+        ).encode()
+
+    body = (
+        field('chat_id', str(channel_id)) +
+        f'--{boundary}\r\n'
+        f'Content-Disposition: form-data; name="video_note"; filename="video.mp4"\r\n'
+        f'Content-Type: video/mp4\r\n\r\n'.encode() +
+        video_bytes +
+        f'\r\n--{boundary}--\r\n'.encode()
+    )
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendVideoNote"
+    req = urllib.request.Request(url, data=body, headers={'Content-Type': ctype}, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            body_err = json.loads(e.read())
+            return {'ok': False, 'description': body_err.get('description', str(e))}
+        except Exception:
+            return {'ok': False, 'description': str(e)}
+    except Exception as e:
+        return {'ok': False, 'description': str(e)}
 
 
 def tg_request(bot_token: str, method: str, payload: dict) -> dict:
@@ -73,10 +121,7 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
 
     # Если есть видео-кружок — сначала отправляем его, потом текст+кнопку
     if video_note_url:
-        video_result = tg_request(bot_token, 'sendVideoNote', {
-            'chat_id': channel_id,
-            'video_note': video_note_url,
-        })
+        video_result = tg_send_video_note(bot_token, channel_id, video_note_url)
         print(f"[POSTS] sendVideoNote result: {video_result}")
         video_msg_id = video_result.get('result', {}).get('message_id') if video_result.get('ok') else None
 
