@@ -1,7 +1,7 @@
 """
 Загрузка видео-кружка в S3.
 Принимает base64-encoded видео, сохраняет в S3, возвращает CDN URL.
-Выделена в отдельную функцию для поддержки файлов до 8 МБ.
+Выделена в отдельную функцию для поддержки файлов до 50 МБ.
 """
 import os
 import json
@@ -50,8 +50,8 @@ def handler(event: dict, context) -> dict:
     size_mb = len(video_bytes) / 1024 / 1024
     print(f"[UPLOAD-VIDEO] size: {size_mb:.1f} MB")
 
-    if size_mb > 8:
-        return {'statusCode': 413, 'headers': CORS, 'body': json.dumps({'error': f'Файл слишком большой: {size_mb:.1f} МБ. Максимум 8 МБ'})}
+    if size_mb > 50:
+        return {'statusCode': 413, 'headers': CORS, 'body': json.dumps({'error': f'Файл слишком большой: {size_mb:.1f} МБ. Максимум 50 МБ'})}
 
     filename = body.get('filename', 'video.mp4')
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'mp4'

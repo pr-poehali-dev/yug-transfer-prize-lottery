@@ -90,7 +90,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const MAX_MB = 8;
+    const MAX_MB = 50;
     if (file.size > MAX_MB * 1024 * 1024) {
       setFormError(`Видео слишком большое. Максимум ${MAX_MB} МБ (сейчас ${(file.size / 1024 / 1024).toFixed(1)} МБ)`);
       e.target.value = "";
@@ -118,7 +118,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
           setFormError("Ошибка загрузки видео: " + (data.error || "неизвестная ошибка"));
         }
       } catch {
-        setFormError("Ошибка загрузки видео. Проверьте размер файла — максимум 8 МБ");
+        setFormError("Ошибка загрузки видео. Проверьте размер файла — максимум 50 МБ");
       } finally {
         setUploadingVideo(false);
         e.target.value = "";
