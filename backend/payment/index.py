@@ -51,9 +51,13 @@ def handler(event: dict, context) -> dict:
     # Создать платёж за участие в розыгрыше
     if action == 'create':
         headers = event.get('headers') or {}
-        user_id = headers.get('X-User-Id') or headers.get('x-user-id')
-        if not user_id:
+        user_id_raw = headers.get('X-User-Id') or headers.get('x-user-id')
+        if not user_id_raw:
             return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
+        try:
+            user_id = int(user_id_raw)
+        except (ValueError, TypeError):
+            return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Invalid user_id'})}
 
         raffle_id = body.get('raffle_id')
         raffle_title = body.get('raffle_title', 'Розыгрыш')
@@ -124,8 +128,8 @@ def handler(event: dict, context) -> dict:
         payment_id = obj.get('id', '')
         status = obj.get('status', '')
         metadata = obj.get('metadata', {})
-        user_id = metadata.get('user_id')
-        raffle_id = metadata.get('raffle_id')
+        user_id = int(metadata.get('user_id') or 0) or None
+        raffle_id = int(metadata.get('raffle_id') or 0) or None
         raffle_title = metadata.get('raffle_title', '')
         amount_val = obj.get('amount', {})
         amount = int(float(amount_val.get('value', 0)))
