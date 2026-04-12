@@ -253,6 +253,7 @@ export function PostForm({
         <PostTelegramPreview
           text={form.text}
           photo_url={form.photo_url}
+          video_note_url={form.video_note_url}
           button_text={form.button_text}
           button_url={form.button_url}
         />
