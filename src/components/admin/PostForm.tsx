@@ -49,6 +49,7 @@ export function PostForm({
 }: PostFormProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
+  const videoCaptureRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="card-glow rounded-3xl overflow-hidden">
@@ -166,18 +167,31 @@ export function PostForm({
                 <Icon name="X" size={13} />
               </button>
             </div>
+          ) : uploadingVideo ? (
+            <div className="w-full h-24 rounded-xl border-2 border-dashed border-cyan-500/30 flex flex-col items-center justify-center gap-2 text-cyan-400">
+              <div className="w-5 h-5 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
+              <span className="text-xs">Загружаю видео...</span>
+            </div>
           ) : (
-            <button
-              onClick={() => videoRef.current?.click()}
-              disabled={uploadingVideo}
-              className="w-full h-24 rounded-xl border-2 border-dashed border-white/10 hover:border-cyan-500/40 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-white transition-colors"
-            >
-              {uploadingVideo
-                ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                : <><Icon name="Video" size={20} /><span className="text-xs">Загрузить видео-кружок</span></>}
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => videoCaptureRef.current?.click()}
+                className="h-24 rounded-xl border-2 border-dashed border-cyan-500/30 hover:border-cyan-500/70 bg-cyan-500/5 hover:bg-cyan-500/10 flex flex-col items-center justify-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors"
+              >
+                <Icon name="Camera" size={22} />
+                <span className="text-xs font-medium">Записать видео</span>
+              </button>
+              <button
+                onClick={() => videoRef.current?.click()}
+                className="h-24 rounded-xl border-2 border-dashed border-white/10 hover:border-white/30 flex flex-col items-center justify-center gap-2 text-white/40 hover:text-white/70 transition-colors"
+              >
+                <Icon name="FolderOpen" size={22} />
+                <span className="text-xs">Выбрать файл</span>
+              </button>
+            </div>
           )}
-          <input ref={videoRef} type="file" accept="video/mp4,video/mov,video/avi" className="hidden" onChange={onVideoNoteUpload} />
+          <input ref={videoRef} type="file" accept="video/mp4,video/mov,video/avi,video/*" className="hidden" onChange={onVideoNoteUpload} />
+          <input ref={videoCaptureRef} type="file" accept="video/*" capture="user" className="hidden" onChange={onVideoNoteUpload} />
         </div>
 
         {/* Кнопка */}
