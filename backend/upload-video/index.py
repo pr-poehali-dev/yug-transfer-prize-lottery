@@ -94,18 +94,20 @@ def handler(event: dict, context) -> dict:
         meta_obj = s3.get_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/meta.json")
         meta = json.loads(meta_obj['Body'].read())
         final_key = meta['final_key']
+        total_chunks = int(meta.get('total_chunks', 0))
 
-        resp = s3.list_objects_v2(Bucket='files', Prefix=f"{CHUNK_PREFIX}/{upload_id}/chunk_")
-        if not resp.get('Contents'):
-            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'нет чанков'})}
+        if total_chunks == 0:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'нет чанков в мета'})}
 
-        keys = sorted(obj['Key'] for obj in resp['Contents'])
-        print(f"[UPLOAD-VIDEO] assembling {len(keys)} chunks for {upload_id}")
+        print(f"[UPLOAD-VIDEO] assembling {total_chunks} chunks for {upload_id}")
 
+        # Читаем чанки напрямую по номерам — без list_objects (eventual consistency)
         parts = []
-        for key in keys:
+        for n in range(total_chunks):
+            key = f"{CHUNK_PREFIX}/{upload_id}/chunk_{n:04d}"
             obj = s3.get_object(Bucket='files', Key=key)
             parts.append(obj['Body'].read())
+            print(f"[UPLOAD-VIDEO] read chunk {n}, size={len(parts[-1])}")
 
         video_bytes = b''.join(parts)
         size_mb = len(video_bytes) / 1024 / 1024
@@ -118,8 +120,8 @@ def handler(event: dict, context) -> dict:
         s3.put_object(Bucket='files', Key=final_key, Body=video_bytes, ContentType='video/mp4')
         cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{final_key}"
 
-        for key in keys:
-            s3.delete_object(Bucket='files', Key=key)
+        for n in range(total_chunks):
+            s3.delete_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/chunk_{n:04d}")
         s3.delete_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/meta.json")
 
         print(f"[UPLOAD-VIDEO] done: {cdn_url}")
