@@ -43,6 +43,7 @@ export interface RaffleDB {
 export const JACKPOT_URL = "https://functions.poehali.dev/f43fd2b9-63b6-433a-9a57-6c363cea9728";
 export const SPIN_URL = "https://functions.poehali.dev/9eba717e-47b3-4a6b-add1-02c8a4a67974";
 export const ADMIN_POSTS_URL = "https://functions.poehali.dev/0813e498-5f2e-4090-b643-15c885d057c8";
+export const UPLOAD_VIDEO_URL = "https://functions.poehali.dev/f6d6a065-4281-4091-ac9e-9e3121bf2571";
 
 export type AdminTab = "dashboard" | "raffles" | "clients" | "notify" | "jackpot" | "posts";
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ADMIN_POSTS_URL } from "./adminTypes";
+import { ADMIN_POSTS_URL, UPLOAD_VIDEO_URL } from "./adminTypes";
 import type { Post } from "./adminTypes";
 import { PostForm } from "./PostForm";
 import type { PostFormData } from "./PostForm";
@@ -89,7 +89,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const MAX_MB = 4;
+    const MAX_MB = 8;
     if (file.size > MAX_MB * 1024 * 1024) {
       setFormError(`Видео слишком большое. Максимум ${MAX_MB} МБ (сейчас ${(file.size / 1024 / 1024).toFixed(1)} МБ)`);
       e.target.value = "";
@@ -100,13 +100,14 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const res = await fetch(`${ADMIN_POSTS_URL}?action=upload_video`, {
+        const res = await fetch(UPLOAD_VIDEO_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Admin-Token": token },
           body: JSON.stringify({ video: reader.result, filename: file.name }),
         });
         if (!res.ok) {
-          setFormError(`Ошибка загрузки видео: сервер вернул ${res.status}. Попробуйте файл меньшего размера.`);
+          const err = await res.json().catch(() => ({}));
+          setFormError(`Ошибка загрузки видео: ${err.error || `сервер вернул ${res.status}`}`);
           return;
         }
         const data = await res.json();
@@ -116,7 +117,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
           setFormError("Ошибка загрузки видео: " + (data.error || "неизвестная ошибка"));
         }
       } catch {
-        setFormError("Ошибка загрузки видео. Проверьте размер файла — максимум 4 МБ");
+        setFormError("Ошибка загрузки видео. Проверьте размер файла — максимум 8 МБ");
       } finally {
         setUploadingVideo(false);
         e.target.value = "";
