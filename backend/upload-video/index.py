@@ -1,5 +1,5 @@
 """
-Загрузка видео-кружка в S3 через чанки.
+Загрузка видео-кружка в S3 через чанки. v2 — обрезает до квадрата через ffmpeg.
 POST ?action=init              — начать загрузку, получить upload_id
 POST ?action=chunk&id=...&n=N — загрузить N-й чанк (base64)
 POST ?action=complete&id=...  — собрать все чанки, залить в S3
@@ -9,6 +9,8 @@ import os
 import json
 import base64
 import uuid
+import subprocess
+import tempfile
 import boto3
 from botocore.config import Config
 
@@ -116,6 +118,34 @@ def handler(event: dict, context) -> dict:
         if size_mb > 150:
             return {'statusCode': 413, 'headers': CORS,
                     'body': json.dumps({'error': f'Файл слишком большой: {size_mb:.1f} МБ. Максимум 150 МБ'})}
+
+        # Обрезаем до квадрата через ffmpeg (нужно для видео-кружка в Telegram)
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as fin:
+                fin.write(video_bytes)
+                fin_path = fin.name
+            fout_path = fin_path + '_sq.mp4'
+            result = subprocess.run(
+                [
+                    'ffmpeg', '-y', '-i', fin_path,
+                    '-vf', 'crop=min(iw\\,ih):min(iw\\,ih)',
+                    '-c:v', 'libx264', '-preset', 'fast',
+                    '-c:a', 'aac',
+                    fout_path
+                ],
+                capture_output=True, timeout=120
+            )
+            if result.returncode == 0:
+                with open(fout_path, 'rb') as f:
+                    video_bytes = f.read()
+                print(f"[UPLOAD-VIDEO] cropped to square: {len(video_bytes)/1024/1024:.1f} MB")
+            else:
+                print(f"[UPLOAD-VIDEO] ffmpeg error: {result.stderr.decode()[:500]}, using original")
+            os.unlink(fin_path)
+            if os.path.exists(fout_path):
+                os.unlink(fout_path)
+        except Exception as e:
+            print(f"[UPLOAD-VIDEO] ffmpeg exception: {e}, using original")
 
         s3.put_object(Bucket='files', Key=final_key, Body=video_bytes, ContentType='video/mp4')
         cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{final_key}"
