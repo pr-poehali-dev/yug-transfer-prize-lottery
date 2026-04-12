@@ -17,7 +17,7 @@ function toLocalInput(iso: string | null | undefined) {
 }
 
 const EMPTY: PostFormData = {
-  title: "", text: "", photo_url: "", button_text: "", button_url: "",
+  title: "", text: "", photo_url: "", video_note_url: "", button_text: "", button_url: "",
   status: "draft", scheduled_at: null, chat: "main",
 };
 
@@ -33,6 +33,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   // ── список ──
   const [posts, setPosts] = useState<Post[]>([]);
@@ -83,10 +84,39 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     reader.readAsDataURL(file);
   };
 
+  // ── загрузка видео-кружка через S3 ──
+  const handleVideoNoteUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingVideo(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const res = await fetch(`${ADMIN_POSTS_URL}?action=upload_video`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+          body: JSON.stringify({ video: reader.result, filename: file.name }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setForm(f => ({ ...f, video_note_url: data.url }));
+        } else {
+          setFormError("Ошибка загрузки видео: " + (data.error || "?"));
+        }
+      } catch {
+        setFormError("Ошибка загрузки видео");
+      } finally {
+        setUploadingVideo(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // ── начать редактирование поста ──
   const startEdit = (post: Post) => {
     const newForm: PostFormData = {
       title: post.title, text: post.text, photo_url: post.photo_url,
+      video_note_url: post.video_note_url ?? "",
       button_text: post.button_text, button_url: post.button_url,
       status: post.status, scheduled_at: post.scheduled_at,
       chat: (post as PostFormData & { chat?: "main" | "kurilka" }).chat ?? "main",
@@ -247,6 +277,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
           saving={saving}
           publishing={publishing}
           uploading={uploading}
+          uploadingVideo={uploadingVideo}
           formError={formError}
           formSuccess={formSuccess}
           editingPublished={!!editingPublished}
@@ -254,6 +285,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
           onScheduledAtChange={setScheduledAt}
           onEditInTgToggle={() => setEditInTg(v => !v)}
           onPhotoUpload={handlePhotoUpload}
+          onVideoNoteUpload={handleVideoNoteUpload}
           onSave={handleSave}
           onPublishNow={handlePublishNow}
           onReset={() => confirmLeave(resetForm)}

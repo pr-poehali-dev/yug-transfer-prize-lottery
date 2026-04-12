@@ -6,6 +6,7 @@ export interface PostFormData {
   title: string;
   text: string;
   photo_url: string;
+  video_note_url: string;
   button_text: string;
   button_url: string;
   status: "draft" | "scheduled" | "published" | "failed";
@@ -26,6 +27,7 @@ interface PostFormProps {
   saving: boolean;
   publishing: boolean;
   uploading: boolean;
+  uploadingVideo: boolean;
   formError: string;
   formSuccess: string;
   editingPublished: boolean;
@@ -33,18 +35,20 @@ interface PostFormProps {
   onScheduledAtChange: (v: string) => void;
   onEditInTgToggle: () => void;
   onPhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onVideoNoteUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSave: (status: "draft" | "scheduled") => void;
   onPublishNow: () => void;
   onReset: () => void;
 }
 
 export function PostForm({
-  form, editId, scheduledAt, editInTg, saving, publishing, uploading,
+  form, editId, scheduledAt, editInTg, saving, publishing, uploading, uploadingVideo,
   formError, formSuccess, editingPublished,
   onFormChange, onScheduledAtChange, onEditInTgToggle,
-  onPhotoUpload, onSave, onPublishNow, onReset,
+  onPhotoUpload, onVideoNoteUpload, onSave, onPublishNow, onReset,
 }: PostFormProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="card-glow rounded-3xl overflow-hidden">
@@ -141,6 +145,39 @@ export function PostForm({
             </button>
           )}
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPhotoUpload} />
+        </div>
+
+        {/* Видео-кружок */}
+        <div>
+          <label className="text-xs text-white/50 mb-1.5 block">Видео-кружок <span className="text-white/20">(необязательно, mp4 до 60 сек)</span></label>
+          {form.video_note_url ? (
+            <div className="relative flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-black shrink-0">
+                <video src={form.video_note_url} className="w-full h-full object-cover" muted />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-green-400 font-medium">Видео загружено ✓</p>
+                <p className="text-xs text-white/30 truncate">{form.video_note_url.split('/').pop()}</p>
+              </div>
+              <button
+                onClick={() => onFormChange({ video_note_url: "" })}
+                className="w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white/60 hover:text-white transition-colors shrink-0"
+              >
+                <Icon name="X" size={13} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => videoRef.current?.click()}
+              disabled={uploadingVideo}
+              className="w-full h-24 rounded-xl border-2 border-dashed border-white/10 hover:border-cyan-500/40 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-white transition-colors"
+            >
+              {uploadingVideo
+                ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                : <><Icon name="Video" size={20} /><span className="text-xs">Загрузить видео-кружок</span></>}
+            </button>
+          )}
+          <input ref={videoRef} type="file" accept="video/mp4,video/mov,video/avi" className="hidden" onChange={onVideoNoteUpload} />
         </div>
 
         {/* Кнопка */}
