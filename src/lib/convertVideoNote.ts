@@ -15,9 +15,9 @@ export async function convertToVideoNote(
 
   const videoUrl = URL.createObjectURL(file);
   const video = document.createElement("video");
-  video.muted = true;
   video.playsInline = true;
   video.preload = "auto";
+  video.volume = 0;
 
   await new Promise<void>((resolve, reject) => {
     video.onloadedmetadata = () => resolve();
@@ -41,12 +41,12 @@ export async function convertToVideoNote(
 
   const stream = canvas.captureStream(TARGET_FPS);
 
+  let audioCtx: AudioContext | null = null;
   try {
-    const audioCtx = new AudioContext();
+    audioCtx = new AudioContext();
     const source = audioCtx.createMediaElementSource(video);
     const dest = audioCtx.createMediaStreamDestination();
     source.connect(dest);
-    source.connect(audioCtx.destination);
     dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
   } catch {
     // no audio track — ok
@@ -118,6 +118,7 @@ export async function convertToVideoNote(
   onProgress?.({ phase: "encoding", percent: 100 });
 
   URL.revokeObjectURL(videoUrl);
+  if (audioCtx) audioCtx.close().catch(() => {});
 
   const blob = new Blob(chunks, { type: selectedMime });
   const ext = selectedMime.includes("mp4") ? "mp4" : "webm";
