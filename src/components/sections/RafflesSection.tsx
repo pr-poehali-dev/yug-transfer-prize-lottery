@@ -45,7 +45,11 @@ export function RafflesSection({ user, onLoginRequired, onGoToCabinet, onUserUpd
       .finally(() => setLoadingList(false));
   }, []);
 
-  useEffect(() => { fetchRaffles(); }, [fetchRaffles]);
+  useEffect(() => {
+    fetchRaffles();
+    const interval = setInterval(fetchRaffles, 60000);
+    return () => clearInterval(interval);
+  }, [fetchRaffles]);
 
   const refreshUser = useCallback(async () => {
     if (!user || !onUserUpdate) return;

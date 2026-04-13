@@ -6,9 +6,17 @@ export function RaffleFormModal({ initial, token, onSave, onClose }: {
   initial?: RaffleDB; token: string;
   onSave: (r: RaffleDB) => void; onClose: () => void;
 }) {
+  const formatDatetimeLocal = (d: string) => {
+    if (!d) return "";
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return d.slice(0, 16);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  };
+
   const [form, setForm] = useState(initial ? {
     title: initial.title, prize: initial.prize, prize_icon: initial.prize_icon,
-    end_date: initial.end_date, participants: initial.participants, min_amount: initial.min_amount,
+    end_date: formatDatetimeLocal(initial.end_date), participants: initial.participants, min_amount: initial.min_amount,
     status: initial.status, gradient: initial.gradient, winner: initial.winner || "",
     photo_url: initial.photo_url || "", target_amount: initial.target_amount || 0,
   } : { ...EMPTY_FORM, photo_url: "" });
@@ -116,8 +124,8 @@ export function RaffleFormModal({ initial, token, onSave, onClose }: {
                   <input required type="number" min={1} value={form.min_amount} onChange={e => set("min_amount", Number(e.target.value))} className={inputCls} />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Дата окончания</label>
-                  <input required type="date" value={form.end_date} onChange={e => set("end_date", e.target.value)} className={inputCls} />
+                  <label className="text-xs text-muted-foreground mb-1.5 block uppercase tracking-wider">Дата и время окончания</label>
+                  <input required type="datetime-local" value={form.end_date} onChange={e => set("end_date", e.target.value)} className={inputCls} />
                 </div>
               </div>
               <div>
