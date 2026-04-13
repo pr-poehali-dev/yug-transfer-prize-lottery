@@ -34,6 +34,45 @@ def tg_api(method, payload):
         return {}
 
 
+def get_active_raffles():
+    schema = get_schema()
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT title, prize, min_amount, end_date FROM {schema}.raffles WHERE status = 'active' ORDER BY end_date ASC LIMIT 5"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+
+def send_welcome(chat_id, name):
+    raffles = get_active_raffles()
+    if raffles:
+        lines = [f'🎰 <b>{r[0]}</b> — приз: {r[1]}, участие от {r[2]} ₽' for r in raffles]
+        raffles_text = '\n'.join(lines)
+        text = (
+            f'🎉 <b>{name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\n'
+            f'🔥 Сейчас активны розыгрыши:\n\n{raffles_text}\n\n'
+            f'👉 Участвуй на сайте: <a href="https://ug-gift.ru">ug-gift.ru</a>\n\n'
+            f'Удачи! 🍀'
+        )
+    else:
+        text = (
+            f'🎉 <b>{name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\n'
+            f'Сейчас активных розыгрышей нет, но скоро появятся новые!\n'
+            f'Мы сообщим тебе первому 🔔\n\n'
+            f'👉 Следи на сайте: <a href="https://ug-gift.ru">ug-gift.ru</a>'
+        )
+    tg_api('sendMessage', {
+        'chat_id': chat_id,
+        'text': text,
+        'parse_mode': 'HTML',
+        'disable_web_page_preview': True,
+    })
+
+
 def handler(event: dict, context) -> dict:
     cors = {
         'Access-Control-Allow-Origin': '*',
@@ -112,6 +151,7 @@ def handler(event: dict, context) -> dict:
                     'text': f'✅ Telegram привязан к аккаунту «{name}»!\n\nТеперь ты будешь получать уведомления о розыгрышах и выигрышах.',
                     'parse_mode': 'HTML',
                 })
+                send_welcome(chat_id, name)
             else:
                 tg_api('sendMessage', {'chat_id': chat_id, 'text': '❌ Аккаунт не найден. Проверь ссылку.'})
         else:
