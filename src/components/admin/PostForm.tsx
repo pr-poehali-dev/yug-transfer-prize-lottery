@@ -13,7 +13,7 @@ export interface PostFormData {
   button2_url: string;
   status: "draft" | "scheduled" | "published" | "failed";
   scheduled_at: string | null;
-  chat: "main" | "kurilka";
+  chats: string[];
 }
 
 const CHATS = [
@@ -72,27 +72,42 @@ export function PostForm({
 
       <div className="p-5 space-y-4">
 
-        {/* Выбор чата */}
+        {/* Выбор каналов */}
         <div>
-          <label className="text-xs text-white/50 mb-1.5 block">Канал публикации</label>
+          <label className="text-xs text-white/50 mb-1.5 block">Каналы публикации</label>
           <div className="grid grid-cols-2 gap-2">
-            {CHATS.map(ch => (
-              <button
-                key={ch.value}
-                type="button"
-                onClick={() => onFormChange({ chat: ch.value })}
-                className={`flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all ${
-                  form.chat === ch.value
-                    ? "border-blue-500/60 bg-blue-500/10"
-                    : "border-white/10 bg-white/5 hover:bg-white/10"
-                }`}
-              >
-                <span className={`text-sm font-semibold ${form.chat === ch.value ? "text-blue-300" : "text-white"}`}>
-                  {ch.label}
-                </span>
-                <span className="text-xs text-white/30">{ch.sub}</span>
-              </button>
-            ))}
+            {CHATS.map(ch => {
+              const selected = form.chats.includes(ch.value);
+              return (
+                <button
+                  key={ch.value}
+                  type="button"
+                  onClick={() => {
+                    const next = selected
+                      ? form.chats.filter(c => c !== ch.value)
+                      : [...form.chats, ch.value];
+                    onFormChange({ chats: next.length ? next : [ch.value] });
+                  }}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all ${
+                    selected
+                      ? "border-blue-500/60 bg-blue-500/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10"
+                  }`}
+                >
+                  <div className={`w-4.5 h-4.5 rounded flex items-center justify-center shrink-0 border transition-colors ${
+                    selected ? "bg-blue-500 border-blue-500" : "border-white/30 bg-white/5"
+                  }`}>
+                    {selected && <Icon name="Check" size={12} className="text-white" />}
+                  </div>
+                  <div>
+                    <span className={`text-sm font-semibold block ${selected ? "text-blue-300" : "text-white"}`}>
+                      {ch.label}
+                    </span>
+                    <span className="text-xs text-white/30">{ch.sub}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 

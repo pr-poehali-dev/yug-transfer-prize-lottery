@@ -192,6 +192,8 @@ def edit_tg_message(bot_token: str, channel_id: str, message_id: int, post: dict
 
 
 def row_to_post(r) -> dict:
+    chats_raw = r[15] if len(r) > 15 else 'main'
+    chats_list = [c.strip() for c in (chats_raw or 'main').split(',') if c.strip()]
     return {
         'id': r[0],
         'title': r[1] or '',
@@ -208,6 +210,7 @@ def row_to_post(r) -> dict:
         'video_note_url': r[12] or '',
         'button2_text': r[13] or '',
         'button2_url': r[14] or '',
+        'chats': chats_list,
     }
 
 
@@ -249,7 +252,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT id, title, text, photo_url, button_text, button_url,
                        status, scheduled_at, published_at, telegram_message_id, created_at, updated_at,
-                       video_note_url, button2_text, button2_url
+                       video_note_url, button2_text, button2_url, chats
                 FROM {SCHEMA}.posts {where}
                 ORDER BY created_at DESC LIMIT %s OFFSET %s""",
             args + [limit, offset]
@@ -338,7 +341,7 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id = %s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, chats FROM {SCHEMA}.posts WHERE id = %s",
             (post_id,)
         )
         row = cur.fetchone()
@@ -375,27 +378,36 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         now = datetime.now(timezone.utc)
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE status='scheduled' AND scheduled_at <= %s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, chats FROM {SCHEMA}.posts WHERE status='scheduled' AND scheduled_at <= %s",
             (now,)
         )
         rows = cur.fetchall()
+        channels_map = {'main': channel_main, 'kurilka': channel_kurilka}
         published = []
         for row in rows:
             post = row_to_post(row)
-            if bot_token and channel_id:
-                result = publish_post(bot_token, channel_id, post)
-                if result['ok']:
-                    cur.execute(
-                        f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, updated_at=%s WHERE id=%s",
-                        (now, result.get('message_id'), now, post['id'])
-                    )
-                    published.append(post['id'])
-                    print(f"[POSTS] auto-published post {post['id']}")
-                else:
-                    cur.execute(
-                        f"UPDATE {SCHEMA}.posts SET status='failed', updated_at=%s WHERE id=%s",
-                        (now, post['id'])
-                    )
+            post_chats = post.get('chats', ['main'])
+            any_ok = False
+            last_msg_id = None
+            for ch in post_chats:
+                ch_id = channels_map.get(ch, channel_main)
+                if bot_token and ch_id:
+                    result = publish_post(bot_token, ch_id, post)
+                    if result['ok']:
+                        any_ok = True
+                        last_msg_id = result.get('message_id')
+                        print(f"[POSTS] auto-published post {post['id']} to {ch}")
+            if any_ok:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, updated_at=%s WHERE id=%s",
+                    (now, last_msg_id, now, post['id'])
+                )
+                published.append(post['id'])
+            else:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.posts SET status='failed', updated_at=%s WHERE id=%s",
+                    (now, post['id'])
+                )
         conn.commit()
         cur.close(); conn.close()
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'published': published})}
@@ -415,9 +427,13 @@ def handler(event: dict, context) -> dict:
         button2_text = body.get('button2_text', '')
         button2_url = body.get('button2_url', '')
         status = body.get('status', 'draft')
-        scheduled_at = body.get('scheduled_at')  # ISO string or None
+        scheduled_at = body.get('scheduled_at')
+        chats_list = body.get('chats', ['main'])
+        if isinstance(chats_list, list):
+            chats_str = ','.join(chats_list)
+        else:
+            chats_str = str(chats_list) if chats_list else 'main'
 
-        # Парсим scheduled_at
         sched_dt = None
         if scheduled_at:
             try:
@@ -429,15 +445,15 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, scheduled_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt)
+            f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, scheduled_at, chats)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, chats_str)
         )
         new_id = cur.fetchone()[0]
         conn.commit()
 
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id=%s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, chats FROM {SCHEMA}.posts WHERE id=%s",
             (new_id,)
         )
         post = row_to_post(cur.fetchone())
@@ -463,6 +479,11 @@ def handler(event: dict, context) -> dict:
         status = body.get('status', 'draft')
         scheduled_at = body.get('scheduled_at')
         edit_in_tg = body.get('edit_in_telegram', False)
+        chats_list = body.get('chats', ['main'])
+        if isinstance(chats_list, list):
+            chats_str = ','.join(chats_list)
+        else:
+            chats_str = str(chats_list) if chats_list else 'main'
 
         sched_dt = None
         if scheduled_at:
@@ -476,7 +497,6 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
 
-        # Если нужно редактировать в Telegram
         if edit_in_tg:
             cur.execute(f"SELECT telegram_message_id FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
             row = cur.fetchone()
@@ -487,14 +507,14 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""UPDATE {SCHEMA}.posts
                 SET title=%s, text=%s, photo_url=%s, video_note_url=%s, button_text=%s, button_url=%s,
-                    button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, updated_at=%s
+                    button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, updated_at=%s, chats=%s
                 WHERE id=%s""",
-            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, now, post_id)
+            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, now, chats_str, post_id)
         )
         conn.commit()
 
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id=%s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, chats FROM {SCHEMA}.posts WHERE id=%s",
             (post_id,)
         )
         post = row_to_post(cur.fetchone())
