@@ -65,20 +65,29 @@ interface Participant {
   ticket: number;
 }
 
-const DEMO_PARTICIPANTS: Participant[] = [
-  { id: 1, name: "Константин", ticket: 1 },
-  { id: 2, name: "Иван", ticket: 2 },
-  { id: 3, name: "Роман", ticket: 3 },
-  { id: 4, name: "Сергей", ticket: 4 },
-  { id: 5, name: "Андрей", ticket: 5 },
-  { id: 6, name: "Вова", ticket: 6 },
-  { id: 7, name: "Фарзин", ticket: 7 },
-  { id: 8, name: "Тамила", ticket: 8 },
-  { id: 9, name: "Геворк", ticket: 9 },
-  { id: 10, name: "Багавутдин", ticket: 10 },
-  { id: 11, name: "Сергей К.", ticket: 11 },
-  { id: 12, name: "Александр", ticket: 12 },
+const NAMES = [
+  "Константин", "Иван", "Роман", "Сергей", "Андрей", "Вова", "Фарзин", "Тамила",
+  "Геворк", "Багавутдин", "Сергей К.", "Александр", "Дмитрий", "Михаил", "Артём",
+  "Максим", "Даниил", "Кирилл", "Егор", "Матвей", "Никита", "Глеб", "Тимофей",
+  "Лука", "Марк", "Степан", "Владислав", "Ярослав", "Фёдор", "Арсений", "Денис",
+  "Павел", "Олег", "Виктор", "Руслан", "Тимур", "Эмиль", "Рустам", "Камиль",
+  "Амир", "Давид", "Адам", "Мурад", "Ислам", "Хасан", "Али", "Омар", "Карим",
+  "Самир", "Юсуф", "Анна", "Мария", "Елена", "Ольга", "Наталья", "Екатерина",
+  "Татьяна", "Ирина", "Светлана", "Юлия", "Алина", "Диана", "Лейла", "Амина",
+  "Фатима", "Зарина", "Камила", "Аида", "Нина", "Вера", "Софья", "Полина",
+  "Дарья", "Ксения", "Валерия", "Кристина", "Виктория", "Алиса", "Милана",
+  "Ева", "Злата", "Маргарита", "Варвара", "Василиса", "Элина", "Эмилия",
+  "Таисия", "Агата", "Мирослава", "Стефания", "Есения", "Вероника", "Арина",
+  "Ульяна", "Аделина", "Сабина", "Лиана", "Регина", "Альбина", "Рената", "Инга",
 ];
+
+function generateParticipants(count: number): Participant[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: i + 1,
+    name: NAMES[i % NAMES.length] + (i >= NAMES.length ? ` ${Math.floor(i / NAMES.length) + 1}` : ""),
+    ticket: i + 1,
+  }));
+}
 
 const COLORS = [
   "#7c3aed", "#db2777", "#ea580c", "#0891b2", "#059669",
@@ -279,6 +288,8 @@ export function SpinWheelDemo({ onClose }: { onClose: () => void }) {
   const [startTime, setStartTime] = useState(0);
   const [secsLeft, setSecsLeft] = useState(0);
   const [duration, setDuration] = useState(DEMO_DURATION);
+  const [count, setCount] = useState(12);
+  const [participants, setParticipants] = useState(() => generateParticipants(12));
 
   useEffect(() => {
     if (!spinning || stopped) return;
@@ -289,12 +300,19 @@ export function SpinWheelDemo({ onClose }: { onClose: () => void }) {
     return () => clearInterval(id);
   }, [spinning, stopped, startTime, duration]);
 
+  const handleChangeCount = (c: number) => {
+    setCount(c);
+    setParticipants(generateParticipants(c));
+    setStopped(false);
+    setSpinning(false);
+  };
+
   const handleStart = () => {
     try {
       const ctx = getAudioCtx();
       if (ctx.state === "suspended") ctx.resume();
     } catch { /* */ }
-    const idx = Math.floor(Math.random() * DEMO_PARTICIPANTS.length);
+    const idx = Math.floor(Math.random() * participants.length);
     setWinnerIndex(idx);
     setStartTime(Date.now());
     setSecsLeft(duration);
@@ -306,7 +324,7 @@ export function SpinWheelDemo({ onClose }: { onClose: () => void }) {
     setStopped(true);
   }, []);
 
-  const winner = DEMO_PARTICIPANTS[winnerIndex];
+  const winner = participants[winnerIndex];
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-3" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -327,25 +345,38 @@ export function SpinWheelDemo({ onClose }: { onClose: () => void }) {
           </div>
 
           <h2 className="font-oswald text-2xl font-bold text-white mb-1">Тест колеса розыгрыша</h2>
-          <p className="text-muted-foreground text-sm mb-4">{DEMO_PARTICIPANTS.length} участников · {duration} сек</p>
+          <p className="text-muted-foreground text-sm mb-4">{participants.length} участников · {duration} сек</p>
 
           {!spinning && !stopped && (
-            <div className="mb-4">
-              <label className="text-xs text-muted-foreground mb-1.5 block">Длительность вращения</label>
-              <div className="flex items-center gap-3 justify-center">
-                {[10, 15, 30, 60].map(d => (
-                  <button key={d} onClick={() => setDuration(d)}
-                    className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${duration === d ? "grad-btn" : "bg-white/5 text-muted-foreground hover:text-white"}`}>
-                    {d}с
-                  </button>
-                ))}
+            <div className="mb-4 space-y-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Участников</label>
+                <div className="flex items-center gap-2 justify-center flex-wrap">
+                  {[5, 12, 20, 50, 100].map(c => (
+                    <button key={c} onClick={() => handleChangeCount(c)}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${count === c ? "grad-btn" : "bg-white/5 text-muted-foreground hover:text-white"}`}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Длительность</label>
+                <div className="flex items-center gap-3 justify-center">
+                  {[10, 15, 30, 60].map(d => (
+                    <button key={d} onClick={() => setDuration(d)}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${duration === d ? "grad-btn" : "bg-white/5 text-muted-foreground hover:text-white"}`}>
+                      {d}с
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
           <div className="mb-4">
             <DemoWheel
-              participants={DEMO_PARTICIPANTS}
+              participants={participants}
               spinning={spinning}
               winnerIndex={winnerIndex}
               startTime={startTime}
