@@ -125,11 +125,11 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
         print(f"[POSTS] sendVideoNote result: {video_result}")
         video_msg_id = video_result.get('result', {}).get('message_id') if video_result.get('ok') else None
 
-        # Если есть текст — отправляем отдельным сообщением с кнопкой
-        if text.strip():
+        if text.strip() or reply_markup:
+            btn_text = text.strip() if text.strip() else '\u200B'
             def try_send_text(parse_mode=None):
-                payload = {'chat_id': channel_id, 'text': text}
-                if parse_mode:
+                payload = {'chat_id': channel_id, 'text': btn_text}
+                if parse_mode and text.strip():
                     payload['parse_mode'] = parse_mode
                 if reply_markup:
                     payload['reply_markup'] = reply_markup

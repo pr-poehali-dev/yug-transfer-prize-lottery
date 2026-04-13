@@ -131,7 +131,7 @@ export function PostForm({
         {/* Текст */}
         <div>
           <label className="text-xs text-white/50 mb-1.5 flex justify-between">
-            <span>Текст поста <span className="text-red-400">*</span></span>
+            <span>Текст поста {!form.video_note_url && <span className="text-red-400">*</span>}</span>
             <span className={form.text.length > 3600 ? "text-red-400" : "text-white/20"}>{form.text.length}/4096</span>
           </label>
           <textarea

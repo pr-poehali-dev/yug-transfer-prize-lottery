@@ -228,13 +228,13 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
 
   // ── сохранить черновик (без аргументов, для confirmLeave) ──
   const handleSaveDraft = async () => {
-    if (!form.text.trim()) return;
+    if (!form.text.trim() && !form.video_note_url) return;
     await handleSave("draft");
   };
 
   // ── сохранить черновик / запланировать ──
   const handleSave = async (saveStatus: "draft" | "scheduled") => {
-    if (!form.text.trim()) { setFormError("Введите текст поста"); return; }
+    if (!form.text.trim() && !form.video_note_url) { setFormError("Введите текст поста или добавьте видео-кружок"); return; }
     if (saveStatus === "scheduled" && !scheduledAt) { setFormError("Укажите дату и время публикации"); return; }
     setSaving(true); setFormError(""); setFormSuccess("");
     try {
@@ -278,7 +278,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
 
   // ── опубликовать сейчас из формы ──
   const handlePublishNow = async () => {
-    if (!form.text.trim()) { setFormError("Введите текст поста"); return; }
+    if (!form.text.trim() && !form.video_note_url) { setFormError("Введите текст поста или добавьте видео-кружок"); return; }
     setPublishing(true); setFormError(""); setFormSuccess("");
     try {
       const savePayload: Record<string, unknown> = {
