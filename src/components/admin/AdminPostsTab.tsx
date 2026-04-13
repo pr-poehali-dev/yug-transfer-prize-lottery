@@ -295,6 +295,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
       const postId = saveData.post.id;
 
       const errors: string[] = [];
+      let lastMessageId: number | undefined;
       for (const chat of form.chats) {
         const pubRes = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
           method: "POST",
@@ -303,12 +304,13 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
         });
         const pubData = await pubRes.json();
         if (!pubData.ok) errors.push(`${chat}: ${pubData.error || "Ошибка"}`);
+        else if (pubData.message_id) lastMessageId = pubData.message_id;
       }
       if (errors.length === form.chats.length) throw new Error(errors.join("; "));
 
       const channelNames = form.chats.length > 1 ? `${form.chats.length} каналов` : "канал";
       setFormSuccess(errors.length ? `⚠️ Опубликован частично: ${errors.join("; ")}` : `✅ Пост опубликован в ${channelNames}!`);
-      const updatedPost = { ...saveData.post, status: "published" as const, published_at: new Date().toISOString(), telegram_message_id: pubData.message_id };
+      const updatedPost = { ...saveData.post, status: "published" as const, published_at: new Date().toISOString(), telegram_message_id: lastMessageId };
       setPosts(prev => {
         const idx = prev.findIndex(p => p.id === postId);
         return idx >= 0 ? prev.map(p => p.id === postId ? updatedPost : p) : [updatedPost, ...prev];
