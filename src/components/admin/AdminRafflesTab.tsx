@@ -1,11 +1,12 @@
 import Icon from "@/components/ui/icon";
-import { RaffleDB } from "./adminTypes";
+import { RaffleDB, RaffleStat } from "./adminTypes";
 
 interface AdminRafflesTabProps {
   raffles: RaffleDB[];
   loadingRaffles: boolean;
   finishing: number | null;
   deleting: number | null;
+  raffleStats?: Record<string, RaffleStat>;
   onAdd: () => void;
   onEdit: (r: RaffleDB) => void;
   onFinish: (r: RaffleDB) => void;
@@ -26,7 +27,7 @@ function formatDate(dateStr: string) {
   } catch { return dateStr; }
 }
 
-export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, onAdd, onEdit, onFinish, onDelete }: AdminRafflesTabProps) {
+export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, raffleStats, onAdd, onEdit, onFinish, onDelete }: AdminRafflesTabProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -93,6 +94,17 @@ export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, 
                     </div>
                   </div>
                 )}
+                {(() => {
+                  const rs = raffleStats?.[String(r.id)];
+                  if (!rs) return null;
+                  return (
+                    <div className="mt-1.5 flex gap-3">
+                      <span className="text-xs text-muted-foreground">👥 {rs.participants} уч.</span>
+                      <span className="text-xs text-muted-foreground">🎫 {rs.entries} бил.</span>
+                      <span className="text-xs text-muted-foreground">💰 {rs.total_amount.toLocaleString("ru")} ₽</span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Статус и кнопки */}

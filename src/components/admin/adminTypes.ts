@@ -65,11 +65,18 @@ export interface Post {
   updated_at: string | null;
 }
 
+export interface RaffleStat {
+  participants: number;
+  entries: number;
+  total_amount: number;
+}
+
 export interface AdminStats {
   users: { total: number; new_week: number; new_month: number };
   payments: { total_amount: number; total_count: number; month_amount: number };
   entries: { total: number };
   raffles: { active: number; total: number };
+  raffle_stats: Record<string, RaffleStat>;
 }
 
 export interface Client {

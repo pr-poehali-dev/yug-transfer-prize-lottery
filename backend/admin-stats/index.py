@@ -76,6 +76,15 @@ def handler(event: dict, context) -> dict:
     """)
     users_chart = [{'date': str(r[0]), 'count': r[1]} for r in cur.fetchall()]
 
+    cur.execute(f"""
+        SELECT e.raffle_id, COUNT(DISTINCT e.user_id) as participants, COUNT(*) as entries, COALESCE(SUM(e.amount), 0) as total_amount
+        FROM {SCHEMA}.entries e
+        GROUP BY e.raffle_id
+    """)
+    raffle_stats = {}
+    for row in cur.fetchall():
+        raffle_stats[row[0]] = {'participants': row[1], 'entries': row[2], 'total_amount': row[3]}
+
     cur.close()
     conn.close()
 
@@ -98,5 +107,6 @@ def handler(event: dict, context) -> dict:
             },
             'entries': {'total': total_entries},
             'raffles': {'active': active_raffles, 'total': total_raffles},
+            'raffle_stats': raffle_stats,
         })
     }

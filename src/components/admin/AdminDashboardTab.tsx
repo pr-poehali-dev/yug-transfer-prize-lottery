@@ -9,6 +9,7 @@ interface AdminDashboardTabProps {
 
 export function AdminDashboardTab({ stats, loadingStats, raffles }: AdminDashboardTabProps) {
   const active = raffles.filter(r => r.status === "active").length;
+  const ended = raffles.filter(r => r.status === "ended");
 
   return (
     <div>
@@ -34,7 +35,7 @@ export function AdminDashboardTab({ stats, loadingStats, raffles }: AdminDashboa
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className="card-glow rounded-2xl p-5">
               <h3 className="font-semibold text-white mb-3 flex items-center gap-2"><Icon name="TrendingUp" size={16} className="text-purple-400" />Новые клиенты</h3>
               <div className="space-y-2">
@@ -52,6 +53,50 @@ export function AdminDashboardTab({ stats, loadingStats, raffles }: AdminDashboa
               </div>
             </div>
           </div>
+
+          {ended.length > 0 && (
+            <div>
+              <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+                <Icon name="Trophy" size={16} className="text-yellow-400" />Завершённые розыгрыши
+              </h3>
+              <div className="space-y-3">
+                {ended.map(r => {
+                  const rs = stats?.raffle_stats?.[String(r.id)];
+                  return (
+                    <div key={r.id} className="card-glow rounded-2xl p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl shrink-0 overflow-hidden bg-white/5 flex items-center justify-center">
+                          {r.photo_url
+                            ? <img src={r.photo_url} alt={r.title} className="w-full h-full object-cover" />
+                            : <div className={`w-full h-full bg-gradient-to-br ${r.gradient} flex items-center justify-center`}>
+                                <Icon name={r.prize_icon as string} size={18} className="text-white" fallback="Gift" />
+                              </div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold text-sm truncate">{r.title}</p>
+                          {r.winner && <p className="text-xs text-yellow-400">🏆 {r.winner}</p>}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-white">{rs?.participants ?? 0}</p>
+                          <p className="text-[10px] text-muted-foreground">Участников</p>
+                        </div>
+                        <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-white">{rs?.entries ?? 0}</p>
+                          <p className="text-[10px] text-muted-foreground">Билетов</p>
+                        </div>
+                        <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-white">{(rs?.total_amount ?? 0).toLocaleString("ru")} ₽</p>
+                          <p className="text-[10px] text-muted-foreground">Собрано</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

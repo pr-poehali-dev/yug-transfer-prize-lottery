@@ -277,6 +277,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               loadingRaffles={loadingRaffles}
               finishing={finishing}
               deleting={deleting}
+              raffleStats={stats?.raffle_stats}
               onAdd={() => { setEditTarget(undefined); setFormOpen(true); }}
               onEdit={r => { setEditTarget(r); setFormOpen(true); }}
               onFinish={handleFinish}
