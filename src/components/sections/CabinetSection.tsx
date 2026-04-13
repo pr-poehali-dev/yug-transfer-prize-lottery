@@ -81,6 +81,13 @@ export function CabinetSection({ user, onLogin, onLogout, onUserUpdate }: Cabine
 
   useEffect(() => {
     if (!user) return;
+    const onFocus = () => reloadCabinet(user.id);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
     const params = new URLSearchParams(window.location.search);
     const isReturn = params.get("payment") === "success";
     const storedPid = sessionStorage.getItem("pending_payment_id");

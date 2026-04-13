@@ -1,0 +1,1 @@
+{"tests": [{"name": "Health check", "method": "GET", "path": "/", "expectedStatus": 200, "expectedBody": {"ok": true, "status": "bot webhook active"}, "bodyMatcher": "partial"}, {"name": "Bot info", "method": "GET", "path": "/?action=bot_info", "expectedStatus": 200, "expectedBody": {"ok": true, "username": "UG_GIFTBOT"}, "bodyMatcher": "partial"}]}

@@ -2,6 +2,8 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import type { AppUser } from "@/pages/Index";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+
+const TG_BOT_USERNAME = "UG_GIFTBOT";
 function Avatar({ user, size = 80 }: { user: AppUser; size?: number }) {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
   const [imgError, setImgError] = useState(false);
@@ -88,6 +90,39 @@ export function CabinetProfile({ user, myWinsCount, activeEntriesCount, onEdit, 
             )}
           </div>
         </div>
+
+        {/* Привязка Telegram */}
+        {!user.telegram_id || user.telegram_id === 0 ? (
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <a
+              href={`https://t.me/${TG_BOT_USERNAME}?start=link_${user.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 w-full p-3 rounded-2xl bg-[#2AABEE]/15 border border-[#2AABEE]/30 hover:bg-[#2AABEE]/25 transition-all group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[#2AABEE] flex items-center justify-center shrink-0">
+                <Icon name="Send" size={18} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white group-hover:text-[#2AABEE] transition-colors">Подключить Telegram</p>
+                <p className="text-xs text-muted-foreground">Получай уведомления о розыгрышах</p>
+              </div>
+              <Icon name="ChevronRight" size={18} className="text-muted-foreground group-hover:text-[#2AABEE] transition-colors shrink-0" />
+            </a>
+          </div>
+        ) : (
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+                <Icon name="Check" size={18} className="text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-emerald-400">Telegram подключён</p>
+                {user.username && <p className="text-xs text-muted-foreground">@{user.username}</p>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Статистика */}
