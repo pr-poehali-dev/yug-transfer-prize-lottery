@@ -137,19 +137,18 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
-    # Берём участников розыгрыша из entries + users
     cur.execute(
-        f"""SELECT DISTINCT u.id, u.first_name, u.last_name, u.username, u.photo_url
+        f"""SELECT DISTINCT ON (u.id) u.id, u.first_name, u.last_name, u.username, u.photo_url, e.ticket_number
             FROM {SCHEMA}.entries e
             JOIN {SCHEMA}.users u ON u.id = e.user_id
-            WHERE e.raffle_id = %s""",
+            WHERE e.raffle_id = %s
+            ORDER BY u.id, e.ticket_number""",
         (raffle_id,)
     )
     rows = cur.fetchall()
 
     if not rows:
-        # Если участников нет — берём всех пользователей
-        cur.execute(f"SELECT id, first_name, last_name, username, photo_url FROM {SCHEMA}.users")
+        cur.execute(f"SELECT id, first_name, last_name, username, photo_url, 0 FROM {SCHEMA}.users")
         rows = cur.fetchall()
 
     participants = [
@@ -157,8 +156,9 @@ def handler(event: dict, context) -> dict:
             'id': r[0],
             'name': ' '.join(filter(None, [r[1], r[2]])) or r[3] or f'User #{r[0]}',
             'photo': r[4] or '',
+            'ticket': r[5] or (i + 1),
         }
-        for r in rows
+        for i, r in enumerate(rows)
     ]
 
     # Выбираем победителя случайно

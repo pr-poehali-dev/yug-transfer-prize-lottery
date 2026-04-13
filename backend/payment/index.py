@@ -149,11 +149,15 @@ def handler(event: dict, context) -> dict:
                 )
                 already_exists = cur.fetchone()
                 if not already_exists:
-                    # Записываем участие в розыгрыше
                     cur.execute(
-                        f"INSERT INTO {SCHEMA}.entries (user_id, raffle_id, tickets, amount, payment_id) "
-                        f"VALUES (%s, %s, 1, %s, %s)",
-                        (user_id, raffle_id, amount, payment_id)
+                        f"SELECT COALESCE(MAX(ticket_number), 0) FROM {SCHEMA}.entries WHERE raffle_id = %s",
+                        (raffle_id,)
+                    )
+                    next_ticket = (cur.fetchone()[0] or 0) + 1
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.entries (user_id, raffle_id, tickets, amount, payment_id, ticket_number) "
+                        f"VALUES (%s, %s, 1, %s, %s, %s)",
+                        (user_id, raffle_id, amount, payment_id, next_ticket)
                     )
                     # Увеличиваем счётчик участников розыгрыша
                     cur.execute(
