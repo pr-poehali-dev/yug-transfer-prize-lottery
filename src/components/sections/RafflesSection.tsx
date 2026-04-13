@@ -70,10 +70,15 @@ export function RafflesSection({ user, onLoginRequired, onGoToCabinet, onUserUpd
     { value: "ended", label: "Завершённые" },
   ];
 
+  const statusPriority: Record<string, number> = { active: 0, upcoming: 1, ended: 2 };
+
   const filtered = rawRaffles
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
     .filter((r) => r.minAmount >= minAmount)
     .sort((a, b) => {
+      const pa = statusPriority[a.status] ?? 1;
+      const pb = statusPriority[b.status] ?? 1;
+      if (pa !== pb) return pa - pb;
       if (sortBy === "date") return new Date(a.endDate).getTime() - new Date(b.endDate).getTime();
       if (sortBy === "amount") return a.minAmount - b.minAmount;
       if (sortBy === "participants") return b.participants - a.participants;
