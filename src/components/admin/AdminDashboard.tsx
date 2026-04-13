@@ -140,7 +140,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   };
 
   const handleFinish = async (r: RaffleDB) => {
-    if (!confirm(`Запустить колесо рулетки для розыгрыша "${r.title}"?\n\nКолесо будет крутиться 60 секунд на сайте в реальном времени. Победитель выбирается автоматически из участников.`)) return;
+    if (!confirm(`Запустить колесо рулетки для розыгрыша "${r.title}"?\n\nКолесо будет крутиться 30 секунд на сайте в реальном времени. Победитель выбирается автоматически из участников.`)) return;
     setFinishing(r.id);
     try {
       // 1. Запускаем спин — колесо крутится на сайте, победитель выбирается случайно
@@ -152,7 +152,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
       const spinData = await spinRes.json();
       if (!spinData.ok) { alert("Ошибка запуска спина: " + (spinData.error || "")); return; }
 
-      // 2. Ждём 62 секунды, потом сохраняем победителя в розыгрыш
       const winner = spinData.winner_name || "";
       setTimeout(async () => {
         const res = await fetch(RAFFLES_URL, {
@@ -162,9 +161,9 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
         });
         const data = await res.json();
         if (data.ok) setRaffles(prev => prev.map(x => x.id === r.id ? data.raffle : x));
-      }, 62_000);
+      }, 32_000);
 
-      alert(`✅ Колесо запущено! Победитель будет объявлен через 60 секунд.\nИмя победителя: ${winner}`);
+      alert(`✅ Колесо запущено! Победитель будет объявлен через 30 секунд.\nИмя победителя: ${winner}`);
     } finally { setFinishing(null); }
   };
 

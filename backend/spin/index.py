@@ -164,11 +164,10 @@ def handler(event: dict, context) -> dict:
     # Выбираем победителя случайно
     winner = random.choice(participants)
 
-    # Сохраняем спин в БД (колесо крутится 60 секунд, потом reveal)
     cur.execute(
         f"""INSERT INTO {SCHEMA}.raffle_spin
             (raffle_id, raffle_title, participants, winner_name, winner_photo, status, reveal_at)
-            VALUES (%s, %s, %s, %s, %s, 'spinning', now() + interval '60 seconds')
+            VALUES (%s, %s, %s, %s, %s, 'spinning', now() + interval '30 seconds')
             RETURNING id, started_at, reveal_at""",
         (raffle_id, raffle_title, json.dumps(participants), winner['name'], winner['photo'])
     )

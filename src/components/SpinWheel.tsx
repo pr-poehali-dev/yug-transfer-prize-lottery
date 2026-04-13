@@ -3,7 +3,7 @@ import Icon from "@/components/ui/icon";
 
 const SPIN_URL = "https://functions.poehali.dev/9eba717e-47b3-4a6b-add1-02c8a4a67974";
 const POLL_INTERVAL = 3000;
-const SPIN_DURATION = 60;
+const SPIN_DURATION = 30;
 
 let audioCtx: AudioContext | null = null;
 function getAudioCtx() {
