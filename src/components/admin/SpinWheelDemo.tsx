@@ -132,11 +132,15 @@ function DemoWheel({
       const r = R - 6;
       ctx.clearRect(0, 0, size, size);
 
+      const pointerPos = -Math.PI / 2;
+      const normAngle = ((pointerPos - angle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+      const sectorUnderPointer = Math.floor(normAngle / slice) % n;
+
       participants.forEach((p, i) => {
         const start = angle + i * slice;
         const end = start + slice;
-        const isWinner = highlightWinner && i === winnerIndex;
-        const isDimmed = highlightWinner && i !== winnerIndex;
+        const isWinner = highlightWinner && i === sectorUnderPointer;
+        const isDimmed = highlightWinner && i !== sectorUnderPointer;
 
         ctx.beginPath();
         ctx.moveTo(R, R);
@@ -214,7 +218,7 @@ function DemoWheel({
       ctx.stroke();
       ctx.restore();
     },
-    [participants, winnerIndex, n, slice]
+    [participants, n, slice]
   );
 
   useEffect(() => {
