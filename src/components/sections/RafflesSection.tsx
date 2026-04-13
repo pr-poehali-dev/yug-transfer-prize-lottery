@@ -47,7 +47,7 @@ export function RafflesSection({ user, onLoginRequired, onGoToCabinet, onUserUpd
 
   useEffect(() => {
     fetchRaffles();
-    const interval = setInterval(fetchRaffles, 60000);
+    const interval = setInterval(fetchRaffles, 30000);
     return () => clearInterval(interval);
   }, [fetchRaffles]);
 
