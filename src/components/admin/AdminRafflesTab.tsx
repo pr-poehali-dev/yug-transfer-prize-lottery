@@ -1,5 +1,7 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { RaffleDB } from "./adminTypes";
+import { SpinWheelDemo } from "./SpinWheelDemo";
 
 interface AdminRafflesTabProps {
   raffles: RaffleDB[];
@@ -27,14 +29,23 @@ function formatDate(dateStr: string) {
 }
 
 export function AdminRafflesTab({ raffles, loadingRaffles, finishing, deleting, onAdd, onEdit, onFinish, onDelete }: AdminRafflesTabProps) {
+  const [showDemo, setShowDemo] = useState(false);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-oswald text-3xl font-bold text-white">Розыгрыши</h2>
-        <button onClick={onAdd} className="grad-btn rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center gap-2">
-          <Icon name="Plus" size={15} />Добавить
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowDemo(true)} className="rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center gap-2 border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors">
+            <Icon name="FlaskConical" size={15} />Тест колеса
+          </button>
+          <button onClick={onAdd} className="grad-btn rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center gap-2">
+            <Icon name="Plus" size={15} />Добавить
+          </button>
+        </div>
       </div>
+
+      {showDemo && <SpinWheelDemo onClose={() => setShowDemo(false)} />}
 
       {loadingRaffles ? (
         <div className="flex justify-center py-20">
