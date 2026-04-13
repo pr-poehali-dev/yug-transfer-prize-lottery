@@ -1,13 +1,27 @@
 import Icon from "@/components/ui/icon";
 import { AdminStats, RaffleDB } from "./adminTypes";
 
+interface JackpotData {
+  balance: number;
+  next_draw_at: string | null;
+  last_winner: string | null;
+}
+
 interface AdminDashboardTabProps {
   stats: AdminStats | null;
   loadingStats: boolean;
   raffles: RaffleDB[];
+  jackpot: JackpotData | null;
 }
 
-export function AdminDashboardTab({ stats, loadingStats, raffles }: AdminDashboardTabProps) {
+function formatDrawDate(dateStr: string | null) {
+  if (!dateStr) return "не назначен";
+  try {
+    return new Date(dateStr).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  } catch { return dateStr; }
+}
+
+export function AdminDashboardTab({ stats, loadingStats, raffles, jackpot }: AdminDashboardTabProps) {
   const active = raffles.filter(r => r.status === "active").length;
   const ended = raffles.filter(r => r.status === "ended");
 
@@ -35,7 +49,8 @@ export function AdminDashboardTab({ stats, loadingStats, raffles }: AdminDashboa
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="card-glow rounded-2xl p-5">
               <h3 className="font-semibold text-white mb-3 flex items-center gap-2"><Icon name="TrendingUp" size={16} className="text-purple-400" />Новые клиенты</h3>
               <div className="space-y-2">
@@ -50,6 +65,23 @@ export function AdminDashboardTab({ stats, loadingStats, raffles }: AdminDashboa
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Платежей за месяц</span><span className="text-white font-medium">{(stats?.payments.month_amount ?? 0).toLocaleString("ru")} ₽</span></div>
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Кол-во транзакций</span><span className="text-white font-medium">{stats?.payments.total_count ?? 0}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Участий в розыгрышах</span><span className="text-white font-medium">{stats?.entries.total ?? 0}</span></div>
+              </div>
+            </div>
+            <div className="card-glow rounded-2xl p-5 border border-purple-500/20">
+              <h3 className="font-semibold text-white mb-3 flex items-center gap-2"><Icon name="Gem" size={16} className="text-purple-400" />Джекпот</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Баланс</span>
+                  <span className="font-bold grad-text">{(jackpot?.balance ?? 0).toLocaleString("ru")} ₽</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Розыгрыш</span>
+                  <span className="text-white font-medium">{formatDrawDate(jackpot?.next_draw_at ?? null)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Посл. победитель</span>
+                  <span className="text-yellow-400 font-medium">{jackpot?.last_winner || "—"}</span>
+                </div>
               </div>
             </div>
           </div>

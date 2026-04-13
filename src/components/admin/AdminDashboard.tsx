@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { RaffleFormModal } from "./RaffleFormModal";
 import {
-  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL, PUSH_URL, SPIN_URL,
+  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL, PUSH_URL, SPIN_URL, JACKPOT_URL,
   AdminTab, AdminStats, Client, Notification, RaffleDB,
 } from "./adminTypes";
 import { AdminDashboardTab } from "./AdminDashboardTab";
@@ -24,6 +24,9 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   // Stats
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
+
+  // Jackpot
+  const [jackpot, setJackpot] = useState<{ balance: number; next_draw_at: string | null; last_winner: string | null } | null>(null);
 
   // Clients
   const [clients, setClients] = useState<Client[]>([]);
@@ -127,7 +130,12 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   };
 
   useEffect(() => { fetchRaffles(); }, []);
-  useEffect(() => { if (tab === "dashboard") fetchStats(); }, [tab]);
+  useEffect(() => {
+    if (tab === "dashboard") {
+      fetchStats();
+      fetch(JACKPOT_URL).then(r => r.json()).then(d => { if (d.ok) setJackpot(d); }).catch(() => {});
+    }
+  }, [tab]);
   useEffect(() => { if (tab === "clients") fetchClients(1, clientsSearch); }, [tab]);
   useEffect(() => { if (tab === "notify") { fetchNotifyHistory(); fetchPushCount(); } }, [tab]);
 
@@ -233,7 +241,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
 
           {tab === "dashboard" && (
-            <AdminDashboardTab stats={stats} loadingStats={loadingStats} raffles={raffles} />
+            <AdminDashboardTab stats={stats} loadingStats={loadingStats} raffles={raffles} jackpot={jackpot} />
           )}
 
           {tab === "clients" && (
