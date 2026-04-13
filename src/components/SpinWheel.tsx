@@ -5,6 +5,48 @@ const SPIN_URL = "https://functions.poehali.dev/9eba717e-47b3-4a6b-add1-02c8a4a6
 const POLL_INTERVAL = 3000;
 const SPIN_DURATION = 60;
 
+let audioCtx: AudioContext | null = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  return audioCtx;
+}
+
+function playTick(pitch = 800, vol = 0.12) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = pitch;
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.06);
+  } catch { /* audio not available */ }
+}
+
+function playWinnerFanfare() {
+  try {
+    const ctx = getAudioCtx();
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.15;
+      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    });
+  } catch { /* audio not available */ }
+}
+
 interface Participant {
   id: number;
   name: string;
@@ -62,6 +104,7 @@ function WheelCanvas({
   const rafRef = useRef<number>(0);
   const stoppedRef = useRef(false);
   const angleRef = useRef(0);
+  const lastSectorRef = useRef(-1);
 
   const n = participants.length;
   const slice = (2 * Math.PI) / n;
@@ -169,6 +212,7 @@ function WheelCanvas({
     }
 
     stoppedRef.current = false;
+    lastSectorRef.current = -1;
     const startTime = new Date(startedAt).getTime();
     const revealTime = new Date(revealAt).getTime();
     const totalDuration = Math.max(revealTime - startTime, SPIN_DURATION * 1000);
@@ -176,8 +220,6 @@ function WheelCanvas({
     const winAngle = -(winnerIndex * slice + slice / 2);
     const totalRotations = 15 + Math.random() * 5;
     const finalAngle = totalRotations * 2 * Math.PI + winAngle;
-
-    const maxSpeed = 0.35;
 
     const animate = () => {
       const now = Date.now();
@@ -187,16 +229,23 @@ function WheelCanvas({
       const eased = 1 - Math.pow(1 - progress, 3);
       angleRef.current = finalAngle * eased;
 
-      const currentSpeed = progress < 0.1
-        ? maxSpeed * (progress / 0.1)
-        : maxSpeed * Math.pow(1 - ((progress - 0.1) / 0.9), 2.5);
+      const pointerAngle = (((-angleRef.current % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI));
+      const currentSector = Math.floor(pointerAngle / slice) % n;
+      if (currentSector !== lastSectorRef.current && lastSectorRef.current !== -1) {
+        const speed = progress < 0.1 ? progress / 0.1 : Math.pow(1 - ((progress - 0.1) / 0.9), 2.5);
+        const pitch = 600 + speed * 600;
+        const vol = Math.max(0.03, Math.min(0.15, speed * 0.2));
+        playTick(pitch, vol);
+      }
+      lastSectorRef.current = currentSector;
 
       draw(angleRef.current, false);
 
-      if (progress >= 1 || currentSpeed < 0.0005) {
+      if (progress >= 1) {
         angleRef.current = finalAngle;
         stoppedRef.current = true;
         draw(angleRef.current, true);
+        playWinnerFanfare();
         onStopped();
         return;
       }
@@ -231,6 +280,26 @@ export function SpinWheel() {
   const [winnerIndex, setWinnerIndex] = useState(0);
 
   const secsLeft = useCountdown(spin?.reveal_at || new Date().toISOString());
+  const audioInitRef = useRef(false);
+
+  const initAudio = useCallback(() => {
+    if (audioInitRef.current) return;
+    audioInitRef.current = true;
+    try {
+      const ctx = getAudioCtx();
+      if (ctx.state === "suspended") ctx.resume();
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => initAudio();
+    document.addEventListener("click", handler, { once: true });
+    document.addEventListener("touchstart", handler, { once: true });
+    return () => {
+      document.removeEventListener("click", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [initAudio]);
 
   const handleWheelStopped = useCallback(() => {
     setWheelStopped(true);
