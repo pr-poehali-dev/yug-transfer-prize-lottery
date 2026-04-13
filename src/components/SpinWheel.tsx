@@ -11,38 +11,54 @@ function getAudioCtx() {
   return audioCtx;
 }
 
-function playTick(pitch = 800, vol = 0.12) {
+function playTick(vol = 0.12) {
   try {
     const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "triangle";
-    osc.frequency.value = pitch;
+    osc.frequency.value = 900;
     gain.gain.setValueAtTime(vol, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.06);
+    osc.stop(ctx.currentTime + 0.05);
   } catch { /* audio not available */ }
 }
 
 function playWinnerFanfare() {
   try {
     const ctx = getAudioCtx();
-    const notes = [523, 659, 784, 1047];
-    notes.forEach((freq, i) => {
+    const t0 = ctx.currentTime;
+    const sequence = [
+      { freq: 523, time: 0, dur: 0.2 },
+      { freq: 659, time: 0.18, dur: 0.2 },
+      { freq: 784, time: 0.36, dur: 0.25 },
+      { freq: 1047, time: 0.55, dur: 0.6 },
+      { freq: 784, time: 0.55, dur: 0.6 },
+      { freq: 1319, time: 1.2, dur: 0.8 },
+      { freq: 1047, time: 1.2, dur: 0.8 },
+    ];
+    sequence.forEach(({ freq, time, dur }) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "sine";
+      osc.type = "sawtooth";
       osc.frequency.value = freq;
-      const t = ctx.currentTime + i * 0.15;
-      gain.gain.setValueAtTime(0.2, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-      osc.connect(gain);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 3000;
+      filter.Q.value = 2;
+      const t = t0 + time;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.12, t + 0.02);
+      gain.gain.setValueAtTime(0.12, t + dur * 0.6);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      osc.connect(filter);
+      filter.connect(gain);
       gain.connect(ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.4);
+      osc.stop(t + dur);
     });
   } catch { /* audio not available */ }
 }
@@ -233,9 +249,8 @@ function WheelCanvas({
       const currentSector = Math.floor(pointerAngle / slice) % n;
       if (currentSector !== lastSectorRef.current && lastSectorRef.current !== -1) {
         const speed = progress < 0.1 ? progress / 0.1 : Math.pow(1 - ((progress - 0.1) / 0.9), 2.5);
-        const pitch = 600 + speed * 600;
-        const vol = Math.max(0.03, Math.min(0.15, speed * 0.2));
-        playTick(pitch, vol);
+        const vol = Math.max(0.04, Math.min(0.15, speed * 0.18));
+        playTick(vol);
       }
       lastSectorRef.current = currentSector;
 
