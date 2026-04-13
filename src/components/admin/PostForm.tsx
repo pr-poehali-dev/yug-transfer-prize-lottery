@@ -21,6 +21,11 @@ const CHATS = [
   { value: "kurilka", label: "КУРИЛКА",       sub: "@KURILKA_GIFT" },
 ] as const;
 
+interface VideoProgress {
+  phase: "loading" | "converting" | "encoding";
+  percent: number;
+}
+
 interface PostFormProps {
   form: PostFormData;
   editId: number | null;
@@ -30,6 +35,7 @@ interface PostFormProps {
   publishing: boolean;
   uploading: boolean;
   uploadingVideo: boolean;
+  videoProgress: VideoProgress | null;
   formError: string;
   formSuccess: string;
   editingPublished: boolean;
@@ -44,7 +50,7 @@ interface PostFormProps {
 }
 
 export function PostForm({
-  form, editId, scheduledAt, editInTg, saving, publishing, uploading, uploadingVideo,
+  form, editId, scheduledAt, editInTg, saving, publishing, uploading, uploadingVideo, videoProgress,
   formError, formSuccess, editingPublished,
   onFormChange, onScheduledAtChange, onEditInTgToggle,
   onPhotoUpload, onVideoNoteUpload, onSave, onPublishNow, onReset,
@@ -185,9 +191,19 @@ export function PostForm({
               </button>
             </div>
           ) : uploadingVideo ? (
-            <div className="w-full h-24 rounded-xl border-2 border-dashed border-cyan-500/30 flex flex-col items-center justify-center gap-2 text-cyan-400">
+            <div className="w-full rounded-xl border-2 border-dashed border-cyan-500/30 flex flex-col items-center justify-center gap-2 text-cyan-400 py-5 px-4">
               <div className="w-5 h-5 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
-              <span className="text-xs">Загружаю видео...</span>
+              <span className="text-xs font-medium">
+                {videoProgress?.phase === "loading" && "Загрузка видео..."}
+                {videoProgress?.phase === "converting" && `Конвертация в кружочек... ${videoProgress.percent}%`}
+                {videoProgress?.phase === "encoding" && "Загрузка на сервер..."}
+                {!videoProgress && "Обработка..."}
+              </span>
+              {videoProgress && videoProgress.phase === "converting" && (
+                <div className="w-full max-w-48 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-cyan-400 rounded-full transition-all duration-300" style={{ width: `${videoProgress.percent}%` }} />
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
