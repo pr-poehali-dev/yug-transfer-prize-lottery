@@ -233,7 +233,7 @@ function WheelCanvas({
     const revealTime = new Date(revealAt).getTime();
     const totalDuration = Math.max(revealTime - startTime, SPIN_DURATION * 1000);
 
-    const winAngle = -(winnerIndex * slice + slice / 2);
+    const winAngle = -Math.PI / 2 - winnerIndex * slice - slice / 2;
     const totalRotations = 15 + Math.random() * 5;
     const finalAngle = totalRotations * 2 * Math.PI + winAngle;
 
