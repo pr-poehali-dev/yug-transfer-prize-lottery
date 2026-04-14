@@ -1,10 +1,10 @@
-"""Webhook Telegram-бота для привязки аккаунта. Обрабатывает /start с deep link параметром user_id."""
+"""Telegram-бот ЮГ ТРАНСФЕР. Открывает сайт как Web App, привязка аккаунта через deep link."""
 import os
 import json
 import urllib.request
 import psycopg2
 
-
+SITE_URL = 'https://ug-transfer.online'
 BOT_TOKEN = None
 SCHEMA = None
 
@@ -55,21 +55,25 @@ def send_welcome(chat_id, name):
         text = (
             f'🎉 <b>{name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\n'
             f'🔥 Сейчас активны розыгрыши:\n\n{raffles_text}\n\n'
-            f'👉 Участвуй на сайте: <a href="https://ug-gift.ru">ug-gift.ru</a>\n\n'
             f'Удачи! 🍀'
         )
     else:
         text = (
             f'🎉 <b>{name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\n'
             f'Сейчас активных розыгрышей нет, но скоро появятся новые!\n'
-            f'Мы сообщим тебе первому 🔔\n\n'
-            f'👉 Следи на сайте: <a href="https://ug-gift.ru">ug-gift.ru</a>'
+            f'Мы сообщим тебе первому 🔔'
         )
     tg_api('sendMessage', {
         'chat_id': chat_id,
         'text': text,
         'parse_mode': 'HTML',
         'disable_web_page_preview': True,
+        'reply_markup': {
+            'inline_keyboard': [[{
+                'text': '🚀 Открыть сайт',
+                'web_app': {'url': SITE_URL},
+            }]]
+        },
     })
 
 
@@ -98,6 +102,18 @@ def handler(event: dict, context) -> dict:
             if not func_url:
                 return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'error': 'url required'})}
             result = tg_api('setWebhook', {'url': func_url})
+            tg_api('setChatMenuButton', {
+                'menu_button': {
+                    'type': 'web_app',
+                    'text': '🚐 Открыть сайт',
+                    'web_app': {'url': SITE_URL},
+                }
+            })
+            tg_api('setMyCommands', {
+                'commands': [
+                    {'command': 'start', 'description': 'Запустить бота'},
+                ]
+            })
             return {'statusCode': 200, 'headers': cors, 'body': json.dumps(result)}
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'status': 'bot webhook active'})}
 
@@ -157,6 +173,13 @@ def handler(event: dict, context) -> dict:
         else:
             tg_api('sendMessage', {
                 'chat_id': chat_id,
-                'text': '👋 Привет! Я бот ЮГ ТРАНСФЕР.\n\nЧтобы привязать Telegram к аккаунту, нажми кнопку «Подключить Telegram» в личном кабинете на сайте.',
+                'text': f'👋 <b>Привет, {first_name}!</b>\n\nЯ бот ЮГ ТРАНСФЕР 🚐\n\nНажми кнопку ниже, чтобы открыть наш сайт 👇',
+                'parse_mode': 'HTML',
+                'reply_markup': {
+                    'inline_keyboard': [[{
+                        'text': '🚀 Открыть сайт',
+                        'web_app': {'url': SITE_URL},
+                    }]]
+                },
             })
     return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
