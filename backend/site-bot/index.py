@@ -89,20 +89,11 @@ def handler(event: dict, context) -> dict:
             'reply_markup': {
                 'keyboard': [
                     [{'text': '🚕 Заказать такси', 'web_app': {'url': SITE_URL}}],
-                    [{'text': '📞 Заказать по телефону'}],
                 ],
                 'resize_keyboard': True,
                 'is_persistent': True,
                 'input_field_placeholder': ' ',
             },
-        })
-
-    if text == '📞 Заказать по телефону':
-        tg_api('sendContact', {
-            'chat_id': chat_id,
-            'phone_number': '+79956141414',
-            'first_name': 'ЮГ ТРАНСФЕР',
-            'last_name': '— Заказать такси',
         })
 
     return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
