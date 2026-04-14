@@ -86,6 +86,63 @@ export function AdminDashboardTab({ stats, loadingStats, raffles, jackpot }: Adm
             </div>
           </div>
 
+          {raffles.filter(r => r.status === "active" || r.status === "upcoming").length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+                <Icon name="Flame" size={16} className="text-green-400" />Активные розыгрыши
+              </h3>
+              <div className="space-y-3">
+                {raffles.filter(r => r.status === "active" || r.status === "upcoming").map(r => {
+                  const rs = stats?.raffle_stats?.[String(r.id)];
+                  return (
+                    <div key={r.id} className="card-glow rounded-2xl p-4 border border-green-500/20">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl shrink-0 overflow-hidden bg-white/5 flex items-center justify-center">
+                          {r.photo_url
+                            ? <img src={r.photo_url} alt={r.title} className="w-full h-full object-cover" />
+                            : <div className={`w-full h-full bg-gradient-to-br ${r.gradient} flex items-center justify-center`}>
+                                <Icon name={r.prize_icon as string} size={18} className="text-white" fallback="Gift" />
+                              </div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold text-sm truncate">{r.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {r.status === "upcoming" ? "⏳ Скоро" : "🟢 Активен"} · до {new Date(r.end_date).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-green-400">{rs?.participants ?? 0}</p>
+                          <p className="text-[10px] text-muted-foreground">Участников</p>
+                        </div>
+                        <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-cyan-400">{rs?.entries ?? 0}</p>
+                          <p className="text-[10px] text-muted-foreground">Билетов</p>
+                        </div>
+                        <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                          <p className="text-lg font-bold text-yellow-400">{(rs?.total_amount ?? 0).toLocaleString("ru")} ₽</p>
+                          <p className="text-[10px] text-muted-foreground">Собрано</p>
+                        </div>
+                      </div>
+                      {r.target_amount ? (
+                        <div className="mt-3">
+                          <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                            <span>Прогресс сбора</span>
+                            <span>{Math.round(((rs?.total_amount ?? 0) / r.target_amount) * 100)}%</span>
+                          </div>
+                          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-green-500 to-cyan-500 rounded-full transition-all" style={{ width: `${Math.min(100, ((rs?.total_amount ?? 0) / r.target_amount) * 100)}%` }} />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {ended.length > 0 && (
             <div>
               <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
