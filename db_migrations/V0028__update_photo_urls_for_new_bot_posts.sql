@@ -1,0 +1,15 @@
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/7b809f15-e8f2-4201-9f57-591f12f4fe7f.jpg' WHERE id = 46;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/325c1e86-3c71-4aaa-b237-f5b90f516577.jpg' WHERE id = 47;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/d2eee39b-bfc5-4e81-bb99-77a11cb505a7.jpg' WHERE id = 48;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/8caa9589-2a6c-43f9-844c-10654c689a79.jpg' WHERE id = 49;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/065f9aa5-fa2b-44f8-aa56-44fa7448df7c.jpg' WHERE id = 50;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/bb732ccf-0b91-47a4-b825-53cc34899e6a.jpg' WHERE id = 51;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/8bbe28b1-f25a-4ad3-b260-1167fd7a5a02.jpg' WHERE id = 52;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/857c1142-be8e-4630-bba5-c9605b556025.jpg' WHERE id = 53;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/5ba28e3e-a1d4-4950-b329-43e74b57ed20.jpg' WHERE id = 54;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/95b4e289-4177-47fb-92a0-4fd018c1017c.jpg' WHERE id = 55;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/e4761aed-4c46-44f4-8d09-960bcaedc387.jpg' WHERE id = 56;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/7d9e045d-d150-41c0-bdea-f2eb04f51055.jpg' WHERE id = 57;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/15226c41-46f8-43eb-af27-6ac713764ccc.jpg' WHERE id = 58;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/bc94f07e-b518-4350-967f-0257dca6fc71.jpg' WHERE id = 59;
+UPDATE t_p67171637_yug_transfer_prize_l.bot_daily_posts SET photo_url = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0d37c525-e7c4-4a0b-9de6-4f094fa4a4b9.jpg' WHERE id = 60;
