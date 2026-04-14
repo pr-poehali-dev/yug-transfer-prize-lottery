@@ -56,11 +56,7 @@ def handler(event: dict, context) -> dict:
                     'web_app': {'url': SITE_URL},
                 }
             })
-            tg_api('setMyCommands', {
-                'commands': [
-                    {'command': 'start', 'description': 'Заказать такси'},
-                ]
-            })
+            tg_api('deleteMyCommands', {})
             return {'statusCode': 200, 'headers': cors, 'body': json.dumps(result)}
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 
