@@ -11,6 +11,7 @@ import { AdminNotifyTab } from "./AdminNotifyTab";
 import { AdminRafflesTab } from "./AdminRafflesTab";
 import { AdminJackpotTab } from "./AdminJackpotTab";
 import { AdminPostsTab } from "./AdminPostsTab";
+import { AdminBotTab } from "./AdminBotTab";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("raffles");
@@ -194,6 +195,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     { id: "notify" as AdminTab, label: "Рассылка", icon: "Bell" },
     { id: "jackpot" as AdminTab, label: "Джекпот", icon: "Gem" },
     { id: "posts" as AdminTab, label: "Посты в канал", icon: "Send" },
+    { id: "bot" as AdminTab, label: "Наш бот", icon: "Bot" },
   ];
 
   return (
@@ -299,6 +301,10 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
           {tab === "posts" && (
             <AdminPostsTab token={token} />
+          )}
+
+          {tab === "bot" && (
+            <AdminBotTab token={token} />
           )}
 
         </main>
