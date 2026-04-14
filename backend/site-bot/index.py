@@ -52,13 +52,13 @@ def handler(event: dict, context) -> dict:
             tg_api('setChatMenuButton', {
                 'menu_button': {
                     'type': 'web_app',
-                    'text': '🚐 Открыть сайт',
+                    'text': '🚕 Заказать такси',
                     'web_app': {'url': SITE_URL},
                 }
             })
             tg_api('setMyCommands', {
                 'commands': [
-                    {'command': 'start', 'description': 'Запустить бота'},
+                    {'command': 'start', 'description': 'Заказать такси'},
                 ]
             })
             return {'statusCode': 200, 'headers': cors, 'body': json.dumps(result)}
@@ -76,13 +76,15 @@ def handler(event: dict, context) -> dict:
     if text.startswith('/start'):
         tg_api('sendMessage', {
             'chat_id': chat_id,
-            'text': f'👋 <b>Привет, {first_name}!</b>\n\n🚐 Я бот ЮГ ТРАНСФЕР.\n\nНажми кнопку ниже, чтобы открыть наш сайт 👇',
+            'text': f'🚕 <b>{first_name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\nНажмите кнопку ниже для заказа такси:',
             'parse_mode': 'HTML',
             'reply_markup': {
-                'inline_keyboard': [[{
-                    'text': '🚀 Открыть сайт',
+                'keyboard': [[{
+                    'text': '🚕 Заказать такси',
                     'web_app': {'url': SITE_URL},
-                }]]
+                }]],
+                'resize_keyboard': True,
+                'is_persistent': True,
             },
         })
 
