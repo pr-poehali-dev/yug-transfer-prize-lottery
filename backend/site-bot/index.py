@@ -70,6 +70,10 @@ def handler(event: dict, context) -> dict:
     first_name = message.get('from', {}).get('first_name', '')
 
     if text.startswith('/start'):
+        tg_api('deleteMessage', {
+            'chat_id': chat_id,
+            'message_id': message['message_id'],
+        })
         tg_api('setChatMenuButton', {
             'chat_id': chat_id,
             'menu_button': {
