@@ -1,0 +1,16 @@
+INSERT INTO t_p67171637_yug_transfer_prize_l.bot_daily_posts (photo_url, greeting, description) VALUES
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_night.jpg', '🚕 Ночной трансфер — безопасно и вовремя!', 'Поздний рейс или ночная прогулка? Наши водители на связи 24/7.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_airport2.jpg', '🚕 Встретим с табличкой в аэропорту!', 'Не нужно искать такси — водитель уже ждёт вас у выхода.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_business.jpg', '🚕 Бизнес-класс для деловых поездок!', 'Представительский автомобиль, кожаный салон, полная конфиденциальность.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_kids.jpg', '🚕 Детское кресло? Конечно, есть!', 'Безопасность маленьких пассажиров — наш приоритет. Кресла для любого возраста.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_group.jpg', '🚕 Большая компания? Подадим минивэн!', 'До 7 пассажиров с багажом. Вместе веселее, а мы довезём!'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_gelendzhik.jpg', '🚕 Геленджик ждёт — мы довезём!', 'Трансфер на побережье с кондиционером и хорошим настроением.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_anapa.jpg', '🚕 В Анапу всей семьёй? Легко!', 'Комфортный трансфер до курорта — дети довольны, родители спокойны.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_mountains.jpg', '🚕 Горы зовут — а мы везём!', 'Лаго-Наки, Гуамка, Мезмай — доставим к самым живописным местам.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_station.jpg', '🚕 Встретим на ж/д вокзале!', 'Поезд прибывает — а водитель уже рядом. Никакого ожидания.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_pets.jpg', '🚕 С питомцем? Не проблема!', 'Перевозим с домашними животными. Предупредите заранее — подготовим салон.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_luggage.jpg', '🚕 Много чемоданов? Поместятся все!', 'Просторный багажник и помощь с погрузкой. Путешествуйте налегке.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_fixed.jpg', '🚕 Фиксированная цена — никаких сюрпризов!', 'Узнайте стоимость заранее. Цена не изменится из-за пробок или погоды.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_sochi.jpg', '🚕 Сочи — город мечты! Довезём с ветерком!', 'Олимпийский парк, Роза Хутор, набережная — весь Сочи к вашим услугам.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_corporate.jpg', '🚕 Корпоративным клиентам — особые условия!', 'Регулярные поездки для компаний со скидкой. Счета и закрывающие документы.'),
+('https://cdn.poehali.dev/projects/p67171637/bucket/bot/taxi_weekend.jpg', '🚕 Выходные на природе? Отвезём и заберём!', 'Пикник, рыбалка, база отдыха — спланируем маршрут вместе.');
