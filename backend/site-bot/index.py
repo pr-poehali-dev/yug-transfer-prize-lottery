@@ -98,16 +98,11 @@ def handler(event: dict, context) -> dict:
         })
 
     if text == '📞 Заказать по телефону':
-        tg_api('sendMessage', {
+        tg_api('sendContact', {
             'chat_id': chat_id,
-            'text': '📞 Нажмите на номер, чтобы позвонить:\n\n<a href="tel:+79956141414">+7 (995) 614-14-14</a>',
-            'parse_mode': 'HTML',
-            'reply_markup': {
-                'inline_keyboard': [[{
-                    'text': '📞 Позвонить +7 (995) 614-14-14',
-                    'url': 'tel:+79956141414',
-                }]],
-            },
+            'phone_number': '+79956141414',
+            'first_name': 'ЮГ ТРАНСФЕР',
+            'last_name': '— Заказать такси',
         })
 
     return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
