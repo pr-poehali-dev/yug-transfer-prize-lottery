@@ -82,14 +82,9 @@ def handler(event: dict, context) -> dict:
                 'web_app': {'url': SITE_URL},
             }
         })
-        tg_api('sendDice', {
-            'chat_id': chat_id,
-            'emoji': '🎰',
-        })
         tg_api('sendMessage', {
             'chat_id': chat_id,
-            'text': f'👋 <b>{first_name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>',
-            'parse_mode': 'HTML',
+            'text': '🚕',
             'reply_markup': {
                 'keyboard': [
                     [{'text': '🚕 Заказать такси', 'web_app': {'url': SITE_URL}}],
