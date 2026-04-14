@@ -70,6 +70,14 @@ def handler(event: dict, context) -> dict:
     first_name = message.get('from', {}).get('first_name', '')
 
     if text.startswith('/start'):
+        tg_api('setChatMenuButton', {
+            'chat_id': chat_id,
+            'menu_button': {
+                'type': 'web_app',
+                'text': 'Заказать такси',
+                'web_app': {'url': SITE_URL},
+            }
+        })
         tg_api('sendMessage', {
             'chat_id': chat_id,
             'text': f'🚕 <b>{first_name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\nНажмите кнопку ниже для заказа такси:',
