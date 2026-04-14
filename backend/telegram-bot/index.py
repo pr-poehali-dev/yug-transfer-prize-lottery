@@ -5,22 +5,12 @@ import urllib.request
 import psycopg2
 
 SITE_URL = 'https://ug-transfer.online'
-BOT_TOKEN = None
-SCHEMA = None
-
-
 def get_bot_token():
-    global BOT_TOKEN
-    if not BOT_TOKEN:
-        BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-    return BOT_TOKEN
+    return os.environ.get('TELEGRAM_BOT_TOKEN', '')
 
 
 def get_schema():
-    global SCHEMA
-    if not SCHEMA:
-        SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
-    return SCHEMA
+    return os.environ.get('MAIN_DB_SCHEMA', 'public')
 
 
 def tg_api(method, payload):
