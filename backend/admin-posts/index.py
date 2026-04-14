@@ -498,10 +498,17 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
 
         if edit_in_tg:
-            cur.execute(f"SELECT telegram_message_id FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+            cur.execute(f"SELECT telegram_message_id, chats FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
             row = cur.fetchone()
-            if row and row[0] and bot_token and channel_id:
-                edit_tg_message(bot_token, channel_id, row[0], {'text': text, 'photo_url': photo_url})
+            if row and row[0] and bot_token:
+                msg_id = row[0]
+                chats_raw = row[1] or 'main'
+                channels_map = {'main': channel_main, 'kurilka': channel_kurilka}
+                for ch in chats_raw.split(','):
+                    ch = ch.strip()
+                    ch_id = channels_map.get(ch)
+                    if ch_id:
+                        edit_tg_message(bot_token, ch_id, msg_id, {'text': text, 'photo_url': photo_url})
 
         now = datetime.now(timezone.utc)
         cur.execute(

@@ -15,10 +15,12 @@ interface PostListProps {
   editId: number | null;
   publishingId: number | null;
   deleting: number | null;
+  editingInTgId: number | null;
   onFilterChange: (sf: string) => void;
   onRefresh: () => void;
   onPublish: (post: Post) => void;
   onEdit: (post: Post) => void;
+  onEditInTg: (post: Post) => void;
   onDelete: (post: Post) => void;
   onResetEdit: () => void;
 }
@@ -26,8 +28,8 @@ interface PostListProps {
 const strip = (html: string) => html.replace(/<[^>]+>/g, "");
 
 export function PostList({
-  posts, loading, statusFilter, editId, publishingId, deleting,
-  onFilterChange, onRefresh, onPublish, onEdit, onDelete, onResetEdit,
+  posts, loading, statusFilter, editId, publishingId, deleting, editingInTgId,
+  onFilterChange, onRefresh, onPublish, onEdit, onEditInTg, onDelete, onResetEdit,
 }: PostListProps) {
   return (
     <div className="space-y-3">
@@ -143,6 +145,18 @@ export function PostList({
                   >
                     <Icon name={isActive ? "X" : "Pencil"} size={13} />
                   </button>
+                  {post.status === "published" && post.telegram_message_id && isActive && (
+                    <button
+                      onClick={() => onEditInTg(post)}
+                      disabled={editingInTgId === post.id}
+                      title="Обновить в Telegram"
+                      className="w-8 h-8 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 flex items-center justify-center text-sky-400 transition-colors disabled:opacity-40"
+                    >
+                      {editingInTgId === post.id
+                        ? <div className="w-3 h-3 border border-sky-400/30 border-t-sky-400 rounded-full animate-spin" />
+                        : <Icon name="RefreshCw" size={13} />}
+                    </button>
+                  )}
                   <button
                     onClick={() => onDelete(post)}
                     disabled={deleting === post.id}

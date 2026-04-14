@@ -45,6 +45,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
   const [statusFilter, setStatusFilter] = useState("");
   const [deleting, setDeleting] = useState<number | null>(null);
   const [publishingId, setPublishingId] = useState<number | null>(null);
+  const [editingInTgId, setEditingInTgId] = useState<number | null>(null);
 
   const fetchPosts = async (sf = statusFilter) => {
     setLoading(true);
@@ -367,6 +368,27 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     } finally { setDeleting(null); }
   };
 
+  const handleEditInTg = async (post: Post) => {
+    if (!editId || editId !== post.id) return;
+    setEditingInTgId(post.id);
+    setFormError(""); setFormSuccess("");
+    try {
+      const payload = { ...form, id: post.id, status: post.status, edit_in_telegram: true, chats: form.chats };
+      const res = await fetch(ADMIN_POSTS_URL, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Ошибка");
+      setFormSuccess("Пост обновлён в Telegram!");
+      setSavedForm({ ...form });
+      setPosts(prev => prev.map(p => p.id === data.post.id ? data.post : p));
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "Ошибка обновления в Telegram");
+    } finally { setEditingInTgId(null); }
+  };
+
   const editingPublished = editId !== null && posts.find(p => p.id === editId)?.status === "published";
 
   return (
@@ -406,9 +428,11 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
           editId={editId}
           publishingId={publishingId}
           deleting={deleting}
+          editingInTgId={editingInTgId}
           onFilterChange={sf => setStatusFilter(sf)}
           onRefresh={() => fetchPosts(statusFilter)}
           onPublish={handlePublishFromList}
+          onEditInTg={handleEditInTg}
           onEdit={post => confirmLeave(() => startEdit(post))}
           onDelete={handleDelete}
           onResetEdit={() => confirmLeave(resetForm)}
