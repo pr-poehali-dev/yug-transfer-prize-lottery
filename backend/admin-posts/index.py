@@ -522,7 +522,7 @@ def handler(event: dict, context) -> dict:
         print(f"[POSTS] updated post {post_id}, status={status}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'post': post})}
 
-    # ── DELETE — удалить пост ───────────────────────────────────────────────
+    # ── DELETE — удалить пост (из Telegram + из базы) ───────────────────────
     if method == 'DELETE':
         body = json.loads(event.get('body') or '{}')
         post_id = body.get('id')
@@ -531,10 +531,26 @@ def handler(event: dict, context) -> dict:
 
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
+        cur.execute(f"SELECT telegram_message_id, chats, status FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+        row = cur.fetchone()
+        tg_deleted = False
+        if row and row[0] and row[2] == 'published' and bot_token:
+            msg_id = row[0]
+            chats_raw = row[1] or 'main'
+            channels_map = {'main': channel_main, 'kurilka': channel_kurilka}
+            for ch in chats_raw.split(','):
+                ch = ch.strip()
+                ch_id = channels_map.get(ch)
+                if ch_id:
+                    result = tg_request(bot_token, 'deleteMessage', {'chat_id': ch_id, 'message_id': msg_id})
+                    print(f"[POSTS] deleteMessage chat={ch} msg_id={msg_id}: {result}")
+                    if result.get('ok'):
+                        tg_deleted = True
+
         cur.execute(f"DELETE FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
         conn.commit()
         cur.close(); conn.close()
-        print(f"[POSTS] deleted post {post_id}")
-        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
+        print(f"[POSTS] deleted post {post_id}, tg_deleted={tg_deleted}")
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'tg_deleted': tg_deleted})}
 
     return {'statusCode': 405, 'headers': CORS, 'body': json.dumps({'error': 'Method not allowed'})}

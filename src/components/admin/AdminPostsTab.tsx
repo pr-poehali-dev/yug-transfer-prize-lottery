@@ -346,17 +346,24 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
   };
 
   const handleDelete = async (post: Post) => {
-    if (!confirm(`Удалить пост?`)) return;
+    const msg = post.status === "published"
+      ? "Удалить пост из Telegram и из базы?"
+      : "Удалить пост?";
+    if (!confirm(msg)) return;
     setDeleting(post.id);
     try {
-      await fetch(ADMIN_POSTS_URL, {
+      const res = await fetch(ADMIN_POSTS_URL, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
         body: JSON.stringify({ id: post.id }),
       });
+      const data = await res.json();
       setPosts(prev => prev.filter(p => p.id !== post.id));
       setTotal(t => t - 1);
       if (editId === post.id) resetForm();
+      if (post.status === "published" && data.tg_deleted) {
+        setFormSuccess("Пост удалён из Telegram и из базы");
+      }
     } finally { setDeleting(null); }
   };
 
