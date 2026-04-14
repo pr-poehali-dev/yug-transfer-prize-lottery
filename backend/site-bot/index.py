@@ -2,8 +2,10 @@
 import os
 import json
 import urllib.request
+import psycopg2
 
 SITE_URL = 'https://ug-transfer.online'
+SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
 
 
 def get_bot_token():
@@ -70,6 +72,16 @@ def handler(event: dict, context) -> dict:
     first_name = message.get('from', {}).get('first_name', '')
 
     if text.startswith('/start'):
+        username = message.get('from', {}).get('username', '')
+        try:
+            conn = psycopg2.connect(os.environ['DATABASE_URL'])
+            cur = conn.cursor()
+            cur.execute(f"INSERT INTO {SCHEMA}.sait_bot_users (chat_id, first_name, username) VALUES ({chat_id}, '{first_name}', '{username}') ON CONFLICT (chat_id) DO UPDATE SET first_name = '{first_name}', username = '{username}'")
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
         tg_api('deleteMessage', {
             'chat_id': chat_id,
             'message_id': message['message_id'],
