@@ -2,7 +2,6 @@ export const ADMIN_AUTH_URL = "https://functions.poehali.dev/cc8cbc36-edde-42f3-
 export const RAFFLES_URL = "https://functions.poehali.dev/39a7b356-ef83-46dd-81a0-581903229de9";
 export const ADMIN_STATS_URL = "https://functions.poehali.dev/fa4cc22e-4f17-475f-ab1a-eb15d4c5971b";
 export const ADMIN_CLIENTS_URL = "https://functions.poehali.dev/68991b02-f3e2-4903-8cd2-2239bf9116ac";
-export const ADMIN_NOTIFY_URL = "https://functions.poehali.dev/b8105351-4e67-40ce-a46c-7a2e2d9ccad0";
 export const PUSH_URL = "https://functions.poehali.dev/0b609b6c-8c5c-4291-8ad1-6f757c5a438b";
 export const SESSION_KEY = "admin_token";
 
@@ -94,13 +93,4 @@ export interface Client {
   total_paid: number;
   payments_count: number;
   entries_count: number;
-}
-
-export interface Notification {
-  id: number;
-  title: string;
-  message: string;
-  type: string;
-  sent_at: string;
-  recipients_count: number;
 }

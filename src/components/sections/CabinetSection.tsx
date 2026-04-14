@@ -8,7 +8,7 @@ import { EditProfileModal } from "./cabinet/EditProfileModal";
 
 const PAYMENT_URL = "https://functions.poehali.dev/81f8c74e-7d9c-47ff-8dfc-8f0e3dd7a155";
 const MAX_POLL = 10;
-const POLL_INTERVAL = 2500;
+const POLL_INTERVAL = 5000;
 
 interface CabinetSectionProps {
   user: AppUser | null;

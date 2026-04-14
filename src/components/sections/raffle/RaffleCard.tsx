@@ -75,7 +75,7 @@ export function RaffleCard({ raffle, idx, user, onLoginRequired, onRefreshRaffle
           setTimeout(() => setPaymentStatus("idle"), 4000);
         }
       } catch { /* ignore */ }
-    }, 3000);
+    }, 5000);
   }, [loadMyTickets, onRefreshRaffles, onRefreshUser, raffle.id, stopPolling]);
 
   const handleParticipate = async () => {
