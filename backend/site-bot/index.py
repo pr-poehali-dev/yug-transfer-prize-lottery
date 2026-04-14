@@ -72,16 +72,9 @@ def handler(event: dict, context) -> dict:
     if text.startswith('/start'):
         tg_api('sendMessage', {
             'chat_id': chat_id,
-            'text': f'🚕 <b>{first_name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\nНажмите кнопку ниже для заказа такси:',
+            'text': f'🚕 <b>{first_name}, добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\nНажмите кнопку «🚕 Заказать такси» в меню слева от поля ввода.',
             'parse_mode': 'HTML',
-            'reply_markup': {
-                'keyboard': [[{
-                    'text': '🚕 Заказать такси',
-                    'web_app': {'url': SITE_URL},
-                }]],
-                'resize_keyboard': True,
-                'is_persistent': True,
-            },
+            'reply_markup': {'remove_keyboard': True},
         })
 
     return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
