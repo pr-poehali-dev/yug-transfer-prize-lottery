@@ -82,10 +82,9 @@ def handler(event: dict, context) -> dict:
                 'web_app': {'url': SITE_URL},
             }
         })
-        tg_api('sendPhoto', {
+        tg_api('sendMessage', {
             'chat_id': chat_id,
-            'photo': 'https://cdn.poehali.dev/files/b7e2cf17-ea45-4ff7-b538-0c8c499da32b.png',
-            'caption': '🚕 <b>Добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\nКомфортные поездки по югу России.\nНажмите кнопку ниже, чтобы оформить заказ 👇',
+            'text': '🚕 <b>Добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\nКомфортные поездки по югу России.\nНажмите кнопку ниже, чтобы оформить заказ 👇',
             'parse_mode': 'HTML',
             'reply_markup': {
                 'keyboard': [[{
