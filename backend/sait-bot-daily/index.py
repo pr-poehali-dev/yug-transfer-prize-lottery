@@ -1,12 +1,11 @@
-"""Ежедневная рассылка контактов ЮГ ТРАНСФЕР через бот @ug_sait_bot."""
+"""Ежедневная рассылка контактов ЮГ ТРАНСФЕР в группу @ug_transfer_pro."""
 import os
 import json
 import random
 import urllib.request
 from datetime import date
-import psycopg2
 
-SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
+CHANNEL_ID = '@ug_transfer_pro'
 
 PHOTOS = [
     'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/d119b7ec-356e-4888-9b28-0660cb78b9ac.jpg',
@@ -82,18 +81,8 @@ def generate_post():
     return photo, text
 
 
-def get_subscribers():
-    conn = psycopg2.connect(os.environ['DATABASE_URL'])
-    cur = conn.cursor()
-    cur.execute(f"SELECT chat_id FROM {SCHEMA}.sait_bot_users")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return [r[0] for r in rows]
-
-
 def handler(event: dict, context) -> dict:
-    """Ежедневная рассылка контактов ЮГ ТРАНСФЕР всем подписчикам бота @ug_sait_bot."""
+    """Ежедневный пост с контактами ЮГ ТРАНСФЕР в группу @ug_transfer_pro."""
     cors = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -104,24 +93,15 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors, 'body': ''}
 
     photo, text = generate_post()
-    subscribers = get_subscribers()
-    sent = 0
-    failed = 0
-
-    for chat_id in subscribers:
-        result = tg_api('sendPhoto', {
-            'chat_id': chat_id,
-            'photo': photo,
-            'caption': text,
-            'parse_mode': 'HTML',
-        })
-        if result.get('ok'):
-            sent += 1
-        else:
-            failed += 1
+    result = tg_api('sendPhoto', {
+        'chat_id': CHANNEL_ID,
+        'photo': photo,
+        'caption': text,
+        'parse_mode': 'HTML',
+    })
 
     return {
         'statusCode': 200,
         'headers': cors,
-        'body': json.dumps({'ok': True, 'sent': sent, 'failed': failed, 'total': len(subscribers)}),
+        'body': json.dumps({'ok': result.get('ok', False)}),
     }
