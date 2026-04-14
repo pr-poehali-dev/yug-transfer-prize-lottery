@@ -87,13 +87,26 @@ def handler(event: dict, context) -> dict:
             'text': '👇',
             'parse_mode': 'HTML',
             'reply_markup': {
-                'keyboard': [[{
-                    'text': '🚕 Заказать такси',
-                    'web_app': {'url': SITE_URL},
-                }]],
+                'keyboard': [
+                    [{'text': '🚕 Заказать такси', 'web_app': {'url': SITE_URL}}],
+                    [{'text': '📞 Заказать по телефону'}],
+                ],
                 'resize_keyboard': True,
                 'is_persistent': True,
                 'input_field_placeholder': ' ',
+            },
+        })
+
+    if text == '📞 Заказать по телефону':
+        tg_api('sendMessage', {
+            'chat_id': chat_id,
+            'text': '📞 Нажмите на номер, чтобы позвонить:\n\n<a href="tel:+79956141414">+7 (995) 614-14-14</a>',
+            'parse_mode': 'HTML',
+            'reply_markup': {
+                'inline_keyboard': [[{
+                    'text': '📞 Позвонить +7 (995) 614-14-14',
+                    'url': 'tel:+79956141414',
+                }]],
             },
         })
 
