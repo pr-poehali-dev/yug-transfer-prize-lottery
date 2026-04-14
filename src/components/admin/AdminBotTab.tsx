@@ -57,7 +57,7 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
         ...prev,
         [botId]: {
           username: data.ok ? data.username : "",
-          webhookStatus: data.ok && data.username ? "active" : "not_set",
+          webhookStatus: data.ok && data.webhook_active ? "active" : data.ok ? "not_set" : "error",
           loading: false,
         },
       }));

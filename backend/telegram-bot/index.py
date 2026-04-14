@@ -78,10 +78,12 @@ def handler(event: dict, context) -> dict:
         if qs.get('action') == 'bot_info':
             result = tg_api('getMe', {})
             bot = result.get('result', {})
+            wh = tg_api('getWebhookInfo', {})
+            wh_url = wh.get('result', {}).get('url', '')
             return {
                 'statusCode': 200,
                 'headers': cors,
-                'body': json.dumps({'ok': True, 'username': bot.get('username', '')}),
+                'body': json.dumps({'ok': True, 'username': bot.get('username', ''), 'webhook_active': bool(wh_url)}),
             }
         if qs.get('action') == 'set_webhook':
             func_url = qs.get('url', '')
