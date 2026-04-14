@@ -2,12 +2,11 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { RaffleFormModal } from "./RaffleFormModal";
 import {
-  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, ADMIN_NOTIFY_URL, PUSH_URL, SPIN_URL, JACKPOT_URL,
-  AdminTab, AdminStats, Client, Notification, RaffleDB,
+  RAFFLES_URL, ADMIN_STATS_URL, ADMIN_CLIENTS_URL, SPIN_URL, JACKPOT_URL,
+  AdminTab, AdminStats, Client, RaffleDB,
 } from "./adminTypes";
 import { AdminDashboardTab } from "./AdminDashboardTab";
 import { AdminClientsTab } from "./AdminClientsTab";
-import { AdminNotifyTab } from "./AdminNotifyTab";
 import { AdminRafflesTab } from "./AdminRafflesTab";
 import { AdminJackpotTab } from "./AdminJackpotTab";
 import { AdminPostsTab } from "./AdminPostsTab";
@@ -37,17 +36,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   const [clientsSearch, setClientsSearch] = useState("");
   const [loadingClients, setLoadingClients] = useState(false);
 
-  // Notify
-  const [notifyTitle, setNotifyTitle] = useState("");
-  const [notifyMsg, setNotifyMsg] = useState("");
-  const [notifyType, setNotifyType] = useState("info");
-  const [sendingNotify, setSendingNotify] = useState(false);
-  const [notifyResult, setNotifyResult] = useState<{ sent: number; total: number } | null>(null);
-  const [notifyHistory, setNotifyHistory] = useState<Notification[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [sendPush, setSendPush] = useState(true);
-  const [pushCount, setPushCount] = useState<number | null>(null);
-  const [pushResult, setPushResult] = useState<{ sent: number; total: number } | null>(null);
+
 
   const fetchRaffles = async () => {
     setLoadingRaffles(true);
@@ -83,52 +72,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     } finally { setLoadingClients(false); }
   };
 
-  const fetchNotifyHistory = async () => {
-    setLoadingHistory(true);
-    try {
-      const res = await fetch(ADMIN_NOTIFY_URL, { headers: { 'X-Admin-Token': token } });
-      const data = await res.json();
-      if (data.ok) setNotifyHistory(data.history);
-    } finally { setLoadingHistory(false); }
-  };
 
-  const fetchPushCount = async () => {
-    try {
-      const res = await fetch(PUSH_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ action: "count" }),
-      });
-      const data = await res.json();
-      if (data.ok) setPushCount(data.count);
-    } catch { /**/ }
-  };
-
-  const handleSendNotify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!notifyTitle.trim() || !notifyMsg.trim()) return;
-    setSendingNotify(true); setNotifyResult(null); setPushResult(null);
-    try {
-      const [tgRes] = await Promise.all([
-        fetch(ADMIN_NOTIFY_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ title: notifyTitle, message: notifyMsg, type: notifyType }),
-        }),
-        sendPush ? fetch(PUSH_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ action: "send", title: notifyTitle, message: notifyMsg, url: "/" }),
-        }).then(r => r.json()).then(d => { if (d.ok) setPushResult({ sent: d.sent, total: d.total }); }) : Promise.resolve(),
-      ]);
-      const data = await tgRes.json();
-      if (data.ok) {
-        setNotifyResult({ sent: data.sent, total: data.total });
-        setNotifyTitle(""); setNotifyMsg("");
-        fetchNotifyHistory();
-      }
-    } finally { setSendingNotify(false); }
-  };
 
   useEffect(() => { fetchRaffles(); }, []);
   useEffect(() => {
@@ -138,7 +82,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     }
   }, [tab]);
   useEffect(() => { if (tab === "clients") fetchClients(1, clientsSearch); }, [tab]);
-  useEffect(() => { if (tab === "notify") { fetchNotifyHistory(); fetchPushCount(); } }, [tab]);
+
 
   const handleSave = (r: RaffleDB) => {
     setRaffles(prev => {
@@ -192,7 +136,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     { id: "dashboard" as AdminTab, label: "Обзор", icon: "LayoutDashboard" },
     { id: "raffles" as AdminTab, label: "Розыгрыши", icon: "Gift" },
     { id: "clients" as AdminTab, label: "Клиенты", icon: "Users" },
-    { id: "notify" as AdminTab, label: "Рассылка", icon: "Bell" },
+
     { id: "jackpot" as AdminTab, label: "Джекпот", icon: "Gem" },
     { id: "posts" as AdminTab, label: "Посты в канал", icon: "Send" },
     { id: "bot" as AdminTab, label: "Наш бот", icon: "Bot" },
@@ -258,26 +202,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               onSearchChange={search => { setClientsSearch(search); fetchClients(1, search); }}
               onPageChange={page => fetchClients(page, clientsSearch)}
               onDeleted={id => { setClients(prev => prev.filter(c => c.id !== id)); setClientsTotal(t => t - 1); }}
-            />
-          )}
-
-          {tab === "notify" && (
-            <AdminNotifyTab
-              notifyTitle={notifyTitle}
-              setNotifyTitle={setNotifyTitle}
-              notifyMsg={notifyMsg}
-              setNotifyMsg={setNotifyMsg}
-              notifyType={notifyType}
-              setNotifyType={setNotifyType}
-              sendingNotify={sendingNotify}
-              notifyResult={notifyResult}
-              notifyHistory={notifyHistory}
-              loadingHistory={loadingHistory}
-              sendPush={sendPush}
-              setSendPush={setSendPush}
-              pushCount={pushCount}
-              pushResult={pushResult}
-              onSubmit={handleSendNotify}
             />
           )}
 

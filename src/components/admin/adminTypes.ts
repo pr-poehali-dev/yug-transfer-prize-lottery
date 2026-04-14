@@ -47,7 +47,7 @@ export const ADMIN_BOT_POSTS_URL = "https://functions.poehali.dev/9578d639-08e5-
 export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21";
 export const UPLOAD_VIDEO_URL = "https://functions.poehali.dev/f6d6a065-4281-4091-ac9e-9e3121bf2571";
 
-export type AdminTab = "dashboard" | "raffles" | "clients" | "notify" | "jackpot" | "posts" | "bot";
+export type AdminTab = "dashboard" | "raffles" | "clients" | "jackpot" | "posts" | "bot";
 
 export interface Post {
   id: number;
