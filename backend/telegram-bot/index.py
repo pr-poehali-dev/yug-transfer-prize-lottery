@@ -5,6 +5,7 @@ import urllib.request
 import psycopg2
 
 SITE_URL = 'https://ug-transfer.online'
+
 def get_bot_token():
     return os.environ.get('TELEGRAM_BOT_TOKEN', '')
 
