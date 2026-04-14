@@ -84,7 +84,7 @@ def handler(event: dict, context) -> dict:
         })
         tg_api('sendMessage', {
             'chat_id': chat_id,
-            'text': '🚕 <b>Добро пожаловать в ЮГ ТРАНСФЕР!</b>\n\nКомфортные поездки по югу России.\nНажмите кнопку ниже, чтобы оформить заказ 👇',
+            'text': '👇',
             'parse_mode': 'HTML',
             'reply_markup': {
                 'keyboard': [[{
