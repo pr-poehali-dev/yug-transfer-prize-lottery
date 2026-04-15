@@ -325,17 +325,30 @@ export function SpinWheel() {
   }, []);
 
   useEffect(() => {
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let stopped = false;
+
     const poll = async () => {
       try {
         const res = await fetch(SPIN_URL);
         const data = await res.json();
-        if (!data.ok || !data.spin) { setSpin(null); setVisible(false); return; }
+        if (!data.ok || !data.spin) {
+          setSpin(null);
+          setVisible(false);
+          if (intervalId) { clearInterval(intervalId); intervalId = null; }
+          return;
+        }
 
         const s: Spin = data.spin;
         const now = Date.now();
         const revealAt = new Date(s.reveal_at).getTime();
 
-        if (now > revealAt + 120_000) { setSpin(null); setVisible(false); return; }
+        if (now > revealAt + 120_000) {
+          setSpin(null);
+          setVisible(false);
+          if (intervalId) { clearInterval(intervalId); intervalId = null; }
+          return;
+        }
 
         setSpin(s);
         setVisible(true);
@@ -349,8 +362,10 @@ export function SpinWheel() {
     };
 
     poll();
-    const id = setInterval(poll, POLL_INTERVAL);
-    return () => clearInterval(id);
+    if (!stopped) {
+      intervalId = setInterval(poll, POLL_INTERVAL);
+    }
+    return () => { stopped = true; if (intervalId) clearInterval(intervalId); };
   }, []);
 
   useEffect(() => {
