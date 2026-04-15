@@ -1,9 +1,8 @@
 """
-Джекпот: GET — баланс и дата следующего розыгрыша. POST (admin) — провести розыгрыш (выбрать победителя среди всех пользователей).
+Джекпот: GET — баланс, дата розыгрыша, статистика. POST (admin) — провести розыгрыш среди участников розыгрышей.
 """
 import os
 import json
-import random
 import hashlib
 import urllib.request
 import psycopg2
@@ -25,6 +24,23 @@ def get_token():
     login = os.environ.get('ADMIN_LOGIN', '')
     password = os.environ.get('ADMIN_PASSWORD', '')
     return hashlib.sha256(f"{login}:{password}:admin_secret_2026".encode()).hexdigest()
+
+
+def get_jackpot_stats(cur):
+    """Статистика джекпота: участники (уникальные юзеры с хотя бы 1 записью в entries)."""
+    cur.execute(f"""
+        SELECT
+            COUNT(DISTINCT e.user_id) as participants,
+            COUNT(e.id) as total_entries,
+            COALESCE(SUM(e.amount), 0) as total_collected
+        FROM {SCHEMA}.entries e
+    """)
+    row = cur.fetchone()
+    return {
+        'participants': row[0] if row else 0,
+        'total_entries': row[1] if row else 0,
+        'total_collected': row[2] if row else 0,
+    }
 
 
 def notify_jackpot_winner(winner_name: str, balance: int):
@@ -58,6 +74,7 @@ def notify_jackpot_winner(winner_name: str, balance: int):
 
 
 def handler(event: dict, context) -> dict:
+    """Джекпот: GET — баланс и статистика, POST — розыгрыш среди участников."""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 
@@ -68,19 +85,24 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         cur.execute(f"SELECT id, balance, next_draw_at, last_winner, last_draw_at FROM {SCHEMA}.jackpot WHERE id = 1")
         row = cur.fetchone()
+
+        stats = get_jackpot_stats(cur)
+
         cur.close()
         conn.close()
         if not row:
-            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'balance': 0, 'next_draw_at': None, 'last_winner': None})}
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
+                'ok': True, 'balance': 0, 'next_draw_at': None, 'last_winner': None, 'stats': stats
+            })}
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
             'ok': True,
             'balance': row[1],
             'next_draw_at': row[2].isoformat() if row[2] else None,
             'last_winner': row[3],
             'last_draw_at': row[4].isoformat() if row[4] else None,
+            'stats': stats,
         })}
 
-    # POST — провести розыгрыш (только для админа)
     token = event.get('headers', {}).get('X-Admin-Token', '')
     if token != get_token():
         return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
@@ -88,7 +110,6 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
-    # Берём текущий баланс
     cur.execute(f"SELECT balance FROM {SCHEMA}.jackpot WHERE id = 1")
     row = cur.fetchone()
     balance = row[0] if row else 0
@@ -98,17 +119,20 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Джекпот пуст'})}
 
-    # Случайный победитель среди всех пользователей
-    cur.execute(f"SELECT id, first_name, last_name, username FROM {SCHEMA}.users ORDER BY random() LIMIT 1")
+    cur.execute(f"""
+        SELECT u.id, u.first_name, u.last_name, u.username
+        FROM {SCHEMA}.users u
+        WHERE u.id IN (SELECT DISTINCT e.user_id FROM {SCHEMA}.entries e)
+        ORDER BY random() LIMIT 1
+    """)
     user = cur.fetchone()
     if not user:
         cur.close()
         conn.close()
-        return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Нет пользователей'})}
+        return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Нет участников розыгрышей'})}
 
     winner_name = ' '.join(filter(None, [user[1], user[2]])) or user[3] or f'User #{user[0]}'
 
-    # Сбрасываем баланс, сохраняем победителя, следующий розыгрыш через 6 месяцев
     cur.execute(
         f"UPDATE {SCHEMA}.jackpot SET balance = 0, last_winner = %s, last_draw_at = now(), next_draw_at = now() + interval '6 months' WHERE id = 1",
         (winner_name,)

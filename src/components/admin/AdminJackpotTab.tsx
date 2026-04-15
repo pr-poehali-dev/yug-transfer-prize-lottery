@@ -3,7 +3,12 @@ import Icon from "@/components/ui/icon";
 import { JACKPOT_URL } from "./adminTypes";
 
 export function AdminJackpotTab({ token }: { token: string }) {
-  const [data, setData] = useState<{ balance: number; next_draw_at: string | null; last_winner: string | null } | null>(null);
+  const [data, setData] = useState<{
+    balance: number;
+    next_draw_at: string | null;
+    last_winner: string | null;
+    stats?: { participants: number; total_entries: number; total_collected: number };
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawing, setDrawing] = useState(false);
   const [result, setResult] = useState<{ winner: string; amount: number } | null>(null);
@@ -91,6 +96,36 @@ export function AdminJackpotTab({ token }: { token: string }) {
       </button>
       {(data?.balance ?? 0) <= 0 && !loading && (
         <p className="text-xs text-muted-foreground text-center mt-2">Баланс пуст — розыгрыш недоступен</p>
+      )}
+
+      {data?.stats && !loading && (
+        <div className="mt-6">
+          <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+            <Icon name="BarChart3" size={16} className="text-yellow-400" />
+            Статистика джекпота
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="card-glow rounded-2xl p-4 text-center">
+              <p className="font-oswald text-2xl font-bold text-yellow-400">{data.stats.participants}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Участников</p>
+              <p className="text-[10px] text-muted-foreground/60">кто участвовал в розыгрышах</p>
+            </div>
+            <div className="card-glow rounded-2xl p-4 text-center">
+              <p className="font-oswald text-2xl font-bold text-cyan-400">{data.stats.total_entries}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Всего участий</p>
+              <p className="text-[10px] text-muted-foreground/60">билетов куплено</p>
+            </div>
+            <div className="card-glow rounded-2xl p-4 text-center">
+              <p className="font-oswald text-2xl font-bold text-green-400">{data.stats.total_collected.toLocaleString("ru")} ₽</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Собрано всего</p>
+              <p className="text-[10px] text-muted-foreground/60">за все розыгрыши</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground/60 mt-3 flex items-center gap-1.5">
+            <Icon name="Info" size={12} />
+            В джекпоте участвуют только те, кто купил хотя бы 1 билет в любом розыгрыше
+          </p>
+        </div>
       )}
     </div>
   );

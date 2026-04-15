@@ -92,7 +92,7 @@ export function JackpotSection() {
                 {balance.toLocaleString("ru")} ₽
               </p>
               <p className="text-muted-foreground mt-2 text-sm">
-                Все зарегистрированные пользователи участвуют автоматически
+                Участвуют все, кто купил хотя бы 1 билет в любом розыгрыше
               </p>
             </div>
           )}
@@ -126,7 +126,7 @@ export function JackpotSection() {
         </h3>
         <div className="space-y-3">
           {[
-            { icon: "Ticket", text: "Каждый зарегистрированный пользователь автоматически участвует в джекпоте" },
+            { icon: "Ticket", text: "Участвуй хотя бы в одном розыгрыше — и ты автоматически в игре за джекпот" },
             { icon: "Calendar", text: "Розыгрыш проводится два раза в год — победитель выбирается случайно" },
             { icon: "Gem", text: "Победитель получает всю накопленную сумму джекпота" },
           ].map((item, i) => (
