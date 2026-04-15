@@ -44,7 +44,7 @@ export function RulesModal({ open, onClose }: RulesModalProps) {
           {/* Порог и джекпот */}
           <section>
             <h3 className="font-oswald text-base font-bold text-white mb-3 flex items-center gap-2">
-              <span className="text-lg">💰</span> Минимальный порог и Джекпот
+              <span className="text-lg">💰</span> Минимальный порог и излишки
             </h3>
             <div className="rounded-xl border border-white/10 overflow-hidden">
               <div className="grid grid-cols-2 bg-white/5 px-4 py-2 text-xs text-white/50 font-medium">
@@ -53,7 +53,7 @@ export function RulesModal({ open, onClose }: RulesModalProps) {
               </div>
               {[
                 ["✅ Ровно порог", "Розыгрыш проводится, приз уходит победителю"],
-                ["💰 Больше порога", "Излишки → в Джекпот следующих розыгрышей 🚀"],
+                ["💰 Больше порога", "Излишки → в Джекпот 🚀"],
                 ["❌ Меньше порога", "Розыгрыш переносится ИЛИ возврат средств"],
               ].map(([left, right], i) => (
                 <div key={i} className={`grid grid-cols-2 px-4 py-2.5 gap-2 ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
@@ -62,7 +62,22 @@ export function RulesModal({ open, onClose }: RulesModalProps) {
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-xs text-white/40">📊 Текущий Джекпот отображается на главной странице</p>
+          </section>
+
+          {/* Джекпот */}
+          <section>
+            <h3 className="font-oswald text-base font-bold text-white mb-3 flex items-center gap-2">
+              <span className="text-lg">💎</span> Джекпот
+            </h3>
+            <ul className="space-y-1.5 pl-1">
+              <li>• Джекпот — это <span className="text-white font-medium">накопительный призовой фонд</span>, который формируется из излишков розыгрышей</li>
+              <li>• В джекпоте участвуют <span className="text-white font-medium">только те пользователи</span>, кто купил хотя бы 1 билет в любом розыгрыше</li>
+              <li>• Чем больше розыгрышей вы участвуете — тем выше шанс попасть в число участников джекпота</li>
+              <li>• 🎲 Победитель джекпота выбирается <span className="text-white font-medium">случайным образом</span> среди всех участников</li>
+              <li>• 🗓 Розыгрыш джекпота проводится <span className="text-white font-medium">2 раза в год</span></li>
+              <li>• 💰 Победитель получает <span className="text-white font-medium">всю накопленную сумму</span> джекпота</li>
+            </ul>
+            <p className="mt-2 text-xs text-white/40">📊 Текущий баланс и таймер джекпота — на главной странице в разделе «Джекпот»</p>
           </section>
 
           {/* Как участвовать */}
@@ -72,10 +87,11 @@ export function RulesModal({ open, onClose }: RulesModalProps) {
             </h3>
             <ol className="space-y-1.5 pl-1">
               {[
-                "📝 Зарегистрируйтесь на ug-gift.ru",
-                "🔐 Подтвердите email/телефон",
-                "💳 Внесите взнос и нажмите «Участвовать»",
-                "⏳ Дождитесь результатов",
+                "📝 Зарегистрируйтесь на ug-gift.ru через Telegram",
+                "💳 Выберите розыгрыш и нажмите «Участвовать»",
+                "💰 Внесите взнос — вы получите билет",
+                "⏳ Дождитесь результатов розыгрыша",
+                "💎 Вы автоматически попадаете в список участников Джекпота",
               ].map((s, i) => (
                 <li key={i}>
                   <span className="text-white/40 mr-2">{i + 1}.</span>{s}
@@ -85,6 +101,7 @@ export function RulesModal({ open, onClose }: RulesModalProps) {
             <div className="mt-3 space-y-1 text-white/60">
               <p>✅ Участвовать могут лица <span className="text-white font-medium">18+</span>, резиденты РФ</p>
               <p>✅ Один аккаунт = один билет (если не указано иное)</p>
+              <p>✅ Участие в любом розыгрыше = участие в Джекпоте</p>
             </div>
           </section>
 
