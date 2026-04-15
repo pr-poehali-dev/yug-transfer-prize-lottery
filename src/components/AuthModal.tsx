@@ -19,7 +19,7 @@ function formatPhone(value: string): string {
   return result;
 }
 
-export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?: (user: AppUser) => void }) {
+export function AuthModal({ onClose, onLogin, onRules, onPrivacy }: { onClose: () => void; onLogin?: (user: AppUser) => void; onRules?: () => void; onPrivacy?: () => void }) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -129,6 +129,15 @@ export function AuthModal({ onClose, onLogin }: { onClose: () => void; onLogin?:
                   : <><Icon name={mode === "register" ? "UserPlus" : "LogIn"} size={16} />{mode === "register" ? "Создать аккаунт" : "Войти"}</>
                 }
               </button>
+
+              {mode === "register" && (
+                <p className="text-[11px] text-muted-foreground/60 text-center leading-relaxed mt-2">
+                  Нажимая «Создать аккаунт», вы соглашаетесь с{" "}
+                  <button type="button" onClick={() => { onClose(); onRules?.(); }} className="text-purple-400 hover:underline">Правилами</button>
+                  {" "}и{" "}
+                  <button type="button" onClick={() => { onClose(); onPrivacy?.(); }} className="text-purple-400 hover:underline">Политикой конфиденциальности</button>
+                </p>
+              )}
             </form>
           </div>
         </div>

@@ -398,7 +398,7 @@ export default function Index() {
       </footer>
 
       <Suspense fallback={null}>
-        {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} />}
+        {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} onRules={() => setRulesOpen(true)} onPrivacy={() => setPrivacyOpen(true)} />}
         <SpinWheel />
       </Suspense>
 
