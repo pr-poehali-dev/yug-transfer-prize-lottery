@@ -3,9 +3,10 @@ import Icon from "@/components/ui/icon";
 interface RulesModalProps {
   open: boolean;
   onClose: () => void;
+  onPrivacy?: () => void;
 }
 
-export function RulesModal({ open, onClose }: RulesModalProps) {
+export function RulesModal({ open, onClose, onPrivacy }: RulesModalProps) {
   if (!open) return null;
 
   return (
@@ -167,7 +168,9 @@ export function RulesModal({ open, onClose }: RulesModalProps) {
 
           {/* Согласие */}
           <div className="rounded-xl bg-purple-500/10 border border-purple-500/20 px-4 py-3 text-xs text-purple-200">
-            ☑️ <span className="font-medium">Нажимая «Участвовать»</span>, вы подтверждаете, что ознакомились с Правилами и согласны с ними.
+            ☑️ <span className="font-medium">Нажимая «Участвовать»</span>, вы подтверждаете, что ознакомились с Правилами и{" "}
+            <button onClick={onPrivacy} className="text-purple-300 underline hover:text-white transition-colors">Политикой конфиденциальности</button>{" "}
+            и согласны с ними.
           </div>
 
           <div className="h-2" />

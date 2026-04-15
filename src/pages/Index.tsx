@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { Section, NAV_ITEMS, TICKER_ITEMS } from "@/components/raffle-types";
 import { RulesModal } from "@/components/RulesModal";
+import { PrivacyModal } from "@/components/PrivacyModal";
 
 export interface AppUser {
   id: number;
@@ -54,6 +55,7 @@ export default function Index() {
   const [logoIdx, setLogoIdx] = useState(0);
   const [stats, setStats] = useState<SiteStats | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const [appUser, setAppUser] = useState<AppUser | null>(() => {
     try { return JSON.parse(localStorage.getItem("app_user") || "null"); } catch { return null; }
   });
@@ -382,15 +384,9 @@ export default function Index() {
           </div>
           <p className="text-xs text-muted-foreground">© 2026 ЮГ ТРАНСФЕР — Все права защищены</p>
           <div className="flex gap-4 items-center">
-            {["Правила", "Конфиденциальность", "Поддержка"].map(l => (
-              <button
-                key={l}
-                onClick={() => l === "Правила" && setRulesOpen(true)}
-                className="text-xs text-muted-foreground hover:text-white transition-colors"
-              >
-                {l}
-              </button>
-            ))}
+            <button onClick={() => setRulesOpen(true)} className="text-xs text-muted-foreground hover:text-white transition-colors">Правила</button>
+            <button onClick={() => setPrivacyOpen(true)} className="text-xs text-muted-foreground hover:text-white transition-colors">Конфиденциальность</button>
+            <button onClick={() => setActiveSection("contacts")} className="text-xs text-muted-foreground hover:text-white transition-colors">Поддержка</button>
             <a
               href="/admin"
               className="text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors"
@@ -406,7 +402,8 @@ export default function Index() {
         <SpinWheel />
       </Suspense>
 
-      <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
+      <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} onPrivacy={() => { setRulesOpen(false); setPrivacyOpen(true); }} />
+      <PrivacyModal open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
     </div>
   );
 }
