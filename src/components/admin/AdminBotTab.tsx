@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
-import { ADMIN_BOT_POSTS_URL, ADMIN_POSTS_URL, SAIT_BOT_DAILY_URL } from "./adminTypes";
+import { ADMIN_BOT_POSTS_URL, ADMIN_POSTS_URL, SAIT_BOT_DAILY_URL, WP_PUBLISH_URL } from "./adminTypes";
 
 interface AdminBotTabProps {
   token: string;
@@ -65,6 +65,30 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
   const [showAdd, setShowAdd] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [wpForm, setWpForm] = useState({ title: "", content: "" });
+  const [wpSending, setWpSending] = useState(false);
+  const [wpResult, setWpResult] = useState<{ link: string } | null>(null);
+  const [wpError, setWpError] = useState("");
+  const [showWp, setShowWp] = useState(false);
+
+  const handleWpPublish = async () => {
+    setWpSending(true); setWpError(""); setWpResult(null);
+    try {
+      const res = await fetch(WP_PUBLISH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify(wpForm),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setWpResult({ link: data.link });
+        setWpForm({ title: "", content: "" });
+      } else {
+        setWpError(data.error || "Ошибка публикации");
+      }
+    } catch { setWpError("Нет соединения"); }
+    setWpSending(false);
+  };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -364,6 +388,52 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+              <Icon name="Globe" size={20} className="text-blue-400" />
+            </div>
+            <div>
+              <h3 className="text-white font-medium text-lg">WordPress</h3>
+              <p className="text-white/40 text-xs">Публикация на ug-transfer.online</p>
+            </div>
+          </div>
+          <button onClick={() => { setShowWp(!showWp); setWpResult(null); setWpError(""); }} className="px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium hover:opacity-80 transition-colors">
+            <Icon name="Plus" size={16} className="inline mr-1" />{showWp ? "Скрыть" : "Новый пост"}
+          </button>
+        </div>
+
+        {showWp && (
+          <div className="p-5 rounded-xl border border-blue-500/20 bg-blue-500/5 space-y-4">
+            <div>
+              <label className="text-white/50 text-xs mb-1 block">Заголовок</label>
+              <input value={wpForm.title} onChange={e => setWpForm(f => ({ ...f, title: e.target.value }))} placeholder="Междугороднее такси | Обновление" className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-blue-500/40" />
+            </div>
+            <div>
+              <label className="text-white/50 text-xs mb-1 block">Содержимое (HTML)</label>
+              <textarea value={wpForm.content} onChange={e => setWpForm(f => ({ ...f, content: e.target.value }))} placeholder="<strong>Такси межгород</strong>..." rows={10} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-blue-500/40 resize-none font-mono text-xs" />
+            </div>
+
+            {wpResult && (
+              <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-300 flex items-center gap-2">
+                <Icon name="CheckCircle2" size={16} />
+                Опубликовано!
+                <a href={wpResult.link} target="_blank" rel="noreferrer" className="underline hover:text-white ml-1">Открыть</a>
+              </div>
+            )}
+            {wpError && <p className="text-red-400 text-sm">{wpError}</p>}
+
+            <div className="flex gap-2">
+              <button onClick={handleWpPublish} disabled={wpSending || !wpForm.title || !wpForm.content} className="px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center gap-2">
+                {wpSending ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Публикация...</> : <><Icon name="Send" size={14} />Опубликовать</>}
+              </button>
+              <button onClick={() => setShowWp(false)} className="px-4 py-2 rounded-xl bg-white/5 text-white/60 text-sm hover:bg-white/10 transition-colors">Отмена</button>
+            </div>
           </div>
         )}
       </div>
