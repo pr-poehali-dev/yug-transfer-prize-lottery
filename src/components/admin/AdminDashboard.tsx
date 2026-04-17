@@ -106,6 +106,9 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
       if (!spinData.ok) { alert("Ошибка запуска спина: " + (spinData.error || "")); return; }
 
       const winner = spinData.winner_name || "";
+      if (spinData.spin) {
+        window.dispatchEvent(new CustomEvent("spin:start", { detail: spinData.spin }));
+      }
       setTimeout(async () => {
         const res = await fetch(RAFFLES_URL, {
           method: "PUT",

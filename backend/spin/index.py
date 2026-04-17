@@ -179,10 +179,22 @@ def handler(event: dict, context) -> dict:
     # Уведомление в Telegram с фото розыгрыша
     notify_spin_start(raffle_title, photo_url)
 
+    spin_obj = {
+        'id': spin_row[0],
+        'raffle_id': raffle_id,
+        'raffle_title': raffle_title,
+        'participants': participants,
+        'winner_name': winner['name'],
+        'winner_photo': winner['photo'],
+        'status': 'spinning',
+        'started_at': spin_row[1].isoformat(),
+        'reveal_at': spin_row[2].isoformat(),
+    }
     return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
         'ok': True,
         'spin_id': spin_row[0],
         'winner_name': winner['name'],
         'participants_count': len(participants),
         'reveal_at': spin_row[2].isoformat(),
+        'spin': spin_obj,
     })}

@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 
-const SPIN_URL = "https://functions.poehali.dev/9eba717e-47b3-4a6b-add1-02c8a4a67974";
-const POLL_INTERVAL = 3000;
 const SPIN_DURATION = 30;
 
 let audioCtx: AudioContext | null = null;
@@ -325,47 +323,33 @@ export function SpinWheel() {
   }, []);
 
   useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    let stopped = false;
+    const onSpinStart = (e: Event) => {
+      const ce = e as CustomEvent<Spin>;
+      const s = ce.detail;
+      if (!s) return;
+      setSpin(s);
+      setVisible(true);
+      setRevealed(false);
+      setWheelStopped(false);
+      const idx = s.participants.findIndex(p => p.name === s.winner_name);
+      setWinnerIndex(idx >= 0 ? idx : 0);
 
-    const poll = async () => {
-      try {
-        const res = await fetch(SPIN_URL);
-        const data = await res.json();
-        if (!data.ok || !data.spin) {
-          setSpin(null);
-          setVisible(false);
-          if (intervalId) { clearInterval(intervalId); intervalId = null; }
-          return;
-        }
-
-        const s: Spin = data.spin;
-        const now = Date.now();
-        const revealAt = new Date(s.reveal_at).getTime();
-
-        if (now > revealAt + 120_000) {
-          setSpin(null);
-          setVisible(false);
-          if (intervalId) { clearInterval(intervalId); intervalId = null; }
-          return;
-        }
-
-        setSpin(s);
-        setVisible(true);
-
-        const idx = s.participants.findIndex(p => p.name === s.winner_name);
-        setWinnerIndex(idx >= 0 ? idx : 0);
-
-        if (now >= revealAt) setRevealed(true);
-        else setRevealed(false);
-      } catch { /* ignore */ }
+      const revealAt = new Date(s.reveal_at).getTime();
+      const hideAt = revealAt + 120_000;
+      const hideDelay = Math.max(0, hideAt - Date.now());
+      const hideTimer = setTimeout(() => {
+        setSpin(null);
+        setVisible(false);
+      }, hideDelay);
+      (onSpinStart as unknown as { _hideTimer?: ReturnType<typeof setTimeout> })._hideTimer = hideTimer;
     };
 
-    poll();
-    if (!stopped) {
-      intervalId = setInterval(poll, POLL_INTERVAL);
-    }
-    return () => { stopped = true; if (intervalId) clearInterval(intervalId); };
+    window.addEventListener("spin:start", onSpinStart as EventListener);
+    return () => {
+      window.removeEventListener("spin:start", onSpinStart as EventListener);
+      const t = (onSpinStart as unknown as { _hideTimer?: ReturnType<typeof setTimeout> })._hideTimer;
+      if (t) clearTimeout(t);
+    };
   }, []);
 
   useEffect(() => {
