@@ -45,7 +45,6 @@ export const ADMIN_POSTS_URL = "https://functions.poehali.dev/0813e498-5f2e-4090
 export const ADMIN_BOT_POSTS_URL = "https://functions.poehali.dev/9578d639-08e5-479c-938a-de950926d149";
 export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21";
 export const UPLOAD_VIDEO_URL = "https://functions.poehali.dev/f6d6a065-4281-4091-ac9e-9e3121bf2571";
-export const WP_PUBLISH_URL = "https://functions.poehali.dev/229ceb32-a242-4b98-93bb-55c0767a3b36";
 
 export type AdminTab = "dashboard" | "raffles" | "clients" | "jackpot" | "posts" | "bot";
 
