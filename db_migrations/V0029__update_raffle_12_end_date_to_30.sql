@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.raffles SET end_date = '2026-04-30T12:00:00' WHERE id = 12;
