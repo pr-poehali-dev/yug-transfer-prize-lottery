@@ -187,9 +187,9 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
 
   return (
     <div className="space-y-8">
-      <h2 className="font-oswald text-3xl font-bold text-white">Наши боты</h2>
+      <h2 className="hidden font-oswald text-3xl font-bold text-white">Наши боты</h2>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
         {BOTS.map(bot => {
           const info = bots[bot.id];
           const c = colorMap[bot.color];
