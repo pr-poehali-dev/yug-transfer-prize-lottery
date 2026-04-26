@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Icon from "@/components/ui/icon";
 import { ADMIN_BOT_POSTS_URL, ADMIN_POSTS_URL, SAIT_BOT_DAILY_URL } from "./adminTypes";
 
@@ -173,8 +173,10 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
     setSending(false);
   };
 
+  const showBotsBlock = false as boolean;
+
   useEffect(() => {
-    BOTS.forEach(b => fetchBotInfo(b.id, b.url));
+    if (showBotsBlock) BOTS.forEach(b => fetchBotInfo(b.id, b.url));
     fetchPosts();
   }, []);
 
@@ -183,8 +185,16 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
     purple: { bg: "bg-purple-500/10", text: "text-purple-400", border: "border-purple-500/20" },
   };
 
-  const unusedCount = posts.filter(p => !p.is_used).length;
-  const showBotsBlock = false as boolean;
+  const { unusedCount, cronStatus } = useMemo(() => {
+    let unused = 0;
+    let lastSent: string | null = null;
+    for (const p of posts) {
+      if (!p.is_used) unused++;
+      else if (p.scheduled_date && (!lastSent || p.scheduled_date > lastSent)) lastSent = p.scheduled_date;
+    }
+    const working = lastSent ? (Date.now() - new Date(lastSent).getTime()) < 36 * 60 * 60 * 1000 : false;
+    return { unusedCount: unused, cronStatus: { working, lastSent } };
+  }, [posts]);
 
   return (
     <div className="space-y-8">
@@ -372,23 +382,17 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
         )}
       </div>
 
-      {(() => {
-        const lastSent = posts.filter(p => p.is_used && p.scheduled_date).map(p => p.scheduled_date as string).sort().pop();
-        const cronWorking = lastSent ? (Date.now() - new Date(lastSent).getTime()) < 36 * 60 * 60 * 1000 : false;
-        if (cronWorking) {
-          return (
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-                <Icon name="CheckCircle2" size={20} className="text-emerald-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-emerald-300 text-sm font-medium">Автопубликация работает</p>
-                <p className="text-white/40 text-xs">Последний пост ушёл {lastSent}. Каждый день в 09:00 МСК очередной пост уходит в Telegram автоматически.</p>
-              </div>
-            </div>
-          );
-        }
-        return (
+      {cronStatus.working ? (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+            <Icon name="CheckCircle2" size={20} className="text-emerald-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-emerald-300 text-sm font-medium">Автопубликация работает</p>
+            <p className="text-white/40 text-xs">Последний пост ушёл {cronStatus.lastSent}. Каждый день в 09:00 МСК очередной пост уходит в Telegram автоматически.</p>
+          </div>
+        </div>
+      ) : (
       <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
@@ -427,8 +431,7 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
           </div>
         </div>
       </div>
-        );
-      })()}
+      )}
     </div>
   );
 }
