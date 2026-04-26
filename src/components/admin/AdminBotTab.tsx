@@ -184,12 +184,15 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
   };
 
   const unusedCount = posts.filter(p => !p.is_used).length;
+  const showBotsBlock = false as boolean;
 
   return (
     <div className="space-y-8">
-      <h2 className="hidden font-oswald text-3xl font-bold text-white">Наши боты</h2>
+      {showBotsBlock && (
+      <>
+      <h2 className="font-oswald text-3xl font-bold text-white">Наши боты</h2>
 
-      <div className="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {BOTS.map(bot => {
           const info = bots[bot.id];
           const c = colorMap[bot.color];
@@ -256,6 +259,8 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
           );
         })}
       </div>
+      </>
+      )}
 
       <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
         <div className="flex items-center justify-between mb-6">
