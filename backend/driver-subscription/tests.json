@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "GET ping",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "OPTIONS CORS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Empty webhook",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 200
+    }
+  ]
+}

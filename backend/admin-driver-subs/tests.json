@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "name": "Without token unauthorized",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401,
+      "expectedBody": {"ok": false},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "OPTIONS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}

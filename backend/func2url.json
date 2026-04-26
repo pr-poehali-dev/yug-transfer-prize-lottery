@@ -1,3 +1,23 @@
 {
-  "spin": "https://functions.poehali.dev/9eba717e-47b3-4a6b-add1-02c8a4a67974"
+  "driver-subscription": "https://functions.poehali.dev/ff32817f-15b9-4881-9ae2-e2a6d5e1a45b",
+  "driver-subscription-cron": "https://functions.poehali.dev/ef6f142c-d3de-4d94-b6e6-e62382f2e8d9",
+  "admin-driver-subs": "https://functions.poehali.dev/95d0380a-04e8-4a3c-88db-9c256a11f1f6",
+  "admin-bot-posts": "https://functions.poehali.dev/9578d639-08e5-479c-938a-de950926d149",
+  "sait-bot-daily": "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21",
+  "site-bot": "https://functions.poehali.dev/1fa0fa06-91b0-4358-aad7-f62d5aafa444",
+  "telegram-bot": "https://functions.poehali.dev/0a298490-7238-4089-bc1d-34880245c186",
+  "admin-posts": "https://functions.poehali.dev/0813e498-5f2e-4090-b643-15c885d057c8",
+  "spin": "https://functions.poehali.dev/9eba717e-47b3-4a6b-add1-02c8a4a67974",
+  "jackpot": "https://functions.poehali.dev/f43fd2b9-63b6-433a-9a57-6c363cea9728",
+  "auth": "https://functions.poehali.dev/3668a161-208c-46c4-8691-84fa9d9586b0",
+  "push": "https://functions.poehali.dev/0b609b6c-8c5c-4291-8ad1-6f757c5a438b",
+  "admin-clients": "https://functions.poehali.dev/68991b02-f3e2-4903-8cd2-2239bf9116ac",
+  "admin-stats": "https://functions.poehali.dev/fa4cc22e-4f17-475f-ab1a-eb15d4c5971b",
+  "admin-notify": "https://functions.poehali.dev/b8105351-4e67-40ce-a46c-7a2e2d9ccad0",
+  "payment": "https://functions.poehali.dev/81f8c74e-7d9c-47ff-8dfc-8f0e3dd7a155",
+  "cabinet": "https://functions.poehali.dev/0ad2d0a9-bb39-4116-9934-9460e7841500",
+  "stats": "https://functions.poehali.dev/60522b1d-07ea-44fd-8d82-ca79a4e092c6",
+  "raffles": "https://functions.poehali.dev/39a7b356-ef83-46dd-81a0-581903229de9",
+  "admin-auth": "https://functions.poehali.dev/cc8cbc36-edde-42f3-9196-fbfc8a6e8946",
+  "telegram-auth": "https://functions.poehali.dev/4f5fad1d-038c-4bc7-9488-0747551c3978"
 }
