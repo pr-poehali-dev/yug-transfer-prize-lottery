@@ -9,13 +9,38 @@ CHANNEL_ID = '@ug_transfer_pro'
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
 
 CONTACTS = """
-<b>Свяжитесь с нами удобным способом:</b>
+━━━━━━━━━━━━━━━━━━━
+✨ <b>ПОЧЕМУ ВЫБИРАЮТ НАС:</b>
 
-📞 Телефон: +7 (995) 614-14-14
-💬 WhatsApp: wa.me/79956141414
-✈️ Telegram: @ug_transfer_online
-🌐 Онлайн: ug-transfer.online
-🤖 Бот для заказа: @ug_sait_bot"""
+✅ Подача авто за 5 минут
+✅ Фиксированная цена без накруток
+✅ Опытные водители со стажем
+✅ Иномарки бизнес и комфорт класса
+✅ Круглосуточно — 24/7 без выходных
+✅ Детские кресла по запросу
+✅ Безналичная оплата и чеки
+
+━━━━━━━━━━━━━━━━━━━
+🎁 <b>БОНУСЫ ДЛЯ КЛИЕНТОВ:</b>
+
+💎 Кэшбэк до 10% с каждой поездки
+🎰 Бесплатные розыгрыши призов
+🏆 Программа лояльности
+⭐️ Скидки постоянным клиентам
+
+━━━━━━━━━━━━━━━━━━━
+📲 <b>СВЯЖИТЕСЬ УДОБНЫМ СПОСОБОМ:</b>
+
+📞 <b>Телефон:</b> +7 (995) 614-14-14
+💬 <b>WhatsApp:</b> wa.me/79956141414
+✈️ <b>Telegram:</b> @ug_transfer_online
+🌐 <b>Сайт:</b> ug-transfer.online
+🤖 <b>Бот заказа:</b> @ug_sait_bot
+
+━━━━━━━━━━━━━━━━━━━
+🚖 <i>ЮГ ТРАНСФЕР — ваш надёжный партнёр в дороге!</i>
+
+#такси #трансфер #ЮгТрансфер #поездки"""
 
 
 def get_bot_token():
@@ -71,7 +96,7 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no posts'})}
 
     post_id, photo, greeting, description = row
-    text = f"{greeting}\n\n{description}\n{CONTACTS}"
+    text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
 
     tg_result = tg_api('sendPhoto', {
         'chat_id': CHANNEL_ID,
