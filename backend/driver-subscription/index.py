@@ -40,17 +40,25 @@ def tg_api(method: str, payload: dict) -> dict:
         return {'ok': False, 'error': str(e)}
 
 
+def persistent_keyboard() -> dict:
+    return {
+        'keyboard': [
+            [{'text': PLANS['month']['label']}],
+            [{'text': PLANS['half']['label']}],
+            [{'text': PLANS['year']['label']}],
+            [{'text': 'Моя подписка'}],
+        ],
+        'resize_keyboard': True,
+        'is_persistent': True,
+        'one_time_keyboard': False,
+    }
+
+
 def send_plans(chat_id: int) -> None:
-    keyboard = [
-        [{'text': PLANS['month']['label'], 'callback_data': 'pay_month'}],
-        [{'text': PLANS['half']['label'], 'callback_data': 'pay_half'}],
-        [{'text': PLANS['year']['label'], 'callback_data': 'pay_year'}],
-        [{'text': 'Моя подписка', 'callback_data': 'status'}],
-    ]
     tg_api('sendMessage', {
         'chat_id': chat_id,
         'text': WELCOME,
-        'reply_markup': {'inline_keyboard': keyboard},
+        'reply_markup': persistent_keyboard(),
     })
 
 
@@ -144,10 +152,13 @@ def handler(event: dict, context) -> dict:
         msg = body['message']
         chat_id = msg['chat']['id']
         text = msg.get('text', '')
+        label_to_plan = {PLANS[k]['label']: k for k in PLANS}
         if text.startswith('/start'):
             send_plans(chat_id)
-        elif text.startswith('/status'):
-            tg_api('sendMessage', {'chat_id': chat_id, 'text': get_status(chat_id)})
+        elif text.startswith('/status') or text == 'Моя подписка':
+            tg_api('sendMessage', {'chat_id': chat_id, 'text': get_status(chat_id), 'reply_markup': persistent_keyboard()})
+        elif text in label_to_plan:
+            send_invoice(chat_id, label_to_plan[text])
         elif 'successful_payment' in msg:
             sp = msg['successful_payment']
             payload = sp.get('invoice_payload', '')
@@ -164,6 +175,7 @@ def handler(event: dict, context) -> dict:
                 tg_api('sendMessage', {
                     'chat_id': chat_id,
                     'text': f"✅ Оплата получена! Подписка активна.\n\n{get_status(chat_id)}",
+                    'reply_markup': persistent_keyboard(),
                 })
 
     elif 'callback_query' in body:
