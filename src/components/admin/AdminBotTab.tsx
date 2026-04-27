@@ -185,7 +185,7 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
     purple: { bg: "bg-purple-500/10", text: "text-purple-400", border: "border-purple-500/20" },
   };
 
-  const { unusedCount, cronStatus } = useMemo(() => {
+  const { unusedCount, cronStatus, scheduleMap, queueOrder } = useMemo(() => {
     let unused = 0;
     let lastSent: string | null = null;
     for (const p of posts) {
@@ -193,8 +193,44 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
       else if (p.scheduled_date && (!lastSent || p.scheduled_date > lastSent)) lastSent = p.scheduled_date;
     }
     const working = lastSent ? (Date.now() - new Date(lastSent).getTime()) < 36 * 60 * 60 * 1000 : false;
-    return { unusedCount: unused, cronStatus: { working, lastSent } };
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().slice(0, 10);
+    const sentToday = posts.some(p => p.scheduled_date === todayStr);
+    const sorted = [...posts].sort((a, b) => {
+      const ad = a.scheduled_date || "";
+      const bd = b.scheduled_date || "";
+      if (ad === bd) return a.id - b.id;
+      if (!ad) return -1;
+      if (!bd) return 1;
+      return ad.localeCompare(bd);
+    });
+
+    const map: Record<number, { date: Date; index: number }> = {};
+    const order: number[] = [];
+    const start = new Date(today);
+    if (sentToday) start.setDate(start.getDate() + 1);
+    sorted.forEach((p, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      map[p.id] = { date: d, index: i };
+      order.push(p.id);
+    });
+
+    return { unusedCount: unused, cronStatus: { working, lastSent }, scheduleMap: map, queueOrder: order };
   }, [posts]);
+
+  const formatNextDate = (d: Date) => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const diff = Math.round((d.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+    const dateStr = d.toLocaleDateString("ru-RU", { day: "2-digit", month: "long" });
+    if (diff === 0) return `Сегодня, 09:00 · ${dateStr}`;
+    if (diff === 1) return `Завтра, 09:00 · ${dateStr}`;
+    if (diff < 7) return `Через ${diff} дн., 09:00 · ${dateStr}`;
+    return `${dateStr}, 09:00`;
+  };
 
   return (
     <div className="space-y-8">
@@ -280,7 +316,11 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
             </div>
             <div>
               <h3 className="text-white font-medium text-lg">Ежедневные посты</h3>
-              <p className="text-white/40 text-xs">Telegram @ug_transfer_pro · Осталось: {unusedCount} из {posts.length}</p>
+              <p className="text-white/40 text-xs">
+                <Icon name="RefreshCw" size={11} className="inline mr-1" />
+                Зацикленная очередь · {posts.length} {posts.length === 1 ? "пост" : posts.length < 5 ? "поста" : "постов"} · @ug_transfer_pro
+                {unusedCount > 0 && unusedCount < posts.length && ` · ещё ${unusedCount} новых в первой очереди`}
+              </p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -349,8 +389,11 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
           <p className="text-white/30 text-center py-8">Нет постов</p>
         ) : (
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-            {posts.map(post => (
-              <div key={post.id} className={`flex gap-4 p-4 rounded-xl border transition-colors ${post.is_used ? "border-white/5 bg-white/2 opacity-60" : "border-white/8 bg-white/3"}`}>
+            {queueOrder.map(pid => posts.find(p => p.id === pid)!).filter(Boolean).map(post => {
+              const sched = scheduleMap[post.id];
+              const isNext = sched?.index === 0;
+              return (
+              <div key={post.id} className={`flex gap-4 p-4 rounded-xl border transition-colors ${isNext ? "border-emerald-500/30 bg-emerald-500/5" : "border-white/8 bg-white/3"}`}>
                 <img src={post.photo_url} alt="" className="w-20 h-20 object-cover rounded-lg border border-white/10 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
@@ -367,17 +410,27 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    {post.is_used ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/30">Отправлен {post.scheduled_date}</span>
-                    ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">В очереди</span>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {sched && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${isNext ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300" : "bg-purple-500/10 border border-purple-500/20 text-purple-300"}`}>
+                        <Icon name="Clock" size={10} />
+                        {formatNextDate(sched.date)}
+                      </span>
                     )}
-                    <span className="text-white/20 text-[10px]">#{post.id}</span>
+                    {post.is_used && post.scheduled_date && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40">
+                        Был отправлен {new Date(post.scheduled_date).toLocaleDateString("ru-RU")}
+                      </span>
+                    )}
+                    {isNext && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-medium">Следующий</span>
+                    )}
+                    <span className="text-white/20 text-[10px] ml-auto">#{post.id}</span>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

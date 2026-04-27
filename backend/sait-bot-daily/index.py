@@ -62,18 +62,17 @@ def get_next_post():
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     today = date.today().isoformat()
-    cur.execute(f"SELECT id, photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts WHERE scheduled_date = '{today}' AND is_used = FALSE LIMIT 1")
+    cur.execute(
+        f"SELECT id, photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts "
+        f"WHERE scheduled_date IS NULL OR scheduled_date < '{today}' "
+        f"ORDER BY scheduled_date ASC NULLS FIRST, id ASC LIMIT 1"
+    )
     row = cur.fetchone()
-    if not row:
-        cur.execute(f"SELECT id, photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts WHERE is_used = FALSE AND scheduled_date IS NULL ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
-    if not row:
-        cur.execute(f"UPDATE {SCHEMA}.bot_daily_posts SET is_used = FALSE")
-        conn.commit()
-        cur.execute(f"SELECT id, photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts WHERE is_used = FALSE ORDER BY id ASC LIMIT 1")
-        row = cur.fetchone()
     if row:
-        cur.execute(f"UPDATE {SCHEMA}.bot_daily_posts SET is_used = TRUE, scheduled_date = '{today}' WHERE id = {row[0]}")
+        cur.execute(
+            f"UPDATE {SCHEMA}.bot_daily_posts SET is_used = TRUE, scheduled_date = '{today}' "
+            f"WHERE id = {row[0]}"
+        )
         conn.commit()
     cur.close()
     conn.close()
