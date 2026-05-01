@@ -108,6 +108,13 @@ export function SiteFooter() {
           <a href="tel:+79180295672" className="hover:text-white transition-colors">
             +7 (918) 029-56-72
           </a>
+          <a
+            href="/admin"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 hover:border-purple-500/50 hover:text-white transition-colors"
+          >
+            <Icon name="Lock" size={13} />
+            Админка
+          </a>
         </div>
       </div>
     </footer>
