@@ -1,97 +1,156 @@
 import Icon from "@/components/ui/icon";
 import { SectionHeader } from "./shared";
 
+const STORES = [
+  {
+    name: "Google Play",
+    icon: "Play",
+    href: "#",
+    color: "from-green-500 to-emerald-600",
+    sub: "для Android",
+  },
+  {
+    name: "App Store",
+    icon: "Apple",
+    href: "#",
+    color: "from-slate-400 to-slate-600",
+    sub: "для iOS",
+  },
+  {
+    name: "RuStore",
+    icon: "Store",
+    href: "#",
+    color: "from-cyan-500 to-blue-600",
+    sub: "Россия",
+  },
+];
+
+function DownloadButtons({ size = "md" }: { size?: "md" | "lg" }) {
+  const pad = size === "lg" ? "px-5 py-4" : "px-4 py-3";
+  const iconSize = size === "lg" ? 22 : 18;
+  return (
+    <div className="flex flex-wrap gap-3">
+      {STORES.map((s) => (
+        <a
+          key={s.name}
+          href={s.href}
+          className={`glass border border-white/10 hover:border-purple-500/50 rounded-xl ${pad} text-white transition-all flex items-center gap-3 group`}
+        >
+          <div
+            className={`w-10 h-10 rounded-lg bg-gradient-to-br ${s.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}
+          >
+            <Icon name={s.icon} size={iconSize} className="text-white" fallback="Download" />
+          </div>
+          <div className="text-left">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider leading-none mb-1">
+              Скачать
+            </p>
+            <p className="font-oswald text-base font-bold leading-none">{s.name}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{s.sub}</p>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 export function DriversSection() {
   const advantages = [
-    { icon: "Coins", title: "Без комиссий с поездки", desc: "Фиксированная подписка — оставляйте 100% выручки себе." },
-    { icon: "Zap", title: "Заказы напрямую", desc: "Получайте заявки в Telegram через секунды после оформления." },
-    { icon: "MapPin", title: "Юг России и Крым", desc: "Ялта, Сочи, Адлер, Краснодар, Симферополь — стабильный поток." },
-    { icon: "Shield", title: "Проверенные клиенты", desc: "Все пассажиры авторизованы, споров и кидалова нет." },
-    { icon: "TrendingUp", title: "Рост дохода", desc: "В среднем водители выходят на 80–150 тыс. ₽ в месяц." },
-    { icon: "Headphones", title: "Поддержка 24/7", desc: "Диспетчер всегда на связи — поможет с любым вопросом." },
+    {
+      icon: "TrendingUp",
+      title: "Стабильная работа",
+      desc: "У нас всегда есть заказы. Все водители имеют постоянный поток и стабильный доход. Работайте без простоев и увеличивайте заработок каждый день.",
+      color: "from-purple-500 to-pink-500",
+    },
+    {
+      icon: "Wallet",
+      title: "Прозрачные выплаты",
+      desc: "Все расчёты и выплаты прозрачны и понятны. Вы всегда видите, сколько заработали и когда получите выплату.",
+      color: "from-cyan-500 to-blue-600",
+    },
+    {
+      icon: "Smartphone",
+      title: "Удобное приложение",
+      desc: "Интуитивно понятный интерфейс, быстрая работа и все нужные функции в одном приложении. Управляйте заказами легко и эффективно.",
+      color: "from-orange-500 to-red-500",
+    },
   ];
 
-  const requirements = [
-    "Российские права категории B, стаж от 3 лет",
-    "Авто не старше 10 лет, в чистом и исправном состоянии",
-    "Смартфон с Telegram",
-    "Без судимостей и серьёзных нарушений ПДД",
-    "Готовность работать вежливо и пунктуально",
-  ];
-
-  const docs = [
-    { icon: "FileText", label: "Паспорт" },
-    { icon: "IdCard", label: "Водительское удостоверение" },
-    { icon: "Car", label: "СТС автомобиля" },
-    { icon: "ShieldCheck", label: "Полис ОСАГО" },
-  ];
-
-  const steps = [
-    { n: "01", title: "Заявка в Telegram", desc: "Откройте @zacazubot и нажмите «Стать водителем» — заполнение займёт минуту." },
-    { n: "02", title: "Проверка документов", desc: "Менеджер проверит данные за 1–2 часа в рабочее время." },
-    { n: "03", title: "Оплата подписки", desc: "Выберите тариф — оплата прямо в Telegram, без карт и сторонних сайтов." },
-    { n: "04", title: "Первый заказ", desc: "После активации заказы начнут поступать сразу — забирайте подходящие." },
+  const perks = [
+    { icon: "Zap", text: "Быстрая регистрация" },
+    { icon: "Rocket", text: "Первые заказы получишь уже сегодня" },
+    { icon: "Headphones", text: "Поддержка всегда на связи, 24/7" },
   ];
 
   return (
     <div>
       <SectionHeader
         title="Стать водителем"
-        subtitle="Подключайтесь к ЮГ ТРАНСФЕР и получайте заказы напрямую"
+        subtitle="Скачай приложение UG-Driver и начни зарабатывать уже сегодня"
         icon="Rocket"
       />
 
       {/* Hero */}
-      <div className="card-glow rounded-2xl p-6 md:p-10 mb-10 relative overflow-hidden">
+      <div className="card-glow rounded-3xl p-6 md:p-12 mb-12 relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-orange-500/20 blur-3xl animate-pulse-glow" />
-        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-purple-500/15 blur-3xl" />
-        <div className="absolute top-8 right-8 text-7xl animate-float opacity-20 hidden md:block">🚖</div>
+        <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-purple-500/15 blur-3xl" />
 
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass border border-green-500/30 text-xs text-green-300 mb-5">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            Набираем водителей · Юг России и Крым
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass border border-green-500/30 text-xs text-green-300 mb-5">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              UG-Driver · приложение для водителей
+            </div>
+
+            <h2 className="font-oswald text-3xl md:text-5xl font-bold leading-tight text-white mb-4">
+              Скачай приложение <br />
+              <span className="grad-text">«Юг-Трансфер»</span> для водителя
+            </h2>
+            <p className="text-muted-foreground text-base md:text-lg mb-7">
+              И начни зарабатывать уже сегодня. Регистрация занимает минуту,
+              первые заказы приходят в тот же день.
+            </p>
+
+            <div className="space-y-3 mb-7">
+              {perks.map((p) => (
+                <div key={p.text} className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg flex-shrink-0">
+                    <Icon name={p.icon} size={16} className="text-white" fallback="Check" />
+                  </div>
+                  <p className="text-white text-sm md:text-base">{p.text}</p>
+                </div>
+              ))}
+            </div>
+
+            <DownloadButtons size="lg" />
           </div>
 
-          <h2 className="font-oswald text-3xl md:text-5xl font-bold leading-tight text-white mb-4">
-            Зарабатывайте <span className="grad-text">без комиссий</span> <br />
-            с приложением ЮГ ТРАНСФЕР
-          </h2>
-          <p className="text-muted-foreground text-base md:text-lg mb-7 max-w-2xl">
-            Получайте заказы на трансферы по Югу России и Крыму прямо в Telegram.
-            Никаких процентов с поездки — только фиксированная подписка.
-          </p>
-
-          <div className="flex flex-wrap gap-3">
-            <a
-              href="https://t.me/zacazubot"
-              target="_blank"
-              rel="noreferrer"
-              className="grad-btn rounded-xl px-6 py-3.5 font-semibold flex items-center gap-2"
-            >
-              <Icon name="Send" size={18} />
-              Стать водителем
-            </a>
-            <a
-              href="tel:+79180295672"
-              className="glass border border-white/10 hover:border-purple-500/50 rounded-xl px-6 py-3.5 font-semibold text-white transition-all flex items-center gap-2"
-            >
-              <Icon name="Phone" size={18} />
-              Позвонить
-            </a>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 mt-8 max-w-xl">
-            {[
-              { v: "100%", l: "выручки" },
-              { v: "120+", l: "водителей" },
-              { v: "24/7", l: "поддержка" },
-            ].map((s) => (
-              <div key={s.l} className="glass rounded-xl p-4 text-center">
-                <p className="grad-text font-oswald text-2xl md:text-3xl font-bold">{s.v}</p>
-                <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider mt-1">{s.l}</p>
+          {/* Phone mockup */}
+          <div className="hidden lg:flex justify-center">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 to-pink-500/30 blur-3xl scale-90" />
+              <div className="relative w-64 h-[520px] rounded-[3rem] glass border-2 border-white/20 p-3 shadow-2xl animate-float">
+                <div className="w-full h-full rounded-[2.3rem] bg-gradient-to-br from-purple-900/60 via-slate-900 to-cyan-900/60 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-5 rounded-full bg-black" />
+                  <div className="text-7xl mb-4 animate-pulse-glow">🚖</div>
+                  <p className="font-oswald text-3xl font-bold text-white mb-1">UG-Driver</p>
+                  <p className="text-xs text-purple-300 mb-6 uppercase tracking-wider">Юг-Трансфер</p>
+                  <div className="w-full space-y-2">
+                    <div className="glass rounded-xl p-3">
+                      <div className="h-2 w-1/2 bg-purple-400/60 rounded mb-2" />
+                      <div className="h-1.5 w-3/4 bg-white/20 rounded" />
+                    </div>
+                    <div className="glass rounded-xl p-3">
+                      <div className="h-2 w-2/3 bg-cyan-400/60 rounded mb-2" />
+                      <div className="h-1.5 w-1/2 bg-white/20 rounded" />
+                    </div>
+                    <div className="grad-btn rounded-xl py-2.5 text-center text-xs font-bold">
+                      Принять заказ
+                    </div>
+                  </div>
+                </div>
               </div>
-            ))}
+            </div>
           </div>
         </div>
       </div>
@@ -99,80 +158,43 @@ export function DriversSection() {
       {/* Advantages */}
       <h3 className="font-oswald text-2xl md:text-3xl font-bold text-white mb-5 flex items-center gap-2">
         <Icon name="Sparkles" size={22} className="text-purple-400" />
-        Почему водители выбирают нас
+        Преимущества работы с нами
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12">
         {advantages.map((a, i) => (
           <div
             key={a.title}
-            className="card-glow rounded-2xl p-5 opacity-0-init animate-fade-in-up"
-            style={{ animationDelay: `${i * 0.06}s`, animationFillMode: "forwards" }}
+            className="card-glow rounded-2xl p-6 opacity-0-init animate-fade-in-up"
+            style={{ animationDelay: `${i * 0.08}s`, animationFillMode: "forwards" }}
           >
-            <div className="w-12 h-12 mb-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-              <Icon name={a.icon} size={20} className="text-white" fallback="Circle" />
+            <div
+              className={`w-14 h-14 mb-4 rounded-2xl bg-gradient-to-br ${a.color} flex items-center justify-center shadow-lg`}
+            >
+              <Icon name={a.icon} size={26} className="text-white" fallback="Circle" />
             </div>
-            <h4 className="font-oswald text-lg font-bold text-white mb-1.5">{a.title}</h4>
-            <p className="text-sm text-muted-foreground">{a.desc}</p>
+            <h4 className="font-oswald text-xl font-bold text-white mb-2">{a.title}</h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">{a.desc}</p>
           </div>
         ))}
       </div>
 
-      {/* How it works */}
-      <h3 className="font-oswald text-2xl md:text-3xl font-bold text-white mb-5 flex items-center gap-2">
-        <Icon name="Route" size={22} className="text-cyan-400" />
-        Как подключиться
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-        {steps.map((s, i) => (
-          <div key={s.n} className="card-glow rounded-2xl p-5 relative">
-            <div className="absolute top-3 right-4 font-oswald text-4xl font-bold text-purple-500/20">{s.n}</div>
-            <div className="w-10 h-10 mb-3 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
-              <Icon name={["UserPlus", "ScanLine", "CreditCard", "Car"][i]} size={18} className="text-white" />
-            </div>
-            <h4 className="font-oswald text-lg font-bold text-white mb-1.5">{s.title}</h4>
-            <p className="text-sm text-muted-foreground">{s.desc}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Requirements + Docs */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-12">
-        <div className="card-glow rounded-2xl p-6">
-          <h3 className="font-oswald text-2xl font-bold text-white mb-5 flex items-center gap-2">
-            <Icon name="ListChecks" size={20} className="text-green-400" />
-            Требования
+      {/* Final CTA */}
+      <div className="card-glow rounded-3xl p-8 md:p-12 text-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-orange-500/10" />
+        <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full bg-purple-500/20 blur-3xl" />
+        <div className="relative z-10">
+          <div className="text-5xl mb-4 animate-float">🚀</div>
+          <h3 className="font-oswald text-2xl md:text-4xl font-bold text-white mb-3">
+            Начните зарабатывать уже сегодня
           </h3>
-          <ul className="space-y-3">
-            {requirements.map((r) => (
-              <li key={r} className="flex items-start gap-3 glass rounded-xl p-3">
-                <Icon name="Check" size={16} className="text-green-400 flex-shrink-0 mt-0.5" />
-                <span className="text-sm text-white">{r}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="card-glow rounded-2xl p-6">
-          <h3 className="font-oswald text-2xl font-bold text-white mb-5 flex items-center gap-2">
-            <Icon name="Folder" size={20} className="text-yellow-400" />
-            Документы
-          </h3>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            {docs.map((d) => (
-              <div key={d.label} className="glass rounded-xl p-4 flex flex-col items-center text-center">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center mb-2 shadow-lg">
-                  <Icon name={d.icon} size={20} className="text-white" fallback="FileText" />
-                </div>
-                <p className="text-xs text-white font-medium">{d.label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Все документы можно прислать прямо в чат бота — фото или PDF.
+          <p className="text-muted-foreground mb-7 max-w-xl mx-auto">
+            Скачайте приложение и присоединяйтесь к нашей команде
           </p>
+          <div className="flex justify-center">
+            <DownloadButtons size="lg" />
+          </div>
         </div>
       </div>
-
     </div>
   );
 }
