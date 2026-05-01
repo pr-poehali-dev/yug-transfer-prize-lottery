@@ -5,21 +5,21 @@ const STORES = [
   {
     name: "Google Play",
     icon: "Play",
-    href: "#",
+    href: "https://play.google.com/store/apps/details?id=com.grigor.ugdriver",
     color: "from-green-500 to-emerald-600",
     sub: "для Android",
   },
   {
     name: "App Store",
     icon: "Apple",
-    href: "#",
+    href: "https://apps.apple.com/ru/app/ug-driver/id6502955527",
     color: "from-slate-400 to-slate-600",
     sub: "для iOS",
   },
   {
     name: "RuStore",
     icon: "Store",
-    href: "#",
+    href: "https://www.rustore.ru/catalog/app/com.grigor.ugdriver",
     color: "from-cyan-500 to-blue-600",
     sub: "Россия",
   },
@@ -34,6 +34,8 @@ function DownloadButtons({ size = "md" }: { size?: "md" | "lg" }) {
         <a
           key={s.name}
           href={s.href}
+          target="_blank"
+          rel="noreferrer"
           className={`glass border border-white/10 hover:border-purple-500/50 rounded-xl ${pad} text-white transition-all flex items-center gap-3 group`}
         >
           <div
