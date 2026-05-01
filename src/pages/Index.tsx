@@ -408,34 +408,6 @@ function DriversSection() {
     { n: "04", title: "Первый заказ", desc: "После активации заказы начнут поступать сразу — забирайте подходящие." },
   ];
 
-  const plans = [
-    { name: "Неделя", price: "990 ₽", period: "7 дней", color: "from-cyan-500 to-blue-600", features: ["Все заказы", "Поддержка", "Аналитика"] },
-    {
-      name: "Месяц",
-      price: "2 990 ₽",
-      period: "30 дней",
-      color: "from-purple-500 to-pink-500",
-      features: ["Все заказы", "Приоритет в выдаче", "Поддержка 24/7", "Скидка 15%"],
-      featured: true,
-    },
-    {
-      name: "Квартал",
-      price: "7 990 ₽",
-      period: "90 дней",
-      color: "from-orange-500 to-red-500",
-      features: ["Все заказы", "Приоритет в выдаче", "Поддержка 24/7", "Скидка 25%", "Личный менеджер"],
-    },
-  ];
-
-  const faqs = [
-    { q: "Сколько можно заработать?", a: "В сезон активные водители выходят на 100–150 тыс. ₽ в месяц. Зимой — 60–90 тыс. ₽." },
-    { q: "Берёте ли комиссию с поездки?", a: "Нет, мы работаем по подписке. Вся стоимость поездки остаётся у вас." },
-    { q: "Можно ли работать на чужом авто?", a: "Да, если есть нотариальная доверенность или договор аренды." },
-    { q: "Как получают заказы?", a: "Все заявки приходят в Telegram-бота @zacazubot, вы выбираете подходящие сами." },
-    { q: "Что если нет заказов?", a: "Менеджер поможет настроить профиль и геолокацию. Сезон и регион сильно влияют — обсудим." },
-    { q: "Как вернуть деньги если не подойдёт?", a: "В течение 24 часов после оплаты вернём подписку без вопросов." },
-  ];
-
   return (
     <div>
       <SectionHeader
@@ -576,92 +548,6 @@ function DriversSection() {
         </div>
       </div>
 
-      {/* Plans */}
-      <h3 className="font-oswald text-2xl md:text-3xl font-bold text-white mb-5 flex items-center gap-2">
-        <Icon name="Star" size={22} className="text-pink-400" />
-        Тарифы подписки
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12">
-        {plans.map((p) => (
-          <div
-            key={p.name}
-            className={`card-glow rounded-2xl p-6 relative ${
-              p.featured ? "border-purple-500/50 shadow-[0_0_40px_rgba(168,85,247,0.25)]" : ""
-            }`}
-          >
-            {p.featured && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 grad-btn rounded-full px-3 py-1 text-xs font-semibold">
-                Популярный
-              </div>
-            )}
-            <div className={`w-12 h-12 mb-4 rounded-xl bg-gradient-to-br ${p.color} flex items-center justify-center shadow-lg`}>
-              <Icon name="Star" size={20} className="text-white" />
-            </div>
-            <h4 className="font-oswald text-2xl font-bold text-white">{p.name}</h4>
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">{p.period}</p>
-            <p className="grad-text font-oswald text-4xl font-bold mb-5">{p.price}</p>
-            <ul className="space-y-2 mb-6">
-              {p.features.map((f) => (
-                <li key={f} className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Icon name="Check" size={14} className="text-green-400 flex-shrink-0" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <a
-              href="https://t.me/zacazubot"
-              target="_blank"
-              rel="noreferrer"
-              className={`block text-center rounded-xl py-3 font-semibold transition-all ${
-                p.featured ? "grad-btn" : "glass border border-white/10 hover:border-purple-500/50 text-white"
-              }`}
-            >
-              Подключить
-            </a>
-          </div>
-        ))}
-      </div>
-
-      {/* FAQ */}
-      <h3 className="font-oswald text-2xl md:text-3xl font-bold text-white mb-5 flex items-center gap-2">
-        <Icon name="HelpCircle" size={22} className="text-cyan-400" />
-        Частые вопросы
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
-        {faqs.map((f) => (
-          <div key={f.q} className="card-glow rounded-2xl p-5">
-            <p className="text-white font-semibold mb-2 flex items-start gap-2">
-              <Icon name="MessageCircleQuestion" size={18} className="text-purple-400 flex-shrink-0 mt-0.5" />
-              {f.q}
-            </p>
-            <p className="text-sm text-muted-foreground pl-6">{f.a}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Final CTA */}
-      <div className="card-glow rounded-2xl p-8 md:p-12 text-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-orange-500/10" />
-        <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full bg-purple-500/20 blur-3xl" />
-        <div className="relative z-10">
-          <div className="text-5xl mb-4 animate-float">🚀</div>
-          <h3 className="font-oswald text-2xl md:text-4xl font-bold text-white mb-3">
-            Готовы стартовать?
-          </h3>
-          <p className="text-muted-foreground mb-6 max-w-xl mx-auto">
-            Заполните анкету в Telegram-боте — менеджер свяжется в течение часа в рабочее время.
-          </p>
-          <a
-            href="https://t.me/zacazubot"
-            target="_blank"
-            rel="noreferrer"
-            className="grad-btn rounded-xl px-8 py-4 font-semibold inline-flex items-center gap-2 text-base"
-          >
-            <Icon name="Rocket" size={20} />
-            Открыть бота @zacazubot
-          </a>
-        </div>
-      </div>
     </div>
   );
 }
