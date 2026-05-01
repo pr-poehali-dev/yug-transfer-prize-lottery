@@ -37,15 +37,14 @@ export function HomeSection({ onNav }: { onNav: (s: Section) => void }) {
       <section className="relative overflow-hidden rounded-3xl glass border border-white/10 p-8 md:p-14">
         <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-purple-500/20 blur-3xl animate-pulse-glow" />
         <div className="absolute -bottom-32 -left-20 w-80 h-80 rounded-full bg-cyan-500/15 blur-3xl" />
-        <div className="absolute top-10 right-10 text-6xl animate-float opacity-30 hidden md:block">🛸</div>
 
-        <div className="relative z-10 max-w-3xl">
-          <img
-            src="https://cdn.poehali.dev/files/67b1710e-13db-49da-a319-264e54d63c57.png"
-            alt="ЮГ ТРАНСФЕР"
-            className="h-16 md:h-24 w-auto mb-6 drop-shadow-[0_0_25px_rgba(255,140,40,0.45)]"
-          />
+        <img
+          src="https://cdn.poehali.dev/files/67b1710e-13db-49da-a319-264e54d63c57.png"
+          alt="ЮГ ТРАНСФЕР"
+          className="absolute top-6 right-6 md:top-10 md:right-10 h-12 md:h-24 w-auto z-10 drop-shadow-[0_0_25px_rgba(255,140,40,0.45)]"
+        />
 
+        <div className="relative z-10 max-w-3xl pt-16 md:pt-0">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass border border-purple-500/30 text-xs text-purple-300 mb-6">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             На связи 24/7 · приём заказов
