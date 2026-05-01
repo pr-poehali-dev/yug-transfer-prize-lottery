@@ -40,6 +40,12 @@ export function HomeSection({ onNav }: { onNav: (s: Section) => void }) {
         <div className="absolute top-10 right-10 text-6xl animate-float opacity-30 hidden md:block">🛸</div>
 
         <div className="relative z-10 max-w-3xl">
+          <img
+            src="https://cdn.poehali.dev/files/67b1710e-13db-49da-a319-264e54d63c57.png"
+            alt="ЮГ ТРАНСФЕР"
+            className="h-16 md:h-24 w-auto mb-6 drop-shadow-[0_0_25px_rgba(255,140,40,0.45)]"
+          />
+
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass border border-purple-500/30 text-xs text-purple-300 mb-6">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             На связи 24/7 · приём заказов

@@ -39,16 +39,14 @@ export function SiteHeader({
     <header className="glass border-b border-white/5 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between h-16">
         <button onClick={() => go("home")} className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center text-lg shadow-lg animate-pulse-glow">
-            🚀
-          </div>
-          <div className="text-left">
-            <span className="font-oswald text-lg font-bold text-white">ЮГ</span>
-            <span className="font-oswald text-lg font-bold grad-text"> ТРАНСФЕР</span>
-            <p className="text-[10px] text-muted-foreground -mt-1 hidden sm:block">
-              космические трансферы юга
-            </p>
-          </div>
+          <img
+            src="https://cdn.poehali.dev/files/67b1710e-13db-49da-a319-264e54d63c57.png"
+            alt="ЮГ ТРАНСФЕР"
+            className="h-9 md:h-10 w-auto drop-shadow-[0_0_12px_rgba(255,140,40,0.35)]"
+          />
+          <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[140px] leading-tight">
+            космические трансферы юга
+          </p>
         </button>
 
         <nav className="hidden md:flex items-center gap-1">
