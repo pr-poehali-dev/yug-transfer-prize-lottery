@@ -94,21 +94,27 @@ def vk_upload_photo(photo_url: str, group_id: str, log: list):
     if not upload_url:
         return None
 
-    boundary = '----vkBoundary7MA4YWxkTrZu0gW'
+    import uuid
+    boundary = uuid.uuid4().hex
     ext = 'jpg'
     if 'png' in content_type:
         ext = 'png'
     elif 'webp' in content_type:
         ext = 'webp'
 
-    body = (
-        f'--{boundary}\r\n'
-        f'Content-Disposition: form-data; name="photo"; filename="photo.{ext}"\r\n'
-        f'Content-Type: {content_type}\r\n\r\n'
-    ).encode() + photo_bytes + f'\r\n--{boundary}--\r\n'.encode()
+    crlf = b'\r\n'
+    body = b''
+    body += b'--' + boundary.encode() + crlf
+    body += f'Content-Disposition: form-data; name="photo"; filename="photo.{ext}"'.encode() + crlf
+    body += f'Content-Type: {content_type}'.encode() + crlf
+    body += crlf
+    body += photo_bytes
+    body += crlf
+    body += b'--' + boundary.encode() + b'--' + crlf
 
     req = urllib.request.Request(upload_url, data=body, headers={
-        'Content-Type': f'multipart/form-data; boundary={boundary}'
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Content-Length': str(len(body)),
     }, method='POST')
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -190,53 +196,6 @@ def handler(event: dict, context) -> dict:
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors, 'body': ''}
-
-    qs = event.get('queryStringParameters') or {}
-    if qs.get('debug') == 'whoami':
-        ut = (os.environ.get('VK_USER_TOKEN', '') or '').strip()
-        url = f"https://api.vk.com/method/users.get?access_token={urllib.parse.quote(ut)}&v=5.199"
-        try:
-            with urllib.request.urlopen(url, timeout=10) as r:
-                resp = json.loads(r.read())
-        except Exception as e:
-            resp = {'err': str(e)}
-        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
-            'token_len': len(ut),
-            'token_prefix': ut[:12],
-            'token_suffix': ut[-8:],
-            'has_whitespace_inside': any(c.isspace() for c in ut),
-            'users_get': resp,
-        }, ensure_ascii=False)}
-    if qs.get('debug') == 'gid':
-        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
-            'VK_GROUP_ID': os.environ.get('VK_GROUP_ID', ''),
-            'VK_USER_TOKEN_set': bool(os.environ.get('VK_USER_TOKEN')),
-            'VK_ACCESS_TOKEN_set': bool(os.environ.get('VK_ACCESS_TOKEN')),
-        })}
-    if qs.get('debug') == 'tokens':
-        ut = os.environ.get('VK_USER_TOKEN', '')
-        gt = os.environ.get('VK_ACCESS_TOKEN', '')
-        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
-            'VK_USER_TOKEN_set': bool(ut),
-            'VK_USER_TOKEN_prefix': ut[:10] if ut else '',
-            'VK_USER_TOKEN_len': len(ut),
-            'VK_ACCESS_TOKEN_set': bool(gt),
-            'VK_ACCESS_TOKEN_prefix': gt[:10] if gt else '',
-            'VK_ACCESS_TOKEN_len': len(gt),
-        })}
-    if qs.get('debug') == 'vkphoto':
-        conn = psycopg2.connect(os.environ['DATABASE_URL'])
-        cur = conn.cursor()
-        cur.execute(f"SELECT photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts ORDER BY id ASC LIMIT 1")
-        r = cur.fetchone()
-        cur.close()
-        conn.close()
-        if not r:
-            return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'err': 'no posts'})}
-        photo, greeting, description = r
-        text = strip_html(f"{greeting}\n\n{description}\n{CONTACTS}")
-        vk_result = post_to_vk(photo, text, debug=True)
-        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'vk': vk_result, 'photo_url': photo}, ensure_ascii=False)}
 
     row = get_next_post()
     if not row:
