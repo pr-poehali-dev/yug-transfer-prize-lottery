@@ -97,8 +97,14 @@ export function ServicesSection({ onOrder }: { onOrder?: (s: Section) => void } 
               onClick={() => {
                 onOrder?.("home");
                 setTimeout(() => {
-                  document.getElementById("order-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }, 80);
+                  const el = document.getElementById("order-form");
+                  if (!el) return;
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el.classList.remove("order-highlight");
+                  void el.offsetWidth;
+                  el.classList.add("order-highlight");
+                  setTimeout(() => el.classList.remove("order-highlight"), 1700);
+                }, 120);
               }}
               className="grad-btn w-full rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
             >
