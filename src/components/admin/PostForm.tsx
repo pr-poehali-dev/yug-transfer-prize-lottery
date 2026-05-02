@@ -60,20 +60,13 @@ export function PostForm({
 
   return (
     <div className="card-glow rounded-2xl overflow-hidden">
-      {/* Шапка */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
-            <Icon name={editId ? "Pencil" : "Plus"} size={12} className="text-white" />
-          </div>
-          <p className="text-white font-semibold text-sm">{editId ? "Редактировать пост" : "Новый пост"}</p>
-        </div>
-        {editId && (
+      {editId && (
+        <div className="flex items-center justify-end px-3.5 py-2 border-b border-white/10">
           <button onClick={onReset} className="text-xs text-muted-foreground hover:text-white transition-colors flex items-center gap-1">
             <Icon name="X" size={12} /> Отмена
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="p-3.5 space-y-2.5">
 
