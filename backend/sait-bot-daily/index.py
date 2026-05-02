@@ -1,12 +1,15 @@
-"""Ежедневная рассылка контактов ЮГ ТРАНСФЕР в Telegram."""
+"""Ежедневная рассылка контактов ЮГ ТРАНСФЕР в Telegram и ВКонтакте."""
 import os
 import json
+import re
 import urllib.request
+import urllib.parse
 from datetime import date
 import psycopg2
 
 CHANNEL_ID = '@ug_transfer_pro'
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA') or 't_p67171637_yug_transfer_prize_l'
+VK_API_VERSION = '5.199'
 
 CONTACTS = """
 ━━━━━━━━━━━━━━━━━━━
@@ -50,6 +53,95 @@ def tg_api(method, payload):
         return {}
 
 
+def strip_html(html_text: str) -> str:
+    text = re.sub(r'<[^>]+>', '', html_text or '')
+    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
+    return text.strip()
+
+
+def vk_api(method, params):
+    token = os.environ.get('VK_ACCESS_TOKEN', '')
+    if not token:
+        return {}
+    params = {**params, 'access_token': token, 'v': VK_API_VERSION}
+    url = f"https://api.vk.com/method/{method}"
+    data = urllib.parse.urlencode(params).encode()
+    req = urllib.request.Request(url, data=data, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return {}
+
+
+def vk_upload_photo(photo_url: str, group_id: str):
+    try:
+        with urllib.request.urlopen(photo_url, timeout=15) as resp:
+            photo_bytes = resp.read()
+            content_type = resp.headers.get('Content-Type', 'image/jpeg')
+    except Exception:
+        return None
+
+    server = vk_api('photos.getWallUploadServer', {'group_id': group_id})
+    upload_url = server.get('response', {}).get('upload_url')
+    if not upload_url:
+        return None
+
+    boundary = '----vkBoundary7MA4YWxkTrZu0gW'
+    ext = 'jpg'
+    if 'png' in content_type:
+        ext = 'png'
+    elif 'webp' in content_type:
+        ext = 'webp'
+
+    body = (
+        f'--{boundary}\r\n'
+        f'Content-Disposition: form-data; name="photo"; filename="photo.{ext}"\r\n'
+        f'Content-Type: {content_type}\r\n\r\n'
+    ).encode() + photo_bytes + f'\r\n--{boundary}--\r\n'.encode()
+
+    req = urllib.request.Request(upload_url, data=body, headers={
+        'Content-Type': f'multipart/form-data; boundary={boundary}'
+    }, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            uploaded = json.loads(resp.read())
+    except Exception:
+        return None
+
+    saved = vk_api('photos.saveWallPhoto', {
+        'group_id': group_id,
+        'photo': uploaded.get('photo', ''),
+        'server': uploaded.get('server', ''),
+        'hash': uploaded.get('hash', ''),
+    })
+    items = saved.get('response', [])
+    if not items:
+        return None
+    item = items[0]
+    return f"photo{item['owner_id']}_{item['id']}"
+
+
+def post_to_vk(photo_url: str, text: str):
+    group_id = os.environ.get('VK_GROUP_ID', '')
+    if not group_id or not os.environ.get('VK_ACCESS_TOKEN'):
+        return {'ok': False, 'error': 'no_vk_credentials'}
+
+    attachment = vk_upload_photo(photo_url, group_id) if photo_url else None
+    params = {
+        'owner_id': f'-{group_id}',
+        'from_group': 1,
+        'message': text,
+    }
+    if attachment:
+        params['attachments'] = attachment
+
+    result = vk_api('wall.post', params)
+    if 'response' in result:
+        return {'ok': True, 'post_id': result['response'].get('post_id')}
+    return {'ok': False, 'error': result.get('error', {}).get('error_msg', 'unknown')}
+
+
 def get_next_post():
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
@@ -72,7 +164,7 @@ def get_next_post():
 
 
 def handler(event: dict, context) -> dict:
-    """Ежедневный пост: отправка в Telegram @ug_transfer_pro."""
+    """Ежедневный пост: отправка в Telegram @ug_transfer_pro и ВКонтакте."""
     cors = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -87,14 +179,17 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no posts'})}
 
     post_id, photo, greeting, description = row
-    text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
+    tg_text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
+    vk_text = strip_html(f"{greeting}\n\n{description}\n{CONTACTS}")
 
     tg_result = tg_api('sendPhoto', {
         'chat_id': CHANNEL_ID,
         'photo': photo,
-        'caption': text,
+        'caption': tg_text,
         'parse_mode': 'HTML',
     })
+
+    vk_result = post_to_vk(photo, vk_text)
 
     return {
         'statusCode': 200,
@@ -102,5 +197,7 @@ def handler(event: dict, context) -> dict:
         'body': json.dumps({
             'ok': tg_result.get('ok', False),
             'post_id': post_id,
+            'tg': tg_result.get('ok', False),
+            'vk': vk_result,
         }),
     }
