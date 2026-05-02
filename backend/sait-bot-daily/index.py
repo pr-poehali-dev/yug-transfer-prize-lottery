@@ -207,6 +207,12 @@ def handler(event: dict, context) -> dict:
             'has_whitespace_inside': any(c.isspace() for c in ut),
             'users_get': resp,
         }, ensure_ascii=False)}
+    if qs.get('debug') == 'gid':
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
+            'VK_GROUP_ID': os.environ.get('VK_GROUP_ID', ''),
+            'VK_USER_TOKEN_set': bool(os.environ.get('VK_USER_TOKEN')),
+            'VK_ACCESS_TOKEN_set': bool(os.environ.get('VK_ACCESS_TOKEN')),
+        })}
     if qs.get('debug') == 'tokens':
         ut = os.environ.get('VK_USER_TOKEN', '')
         gt = os.environ.get('VK_ACCESS_TOKEN', '')
