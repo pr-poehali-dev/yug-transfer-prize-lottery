@@ -19,12 +19,12 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen mesh-bg">
+    <div className={`min-h-screen mesh-bg ${active === "home" ? "home-page" : ""}`}>
       <SiteHeader active={active} menuOpen={menuOpen} setMenuOpen={setMenuOpen} go={go} />
 
       <main className={`max-w-7xl mx-auto px-4 md:px-6 ${active === "home" ? "py-3 md:py-4" : "py-8 md:py-12"}`}>
         {active === "home" && <HomeSection onNav={go} />}
-        {active === "services" && <ServicesSection />}
+        {active === "services" && <ServicesSection onOrder={go} />}
         {active === "bot" && <BotSection />}
         {active === "drivers" && <DriversSection />}
         {active === "contacts" && (

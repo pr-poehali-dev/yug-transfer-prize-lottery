@@ -1,5 +1,5 @@
 import Icon from "@/components/ui/icon";
-import { SectionHeader } from "./shared";
+import { SectionHeader, Section } from "./shared";
 
 const CLIENT_STORES = [
   {
@@ -25,7 +25,7 @@ const CLIENT_STORES = [
   },
 ];
 
-export function ServicesSection() {
+export function ServicesSection({ onOrder }: { onOrder?: (s: Section) => void } = {}) {
   const services = [
     {
       icon: "Plane",
@@ -92,7 +92,14 @@ export function ServicesSection() {
               <Icon name={s.icon} size={26} className="text-white" fallback="Circle" />
             </div>
             <h3 className="font-oswald text-2xl font-bold text-white mb-2">{s.title}</h3>
-            <p className="text-sm text-muted-foreground">{s.desc}</p>
+            <p className="text-sm text-muted-foreground mb-4">{s.desc}</p>
+            <button
+              onClick={() => onOrder?.("home")}
+              className="grad-btn w-full rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+            >
+              <Icon name="Send" size={14} />
+              Заказать
+            </button>
           </div>
         ))}
       </div>
