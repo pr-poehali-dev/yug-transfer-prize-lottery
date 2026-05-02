@@ -228,7 +228,6 @@ def handler(event: dict, context) -> dict:
 
     bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
     channel_main = os.environ.get('TELEGRAM_CHANNEL_ID', '')
-    channel_kurilka = os.environ.get('TELEGRAM_CHANNEL_ID_2', '')
 
     # ── GET — список постов ─────────────────────────────────────────────────
     if method == 'GET':
@@ -332,11 +331,11 @@ def handler(event: dict, context) -> dict:
     if method == 'POST' and action == 'publish':
         body = json.loads(event.get('body') or '{}')
         post_id = body.get('post_id')
-        chat = body.get('chat', 'main')
+        chat = 'main'
         if not post_id:
             return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'post_id обязателен'})}
 
-        channel_id = channel_kurilka if chat == 'kurilka' else channel_main
+        channel_id = channel_main
 
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
@@ -382,21 +381,17 @@ def handler(event: dict, context) -> dict:
             (now,)
         )
         rows = cur.fetchall()
-        channels_map = {'main': channel_main, 'kurilka': channel_kurilka}
         published = []
         for row in rows:
             post = row_to_post(row)
-            post_chats = post.get('chats', ['main'])
             any_ok = False
             last_msg_id = None
-            for ch in post_chats:
-                ch_id = channels_map.get(ch, channel_main)
-                if bot_token and ch_id:
-                    result = publish_post(bot_token, ch_id, post)
-                    if result['ok']:
-                        any_ok = True
-                        last_msg_id = result.get('message_id')
-                        print(f"[POSTS] auto-published post {post['id']} to {ch}")
+            if bot_token and channel_main:
+                result = publish_post(bot_token, channel_main, post)
+                if result['ok']:
+                    any_ok = True
+                    last_msg_id = result.get('message_id')
+                    print(f"[POSTS] auto-published post {post['id']} to main")
             if any_ok:
                 cur.execute(
                     f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, updated_at=%s WHERE id=%s",
@@ -428,11 +423,7 @@ def handler(event: dict, context) -> dict:
         button2_url = body.get('button2_url', '')
         status = body.get('status', 'draft')
         scheduled_at = body.get('scheduled_at')
-        chats_list = body.get('chats', ['main'])
-        if isinstance(chats_list, list):
-            chats_str = ','.join(chats_list)
-        else:
-            chats_str = str(chats_list) if chats_list else 'main'
+        chats_str = 'main'
 
         sched_dt = None
         if scheduled_at:
@@ -479,11 +470,7 @@ def handler(event: dict, context) -> dict:
         status = body.get('status', 'draft')
         scheduled_at = body.get('scheduled_at')
         edit_in_tg = body.get('edit_in_telegram', False)
-        chats_list = body.get('chats', ['main'])
-        if isinstance(chats_list, list):
-            chats_str = ','.join(chats_list)
-        else:
-            chats_str = str(chats_list) if chats_list else 'main'
+        chats_str = 'main'
 
         sched_dt = None
         if scheduled_at:
@@ -498,17 +485,11 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
 
         if edit_in_tg:
-            cur.execute(f"SELECT telegram_message_id, chats FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+            cur.execute(f"SELECT telegram_message_id FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
             row = cur.fetchone()
-            if row and row[0] and bot_token:
+            if row and row[0] and bot_token and channel_main:
                 msg_id = row[0]
-                chats_raw = row[1] or 'main'
-                channels_map = {'main': channel_main, 'kurilka': channel_kurilka}
-                for ch in chats_raw.split(','):
-                    ch = ch.strip()
-                    ch_id = channels_map.get(ch)
-                    if ch_id:
-                        edit_tg_message(bot_token, ch_id, msg_id, {'text': text, 'photo_url': photo_url})
+                edit_tg_message(bot_token, channel_main, msg_id, {'text': text, 'photo_url': photo_url})
 
         now = datetime.now(timezone.utc)
         cur.execute(
@@ -538,21 +519,15 @@ def handler(event: dict, context) -> dict:
 
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
-        cur.execute(f"SELECT telegram_message_id, chats, status FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+        cur.execute(f"SELECT telegram_message_id, status FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
         row = cur.fetchone()
         tg_deleted = False
-        if row and row[0] and row[2] == 'published' and bot_token:
+        if row and row[0] and row[1] == 'published' and bot_token and channel_main:
             msg_id = row[0]
-            chats_raw = row[1] or 'main'
-            channels_map = {'main': channel_main, 'kurilka': channel_kurilka}
-            for ch in chats_raw.split(','):
-                ch = ch.strip()
-                ch_id = channels_map.get(ch)
-                if ch_id:
-                    result = tg_request(bot_token, 'deleteMessage', {'chat_id': ch_id, 'message_id': msg_id})
-                    print(f"[POSTS] deleteMessage chat={ch} msg_id={msg_id}: {result}")
-                    if result.get('ok'):
-                        tg_deleted = True
+            result = tg_request(bot_token, 'deleteMessage', {'chat_id': channel_main, 'message_id': msg_id})
+            print(f"[POSTS] deleteMessage chat=main msg_id={msg_id}: {result}")
+            if result.get('ok'):
+                tg_deleted = True
 
         cur.execute(f"DELETE FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
         conn.commit()

@@ -17,8 +17,7 @@ export interface PostFormData {
 }
 
 const CHATS = [
-  { value: "main",    label: "ЮГ ТРАНСФЕР",  sub: "@ug_transfer_gift" },
-  { value: "kurilka", label: "КУРИЛКА",       sub: "@KURILKA_GIFT" },
+  { value: "main", label: "ЮГ ТРАНСФЕР", sub: "@ug_transfer_gift" },
 ] as const;
 
 interface VideoProgress {
@@ -78,42 +77,17 @@ export function PostForm({
 
       <div className="p-3.5 space-y-2.5">
 
-        {/* Выбор каналов */}
+        {/* Канал публикации */}
         <div>
-          <label className="text-[11px] text-white/50 mb-1 block">Каналы</label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {CHATS.map(ch => {
-              const selected = form.chats.includes(ch.value);
-              return (
-                <button
-                  key={ch.value}
-                  type="button"
-                  onClick={() => {
-                    const next = selected
-                      ? form.chats.filter(c => c !== ch.value)
-                      : [...form.chats, ch.value];
-                    onFormChange({ chats: next.length ? next : [ch.value] });
-                  }}
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-left transition-all ${
-                    selected
-                      ? "border-blue-500/60 bg-blue-500/10"
-                      : "border-white/10 bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors ${
-                    selected ? "bg-blue-500 border-blue-500" : "border-white/30 bg-white/5"
-                  }`}>
-                    {selected && <Icon name="Check" size={10} className="text-white" />}
-                  </div>
-                  <div className="min-w-0">
-                    <span className={`text-xs font-semibold block leading-tight truncate ${selected ? "text-blue-300" : "text-white"}`}>
-                      {ch.label}
-                    </span>
-                    <span className="text-[10px] text-white/30 leading-tight truncate block">{ch.sub}</span>
-                  </div>
-                </button>
-              );
-            })}
+          <label className="text-[11px] text-white/50 mb-1 block">Канал</label>
+          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-blue-500/60 bg-blue-500/10">
+            <div className="w-4 h-4 rounded bg-blue-500 flex items-center justify-center shrink-0">
+              <Icon name="Check" size={10} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-semibold text-blue-300 block leading-tight truncate">{CHATS[0].label}</span>
+              <span className="text-[10px] text-white/30 leading-tight truncate block">{CHATS[0].sub}</span>
+            </div>
           </div>
         </div>
 
