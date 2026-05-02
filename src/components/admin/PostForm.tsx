@@ -72,7 +72,7 @@ export function PostForm({
 
         {/* Название */}
         <div>
-          <label className="text-[11px] text-white/50 mb-1 block">Название <span className="text-white/20">(для архива)</span></label>
+          <label className="text-[11px] text-white/50 mb-1 block">Название <span className="text-white/20">(будет жирным заголовком)</span></label>
           <input
             value={form.title}
             onChange={e => onFormChange({ title: e.target.value })}
