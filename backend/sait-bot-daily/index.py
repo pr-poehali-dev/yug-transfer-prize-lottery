@@ -192,6 +192,17 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors, 'body': ''}
 
     qs = event.get('queryStringParameters') or {}
+    if qs.get('debug') == 'tokens':
+        ut = os.environ.get('VK_USER_TOKEN', '')
+        gt = os.environ.get('VK_ACCESS_TOKEN', '')
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
+            'VK_USER_TOKEN_set': bool(ut),
+            'VK_USER_TOKEN_prefix': ut[:10] if ut else '',
+            'VK_USER_TOKEN_len': len(ut),
+            'VK_ACCESS_TOKEN_set': bool(gt),
+            'VK_ACCESS_TOKEN_prefix': gt[:10] if gt else '',
+            'VK_ACCESS_TOKEN_len': len(gt),
+        })}
     if qs.get('debug') == 'vkphoto':
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
