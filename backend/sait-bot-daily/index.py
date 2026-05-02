@@ -214,6 +214,24 @@ def handler(event: dict, context) -> dict:
 
     vk_result = post_to_vk(photo, vk_text)
 
+    tg_status = 'ok' if tg_result.get('ok') else f"err:{(tg_result.get('description') or 'fail')[:200]}"
+    vk_status = 'ok' if vk_result.get('ok') else f"err:{(vk_result.get('error') or 'fail')[:200]}"
+    try:
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        tg_safe = tg_status.replace("'", "''")
+        vk_safe = vk_status.replace("'", "''")
+        cur.execute(
+            f"UPDATE {SCHEMA}.bot_daily_posts "
+            f"SET last_tg_status = '{tg_safe}', last_vk_status = '{vk_safe}', last_sent_at = NOW() "
+            f"WHERE id = {post_id}"
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
+
     return {
         'statusCode': 200,
         'headers': cors,
@@ -221,6 +239,8 @@ def handler(event: dict, context) -> dict:
             'ok': tg_result.get('ok', False),
             'post_id': post_id,
             'tg': tg_result.get('ok', False),
+            'tg_status': tg_status,
             'vk': vk_result,
+            'vk_status': vk_status,
         }),
     }

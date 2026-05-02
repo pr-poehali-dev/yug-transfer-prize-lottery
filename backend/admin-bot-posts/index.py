@@ -66,7 +66,8 @@ def handler(event: dict, context) -> dict:
         # ── GET — список всех постов ──
         if method == 'GET':
             cur.execute(
-                f"SELECT id, photo_url, greeting, description, is_used, scheduled_date, created_at "
+                f"SELECT id, photo_url, greeting, description, is_used, scheduled_date, created_at, "
+                f"last_tg_status, last_vk_status, last_sent_at "
                 f"FROM {SCHEMA}.bot_daily_posts ORDER BY id DESC"
             )
             rows = cur.fetchall()
@@ -80,6 +81,9 @@ def handler(event: dict, context) -> dict:
                     'is_used': r[4],
                     'scheduled_date': r[5].isoformat() if r[5] else None,
                     'created_at': r[6].isoformat() if r[6] else None,
+                    'last_tg_status': r[7],
+                    'last_vk_status': r[8],
+                    'last_sent_at': r[9].isoformat() if r[9] else None,
                 })
             cur.close()
             conn.close()

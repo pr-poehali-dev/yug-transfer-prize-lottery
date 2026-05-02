@@ -14,6 +14,9 @@ interface BotPost {
   is_used: boolean;
   scheduled_date: string | null;
   created_at: string;
+  last_tg_status?: string | null;
+  last_vk_status?: string | null;
+  last_sent_at?: string | null;
 }
 
 const BOTS = [
@@ -161,12 +164,13 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
     try {
       const res = await fetch(SAIT_BOT_DAILY_URL);
       const data = await res.json();
-      if (data.ok) {
-        alert("Пост отправлен в @ug_transfer_pro!");
-        fetchPosts();
-      } else {
-        alert("Ошибка отправки. Проверьте, что бот — админ группы.");
-      }
+      const tgOk = !!data.tg;
+      const vkOk = !!(data.vk && data.vk.ok);
+      const lines: string[] = [];
+      lines.push(tgOk ? "✅ Telegram: отправлено" : `❌ Telegram: ${data.tg_status || "ошибка"}`);
+      lines.push(vkOk ? "✅ ВКонтакте: отправлено" : `❌ ВКонтакте: ${(data.vk && data.vk.error) || data.vk_status || "ошибка"}`);
+      alert(lines.join("\n"));
+      fetchPosts();
     } catch {
       alert("Ошибка соединения");
     }
@@ -420,6 +424,24 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
                     {post.is_used && post.scheduled_date && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40">
                         Был отправлен {new Date(post.scheduled_date).toLocaleDateString("ru-RU")}
+                      </span>
+                    )}
+                    {post.last_tg_status && (
+                      <span
+                        title={post.last_tg_status === "ok" ? "Telegram: успешно" : `Telegram: ${post.last_tg_status.replace(/^err:/, "")}`}
+                        className={`text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${post.last_tg_status === "ok" ? "bg-sky-500/10 border border-sky-500/20 text-sky-300" : "bg-red-500/10 border border-red-500/20 text-red-300"}`}
+                      >
+                        <Icon name={post.last_tg_status === "ok" ? "Send" : "AlertCircle"} size={10} />
+                        TG {post.last_tg_status === "ok" ? "✓" : "✗"}
+                      </span>
+                    )}
+                    {post.last_vk_status && (
+                      <span
+                        title={post.last_vk_status === "ok" ? "ВКонтакте: успешно" : `ВКонтакте: ${post.last_vk_status.replace(/^err:/, "")}`}
+                        className={`text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${post.last_vk_status === "ok" ? "bg-blue-500/10 border border-blue-500/20 text-blue-300" : "bg-red-500/10 border border-red-500/20 text-red-300"}`}
+                      >
+                        <Icon name={post.last_vk_status === "ok" ? "Send" : "AlertCircle"} size={10} />
+                        VK {post.last_vk_status === "ok" ? "✓" : "✗"}
                       </span>
                     )}
                     {isNext && (
