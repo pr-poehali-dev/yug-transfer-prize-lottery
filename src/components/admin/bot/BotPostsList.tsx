@@ -13,6 +13,8 @@ interface BotPostsListProps {
   onAddNew: () => void;
   onEdit: (post: BotPost) => void;
   onDelete: (id: number) => void;
+  onSendOne?: (id: number) => void;
+  sendingId?: number | null;
   formSlot?: React.ReactNode;
 }
 
@@ -28,6 +30,8 @@ export function BotPostsList({
   onAddNew,
   onEdit,
   onDelete,
+  onSendOne,
+  sendingId,
   formSlot,
 }: BotPostsListProps) {
   return (
@@ -79,6 +83,18 @@ export function BotPostsList({
                     <p className="text-white/50 text-xs mt-1 line-clamp-2">{post.description}</p>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
+                    {onSendOne && (
+                      <button
+                        onClick={() => onSendOne(post.id)}
+                        disabled={sendingId === post.id}
+                        title="Отправить повторно"
+                        className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center transition-colors disabled:opacity-40"
+                      >
+                        {sendingId === post.id
+                          ? <div className="w-3 h-3 border border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                          : <Icon name="Send" size={14} className="text-emerald-400" />}
+                      </button>
+                    )}
                     <button onClick={() => onEdit(post)} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
                       <Icon name="Pencil" size={14} className="text-white/50" />
                     </button>

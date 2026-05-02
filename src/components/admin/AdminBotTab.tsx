@@ -17,6 +17,7 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
   const [form, setForm] = useState({ photo_url: "", greeting: "", description: "" });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingId, setSendingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
 
   const fetchPosts = async () => {
@@ -77,6 +78,25 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
       alert("Ошибка соединения");
     }
     setSending(false);
+  };
+
+  const handleSendOne = async (id: number) => {
+    if (!confirm("Отправить этот пост в Telegram и ВКонтакте прямо сейчас?")) return;
+    setSendingId(id);
+    try {
+      const res = await fetch(`${SAIT_BOT_DAILY_URL}?post_id=${id}`);
+      const data = await res.json();
+      const tgOk = !!data.tg;
+      const vkOk = !!(data.vk && data.vk.ok);
+      const lines: string[] = [];
+      lines.push(tgOk ? "✅ Telegram: отправлено" : `❌ Telegram: ${data.tg_status || "ошибка"}`);
+      lines.push(vkOk ? "✅ ВКонтакте: отправлено" : `❌ ВКонтакте: ${(data.vk && data.vk.error) || data.vk_status || "ошибка"}`);
+      alert(lines.join("\n"));
+      fetchPosts();
+    } catch {
+      alert("Ошибка соединения");
+    }
+    setSendingId(null);
   };
 
   const showBotsBlock = false as boolean;
@@ -148,6 +168,8 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
         onAddNew={() => { setShowAdd(true); setEditingId(null); setForm({ photo_url: "", greeting: "", description: "" }); }}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onSendOne={handleSendOne}
+        sendingId={sendingId}
         formSlot={showAdd && (
           <BotPostForm
             token={token}

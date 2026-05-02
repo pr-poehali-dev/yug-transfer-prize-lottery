@@ -186,6 +186,19 @@ def get_next_post():
     return row
 
 
+def get_post_by_id(post_id: int):
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT id, photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts "
+        f"WHERE id = {int(post_id)} LIMIT 1"
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
 def handler(event: dict, context) -> dict:
     """Ежедневный пост: отправка в Telegram @ug_transfer_pro и ВКонтакте."""
     cors = {
@@ -197,9 +210,19 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors, 'body': ''}
 
-    row = get_next_post()
-    if not row:
-        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no posts'})}
+    qs = event.get('queryStringParameters') or {}
+    forced_id = qs.get('post_id')
+    if forced_id:
+        try:
+            row = get_post_by_id(int(forced_id))
+        except Exception:
+            row = None
+        if not row:
+            return {'statusCode': 404, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'post not found'})}
+    else:
+        row = get_next_post()
+        if not row:
+            return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no posts'})}
 
     post_id, photo, greeting, description = row
     tg_text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
