@@ -94,7 +94,12 @@ export function ServicesSection({ onOrder }: { onOrder?: (s: Section) => void } 
             <h3 className="font-oswald text-2xl font-bold text-white mb-2">{s.title}</h3>
             <p className="text-sm text-muted-foreground mb-4">{s.desc}</p>
             <button
-              onClick={() => onOrder?.("home")}
+              onClick={() => {
+                onOrder?.("home");
+                setTimeout(() => {
+                  document.getElementById("order-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 80);
+              }}
               className="grad-btn w-full rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
             >
               <Icon name="Send" size={14} />

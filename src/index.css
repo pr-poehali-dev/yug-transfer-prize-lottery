@@ -306,12 +306,16 @@
   background: rgba(168, 85, 247, 0.7);
 }
 
-/* Главная — скрываем полосу скролла */
+/* Главная — скрываем полосу скролла, но скролл работает */
+html:has(.home-page),
 body:has(.home-page) {
-  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+html:has(.home-page)::-webkit-scrollbar,
 body:has(.home-page)::-webkit-scrollbar {
   display: none;
+  width: 0;
 }
 .home-page {
   scrollbar-width: none;
@@ -319,4 +323,8 @@ body:has(.home-page)::-webkit-scrollbar {
 }
 .home-page::-webkit-scrollbar {
   display: none;
+}
+
+html {
+  scroll-behavior: smooth;
 }

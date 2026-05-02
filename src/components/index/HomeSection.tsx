@@ -53,7 +53,7 @@ export function HomeSection({ onNav }: { onNav: (s: Section) => void }) {
           </div>
 
           {/* Форма заказа */}
-          <div className="w-full lg:w-auto flex lg:justify-end justify-center">
+          <div id="order-form" className="w-full lg:w-auto flex lg:justify-end justify-center scroll-mt-24">
             <OrderForm />
           </div>
         </div>
