@@ -380,10 +380,6 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
 
   return (
     <div>
-      <h2 className="font-oswald text-3xl font-bold text-white mb-6">
-        Посты в канал <span className="text-muted-foreground text-xl">({total})</span>
-      </h2>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <PostForm
           form={form}
