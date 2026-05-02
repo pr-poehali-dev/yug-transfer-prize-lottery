@@ -100,9 +100,22 @@ def tg_request(bot_token: str, method: str, payload: dict) -> dict:
         return {'ok': False, 'description': str(e)}
 
 
+def build_text_with_title(post: dict) -> str:
+    """Добавляет title жирным заголовком в начало текста, если он есть."""
+    title = (post.get('title') or '').strip()
+    text = post.get('text', '') or ''
+    if not title:
+        return text
+    # Если text уже начинается с этого заголовка (в любом виде) — не дублируем
+    plain = text.lstrip()
+    if plain.startswith(title) or plain.startswith(f'<b>{title}</b>'):
+        return text
+    return f'<b>{title}</b>\n\n{text}' if text.strip() else f'<b>{title}</b>'
+
+
 def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     """Публикует пост в Telegram, возвращает {ok, message_id}"""
-    text = post.get('text', '')
+    text = build_text_with_title(post)
     photo_url = post.get('photo_url', '')
     video_note_url = post.get('video_note_url', '')
     button_text = post.get('button_text', '')
@@ -175,7 +188,7 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
 
 def edit_tg_message(bot_token: str, channel_id: str, message_id: int, post: dict) -> dict:
     """Редактирует уже опубликованный пост в Telegram"""
-    text = post.get('text', '')
+    text = build_text_with_title(post)
     photo_url = post.get('photo_url', '')
 
     if photo_url:
