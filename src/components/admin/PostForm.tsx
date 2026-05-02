@@ -287,6 +287,7 @@ export function PostForm({
 
         {/* Предпросмотр Telegram */}
         <PostTelegramPreview
+          title={form.title}
           text={form.text}
           photo_url={form.photo_url}
           video_note_url={form.video_note_url}

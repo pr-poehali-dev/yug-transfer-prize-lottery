@@ -1,6 +1,7 @@
 import Icon from "@/components/ui/icon";
 
 interface PostTelegramPreviewProps {
+  title?: string;
   text: string;
   photo_url: string;
   video_note_url: string;
@@ -12,8 +13,17 @@ interface PostTelegramPreviewProps {
 
 const TIME = new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
 
-export function PostTelegramPreview({ text, photo_url, video_note_url, button_text, button_url, button2_text = "", button2_url = "" }: PostTelegramPreviewProps) {
-  if (!text && !photo_url && !video_note_url) return null;
+const buildTextWithTitle = (title: string, text: string): string => {
+  const t = (title || "").trim();
+  if (!t) return text || "";
+  const plain = (text || "").replace(/^\s+/, "");
+  if (plain.startsWith(t) || plain.startsWith(`<b>${t}</b>`)) return text || "";
+  return text && text.trim() ? `<b>${t}</b>\n\n${text}` : `<b>${t}</b>`;
+};
+
+export function PostTelegramPreview({ title = "", text, photo_url, video_note_url, button_text, button_url, button2_text = "", button2_url = "" }: PostTelegramPreviewProps) {
+  const fullText = buildTextWithTitle(title, text);
+  if (!fullText && !photo_url && !video_note_url) return null;
 
   return (
     <div className="rounded-2xl bg-[#17212b] border border-white/10 overflow-hidden">
@@ -47,18 +57,18 @@ export function PostTelegramPreview({ text, photo_url, video_note_url, button_te
         )}
 
         {/* Текст + фото + кнопка */}
-        {(text || photo_url) && (
+        {(fullText || photo_url) && (
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl rounded-tl-sm overflow-hidden bg-[#182533]">
               {photo_url && (
                 <img src={photo_url} alt="" className="w-full max-h-48 object-cover" />
               )}
-              {text && (
+              {fullText && (
                 <div className="px-3 py-2">
                   <div
                     className="text-[#e8e8e8] text-sm leading-relaxed break-words"
                     dangerouslySetInnerHTML={{
-                      __html: text
+                      __html: fullText
                         .replace(/\n/g, "<br/>")
                         .replace(/<(?!b|\/b|i|\/i|a|\/a|br)[^>]+>/gi, ""),
                     }}
@@ -90,7 +100,7 @@ export function PostTelegramPreview({ text, photo_url, video_note_url, button_te
         )}
 
         {/* Кнопки без текста (если только кружок + кнопки) */}
-        {video_note_url && !text && !photo_url && ((button_text && button_url) || (button2_text && button2_url)) && (
+        {video_note_url && !fullText && !photo_url && ((button_text && button_url) || (button2_text && button2_url)) && (
           <div className="flex justify-start">
             <div className="rounded-2xl rounded-tl-sm overflow-hidden bg-[#182533] px-3 py-1.5 flex gap-1 min-w-[140px]">
               {button_text && button_url && (
