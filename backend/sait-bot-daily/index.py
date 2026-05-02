@@ -74,15 +74,18 @@ def vk_api(method, params):
         return {}
 
 
-def vk_upload_photo(photo_url: str, group_id: str):
+def vk_upload_photo(photo_url: str, group_id: str, log: list):
     try:
         with urllib.request.urlopen(photo_url, timeout=15) as resp:
             photo_bytes = resp.read()
             content_type = resp.headers.get('Content-Type', 'image/jpeg')
-    except Exception:
+        log.append({'step': 'download', 'ok': True, 'size': len(photo_bytes), 'ct': content_type})
+    except Exception as e:
+        log.append({'step': 'download', 'ok': False, 'err': str(e)})
         return None
 
     server = vk_api('photos.getWallUploadServer', {'group_id': group_id})
+    log.append({'step': 'getWallUploadServer', 'resp': server})
     upload_url = server.get('response', {}).get('upload_url')
     if not upload_url:
         return None
@@ -106,7 +109,9 @@ def vk_upload_photo(photo_url: str, group_id: str):
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             uploaded = json.loads(resp.read())
-    except Exception:
+        log.append({'step': 'upload', 'resp': uploaded})
+    except Exception as e:
+        log.append({'step': 'upload', 'ok': False, 'err': str(e)})
         return None
 
     saved = vk_api('photos.saveWallPhoto', {
@@ -115,6 +120,7 @@ def vk_upload_photo(photo_url: str, group_id: str):
         'server': uploaded.get('server', ''),
         'hash': uploaded.get('hash', ''),
     })
+    log.append({'step': 'saveWallPhoto', 'resp': saved})
     items = saved.get('response', [])
     if not items:
         return None
@@ -122,12 +128,13 @@ def vk_upload_photo(photo_url: str, group_id: str):
     return f"photo{item['owner_id']}_{item['id']}"
 
 
-def post_to_vk(photo_url: str, text: str):
+def post_to_vk(photo_url: str, text: str, debug: bool = False):
     group_id = os.environ.get('VK_GROUP_ID', '')
     if not group_id or not os.environ.get('VK_ACCESS_TOKEN'):
         return {'ok': False, 'error': 'no_vk_credentials'}
 
-    attachment = vk_upload_photo(photo_url, group_id) if photo_url else None
+    log = []
+    attachment = vk_upload_photo(photo_url, group_id, log) if photo_url else None
     params = {
         'owner_id': f'-{group_id}',
         'from_group': 1,
@@ -137,9 +144,14 @@ def post_to_vk(photo_url: str, text: str):
         params['attachments'] = attachment
 
     result = vk_api('wall.post', params)
+    out = {}
     if 'response' in result:
-        return {'ok': True, 'post_id': result['response'].get('post_id')}
-    return {'ok': False, 'error': result.get('error', {}).get('error_msg', 'unknown')}
+        out = {'ok': True, 'post_id': result['response'].get('post_id'), 'attachment': attachment}
+    else:
+        out = {'ok': False, 'error': result.get('error', {}).get('error_msg', 'unknown'), 'attachment': attachment}
+    if debug:
+        out['log'] = log
+    return out
 
 
 def get_next_post():
@@ -173,6 +185,21 @@ def handler(event: dict, context) -> dict:
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors, 'body': ''}
+
+    qs = event.get('queryStringParameters') or {}
+    if qs.get('debug') == 'vkphoto':
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        cur.execute(f"SELECT photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts ORDER BY id ASC LIMIT 1")
+        r = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not r:
+            return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'err': 'no posts'})}
+        photo, greeting, description = r
+        text = strip_html(f"{greeting}\n\n{description}\n{CONTACTS}")
+        vk_result = post_to_vk(photo, text, debug=True)
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'vk': vk_result, 'photo_url': photo}, ensure_ascii=False)}
 
     row = get_next_post()
     if not row:
