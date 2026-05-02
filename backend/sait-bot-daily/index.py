@@ -59,8 +59,12 @@ def strip_html(html_text: str) -> str:
     return text.strip()
 
 
-def vk_api(method, params):
-    token = os.environ.get('VK_ACCESS_TOKEN', '')
+def vk_api(method, params, use_user_token: bool = True):
+    token = ''
+    if use_user_token:
+        token = os.environ.get('VK_USER_TOKEN', '') or os.environ.get('VK_ACCESS_TOKEN', '')
+    else:
+        token = os.environ.get('VK_ACCESS_TOKEN', '') or os.environ.get('VK_USER_TOKEN', '')
     if not token:
         return {}
     params = {**params, 'access_token': token, 'v': VK_API_VERSION}
@@ -130,7 +134,8 @@ def vk_upload_photo(photo_url: str, group_id: str, log: list):
 
 def post_to_vk(photo_url: str, text: str, debug: bool = False):
     group_id = os.environ.get('VK_GROUP_ID', '')
-    if not group_id or not os.environ.get('VK_ACCESS_TOKEN'):
+    has_token = bool(os.environ.get('VK_USER_TOKEN') or os.environ.get('VK_ACCESS_TOKEN'))
+    if not group_id or not has_token:
         return {'ok': False, 'error': 'no_vk_credentials'}
 
     log = []
