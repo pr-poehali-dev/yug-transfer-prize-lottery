@@ -192,6 +192,21 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors, 'body': ''}
 
     qs = event.get('queryStringParameters') or {}
+    if qs.get('debug') == 'whoami':
+        ut = (os.environ.get('VK_USER_TOKEN', '') or '').strip()
+        url = f"https://api.vk.com/method/users.get?access_token={urllib.parse.quote(ut)}&v=5.199"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as r:
+                resp = json.loads(r.read())
+        except Exception as e:
+            resp = {'err': str(e)}
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
+            'token_len': len(ut),
+            'token_prefix': ut[:12],
+            'token_suffix': ut[-8:],
+            'has_whitespace_inside': any(c.isspace() for c in ut),
+            'users_get': resp,
+        }, ensure_ascii=False)}
     if qs.get('debug') == 'tokens':
         ut = os.environ.get('VK_USER_TOKEN', '')
         gt = os.environ.get('VK_ACCESS_TOKEN', '')
