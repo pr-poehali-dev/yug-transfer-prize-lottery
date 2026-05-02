@@ -126,18 +126,16 @@ export function PostList({
 
                 {/* Действия */}
                 <div className="flex flex-col gap-1.5 shrink-0">
-                  {post.status !== "published" && (
-                    <button
-                      onClick={() => onPublish(post)}
-                      disabled={publishingId === post.id}
-                      title="Опубликовать сейчас"
-                      className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center text-emerald-400 transition-colors disabled:opacity-40"
-                    >
-                      {publishingId === post.id
-                        ? <div className="w-3 h-3 border border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-                        : <Icon name="Send" size={13} />}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => onPublish(post)}
+                    disabled={publishingId === post.id}
+                    title={post.status === "published" ? "Отправить повторно" : "Опубликовать сейчас"}
+                    className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center text-emerald-400 transition-colors disabled:opacity-40"
+                  >
+                    {publishingId === post.id
+                      ? <div className="w-3 h-3 border border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                      : <Icon name={post.status === "published" ? "SendHorizontal" : "Send"} size={13} />}
+                  </button>
                   <button
                     onClick={() => isActive ? onResetEdit() : onEdit(post)}
                     title={isActive ? "Закрыть" : "Редактировать"}
