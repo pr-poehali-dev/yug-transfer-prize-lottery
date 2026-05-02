@@ -7,7 +7,7 @@ export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4
 export const UPLOAD_VIDEO_URL = "https://functions.poehali.dev/f6d6a065-4281-4091-ac9e-9e3121bf2571";
 export const ADMIN_DRIVER_SUBS_URL = "https://functions.poehali.dev/95d0380a-04e8-4a3c-88db-9c256a11f1f6";
 
-export type AdminTab = "posts" | "bot" | "drivers";
+export type AdminTab = "content" | "drivers";
 
 export interface DriverSub {
   id: number;
