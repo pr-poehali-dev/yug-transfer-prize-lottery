@@ -22,7 +22,7 @@ const App = () => (
     <BrowserRouter>
       <Suspense fallback={null}>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Admin />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/offer" element={<Offer />} />
