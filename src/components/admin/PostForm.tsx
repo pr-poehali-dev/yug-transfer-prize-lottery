@@ -13,12 +13,7 @@ export interface PostFormData {
   button2_url: string;
   status: "draft" | "scheduled" | "published" | "failed";
   scheduled_at: string | null;
-  chats: string[];
 }
-
-const CHATS = [
-  { value: "main", label: "ЮГ ТРАНСФЕР", sub: "@ug_transfer_gift" },
-] as const;
 
 interface VideoProgress {
   phase: "loading" | "converting" | "encoding";
@@ -76,20 +71,6 @@ export function PostForm({
       </div>
 
       <div className="p-3.5 space-y-2.5">
-
-        {/* Канал публикации */}
-        <div>
-          <label className="text-[11px] text-white/50 mb-1 block">Канал</label>
-          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-blue-500/60 bg-blue-500/10">
-            <div className="w-4 h-4 rounded bg-blue-500 flex items-center justify-center shrink-0">
-              <Icon name="Check" size={10} className="text-white" />
-            </div>
-            <div className="min-w-0">
-              <span className="text-xs font-semibold text-blue-300 block leading-tight truncate">{CHATS[0].label}</span>
-              <span className="text-[10px] text-white/30 leading-tight truncate block">{CHATS[0].sub}</span>
-            </div>
-          </div>
-        </div>
 
         {/* Название */}
         <div>

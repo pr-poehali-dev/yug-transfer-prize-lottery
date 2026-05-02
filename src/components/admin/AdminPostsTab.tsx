@@ -20,7 +20,7 @@ function toLocalInput(iso: string | null | undefined) {
 const EMPTY: PostFormData = {
   title: "", text: "", photo_url: "", video_note_url: "", button_text: "", button_url: "",
   button2_text: "", button2_url: "",
-  status: "draft", scheduled_at: null, chats: ["main"],
+  status: "draft", scheduled_at: null,
 };
 
 export function AdminPostsTab({ token }: AdminPostsTabProps) {
@@ -200,14 +200,12 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
 
   // ── начать редактирование поста ──
   const startEdit = (post: Post) => {
-    const postAny = post as Post & { chats?: string[] };
     const newForm: PostFormData = {
       title: post.title, text: post.text, photo_url: post.photo_url,
       video_note_url: post.video_note_url ?? "",
       button_text: post.button_text, button_url: post.button_url,
       button2_text: post.button2_text ?? "", button2_url: post.button2_url ?? "",
       status: post.status, scheduled_at: post.scheduled_at,
-      chats: postAny.chats?.length ? postAny.chats : ["main"],
     };
     setEditId(post.id);
     setForm(newForm);
@@ -295,23 +293,16 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
       if (!saveData.ok) throw new Error(saveData.error || "Ошибка сохранения");
       const postId = saveData.post.id;
 
-      const errors: string[] = [];
-      let lastMessageId: number | undefined;
-      for (const chat of form.chats) {
-        const pubRes = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ post_id: postId, chat }),
-        });
-        const pubData = await pubRes.json();
-        if (!pubData.ok) errors.push(`${chat}: ${pubData.error || "Ошибка"}`);
-        else if (pubData.message_id) lastMessageId = pubData.message_id;
-      }
-      if (errors.length === form.chats.length) throw new Error(errors.join("; "));
+      const pubRes = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ post_id: postId }),
+      });
+      const pubData = await pubRes.json();
+      if (!pubData.ok) throw new Error(pubData.error || "Ошибка публикации");
 
-      const channelNames = form.chats.length > 1 ? `${form.chats.length} каналов` : "канал";
-      setFormSuccess(errors.length ? `⚠️ Опубликован частично: ${errors.join("; ")}` : `✅ Пост опубликован в ${channelNames}!`);
-      const updatedPost = { ...saveData.post, status: "published" as const, published_at: new Date().toISOString(), telegram_message_id: lastMessageId };
+      setFormSuccess("✅ Пост опубликован!");
+      const updatedPost = { ...saveData.post, status: "published" as const, published_at: new Date().toISOString(), telegram_message_id: pubData.message_id };
       setPosts(prev => {
         const idx = prev.findIndex(p => p.id === postId);
         return idx >= 0 ? prev.map(p => p.id === postId ? updatedPost : p) : [updatedPost, ...prev];
@@ -326,23 +317,19 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
   const handlePublishFromList = async (post: Post) => {
     setPublishingId(post.id);
     try {
-      const chats = form.chats.length ? form.chats : ["main"];
-      const errors: string[] = [];
-      for (const chat of chats) {
-        const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ post_id: post.id, chat }),
-        });
-        const data = await res.json();
-        if (!data.ok) errors.push(`${chat}: ${data.error || "?"}`);
-      }
-      if (errors.length < chats.length) {
+      const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ post_id: post.id }),
+      });
+      const data = await res.json();
+      if (data.ok) {
         setPosts(prev => prev.map(p => p.id === post.id
           ? { ...p, status: "published", published_at: new Date().toISOString() }
           : p));
+      } else {
+        alert("Ошибка: " + (data.error || "?"));
       }
-      if (errors.length) alert("Ошибки: " + errors.join("; "));
     } finally { setPublishingId(null); }
   };
 
@@ -373,7 +360,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
     setEditingInTgId(post.id);
     setFormError(""); setFormSuccess("");
     try {
-      const payload = { ...form, id: post.id, status: post.status, edit_in_telegram: true, chats: form.chats };
+      const payload = { ...form, id: post.id, status: post.status, edit_in_telegram: true };
       const res = await fetch(ADMIN_POSTS_URL, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
