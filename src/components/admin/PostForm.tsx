@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { PostTelegramPreview } from "./PostTelegramPreview";
 
@@ -52,6 +52,11 @@ export function PostForm({
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
   const videoCaptureRef = useRef<HTMLInputElement>(null);
+  const [showButton2, setShowButton2] = useState(!!(form.button2_text || form.button2_url));
+
+  useEffect(() => {
+    if (form.button2_text || form.button2_url) setShowButton2(true);
+  }, [form.button2_text, form.button2_url]);
 
   return (
     <div className="card-glow rounded-2xl overflow-hidden">
@@ -187,32 +192,57 @@ export function PostForm({
         {/* Кнопки */}
         <div className="space-y-1.5">
           <label className="text-[11px] text-white/50 block">Кнопки <span className="text-white/20">(до 2 шт)</span></label>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="flex gap-1.5">
             <input
               value={form.button_text}
               onChange={e => onFormChange({ button_text: e.target.value })}
-              placeholder="Кнопка 1 — текст"
-              className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-1.5 text-white text-sm outline-none placeholder-white/20"
+              placeholder="Кнопка — текст"
+              className="flex-1 min-w-0 bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-1.5 text-white text-sm outline-none placeholder-white/20"
             />
             <input
               value={form.button_url}
               onChange={e => onFormChange({ button_url: e.target.value })}
               placeholder="https://ug-gift.ru"
-              className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-1.5 text-white text-sm outline-none placeholder-white/20"
+              className="flex-1 min-w-0 bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-1.5 text-white text-sm outline-none placeholder-white/20"
             />
-            <input
-              value={form.button2_text}
-              onChange={e => onFormChange({ button2_text: e.target.value })}
-              placeholder="Кнопка 2 — текст"
-              className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-1.5 text-white text-sm outline-none placeholder-white/20"
-            />
-            <input
-              value={form.button2_url}
-              onChange={e => onFormChange({ button2_url: e.target.value })}
-              placeholder="https://t.me/..."
-              className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-1.5 text-white text-sm outline-none placeholder-white/20"
-            />
+            {!showButton2 && (
+              <button
+                type="button"
+                onClick={() => setShowButton2(true)}
+                title="Добавить вторую кнопку"
+                className="shrink-0 w-8 h-8 self-center rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:border-purple-500/40 text-white/60 hover:text-white transition-colors flex items-center justify-center"
+              >
+                <Icon name="Plus" size={14} />
+              </button>
+            )}
           </div>
+          {showButton2 && (
+            <div className="flex gap-1.5">
+              <input
+                value={form.button2_text}
+                onChange={e => onFormChange({ button2_text: e.target.value })}
+                placeholder="Кнопка 2 — текст"
+                className="flex-1 min-w-0 bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-1.5 text-white text-sm outline-none placeholder-white/20"
+              />
+              <input
+                value={form.button2_url}
+                onChange={e => onFormChange({ button2_url: e.target.value })}
+                placeholder="https://t.me/..."
+                className="flex-1 min-w-0 bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-1.5 text-white text-sm outline-none placeholder-white/20"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  onFormChange({ button2_text: "", button2_url: "" });
+                  setShowButton2(false);
+                }}
+                title="Убрать вторую кнопку"
+                className="shrink-0 w-8 h-8 self-center rounded-lg border border-white/10 bg-white/5 hover:bg-red-500/10 hover:border-red-500/40 text-white/60 hover:text-red-400 transition-colors flex items-center justify-center"
+              >
+                <Icon name="X" size={14} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Расписание */}
