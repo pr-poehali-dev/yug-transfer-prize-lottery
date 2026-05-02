@@ -34,7 +34,7 @@ export default function Index() {
         )}
       </main>
 
-      <SiteFooter />
+      <SiteFooter go={go} />
     </div>
   );
 }
