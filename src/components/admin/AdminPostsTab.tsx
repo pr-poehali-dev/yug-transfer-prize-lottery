@@ -8,6 +8,7 @@ import { convertToVideoNote, type ConvertProgress } from "@/lib/convertVideoNote
 
 interface AdminPostsTabProps {
   token: string;
+  onTotalChange?: (n: number) => void;
 }
 
 function toLocalInput(iso: string | null | undefined) {
@@ -23,7 +24,7 @@ const EMPTY: PostFormData = {
   status: "draft", scheduled_at: null,
 };
 
-export function AdminPostsTab({ token }: AdminPostsTabProps) {
+export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
   // ── форма ──
   const [form, setForm] = useState<PostFormData>({ ...EMPTY });
   const [savedForm, setSavedForm] = useState<PostFormData>({ ...EMPTY });
@@ -59,6 +60,7 @@ export function AdminPostsTab({ token }: AdminPostsTabProps) {
   };
 
   useEffect(() => { fetchPosts(statusFilter); }, [statusFilter]);
+  useEffect(() => { onTotalChange?.(total); }, [total, onTotalChange]);
 
   // ── загрузка фото через S3 ──
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

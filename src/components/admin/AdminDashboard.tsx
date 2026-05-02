@@ -7,11 +7,12 @@ import { AdminDriversTab } from "./AdminDriversTab";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("posts");
+  const [postsTotal, setPostsTotal] = useState<number | null>(null);
 
-  const TABS = [
-    { id: "posts" as AdminTab, label: "Посты в канал", icon: "Send" },
-    { id: "drivers" as AdminTab, label: "Водители", icon: "Car" },
-    { id: "bot" as AdminTab, label: "Наш бот", icon: "Bot" },
+  const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
+    { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
+    { id: "drivers", label: "Водители", icon: "Car" },
+    { id: "bot", label: "Наш бот", icon: "Bot" },
   ];
 
   return (
@@ -42,7 +43,11 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${tab === t.id ? "grad-btn shadow-lg" : "text-muted-foreground hover:text-white hover:bg-white/5"}`}>
-              <Icon name={t.icon as string} size={17} fallback="Circle" />{t.label}
+              <Icon name={t.icon as string} size={17} fallback="Circle" />
+              <span className="flex-1 text-left">{t.label}</span>
+              {typeof t.badge === "number" && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${tab === t.id ? "bg-white/20 text-white" : "bg-white/10 text-white/60"}`}>{t.badge}</span>
+              )}
             </button>
           ))}
         </aside>
@@ -50,14 +55,20 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/5 flex">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs transition-colors ${tab === t.id ? "text-purple-400" : "text-muted-foreground"}`}>
-              <Icon name={t.icon as string} size={18} fallback="Circle" />{t.label}
+              className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs transition-colors relative ${tab === t.id ? "text-purple-400" : "text-muted-foreground"}`}>
+              <div className="relative">
+                <Icon name={t.icon as string} size={18} fallback="Circle" />
+                {typeof t.badge === "number" && t.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 text-[9px] font-bold px-1 min-w-[14px] h-[14px] rounded-full bg-purple-500 text-white flex items-center justify-center">{t.badge}</span>
+                )}
+              </div>
+              {t.label}
             </button>
           ))}
         </div>
 
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
-          {tab === "posts" && <AdminPostsTab token={token} />}
+          {tab === "posts" && <AdminPostsTab token={token} onTotalChange={setPostsTotal} />}
           {tab === "bot" && <AdminBotTab token={token} />}
           {tab === "drivers" && <AdminDriversTab token={token} />}
         </main>
