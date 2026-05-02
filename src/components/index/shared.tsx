@@ -5,7 +5,6 @@ export type Section = "home" | "services" | "bot" | "drivers" | "contacts";
 export const NAV: { id: Section; label: string; icon: string }[] = [
   { id: "home", label: "Главная", icon: "Rocket" },
   { id: "services", label: "Услуги", icon: "Car" },
-  { id: "bot", label: "Бот", icon: "Bot" },
   { id: "drivers", label: "Водителям", icon: "Briefcase" },
   { id: "contacts", label: "Контакты", icon: "Phone" },
 ];
