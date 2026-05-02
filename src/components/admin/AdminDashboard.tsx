@@ -9,8 +9,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   const [tab, setTab] = useState<AdminTab>("posts");
   const [postsTotal, setPostsTotal] = useState<number | null>(null);
 
-  const [postsSubTab, setPostsSubTab] = useState<"posts" | "bot">("posts");
-
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
     { id: "drivers", label: "Водители", icon: "Car" },
@@ -70,25 +68,9 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
           {tab === "posts" && (
-            <div className="space-y-4">
-              <div className="inline-flex p-1 rounded-xl bg-white/5 border border-white/10 gap-1">
-                <button
-                  onClick={() => setPostsSubTab("posts")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${postsSubTab === "posts" ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "text-white/50 hover:text-white"}`}
-                >
-                  <Icon name="Send" size={15} />
-                  Посты в канал
-                </button>
-                <button
-                  onClick={() => setPostsSubTab("bot")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${postsSubTab === "bot" ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "text-white/50 hover:text-white"}`}
-                >
-                  <Icon name="Bot" size={15} />
-                  Наш бот
-                </button>
-              </div>
-              {postsSubTab === "posts" && <AdminPostsTab token={token} onTotalChange={setPostsTotal} />}
-              {postsSubTab === "bot" && <AdminBotTab token={token} />}
+            <div className="space-y-8">
+              <AdminPostsTab token={token} onTotalChange={setPostsTotal} />
+              <AdminBotTab token={token} />
             </div>
           )}
           {tab === "drivers" && <AdminDriversTab token={token} />}
