@@ -223,7 +223,7 @@ def handler(event: dict, context) -> dict:
     qs = event.get('queryStringParameters') or {}
     action = qs.get('action', '')
 
-    bot_token = os.environ.get('UG_INFO_BOT_TOKEN', '') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    bot_token = os.environ.get('UG_INFO_BOT_TOKEN_NEW', '') or os.environ.get('UG_INFO_BOT_TOKEN', '') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
     channel_main = os.environ.get('UG_DRIVER_CHANNEL_ID', '') or os.environ.get('TELEGRAM_CHANNEL_ID', '')
 
     # ── GET — список постов ─────────────────────────────────────────────────
