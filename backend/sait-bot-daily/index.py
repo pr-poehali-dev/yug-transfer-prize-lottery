@@ -174,18 +174,6 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors, 'body': ''}
 
-    qs = event.get('queryStringParameters') or {}
-    if qs.get('debug') == 'vk':
-        token = os.environ.get('VK_ACCESS_TOKEN', '')
-        gid = os.environ.get('VK_GROUP_ID', '')
-        info = vk_api('groups.getById', {'group_id': gid}) if token else {}
-        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
-            'token_set': bool(token),
-            'token_prefix': token[:8] if token else '',
-            'group_id_env': gid,
-            'groups_getById': info,
-        }, ensure_ascii=False)}
-
     row = get_next_post()
     if not row:
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no posts'})}
