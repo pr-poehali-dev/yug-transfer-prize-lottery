@@ -66,11 +66,11 @@ export function PostTelegramPreview({ title = "", text, photo_url, video_note_ur
               {fullText && (
                 <div className="px-3 py-2">
                   <div
-                    className="text-[#e8e8e8] text-sm leading-relaxed break-words"
+                    className="text-[#e8e8e8] text-sm leading-relaxed break-words [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_a]:text-[#2ea6ff] [&_a]:underline"
                     dangerouslySetInnerHTML={{
                       __html: fullText
                         .replace(/\n/g, "<br/>")
-                        .replace(/<(?!b|\/b|i|\/i|a|\/a|br)[^>]+>/gi, ""),
+                        .replace(/<(?!\/?(?:b|i|a|br)\b)[^>]+>/gi, ""),
                     }}
                   />
                   <p className="text-[#6c8998] text-[10px] text-right mt-1">{TIME}</p>
