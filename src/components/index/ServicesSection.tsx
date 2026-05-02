@@ -31,42 +31,36 @@ export function ServicesSection() {
       icon: "Plane",
       title: "Аэропорт",
       desc: "Встреча с табличкой, помощь с багажом. Адлер, Краснодар, Симферополь.",
-      price: "от 1 500 ₽",
       color: "from-cyan-500 to-blue-600",
     },
     {
       icon: "Map",
       title: "Межгород",
       desc: "Поездки между городами юга. Фиксированная цена, без сюрпризов.",
-      price: "от 3 000 ₽",
       color: "from-purple-500 to-pink-500",
     },
     {
       icon: "Building2",
       title: "По городу",
       desc: "Комфортные поездки внутри города. Любые расстояния.",
-      price: "от 500 ₽",
       color: "from-orange-500 to-red-500",
     },
     {
       icon: "Mountain",
       title: "Экскурсии",
       desc: "Поездки по достопримечательностям Кубани и Крыма с водителем.",
-      price: "от 5 000 ₽",
       color: "from-green-500 to-emerald-500",
     },
     {
       icon: "Briefcase",
       title: "Корпоратив",
       desc: "Регулярные поездки для компаний. Договор, безнал, отчётность.",
-      price: "по запросу",
       color: "from-yellow-400 to-orange-500",
     },
     {
       icon: "Users",
       title: "Группы",
       desc: "Минивэны на 6-8 человек. Свадьбы, конференции, командировки.",
-      price: "от 4 000 ₽",
       color: "from-pink-500 to-purple-600",
     },
   ];
@@ -98,11 +92,7 @@ export function ServicesSection() {
               <Icon name={s.icon} size={26} className="text-white" fallback="Circle" />
             </div>
             <h3 className="font-oswald text-2xl font-bold text-white mb-2">{s.title}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{s.desc}</p>
-            <div className="flex items-center justify-between pt-4 border-t border-white/5">
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">Цена</span>
-              <span className="grad-text font-oswald text-xl font-bold">{s.price}</span>
-            </div>
+            <p className="text-sm text-muted-foreground">{s.desc}</p>
           </div>
         ))}
       </div>
