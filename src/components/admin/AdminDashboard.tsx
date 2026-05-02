@@ -1,15 +1,17 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { AdminTab } from "./adminTypes";
-import { AdminContentTab } from "./AdminContentTab";
+import { AdminPostsTab } from "./AdminPostsTab";
+import { AdminBotTab } from "./AdminBotTab";
 import { AdminDriversTab } from "./AdminDriversTab";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [tab, setTab] = useState<AdminTab>("content");
+  const [tab, setTab] = useState<AdminTab>("posts");
 
   const TABS = [
-    { id: "content" as AdminTab, label: "Контент", icon: "Megaphone" },
+    { id: "posts" as AdminTab, label: "Посты в канал", icon: "Send" },
     { id: "drivers" as AdminTab, label: "Водители", icon: "Car" },
+    { id: "bot" as AdminTab, label: "Наш бот", icon: "Bot" },
   ];
 
   return (
@@ -55,7 +57,8 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
         </div>
 
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
-          {tab === "content" && <AdminContentTab token={token} />}
+          {tab === "posts" && <AdminPostsTab token={token} />}
+          {tab === "bot" && <AdminBotTab token={token} />}
           {tab === "drivers" && <AdminDriversTab token={token} />}
         </main>
       </div>
