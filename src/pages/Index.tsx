@@ -22,7 +22,7 @@ export default function Index() {
     <div className="min-h-screen mesh-bg">
       <SiteHeader active={active} menuOpen={menuOpen} setMenuOpen={setMenuOpen} go={go} />
 
-      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
+      <main className={`max-w-7xl mx-auto px-4 md:px-6 ${active === "home" ? "py-3 md:py-4" : "py-8 md:py-12"}`}>
         {active === "home" && <HomeSection onNav={go} />}
         {active === "services" && <ServicesSection />}
         {active === "bot" && <BotSection />}
