@@ -13,6 +13,7 @@ interface Status {
 export function TgUserLogin({ token }: Props) {
   const [status, setStatus] = useState<Status | null>(null);
   const [step, setStep] = useState<"idle" | "code" | "2fa">("idle");
+  const [expanded, setExpanded] = useState(false);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -79,26 +80,43 @@ export function TgUserLogin({ token }: Props) {
   if (!status) return null;
 
   return (
-    <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+    <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: "rgba(255,255,255,0.02)" }}>
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left"
+      >
+        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
           <Icon name={status.logged_in ? "UserCheck" : "User"} size={20} className={status.logged_in ? "text-emerald-400" : "text-cyan-400"} />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-white font-medium text-lg">Telegram-аккаунт для сторис</h3>
-          <p className="text-white/40 text-xs">
+          <p className="text-white/40 text-xs truncate">
             {status.logged_in
               ? `Залогинен: ${status.user?.first_name || ""} ${status.user?.username ? "@" + status.user.username : ""}`
               : "Не залогинен — войди по номеру телефона"}
           </p>
         </div>
         {status.logged_in && (
-          <button onClick={logout} className="px-3 py-2 rounded-xl border border-red-500/30 text-red-300 text-xs hover:bg-red-500/10">
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={e => { e.stopPropagation(); logout(); }}
+            onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); logout(); } }}
+            className="px-3 py-2 rounded-xl border border-red-500/30 text-red-300 text-xs hover:bg-red-500/10 cursor-pointer"
+          >
             Выйти
-          </button>
+          </span>
         )}
-      </div>
+        <Icon
+          name="ChevronDown"
+          size={18}
+          className={`text-white/50 transition-transform flex-shrink-0 ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
 
+      {expanded && (
+      <div className="px-4 pb-4">
       {!status.logged_in && (
         <div className="space-y-3">
           {step === "idle" && (
@@ -156,6 +174,11 @@ export function TgUserLogin({ token }: Props) {
             </div>
           )}
         </div>
+      )}
+      {status.logged_in && (
+        <p className="text-xs text-white/40">Аккаунт подключён. Сторис будут публиковаться от его имени.</p>
+      )}
+      </div>
       )}
     </div>
   );

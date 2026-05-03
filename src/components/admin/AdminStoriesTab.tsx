@@ -72,6 +72,8 @@ export function AdminStoriesTab({ token }: Props) {
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [formExpanded, setFormExpanded] = useState(false);
+  const [queueExpanded, setQueueExpanded] = useState(false);
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -153,18 +155,24 @@ export function AdminStoriesTab({ token }: Props) {
     <div className="space-y-6">
       <TgUserLogin token={token} />
 
-      <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center">
+      <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: "rgba(255,255,255,0.02)" }}>
+        <button
+          type="button"
+          onClick={() => setFormExpanded(v => !v)}
+          className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left"
+        >
+          <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center flex-shrink-0">
             <Icon name="Film" size={20} className="text-pink-400" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h3 className="text-white font-medium text-lg">{editId ? "Редактирование сторис" : "Новый сторис"}</h3>
             <p className="text-white/40 text-xs">Видео 9:16 · автопубликация в @ug_transfer_pro раз в 48 часов</p>
           </div>
-        </div>
+          <Icon name="ChevronDown" size={18} className={`text-white/50 transition-transform flex-shrink-0 ${formExpanded ? "rotate-180" : ""}`} />
+        </button>
 
-        <div className="space-y-3">
+        {formExpanded && (
+        <div className="px-6 pb-6 space-y-3">
           <div>
             <label className="text-xs text-white/50 mb-1.5 block">Видео для сторис</label>
             <input
@@ -224,21 +232,30 @@ export function AdminStoriesTab({ token }: Props) {
             )}
           </div>
         </div>
+        )}
       </div>
 
-      <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+      <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: "rgba(255,255,255,0.02)" }}>
+        <button
+          type="button"
+          onClick={() => setQueueExpanded(v => !v)}
+          className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left"
+        >
+          <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
             <Icon name="ListVideo" size={20} className="text-orange-400" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h3 className="text-white font-medium text-lg">Очередь сторис</h3>
             <p className="text-white/40 text-xs">
               <Icon name="RefreshCw" size={11} className="inline mr-1" />
               {items.length} {items.length === 1 ? "видео" : "видео"} · публикация автоматом каждые 48 часов
             </p>
           </div>
-        </div>
+          <Icon name="ChevronDown" size={18} className={`text-white/50 transition-transform flex-shrink-0 ${queueExpanded ? "rotate-180" : ""}`} />
+        </button>
+
+        {queueExpanded && (
+        <div className="px-6 pb-6">
 
         {loading ? (
           <div className="flex justify-center py-8">
@@ -297,6 +314,8 @@ export function AdminStoriesTab({ token }: Props) {
               </div>
             ))}
           </div>
+        )}
+        </div>
         )}
       </div>
     </div>
