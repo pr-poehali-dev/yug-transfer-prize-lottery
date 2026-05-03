@@ -10,6 +10,7 @@ POST ?action=check_scheduled — проверить и опубликовать 
 """
 import os
 import json
+import re
 import hashlib
 import base64
 import uuid
@@ -19,6 +20,8 @@ import urllib.request
 import urllib.parse
 import boto3
 from datetime import datetime, timezone
+
+VK_API_VERSION = '5.199'
 
 
 CORS = {
