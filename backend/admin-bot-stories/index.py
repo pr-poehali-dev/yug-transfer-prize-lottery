@@ -89,10 +89,8 @@ def tg_api_multipart(method: str, fields: dict, files: dict) -> dict:
 
 
 def post_story(video_url: str, caption: str) -> dict:
-    """Публикует сторис: качает видео из CDN и шлёт в Telegram через multipart."""
-    business_id = os.environ.get('TELEGRAM_BUSINESS_CONNECTION_ID', '').strip()
-    if not business_id:
-        return {'ok': False, 'error': 'TELEGRAM_BUSINESS_CONNECTION_ID не задан'}
+    """Публикует сторис в канал @ug_transfer_pro через postStory (chat_id канала)."""
+    chat_id = '@ug_transfer_pro'
 
     try:
         with urllib.request.urlopen(video_url, timeout=30) as r:
@@ -106,7 +104,7 @@ def post_story(video_url: str, caption: str) -> dict:
         content['caption'] = caption
 
     fields = {
-        'business_connection_id': business_id,
+        'chat_id': chat_id,
         'content': json.dumps(content),
         'active_period': '172800',
     }
