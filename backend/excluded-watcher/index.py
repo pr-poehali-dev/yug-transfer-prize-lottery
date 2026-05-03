@@ -186,9 +186,14 @@ async def run_scan() -> dict:
         except Exception as e:
             return {'ok': False, 'error': f'нет доступа к {TARGET_GROUP}: {e}'}
 
-        # Читаем АДМИН-ЛОГ группы — нас интересуют:
-        # 1) Удаления сообщений (delete=True) — старая логика
-        # 2) Изменения прав / баны (kick=True, ban=True) — новая логика для @VsyaRussiabot
+        # Читаем АДМИН-ЛОГ группы — фильтруем строго по @VsyaRussiabot (admins=[bot])
+        # КРИТИЧНО: без admins=[bot] действия ботов СКРЫТЫ в AdminLog Telegram!
+        bot_entity = None
+        try:
+            bot_entity = await client.get_entity(DELETER_BOT)
+        except Exception as e:
+            return {'ok': False, 'error': f'cannot resolve {DELETER_BOT}: {e}'}
+
         try:
             admin_log = await client(GetAdminLogRequest(
                 channel=entity,
@@ -196,7 +201,7 @@ async def run_scan() -> dict:
                 events_filter=ChannelAdminLogEventsFilter(
                     delete=True, kick=True, ban=True,
                 ),
-                admins=[],
+                admins=[bot_entity],  # !! фильтр по конкретному боту
                 max_id=0,
                 min_id=last_id,
                 limit=100,
@@ -208,14 +213,7 @@ async def run_scan() -> dict:
         events.sort(key=lambda e: e.id)
 
         users_cache = {u.id: u for u in admin_log.users}
-
-        # Резолвим ID бота-исключателя
-        deleter_bot_ids = set()
-        try:
-            b = await client.get_entity(DELETER_BOT)
-            deleter_bot_ids.add(b.id)
-        except Exception as e:
-            print(f"[adminlog] cannot resolve {DELETER_BOT}: {e}")
+        deleter_bot_ids = {bot_entity.id}
 
         for ev in events:
             if ev.id > new_last_id:
@@ -420,19 +418,22 @@ async def run_listener(loop_token: str) -> dict:
             try:
                 cur_s = get_settings()
                 last_id = cur_s['last_checked_msg_id']
+                # КРИТИЧНО: admins=[bot] — иначе AdminLog скрывает действия ботов
+                try:
+                    bot_entity = await client.get_entity(DELETER_BOT)
+                except Exception as _e:
+                    print(f"[adminlog-poll] cannot resolve {DELETER_BOT}: {_e}")
+                    bot_entity = None
+                if not bot_entity:
+                    raise Exception('no bot entity')
                 admin_log = await client(GetAdminLogRequest(
                     channel=target_entity, q='',
                     events_filter=ChannelAdminLogEventsFilter(delete=True, kick=True, ban=True),
-                    admins=[], max_id=0, min_id=last_id, limit=50,
+                    admins=[bot_entity], max_id=0, min_id=last_id, limit=50,
                 ))
                 ev_list = sorted(admin_log.events, key=lambda e: e.id)
                 users_cache = {u.id: u for u in admin_log.users}
-                deleter_bot_ids = set()
-                try:
-                    b = await client.get_entity(DELETER_BOT)
-                    deleter_bot_ids.add(b.id)
-                except Exception as _e:
-                    print(f"[adminlog-poll] cannot resolve {DELETER_BOT}: {_e}")
+                deleter_bot_ids = {bot_entity.id}
                 new_max = last_id
                 for ev in ev_list:
                     if ev.id > new_max:
@@ -554,6 +555,61 @@ def handler(event: dict, context) -> dict:
         finally:
             loop.close()
 
+    # DEBUG: проверить права нашей сессии в группе и список админов
+    if action == 'debug_perms':
+        session_str = get_session2()
+        if not session_str:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+        api_id = int(os.environ['TG_API_ID'])
+        api_hash = os.environ['TG_API_HASH']
+        async def _dbg_perms():
+            from telethon.tl.functions.channels import GetParticipantsRequest, GetParticipantRequest
+            from telethon.tl.types import ChannelParticipantsAdmins
+            client = TelegramClient(StringSession(session_str), api_id, api_hash)
+            await client.connect()
+            try:
+                me = await client.get_me()
+                entity = await client.get_entity(TARGET_GROUP)
+                # Кто я в группе
+                my_part = None
+                try:
+                    p = await client(GetParticipantRequest(channel=entity, participant=me.id))
+                    my_part = type(p.participant).__name__
+                except Exception as e:
+                    my_part = f'err:{e}'
+                # Список админов
+                admins = []
+                try:
+                    res = await client(GetParticipantsRequest(
+                        channel=entity, filter=ChannelParticipantsAdmins(),
+                        offset=0, limit=50, hash=0
+                    ))
+                    for u in res.users:
+                        admins.append({
+                            'id': u.id, 'username': getattr(u, 'username', None),
+                            'first_name': getattr(u, 'first_name', None),
+                            'is_bot': getattr(u, 'bot', False),
+                        })
+                except Exception as e:
+                    admins = [{'error': str(e)}]
+                return {
+                    'ok': True,
+                    'me_id': me.id, 'me_username': me.username,
+                    'group_id': entity.id, 'group_title': getattr(entity, 'title', None),
+                    'my_role_in_group': my_part,
+                    'admins': admins,
+                }
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
+            finally:
+                try: await client.disconnect()
+                except Exception: pass
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        try:
+            return resp(200, loop.run_until_complete(_dbg_perms()))
+        finally:
+            loop.close()
+
     # DEBUG: последние сообщения В ЧАТЕ от @VsyaRussiabot
     if action == 'debug_chat':
         session_str = get_session2()
@@ -603,7 +659,7 @@ def handler(event: dict, context) -> dict:
             try:
                 entity = await client.get_entity(TARGET_GROUP)
                 bot = await client.get_entity(DELETER_BOT)
-                # Все типы событий
+                # Все типы событий — полный фильтр (включая send=True для сообщений)
                 admin_log = await client(GetAdminLogRequest(
                     channel=entity, q='',
                     events_filter=ChannelAdminLogEventsFilter(
@@ -611,8 +667,9 @@ def handler(event: dict, context) -> dict:
                         kick=True, unkick=True, promote=True, demote=True,
                         info=True, settings=True, pinned=True,
                         edit=True, delete=True, group_call=True, invites=True,
+                        send=True, forums=True,
                     ),
-                    admins=[], max_id=0, min_id=0, limit=50,
+                    admins=[bot], max_id=0, min_id=0, limit=100,
                 ))
                 events_data = []
                 for ev in sorted(admin_log.events, key=lambda e: e.id, reverse=True):
