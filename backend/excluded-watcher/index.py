@@ -357,27 +357,81 @@ async def run_listener(loop_token: str) -> dict:
             except Exception as e:
                 print(f"[listener handler err] {e}")
 
-        # Слушаем 25 секунд (или пока loop_token не сменился)
+        # Слушаем 25 секунд (или пока loop_token не сменился).
+        # В конце — один раз опрашиваем AdminLog (надёжный fallback).
         start = time.time()
         last_hb = 0
         try:
             while time.time() - start < LOOP_DURATION_SEC:
-                # Heartbeat и проверка остановки
                 if time.time() - last_hb > HEARTBEAT_EVERY_SEC:
                     cur_s = get_settings()
                     if not cur_s['enabled'] or cur_s['loop_token'] != loop_token:
                         break
                     heartbeat()
                     last_hb = time.time()
-                # Спим короткими порциями, чтобы handler успел отреагировать
                 await asyncio.sleep(2)
+
+            # Fallback: опрос AdminLog (один раз за цикл)
+            adminlog_sent = 0
+            try:
+                from telethon.tl.functions.channels import GetAdminLogRequest as _GAL
+                from telethon.tl.types import (
+                    ChannelAdminLogEventsFilter as _F,
+                    ChannelAdminLogEventActionDeleteMessage as _DEL,
+                )
+                cur_s = get_settings()
+                last_id = cur_s['last_checked_msg_id']
+                admin_log = await client(_GAL(
+                    channel=target_entity, q='', events_filter=_F(delete=True),
+                    admins=[], max_id=0, min_id=last_id, limit=50,
+                ))
+                ev_list = sorted(admin_log.events, key=lambda e: e.id)
+                users_cache = {u.id: u for u in admin_log.users}
+                new_max = last_id
+                for ev in ev_list:
+                    if ev.id > new_max:
+                        new_max = ev.id
+                    if not isinstance(ev.action, _DEL):
+                        continue
+                    deleted = ev.action.message
+                    from_id = getattr(deleted, 'from_id', None)
+                    author_id = getattr(from_id, 'user_id', None) if from_id else None
+                    if not author_id:
+                        continue
+                    user = users_cache.get(author_id)
+                    if not user:
+                        try:
+                            user = await client.get_entity(author_id)
+                        except Exception:
+                            continue
+                    if getattr(user, 'bot', False):
+                        continue
+                    if already_sent(author_id):
+                        continue
+                    username = getattr(user, 'username', '') or ''
+                    first_name = getattr(user, 'first_name', '') or 'водитель'
+                    personalized = template.replace('{name}', first_name).replace('{username}', username or '')
+                    try:
+                        await client.send_message(author_id, personalized)
+                        log_send(author_id, username, first_name, ev.id, 'ok')
+                        adminlog_sent += 1
+                        print(f"[adminlog-poll] sent to @{username} (id={author_id})")
+                    except FloodWaitError as fe:
+                        log_send(author_id, username, first_name, ev.id, f'flood:{fe.seconds}')
+                        break
+                    except Exception as e:
+                        log_send(author_id, username, first_name, ev.id, f'err:{str(e)[:200]}')
+                if new_max > last_id:
+                    save_settings(last_msg_id=new_max)
+            except Exception as e:
+                print(f"[adminlog-poll err] {e}")
         finally:
             try:
                 await client.disconnect()
             except Exception:
                 pass
 
-        return {'ok': True, 'sent': sent_count[0], 'events_seen': events_seen[0], 'duration_sec': round(time.time() - start, 1)}
+        return {'ok': True, 'sent': sent_count[0] + adminlog_sent, 'events_seen': events_seen[0], 'duration_sec': round(time.time() - start, 1)}
     except Exception as e:
         return {'ok': False, 'error': str(e)}
 
