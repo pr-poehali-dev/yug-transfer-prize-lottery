@@ -16,9 +16,9 @@ interface Settings {
 function isLoopAlive(heartbeat: string | null): boolean {
   if (!heartbeat) return false;
   const hb = new Date(heartbeat).getTime();
-  // С паузами 60с между циклами, нормальный heartbeat до ~90 сек
-  // Считаем мёртвым если > 2 мин
-  return Date.now() - hb < 120_000;
+  // С паузами 180с между циклами, нормальный heartbeat до ~210 сек
+  // Считаем мёртвым если > 4 мин
+  return Date.now() - hb < 240_000;
 }
 
 interface HistoryItem {
