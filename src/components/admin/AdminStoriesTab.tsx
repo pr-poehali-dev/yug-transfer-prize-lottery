@@ -72,8 +72,7 @@ export function AdminStoriesTab({ token }: Props) {
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [formExpanded, setFormExpanded] = useState(false);
-  const [queueExpanded, setQueueExpanded] = useState(false);
+  const [tabExpanded, setTabExpanded] = useState(false);
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -152,15 +151,30 @@ export function AdminStoriesTab({ token }: Props) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="card-glow rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setTabExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
+      >
+        <div className="flex items-center gap-2">
+          <Icon name="Film" size={15} className="text-pink-400" />
+          <span className="text-sm font-medium text-white">Сторис</span>
+          <span className="text-[11px] text-white/40">· {items.length}</span>
+        </div>
+        <Icon
+          name="ChevronDown"
+          size={16}
+          className={`text-white/50 transition-transform ${tabExpanded ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {tabExpanded && (
+      <div className="p-4 space-y-6">
       <TgUserLogin token={token} />
 
       <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: "rgba(255,255,255,0.02)" }}>
-        <button
-          type="button"
-          onClick={() => setFormExpanded(v => !v)}
-          className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left"
-        >
+        <div className="flex items-center gap-3 p-4">
           <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center flex-shrink-0">
             <Icon name="Film" size={20} className="text-pink-400" />
           </div>
@@ -168,10 +182,8 @@ export function AdminStoriesTab({ token }: Props) {
             <h3 className="text-white font-medium text-lg">{editId ? "Редактирование сторис" : "Новый сторис"}</h3>
             <p className="text-white/40 text-xs">Видео 9:16 · автопубликация в @ug_transfer_pro раз в 48 часов</p>
           </div>
-          <Icon name="ChevronDown" size={18} className={`text-white/50 transition-transform flex-shrink-0 ${formExpanded ? "rotate-180" : ""}`} />
-        </button>
+        </div>
 
-        {formExpanded && (
         <div className="px-6 pb-6 space-y-3">
           <div>
             <label className="text-xs text-white/50 mb-1.5 block">Видео для сторис</label>
@@ -232,15 +244,10 @@ export function AdminStoriesTab({ token }: Props) {
             )}
           </div>
         </div>
-        )}
       </div>
 
       <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: "rgba(255,255,255,0.02)" }}>
-        <button
-          type="button"
-          onClick={() => setQueueExpanded(v => !v)}
-          className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left"
-        >
+        <div className="flex items-center gap-3 p-4">
           <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
             <Icon name="ListVideo" size={20} className="text-orange-400" />
           </div>
@@ -251,12 +258,9 @@ export function AdminStoriesTab({ token }: Props) {
               {items.length} {items.length === 1 ? "видео" : "видео"} · публикация автоматом каждые 48 часов
             </p>
           </div>
-          <Icon name="ChevronDown" size={18} className={`text-white/50 transition-transform flex-shrink-0 ${queueExpanded ? "rotate-180" : ""}`} />
-        </button>
+        </div>
 
-        {queueExpanded && (
         <div className="px-6 pb-6">
-
         {loading ? (
           <div className="flex justify-center py-8">
             <div className="w-6 h-6 border-2 border-pink-500/30 border-t-pink-500 rounded-full animate-spin" />
@@ -316,8 +320,9 @@ export function AdminStoriesTab({ token }: Props) {
           </div>
         )}
         </div>
-        )}
       </div>
+      </div>
+      )}
     </div>
   );
 }

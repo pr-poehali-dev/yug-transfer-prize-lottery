@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import Icon from "@/components/ui/icon";
 import { ADMIN_BOT_POSTS_URL, SAIT_BOT_DAILY_URL } from "./adminTypes";
 import { BotPost } from "./bot/botTypes";
 import { BotsListBlock } from "./bot/BotsListBlock";
@@ -19,6 +20,7 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
   const [sending, setSending] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const fetchPosts = async () => {
     try {
@@ -153,37 +155,58 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
   };
 
   return (
-    <div className="space-y-8">
-      <BotsListBlock token={token} show={showBotsBlock} />
+    <div className="card-glow rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
+      >
+        <div className="flex items-center gap-2">
+          <Icon name="Calendar" size={15} className="text-orange-400" />
+          <span className="text-sm font-medium text-white">Ежедневные посты</span>
+          <span className="text-[11px] text-white/40">· {posts.length}</span>
+        </div>
+        <Icon
+          name="ChevronDown"
+          size={16}
+          className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
 
-      <BotPostsList
-        posts={posts}
-        loadingPosts={loadingPosts}
-        sending={sending}
-        unusedCount={unusedCount}
-        scheduleMap={scheduleMap}
-        queueOrder={queueOrder}
-        formatNextDate={formatNextDate}
-        onSendNow={handleSendNow}
-        onAddNew={() => { setShowAdd(true); setEditingId(null); setForm({ photo_url: "", greeting: "", description: "" }); }}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onSendOne={handleSendOne}
-        sendingId={sendingId}
-        formSlot={showAdd && (
-          <BotPostForm
-            token={token}
-            editingId={editingId}
-            form={form}
-            setForm={setForm}
-            saving={saving}
-            onSave={handleSave}
-            onCancel={() => { setShowAdd(false); setEditingId(null); }}
+      {expanded && (
+        <div className="p-4 space-y-6">
+          <BotsListBlock token={token} show={showBotsBlock} />
+
+          <BotPostsList
+            posts={posts}
+            loadingPosts={loadingPosts}
+            sending={sending}
+            unusedCount={unusedCount}
+            scheduleMap={scheduleMap}
+            queueOrder={queueOrder}
+            formatNextDate={formatNextDate}
+            onSendNow={handleSendNow}
+            onAddNew={() => { setShowAdd(true); setEditingId(null); setForm({ photo_url: "", greeting: "", description: "" }); }}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onSendOne={handleSendOne}
+            sendingId={sendingId}
+            formSlot={showAdd && (
+              <BotPostForm
+                token={token}
+                editingId={editingId}
+                form={form}
+                setForm={setForm}
+                saving={saving}
+                onSave={handleSave}
+                onCancel={() => { setShowAdd(false); setEditingId(null); }}
+              />
+            )}
           />
-        )}
-      />
 
-      <BotCronStatus cronStatus={cronStatus} />
+          <BotCronStatus cronStatus={cronStatus} />
+        </div>
+      )}
     </div>
   );
 }

@@ -62,35 +62,9 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
           {tab === "posts" && (
-            <div className="space-y-8">
+            <div className="space-y-3">
               <AdminPostsTab token={token} onTotalChange={setPostsTotal} />
-
-              <div className="relative py-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
-                </div>
-                <div className="relative flex justify-center">
-                  <div className="px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 backdrop-blur-sm flex items-center gap-2">
-                    <Icon name="Calendar" size={14} className="text-purple-300" />
-                    <span className="text-purple-200 text-xs font-medium uppercase tracking-wider">Ежедневные посты</span>
-                  </div>
-                </div>
-              </div>
-
               <AdminBotTab token={token} />
-
-              <div className="relative py-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full h-px bg-gradient-to-r from-transparent via-pink-500/40 to-transparent" />
-                </div>
-                <div className="relative flex justify-center">
-                  <div className="px-4 py-1.5 rounded-full bg-pink-500/10 border border-pink-500/30 backdrop-blur-sm flex items-center gap-2">
-                    <Icon name="Film" size={14} className="text-pink-300" />
-                    <span className="text-pink-200 text-xs font-medium uppercase tracking-wider">Сторис</span>
-                  </div>
-                </div>
-              </div>
-
               <AdminStoriesTab token={token} />
             </div>
           )}

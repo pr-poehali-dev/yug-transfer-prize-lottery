@@ -1,4 +1,3 @@
-import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { BotPost } from "./botTypes";
 
@@ -35,47 +34,35 @@ export function BotPostsList({
   sendingId,
   formSlot,
 }: BotPostsListProps) {
-  const [expanded, setExpanded] = useState(false);
   return (
     <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
       <div className="flex items-center justify-between mb-6">
-        <button
-          type="button"
-          onClick={() => setExpanded(v => !v)}
-          className="flex items-center gap-3 text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
-        >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
             <Icon name="Calendar" size={20} className="text-orange-400" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-white font-medium text-lg flex items-center gap-2">
-              Ежедневные посты
-              <Icon
-                name="ChevronDown"
-                size={18}
-                className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`}
-              />
-            </h3>
+            <h3 className="text-white font-medium text-lg">Ежедневные посты</h3>
             <p className="text-white/40 text-xs">
               <Icon name="RefreshCw" size={11} className="inline mr-1" />
               Зацикленная очередь · {posts.length} {posts.length === 1 ? "пост" : posts.length < 5 ? "поста" : "постов"} · @ug_transfer_pro
               {unusedCount > 0 && unusedCount < posts.length && ` · ещё ${unusedCount} новых в первой очереди`}
             </p>
           </div>
-        </button>
+        </div>
         <div className="flex gap-2 flex-shrink-0">
           <button onClick={onSendNow} disabled={sending} className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium hover:opacity-80 transition-colors disabled:opacity-50">
             {sending ? "Отправка..." : "Отправить сейчас"}
           </button>
-          <button onClick={() => { setExpanded(true); onAddNew(); }} className="px-4 py-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-sm font-medium hover:opacity-80 transition-colors">
+          <button onClick={onAddNew} className="px-4 py-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 text-sm font-medium hover:opacity-80 transition-colors">
             <Icon name="Plus" size={16} className="inline mr-1" />Добавить
           </button>
         </div>
       </div>
 
-      {expanded && formSlot}
+      {formSlot}
 
-      {!expanded ? null : loadingPosts ? (
+      {loadingPosts ? (
         <div className="flex justify-center py-8">
           <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
         </div>
