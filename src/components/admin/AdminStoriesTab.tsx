@@ -59,15 +59,6 @@ interface Props {
   token: string;
 }
 
-interface Conn {
-  connection_id: string;
-  user_id: number | null;
-  username: string;
-  is_enabled: boolean;
-  can_reply: boolean;
-  created_at: string | null;
-}
-
 export function AdminStoriesTab({ token }: Props) {
   const [items, setItems] = useState<BotStory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,10 +68,6 @@ export function AdminStoriesTab({ token }: Props) {
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [conns, setConns] = useState<Conn[]>([]);
-  const [currentSecret, setCurrentSecret] = useState("");
-  const [loadingConns, setLoadingConns] = useState(false);
-  const [copied, setCopied] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -98,25 +85,7 @@ export function AdminStoriesTab({ token }: Props) {
     }
   };
 
-  const loadConns = async () => {
-    setLoadingConns(true);
-    try {
-      const r = await fetch(`${ADMIN_BOT_STORIES_URL}?action=connections`, { headers: { "X-Admin-Token": token } });
-      const d = await r.json();
-      setConns(d.connections || []);
-      setCurrentSecret(d.current_secret || "");
-    } finally {
-      setLoadingConns(false);
-    }
-  };
-
-  const copyId = (id: string) => {
-    navigator.clipboard.writeText(id);
-    setCopied(id);
-    setTimeout(() => setCopied(""), 2000);
-  };
-
-  useEffect(() => { load(); loadConns(); }, []);
+  useEffect(() => { load(); }, []);
 
   const reset = () => {
     setVideoUrl(""); setCaption(""); setEditId(null); setError("");
@@ -181,66 +150,6 @@ export function AdminStoriesTab({ token }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-              <Icon name="Link2" size={20} className="text-blue-400" />
-            </div>
-            <div>
-              <h3 className="text-white font-medium text-lg">Подключения Telegram Business</h3>
-              <p className="text-white/40 text-xs">ID для секрета TELEGRAM_BUSINESS_CONNECTION_ID</p>
-            </div>
-          </div>
-          <button onClick={loadConns} className="px-3 py-2 rounded-xl border border-white/10 text-white/60 text-xs hover:bg-white/5 flex items-center gap-1.5">
-            <Icon name="RefreshCw" size={13} className={loadingConns ? "animate-spin" : ""} />Обновить
-          </button>
-        </div>
-
-        {conns.length === 0 ? (
-          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4 text-xs text-yellow-200/80 space-y-2">
-            <p className="font-medium text-yellow-200">Подключений ещё нет</p>
-            <p>Открой Telegram → Настройки → Telegram Business → Чат-боты → добавь @ug_sait_bot и включи «Управление сторис». Затем нажми «Обновить».</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {conns.map(c => {
-              const isActive = c.connection_id === currentSecret;
-              return (
-                <div key={c.connection_id} className={`p-3 rounded-xl border ${isActive ? "border-emerald-500/40 bg-emerald-500/5" : "border-white/8 bg-white/3"}`}>
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <code className="text-white text-sm font-mono break-all">{c.connection_id}</code>
-                        {isActive && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">в секрете</span>}
-                        {c.is_enabled ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300">активно</span>
-                        ) : (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/40">отключено</span>
-                        )}
-                      </div>
-                      <p className="text-white/40 text-xs mt-1">
-                        {c.username ? `@${c.username}` : `id ${c.user_id}`} · {c.created_at && new Date(c.created_at).toLocaleString("ru-RU")}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => copyId(c.connection_id)}
-                      className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 text-xs flex items-center gap-1.5 flex-shrink-0"
-                    >
-                      <Icon name={copied === c.connection_id ? "Check" : "Copy"} size={13} />
-                      {copied === c.connection_id ? "Скопировано" : "Скопировать"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            <p className="text-[11px] text-white/40 mt-3">
-              Скопируй ID и вставь его в секрет <code className="text-white/70">TELEGRAM_BUSINESS_CONNECTION_ID</code> в настройках проекта.
-            </p>
-          </div>
-        )}
-      </div>
-
       <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center">
