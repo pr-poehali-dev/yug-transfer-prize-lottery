@@ -183,18 +183,19 @@ async def run_scan() -> dict:
         # А username извлекаем из reply-сообщения (если есть)
         for m in msgs:
             text = (m.text or m.message or '')
-            if not text:
-                continue
-            # Сообщение должно быть от @VsyaRussiabot
+            action = getattr(m, 'action', None)
             sender = await m.get_sender() if m.sender_id else None
             sender_username = (getattr(sender, 'username', '') or '').lower() if sender else ''
-            if sender_username != DELETER_BOT.lower():
+            sender_id_log = m.sender_id
+            print(f"[scan] msg_id={m.id} from=@{sender_username} (id={sender_id_log}) action={type(action).__name__ if action else None} text={text[:200]!r}")
+            if not text:
                 continue
-            # Ищем именно фразу про удаление
+            # Триггер: фраза про удаление в любом сообщении (не зависим от username бота)
             mt = re.search(r'удалил.*?\bот\s+([^:\n]+):', text, re.IGNORECASE)
             if not mt:
                 continue
             display_name = mt.group(1).strip()
+            print(f"[scan] MATCH delete-msg from @{sender_username}, name={display_name!r}, reply_to={m.reply_to_msg_id}")
 
             # Достаём автора удалённого сообщения через reply
             reply = None
