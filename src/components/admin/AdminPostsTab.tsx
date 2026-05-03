@@ -47,6 +47,7 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [editingInTgId, setEditingInTgId] = useState<number | null>(null);
+  const [formExpanded, setFormExpanded] = useState(false);
 
   const fetchPosts = async (sf = statusFilter) => {
     setLoading(true);
@@ -382,7 +383,7 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
 
   return (
     <div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className={`grid grid-cols-1 gap-6 items-start ${formExpanded ? "lg:grid-cols-2" : ""}`}>
         <PostForm
           form={form}
           editId={editId}
@@ -396,6 +397,8 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
           formError={formError}
           formSuccess={formSuccess}
           editingPublished={!!editingPublished}
+          expanded={formExpanded}
+          onExpandedChange={setFormExpanded}
           onFormChange={patch => setForm(f => ({ ...f, ...patch }))}
           onScheduledAtChange={setScheduledAt}
           onEditInTgToggle={() => setEditInTg(v => !v)}
@@ -406,22 +409,24 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
           onReset={() => confirmLeave(resetForm)}
         />
 
-        <PostList
-          posts={posts}
-          loading={loading}
-          statusFilter={statusFilter}
-          editId={editId}
-          publishingId={publishingId}
-          deleting={deleting}
-          editingInTgId={editingInTgId}
-          onFilterChange={sf => setStatusFilter(sf)}
-          onRefresh={() => fetchPosts(statusFilter)}
-          onPublish={handlePublishFromList}
-          onEditInTg={handleEditInTg}
-          onEdit={post => confirmLeave(() => startEdit(post))}
-          onDelete={handleDelete}
-          onResetEdit={() => confirmLeave(resetForm)}
-        />
+        {!formExpanded && (
+          <PostList
+            posts={posts}
+            loading={loading}
+            statusFilter={statusFilter}
+            editId={editId}
+            publishingId={publishingId}
+            deleting={deleting}
+            editingInTgId={editingInTgId}
+            onFilterChange={sf => setStatusFilter(sf)}
+            onRefresh={() => fetchPosts(statusFilter)}
+            onPublish={handlePublishFromList}
+            onEditInTg={handleEditInTg}
+            onEdit={post => { confirmLeave(() => startEdit(post)); setFormExpanded(true); }}
+            onDelete={handleDelete}
+            onResetEdit={() => confirmLeave(resetForm)}
+          />
+        )}
       </div>
     </div>
   );

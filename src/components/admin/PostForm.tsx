@@ -33,6 +33,8 @@ interface PostFormProps {
   formError: string;
   formSuccess: string;
   editingPublished: boolean;
+  expanded: boolean;
+  onExpandedChange: (v: boolean) => void;
   onFormChange: (patch: Partial<PostFormData>) => void;
   onScheduledAtChange: (v: string) => void;
   onEditInTgToggle: () => void;
@@ -45,7 +47,7 @@ interface PostFormProps {
 
 export function PostForm({
   form, editId, scheduledAt, editInTg, saving, publishing, uploading, uploadingVideo, videoProgress,
-  formError, formSuccess, editingPublished,
+  formError, formSuccess, editingPublished, expanded, onExpandedChange,
   onFormChange, onScheduledAtChange, onEditInTgToggle,
   onPhotoUpload, onVideoNoteUpload, onSave, onPublishNow, onReset,
 }: PostFormProps) {
@@ -53,21 +55,20 @@ export function PostForm({
   const videoRef = useRef<HTMLInputElement>(null);
   const videoCaptureRef = useRef<HTMLInputElement>(null);
   const [showButton2, setShowButton2] = useState(!!(form.button2_text || form.button2_url));
-  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (form.button2_text || form.button2_url) setShowButton2(true);
   }, [form.button2_text, form.button2_url]);
 
   useEffect(() => {
-    if (editId) setExpanded(true);
-  }, [editId]);
+    if (editId) onExpandedChange(true);
+  }, [editId, onExpandedChange]);
 
   return (
     <div className="card-glow rounded-2xl overflow-hidden">
       <button
         type="button"
-        onClick={() => setExpanded(v => !v)}
+        onClick={() => onExpandedChange(!expanded)}
         className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/5 transition-colors border-b border-white/10"
       >
         <div className="flex items-center gap-2">
