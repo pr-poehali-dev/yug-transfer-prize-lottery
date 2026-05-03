@@ -20,6 +20,11 @@ import psycopg2
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError
+from telethon.tl.functions.channels import GetAdminLogRequest
+from telethon.tl.types import (
+    ChannelAdminLogEventsFilter,
+    ChannelAdminLogEventActionDeleteMessage,
+)
 
 SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
 LOOP_DURATION_SEC = 25  # макс время одного запуска (укладываемся в таймаут 30)
@@ -165,85 +170,83 @@ async def run_scan() -> dict:
         except Exception as e:
             return {'ok': False, 'error': f'нет доступа к {TARGET_GROUP}: {e}'}
 
-        # Берём последние 100 сообщений; если впервые — стартуем с самых свежих
-        msgs = []
-        async for m in client.iter_messages(entity, limit=100):
-            msgs.append(m)
-            if m.id > new_last_id:
-                new_last_id = m.id
-            if last_id > 0 and m.id <= last_id:
-                break
+        # Читаем АДМИН-ЛОГ группы — там фиксируются удаления сообщений ботом
+        # ВАЖНО: аккаунт должен быть админом группы @UG_DRIVER, иначе AdminLog недоступен
+        try:
+            admin_log = await client(GetAdminLogRequest(
+                channel=entity,
+                q='',
+                events_filter=ChannelAdminLogEventsFilter(
+                    delete=True,
+                ),
+                admins=[],
+                max_id=0,
+                min_id=last_id,  # берём только новые события после last_id
+                limit=100,
+            ))
+        except Exception as e:
+            return {'ok': False, 'error': f'AdminLog недоступен (аккаунт должен быть админом): {e}'}
 
-        # Идём от старых к новым
-        msgs.reverse()
+        events = list(admin_log.events)
+        events.sort(key=lambda e: e.id)  # от старых к новым
 
-        # Регулярка: "Payment удалил(а) ... сообщение от <ИМЯ>:" — после идёт цитата
-        # На скрине: "Payment удалил(а) 1 сообщение от Олег:"
-        # Имя автора — после "от " до ":"
-        # А username извлекаем из reply-сообщения (если есть)
-        for m in msgs:
-            text = (m.text or m.message or '')
-            action = getattr(m, 'action', None)
-            sender = await m.get_sender() if m.sender_id else None
-            sender_username = (getattr(sender, 'username', '') or '').lower() if sender else ''
-            sender_id_log = m.sender_id
-            print(f"[scan] msg_id={m.id} from=@{sender_username} (id={sender_id_log}) action={type(action).__name__ if action else None} text={text[:200]!r}")
-            if not text:
+        # Кеш юзеров из лога
+        users_cache = {u.id: u for u in admin_log.users}
+
+        for ev in events:
+            if ev.id > new_last_id:
+                new_last_id = ev.id
+            action = ev.action
+            if not isinstance(action, ChannelAdminLogEventActionDeleteMessage):
                 continue
-            # Триггер: фраза про удаление в любом сообщении (не зависим от username бота)
-            mt = re.search(r'удалил.*?\bот\s+([^:\n]+):', text, re.IGNORECASE)
-            if not mt:
+            deleted = action.message
+            author_id = None
+            # Достаём ID автора удалённого сообщения
+            if hasattr(deleted, 'from_id') and deleted.from_id:
+                from_id = deleted.from_id
+                # PeerUser имеет .user_id
+                author_id = getattr(from_id, 'user_id', None)
+            if not author_id:
+                print(f"[adminlog] event={ev.id} no author")
                 continue
-            display_name = mt.group(1).strip()
-            print(f"[scan] MATCH delete-msg from @{sender_username}, name={display_name!r}, reply_to={m.reply_to_msg_id}")
 
-            # Достаём автора удалённого сообщения через reply
-            reply = None
-            if m.reply_to_msg_id:
+            user = users_cache.get(author_id)
+            if not user:
                 try:
-                    reply = await client.get_messages(entity, ids=m.reply_to_msg_id)
-                except Exception:
-                    reply = None
+                    user = await client.get_entity(author_id)
+                except Exception as e:
+                    print(f"[adminlog] event={ev.id} get_entity failed: {e}")
+                    continue
 
-            user_id = None
-            username = ''
-            first_name = display_name
-            if reply and getattr(reply, 'sender_id', None):
-                user_id = reply.sender_id
-                try:
-                    u = await reply.get_sender()
-                    if u:
-                        username = getattr(u, 'username', '') or ''
-                        first_name = getattr(u, 'first_name', '') or display_name
-                except Exception:
-                    pass
+            username = getattr(user, 'username', '') or ''
+            first_name = getattr(user, 'first_name', '') or 'водитель'
+            is_bot = getattr(user, 'bot', False)
 
-            if not user_id:
-                errors.append({'msg_id': m.id, 'reason': 'no_reply_author', 'name': display_name})
+            print(f"[adminlog] event={ev.id} deleted_author=@{username} (id={author_id}, name={first_name}, bot={is_bot})")
+
+            if is_bot:
+                continue  # ботам не пишем
+
+            if already_sent(author_id):
                 continue
 
-            # Не шлём повторно
-            if already_sent(user_id):
-                continue
-
-            # Подставляем имя
             personalized = template.replace('{name}', first_name).replace('{username}', username or '')
-            # Шлём в ЛС
             try:
-                await client.send_message(user_id, personalized)
-                log_send(user_id, username, first_name, m.id, 'ok')
+                await client.send_message(author_id, personalized)
+                log_send(author_id, username, first_name, ev.id, 'ok')
                 sent_count += 1
-                found.append({'user_id': user_id, 'username': username, 'first_name': first_name, 'msg_id': m.id})
+                found.append({'user_id': author_id, 'username': username, 'first_name': first_name, 'event_id': ev.id})
             except FloodWaitError as fe:
-                log_send(user_id, username, first_name, m.id, f'flood:{fe.seconds}')
-                errors.append({'msg_id': m.id, 'reason': f'flood {fe.seconds}s'})
+                log_send(author_id, username, first_name, ev.id, f'flood:{fe.seconds}')
+                errors.append({'event_id': ev.id, 'reason': f'flood {fe.seconds}s'})
                 break
             except Exception as e:
-                log_send(user_id, username, first_name, m.id, f'err:{str(e)[:200]}')
-                errors.append({'msg_id': m.id, 'reason': str(e)[:200]})
+                log_send(author_id, username, first_name, ev.id, f'err:{str(e)[:200]}')
+                errors.append({'event_id': ev.id, 'reason': str(e)[:200]})
 
-        save_settings(last_msg_id=new_last_id)
-        return {'ok': True, 'sent': sent_count, 'found': found, 'errors': errors, 'last_msg_id': new_last_id}
+        if new_last_id > last_id:
+            save_settings(last_msg_id=new_last_id)
+        return {'ok': True, 'sent': sent_count, 'found': found, 'errors': errors, 'events_total': len(events), 'last_event_id': new_last_id}
     finally:
         try:
             await client.disconnect()
