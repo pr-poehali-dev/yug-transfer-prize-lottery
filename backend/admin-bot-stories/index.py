@@ -158,7 +158,30 @@ def handler(event: dict, context) -> dict:
             row = cur.fetchone()
             if not row:
                 return resp(404, {'error': 'not_found'})
-            r = post_story(row[0], row[1] or '')
+
+            # Публикуем через user-аккаунт (Telethon) — обращаемся к tg-user-story
+            user_story_url = 'https://functions.poehali.dev/e47b662c-3d9d-42c4-aa13-dda080f9a777'
+            admin_login = os.environ.get('ADMIN_LOGIN', '')
+            admin_password = os.environ.get('ADMIN_PASSWORD', '')
+            admin_token = hashlib.sha256(f"{admin_login}:{admin_password}:admin_secret_2026".encode()).hexdigest()
+            payload = json.dumps({'video_url': row[0], 'caption': row[1] or ''}).encode()
+            req = urllib.request.Request(
+                user_story_url,
+                data=payload,
+                headers={'Content-Type': 'application/json', 'X-Admin-Token': admin_token},
+                method='POST',
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=120) as rr:
+                    r = json.loads(rr.read())
+            except urllib.error.HTTPError as e:
+                try:
+                    r = json.loads(e.read().decode())
+                except Exception:
+                    r = {'ok': False, 'error': f'HTTP {e.code}'}
+            except Exception as e:
+                r = {'ok': False, 'error': str(e)}
+
             tg_desc = r.get('description') or r.get('error') or 'unknown'
             status = 'ok' if r.get('ok') else f"err:{tg_desc}"
             cur.execute(f"UPDATE {SCHEMA}.bot_stories SET last_sent_at=NOW(), last_status='{esc(status)}', is_used=TRUE WHERE id={sid}")
