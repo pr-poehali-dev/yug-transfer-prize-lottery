@@ -488,6 +488,17 @@ def handler(event: dict, context) -> dict:
         finally:
             loop.close()
 
+    # Перезапуск цикла без авторизации (для случаев когда loop умер после деплоя)
+    if (method == 'POST' or method == 'GET') and action == 'revive':
+        s = get_settings()
+        if not s['enabled']:
+            return resp(200, {'ok': False, 'reason': 'disabled', 'hint': 'включи слежение в админке'})
+        import secrets as _secrets
+        new_token = _secrets.token_hex(16)
+        set_loop_token(new_token)
+        fire_self_loop(new_token)
+        return resp(200, {'ok': True, 'revived': True, 'token_preview': new_token[:8] + '…'})
+
     # 24/7 СЛУШАТЕЛЬ событий (event-driven, экономит compute)
     if method == 'POST' and action == 'loop':
         body_raw = event.get('body') or '{}'
