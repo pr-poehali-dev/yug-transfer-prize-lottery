@@ -1,21 +1,29 @@
 """Сканер группы @UG_DRIVER: ловит сообщения от @VsyaRussiabot ('удалил(а) сообщение от ...'),
 определяет автора удалённого сообщения и шлёт ему в ЛС шаблон от имени второго user-аккаунта.
 
-GET                         — статус (включено/выключено, шаблон, последние отправки)
-POST ?action=settings       — обновить шаблон/enabled
-POST ?action=run            — ручной запуск проверки (тот же код что cron)
+GET                         — статус
+POST ?action=settings       — обновить шаблон/enabled (старт/стоп цикла)
+POST ?action=run            — одноразовый ручной запуск
+POST ?action=loop           — цикл 24/7: сканит каждые 5 сек, в конце таймаута перезапускает себя
 GET  ?action=history        — история отправок
 """
 import os
 import json
 import re
+import time
 import hashlib
 import asyncio
+import threading
+import urllib.request
 import psycopg2
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError
+
+SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
+LOOP_DURATION_SEC = 25  # макс время одного запуска (укладываемся в таймаут 30)
+SCAN_INTERVAL_SEC = 5   # пауза между сканами внутри цикла
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -48,12 +56,43 @@ def db():
 
 def get_settings() -> dict:
     conn = db(); cur = conn.cursor()
-    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at FROM {SCHEMA}.excluded_settings WHERE id=1")
+    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat FROM {SCHEMA}.excluded_settings WHERE id=1")
     r = cur.fetchone()
     cur.close(); conn.close()
     if not r:
-        return {'enabled': False, 'message_template': '', 'last_checked_msg_id': 0, 'last_run_at': None}
-    return {'enabled': r[0], 'message_template': r[1], 'last_checked_msg_id': int(r[2] or 0), 'last_run_at': r[3]}
+        return {'enabled': False, 'message_template': '', 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None}
+    return {
+        'enabled': r[0], 'message_template': r[1], 'last_checked_msg_id': int(r[2] or 0),
+        'last_run_at': r[3], 'loop_token': r[4], 'loop_heartbeat': r[5],
+    }
+
+
+def set_loop_token(token: str):
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"UPDATE {SCHEMA}.excluded_settings SET loop_token='{esc(token)}', loop_heartbeat=NOW() WHERE id=1")
+    conn.commit(); cur.close(); conn.close()
+
+
+def heartbeat():
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"UPDATE {SCHEMA}.excluded_settings SET loop_heartbeat=NOW() WHERE id=1")
+    conn.commit(); cur.close(); conn.close()
+
+
+def fire_self_loop(token: str):
+    """Запускает себя же в фоне (POST ?action=loop) и сразу возвращается."""
+    def _go():
+        try:
+            req = urllib.request.Request(
+                f"{SELF_URL}?action=loop",
+                data=json.dumps({'token': token}).encode(),
+                headers={'Content-Type': 'application/json'},
+                method='POST',
+            )
+            urllib.request.urlopen(req, timeout=3)
+        except Exception:
+            pass
+    threading.Thread(target=_go, daemon=True).start()
 
 
 def save_settings(enabled=None, template=None, last_msg_id=None):
@@ -220,11 +259,58 @@ def handler(event: dict, context) -> dict:
     qs = event.get('queryStringParameters') or {}
     action = qs.get('action', '')
 
-    # Cron вызов без авторизации (по action=cron)
+    # Cron вызов без авторизации
     if method == 'POST' and action == 'cron':
         loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
         try:
             return resp(200, loop.run_until_complete(run_scan()))
+        finally:
+            loop.close()
+
+    # 24/7 цикл — без авторизации (защищён токеном из БД)
+    if method == 'POST' and action == 'loop':
+        body_raw = event.get('body') or '{}'
+        try:
+            body_in = json.loads(body_raw)
+        except Exception:
+            body_in = {}
+        incoming_token = body_in.get('token', '')
+        s = get_settings()
+        # Проверка: цикл активен и токен совпадает
+        if not s['enabled']:
+            return resp(200, {'ok': False, 'reason': 'disabled'})
+        if s['loop_token'] and incoming_token != s['loop_token']:
+            return resp(200, {'ok': False, 'reason': 'token_mismatch_old_loop_dies'})
+
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        start = time.time()
+        scans = 0
+        total_sent = 0
+        try:
+            while time.time() - start < LOOP_DURATION_SEC:
+                # проверяем что цикл всё ещё нужен
+                cur_s = get_settings()
+                if not cur_s['enabled'] or cur_s['loop_token'] != incoming_token:
+                    return resp(200, {'ok': True, 'stopped': True, 'scans': scans, 'sent': total_sent})
+                heartbeat()
+                try:
+                    res = loop.run_until_complete(run_scan())
+                    if res.get('ok'):
+                        total_sent += res.get('sent', 0)
+                except Exception as e:
+                    print(f"[loop scan err] {e}")
+                scans += 1
+                # Спим до следующего скана
+                remain = LOOP_DURATION_SEC - (time.time() - start)
+                if remain > SCAN_INTERVAL_SEC + 2:
+                    time.sleep(SCAN_INTERVAL_SEC)
+                else:
+                    break
+            # Цикл закончился — перезапускаем себя
+            cur_s = get_settings()
+            if cur_s['enabled'] and cur_s['loop_token'] == incoming_token:
+                fire_self_loop(incoming_token)
+            return resp(200, {'ok': True, 'scans': scans, 'sent': total_sent, 'restarted': True})
         finally:
             loop.close()
 
@@ -257,7 +343,17 @@ def handler(event: dict, context) -> dict:
         enabled = body.get('enabled')
         template = body.get('message_template')
         save_settings(enabled=enabled, template=template)
-        return resp(200, {'ok': True})
+        # Запускаем/перезапускаем цикл если включено
+        if enabled:
+            import secrets
+            new_token = secrets.token_hex(16)
+            set_loop_token(new_token)
+            fire_self_loop(new_token)
+            return resp(200, {'ok': True, 'loop_started': True})
+        else:
+            # Сбрасываем токен — старые циклы умрут на следующей итерации
+            set_loop_token('')
+            return resp(200, {'ok': True, 'loop_stopped': True})
 
     if method == 'POST' and action == 'run':
         loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)

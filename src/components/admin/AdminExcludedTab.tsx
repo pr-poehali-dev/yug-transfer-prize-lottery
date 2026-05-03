@@ -10,6 +10,13 @@ interface Settings {
   message_template: string;
   last_checked_msg_id: number;
   last_run_at: string | null;
+  loop_heartbeat: string | null;
+}
+
+function isLoopAlive(heartbeat: string | null): boolean {
+  if (!heartbeat) return false;
+  const hb = new Date(heartbeat).getTime();
+  return Date.now() - hb < 60_000; // живой если был < 1 минуты назад
 }
 
 interface HistoryItem {
@@ -51,6 +58,12 @@ export function AdminExcludedTab({ token }: Props) {
     if (tabExpanded) { load(); loadHistory(); }
   }, [tabExpanded]);
 
+  useEffect(() => {
+    if (!tabExpanded) return;
+    const id = setInterval(() => { load(); loadHistory(); }, 15_000);
+    return () => clearInterval(id);
+  }, [tabExpanded]);
+
   const saveSettings = async () => {
     setSaving(true);
     try {
@@ -89,6 +102,12 @@ export function AdminExcludedTab({ token }: Props) {
           {settings && (
             <span className={`text-[10px] px-2 py-0.5 rounded-full ${enabled ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white/40"}`}>
               {enabled ? "вкл" : "выкл"}
+            </span>
+          )}
+          {settings && enabled && (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${isLoopAlive(settings.loop_heartbeat) ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isLoopAlive(settings.loop_heartbeat) ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
+              {isLoopAlive(settings.loop_heartbeat) ? "слушает 24/7" : "цикл остановлен"}
             </span>
           )}
         </div>
