@@ -1,4 +1,6 @@
 {
+  "tg-user-story": "https://functions.poehali.dev/e47b662c-3d9d-42c4-aa13-dda080f9a777",
+  "tg-user-auth": "https://functions.poehali.dev/1d230a4a-3752-4182-9d42-e67398b99b97",
   "admin-bot-stories": "https://functions.poehali.dev/58582409-0dd6-4199-9901-fc7977290659",
   "stories-cron": "https://functions.poehali.dev/4358e85d-c5de-4dd3-840a-8f6ce8b6f2eb",
   "admin-driver-subs": "https://functions.poehali.dev/95d0380a-04e8-4a3c-88db-9c256a11f1f6",

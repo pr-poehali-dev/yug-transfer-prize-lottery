@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { ADMIN_BOT_STORIES_URL, UPLOAD_VIDEO_URL } from "./adminTypes";
 import type { BotStory } from "./adminTypes";
+import { TgUserLogin } from "./TgUserLogin";
 
 const CHUNK_SIZE = 512 * 1024; // 512 KB
 
@@ -150,6 +151,8 @@ export function AdminStoriesTab({ token }: Props) {
 
   return (
     <div className="space-y-6">
+      <TgUserLogin token={token} />
+
       <div className="rounded-2xl border border-white/8 p-6" style={{ background: "rgba(255,255,255,0.02)" }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center">

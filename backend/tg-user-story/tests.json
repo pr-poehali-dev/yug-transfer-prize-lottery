@@ -1,0 +1,6 @@
+{
+  "tests": [
+    {"name": "OPTIONS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+    {"name": "POST unauthorized", "method": "POST", "path": "/", "expectedStatus": 401}
+  ]
+}

@@ -7,6 +7,8 @@ export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4
 export const UPLOAD_VIDEO_URL = "https://functions.poehali.dev/f6d6a065-4281-4091-ac9e-9e3121bf2571";
 export const ADMIN_DRIVER_SUBS_URL = "https://functions.poehali.dev/95d0380a-04e8-4a3c-88db-9c256a11f1f6";
 export const ADMIN_BOT_STORIES_URL = "https://functions.poehali.dev/58582409-0dd6-4199-9901-fc7977290659";
+export const TG_USER_AUTH_URL = "https://functions.poehali.dev/1d230a4a-3752-4182-9d42-e67398b99b97";
+export const TG_USER_STORY_URL = "https://functions.poehali.dev/e47b662c-3d9d-42c4-aa13-dda080f9a777";
 
 export type AdminTab = "posts" | "bot" | "drivers" | "stories";
 
