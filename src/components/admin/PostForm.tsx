@@ -41,6 +41,8 @@ interface PostFormProps {
   onSave: (status: "draft" | "scheduled") => void;
   onPublishNow: () => void;
   onReset: () => void;
+  testingVk?: boolean;
+  onTestVK?: () => void;
 }
 
 export function PostForm({
@@ -48,6 +50,7 @@ export function PostForm({
   formError, formSuccess, editingPublished,
   onFormChange, onScheduledAtChange, onEditInTgToggle,
   onPhotoUpload, onVideoNoteUpload, onSave, onPublishNow, onReset,
+  testingVk = false, onTestVK,
 }: PostFormProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
@@ -329,6 +332,19 @@ export function PostForm({
               : <><Icon name="Send" size={13} />Опубликовать</>}
           </button>
         </div>
+
+        {onTestVK && (
+          <button
+            onClick={onTestVK}
+            disabled={saving || publishing || testingVk}
+            className="w-full py-2 rounded-lg bg-[#0077FF]/15 hover:bg-[#0077FF]/25 border border-[#0077FF]/40 text-[#4ea3ff] text-xs font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+            title="Тест: опубликовать только на личную стену ВК"
+          >
+            {testingVk
+              ? <><div className="w-3.5 h-3.5 border-2 border-[#4ea3ff]/30 border-t-[#4ea3ff] rounded-full animate-spin" />Отправляю в ВК...</>
+              : <><Icon name="TestTube2" size={13} />Тест: моя стена ВК</>}
+          </button>
+        )}
       </div>
     </div>
   );

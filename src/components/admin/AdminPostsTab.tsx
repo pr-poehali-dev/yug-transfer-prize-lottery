@@ -33,6 +33,7 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
   const [editInTg, setEditInTg] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [testingVk, setTestingVk] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -315,6 +316,38 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
     } finally { setPublishing(false); }
   };
 
+  // ── тест: опубликовать ТОЛЬКО на личную стену ВК ──
+  const handleTestVK = async () => {
+    if (!form.text.trim() && !form.photo_url) { setFormError("Добавьте текст или фото"); return; }
+    setTestingVk(true); setFormError(""); setFormSuccess("");
+    try {
+      const savePayload: Record<string, unknown> = {
+        ...form, status: "draft", scheduled_at: null,
+        ...(editId ? { id: editId } : {}),
+      };
+      const saveRes = await fetch(ADMIN_POSTS_URL, {
+        method: editId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify(savePayload),
+      });
+      const saveData = await saveRes.json();
+      if (!saveData.ok) throw new Error(saveData.error || "Ошибка сохранения");
+      const postId = saveData.post.id;
+
+      const res = await fetch(`${ADMIN_POSTS_URL}?action=test_vk_user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ post_id: postId }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Ошибка ВК");
+      setFormSuccess(`✅ Опубликовано на стене ВК (post_id: ${data.vk_post_id})`);
+      if (!editId) { setTotal(t => t + 1); setEditId(postId); }
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "Ошибка теста ВК");
+    } finally { setTestingVk(false); }
+  };
+
   // ── опубликовать из списка ──
   const handlePublishFromList = async (post: Post) => {
     setPublishingId(post.id);
@@ -404,6 +437,8 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
           onSave={handleSave}
           onPublishNow={handlePublishNow}
           onReset={() => confirmLeave(resetForm)}
+          testingVk={testingVk}
+          onTestVK={handleTestVK}
         />
 
         <PostList
