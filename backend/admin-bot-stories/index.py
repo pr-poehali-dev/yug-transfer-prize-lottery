@@ -2,7 +2,9 @@
 import os
 import json
 import hashlib
+import uuid
 import urllib.request
+import urllib.error
 import psycopg2
 
 CORS = {
@@ -40,25 +42,76 @@ def tg_api(method: str, payload: dict) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode()
+            print(f"[tg_api {method}] HTTP {e.code}: {err_body}")
+            return json.loads(err_body)
+        except Exception:
+            return {'ok': False, 'error': f'HTTP {e.code}'}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def tg_api_multipart(method: str, fields: dict, files: dict) -> dict:
+    token = os.environ.get('TELEGRAM_BOT_TOKEN_2', '')
+    url = f"https://api.telegram.org/bot{token}/{method}"
+    boundary = uuid.uuid4().hex
+    crlf = b'\r\n'
+    body = b''
+    for k, v in fields.items():
+        body += b'--' + boundary.encode() + crlf
+        body += f'Content-Disposition: form-data; name="{k}"'.encode() + crlf + crlf
+        body += (v if isinstance(v, bytes) else str(v).encode()) + crlf
+    for fname, (filename, fbytes, ctype) in files.items():
+        body += b'--' + boundary.encode() + crlf
+        body += f'Content-Disposition: form-data; name="{fname}"; filename="{filename}"'.encode() + crlf
+        body += f'Content-Type: {ctype}'.encode() + crlf + crlf
+        body += fbytes + crlf
+    body += b'--' + boundary.encode() + b'--' + crlf
+
+    req = urllib.request.Request(url, data=body, headers={
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Content-Length': str(len(body)),
+    }, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode()
+            print(f"[tg_api_multipart {method}] HTTP {e.code}: {err_body}")
+            return json.loads(err_body)
+        except Exception:
+            return {'ok': False, 'error': f'HTTP {e.code}'}
     except Exception as e:
         return {'ok': False, 'error': str(e)}
 
 
 def post_story(video_url: str, caption: str) -> dict:
-    """Публикует сторис в канал. Требует Business Connection (Telegram Premium у владельца).
-    Если business_connection_id не настроен — возвращает понятную ошибку."""
+    """Публикует сторис: качает видео из CDN и шлёт в Telegram через multipart."""
     business_id = os.environ.get('TELEGRAM_BUSINESS_CONNECTION_ID', '').strip()
     if not business_id:
-        return {'ok': False, 'error': 'TELEGRAM_BUSINESS_CONNECTION_ID не задан. Сторис в канал требует подключения Business аккаунта Telegram.'}
-    payload = {
-        'business_connection_id': business_id,
-        'content': {'type': 'video', 'video': video_url},
-        'active_period': 172800,  # 48 часов
-    }
+        return {'ok': False, 'error': 'TELEGRAM_BUSINESS_CONNECTION_ID не задан'}
+
+    try:
+        with urllib.request.urlopen(video_url, timeout=30) as r:
+            video_bytes = r.read()
+        print(f"[post_story] downloaded {len(video_bytes)} bytes from {video_url}")
+    except Exception as e:
+        return {'ok': False, 'error': f'не удалось скачать видео: {e}'}
+
+    content = {'type': 'video', 'video': 'attach://video_file'}
     if caption:
-        payload['caption'] = caption
-    result = tg_api('postStory', payload)
-    return result
+        content['caption'] = caption
+
+    fields = {
+        'business_connection_id': business_id,
+        'content': json.dumps(content),
+        'active_period': '172800',
+    }
+    files = {'video_file': ('story.mp4', video_bytes, 'video/mp4')}
+    return tg_api_multipart('postStory', fields, files)
 
 
 def handler(event: dict, context) -> dict:
@@ -108,10 +161,11 @@ def handler(event: dict, context) -> dict:
             if not row:
                 return resp(404, {'error': 'not_found'})
             r = post_story(row[0], row[1] or '')
-            status = 'ok' if r.get('ok') else f"err:{r.get('error') or r.get('description', 'unknown')}"
+            tg_desc = r.get('description') or r.get('error') or 'unknown'
+            status = 'ok' if r.get('ok') else f"err:{tg_desc}"
             cur.execute(f"UPDATE {SCHEMA}.bot_stories SET last_sent_at=NOW(), last_status='{esc(status)}', is_used=TRUE WHERE id={sid}")
             conn.commit()
-            return resp(200, {'ok': r.get('ok', False), 'status': status, 'tg': r})
+            return resp(200, {'ok': r.get('ok', False), 'status': status, 'description': tg_desc, 'tg': r})
 
         if method == 'POST':
             video_url = body.get('video_url', '').strip()
