@@ -5,6 +5,19 @@ import type { BotStory } from "./adminTypes";
 
 const CHUNK_SIZE = 512 * 1024; // 512 KB
 
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function uploadVideoFile(file: File, token: string, onProgress: (pct: number) => void): Promise<string> {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   const initRes = await fetch(`${UPLOAD_VIDEO_URL}?action=init`, {
@@ -19,8 +32,7 @@ async function uploadVideoFile(file: File, token: string, onProgress: (pct: numb
   for (let i = 0; i < totalChunks; i++) {
     const start = i * CHUNK_SIZE;
     const blob = file.slice(start, start + CHUNK_SIZE);
-    const buf = await blob.arrayBuffer();
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const b64 = await blobToBase64(blob);
     const r = await fetch(`${UPLOAD_VIDEO_URL}?action=chunk&id=${uploadId}&n=${i}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Admin-Token": token },
