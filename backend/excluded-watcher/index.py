@@ -194,11 +194,23 @@ async def run_scan() -> dict:
         # Кеш юзеров из лога
         users_cache = {u.id: u for u in admin_log.users}
 
+        # Резолвим ID бота-удалятора (только его удаления нас интересуют)
+        deleter_bot_ids = set()
+        try:
+            b = await client.get_entity(DELETER_BOT)
+            deleter_bot_ids.add(b.id)
+        except Exception as e:
+            print(f"[adminlog] cannot resolve {DELETER_BOT}: {e}")
+
         for ev in events:
             if ev.id > new_last_id:
                 new_last_id = ev.id
             action = ev.action
             if not isinstance(action, ChannelAdminLogEventActionDeleteMessage):
+                continue
+            # Фильтр: реагируем только если удалил @VsyaRussiabot
+            if deleter_bot_ids and ev.user_id not in deleter_bot_ids:
+                print(f"[adminlog] skip event={ev.id} deleter_id={ev.user_id} (not VsyaRussiabot)")
                 continue
             deleted = action.message
             author_id = None
@@ -387,11 +399,21 @@ async def run_listener(loop_token: str) -> dict:
                 ))
                 ev_list = sorted(admin_log.events, key=lambda e: e.id)
                 users_cache = {u.id: u for u in admin_log.users}
+                # Резолвим ID @VsyaRussiabot
+                deleter_bot_ids = set()
+                try:
+                    b = await client.get_entity(DELETER_BOT)
+                    deleter_bot_ids.add(b.id)
+                except Exception as _e:
+                    print(f"[adminlog-poll] cannot resolve {DELETER_BOT}: {_e}")
                 new_max = last_id
                 for ev in ev_list:
                     if ev.id > new_max:
                         new_max = ev.id
                     if not isinstance(ev.action, _DEL):
+                        continue
+                    # Фильтр: только удаления от @VsyaRussiabot
+                    if deleter_bot_ids and ev.user_id not in deleter_bot_ids:
                         continue
                     deleted = ev.action.message
                     from_id = getattr(deleted, 'from_id', None)
