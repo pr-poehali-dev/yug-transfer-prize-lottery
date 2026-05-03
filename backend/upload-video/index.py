@@ -63,9 +63,11 @@ def handler(event: dict, context) -> dict:
     if action == 'init':
         upload_id = str(uuid.uuid4())
         filename = body.get('filename', 'video.mp4')
+        mode = body.get('mode', 'square')
         ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'mp4'
-        final_key = f"posts/video_{upload_id}.{ext}"
-        meta = json.dumps({'final_key': final_key, 'total_chunks': body.get('total_chunks', 0)})
+        folder = 'stories' if mode == 'raw' else 'posts'
+        final_key = f"{folder}/video_{upload_id}.{ext}"
+        meta = json.dumps({'final_key': final_key, 'total_chunks': body.get('total_chunks', 0), 'mode': mode})
         s3.put_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/meta.json",
                       Body=meta.encode(), ContentType='application/json')
         print(f"[UPLOAD-VIDEO] init upload_id={upload_id} key={final_key}")
@@ -97,6 +99,7 @@ def handler(event: dict, context) -> dict:
         meta = json.loads(meta_obj['Body'].read())
         final_key = meta['final_key']
         total_chunks = int(meta.get('total_chunks', 0))
+        mode = meta.get('mode', 'square')
 
         if total_chunks == 0:
             return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'нет чанков в мета'})}
@@ -118,6 +121,17 @@ def handler(event: dict, context) -> dict:
         if size_mb > 150:
             return {'statusCode': 413, 'headers': CORS,
                     'body': json.dumps({'error': f'Файл слишком большой: {size_mb:.1f} МБ. Максимум 150 МБ'})}
+
+        # Для режима raw (сторис) — не обрезаем, сохраняем как есть
+        if mode == 'raw':
+            s3.put_object(Bucket='files', Key=final_key, Body=video_bytes, ContentType='video/mp4')
+            cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{final_key}"
+            for n in range(total_chunks):
+                s3.delete_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/chunk_{n:04d}")
+            s3.delete_object(Bucket='files', Key=f"{CHUNK_PREFIX}/{upload_id}/meta.json")
+            print(f"[UPLOAD-VIDEO] raw done: {cdn_url}")
+            return {'statusCode': 200, 'headers': CORS,
+                    'body': json.dumps({'ok': True, 'url': cdn_url})}
 
         # Обрезаем до квадрата через ffmpeg (нужно для видео-кружка в Telegram)
         try:

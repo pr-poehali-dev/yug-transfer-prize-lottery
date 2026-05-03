@@ -1,7 +1,47 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
-import { ADMIN_BOT_STORIES_URL } from "./adminTypes";
+import { ADMIN_BOT_STORIES_URL, UPLOAD_VIDEO_URL } from "./adminTypes";
 import type { BotStory } from "./adminTypes";
+
+const CHUNK_SIZE = 512 * 1024; // 512 KB
+
+async function uploadVideoFile(file: File, token: string, onProgress: (pct: number) => void): Promise<string> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const initRes = await fetch(`${UPLOAD_VIDEO_URL}?action=init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+    body: JSON.stringify({ filename: file.name, total_chunks: totalChunks, mode: "raw" }),
+  });
+  const initData = await initRes.json();
+  if (!initData.ok) throw new Error(initData.error || "init failed");
+  const uploadId = initData.upload_id;
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const blob = file.slice(start, start + CHUNK_SIZE);
+    const buf = await blob.arrayBuffer();
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const r = await fetch(`${UPLOAD_VIDEO_URL}?action=chunk&id=${uploadId}&n=${i}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      body: JSON.stringify({ data: b64 }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || `chunk ${i} failed`);
+    onProgress(Math.round(((i + 1) / totalChunks) * 90));
+  }
+
+  onProgress(95);
+  const completeRes = await fetch(`${UPLOAD_VIDEO_URL}?action=complete&id=${uploadId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+    body: "{}",
+  });
+  const completeData = await completeRes.json();
+  if (!completeData.ok) throw new Error(completeData.error || "complete failed");
+  onProgress(100);
+  return completeData.url;
+}
 
 interface Props {
   token: string;
@@ -29,6 +69,9 @@ export function AdminStoriesTab({ token }: Props) {
   const [currentSecret, setCurrentSecret] = useState("");
   const [loadingConns, setLoadingConns] = useState(false);
   const [copied, setCopied] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -65,6 +108,22 @@ export function AdminStoriesTab({ token }: Props) {
 
   const reset = () => {
     setVideoUrl(""); setCaption(""); setEditId(null); setError("");
+  };
+
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setUploadPct(0); setError("");
+    try {
+      const url = await uploadVideoFile(file, token, setUploadPct);
+      setVideoUrl(url);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "ошибка";
+      setError(`Не удалось загрузить: ${msg}`);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   const save = async () => {
@@ -183,13 +242,36 @@ export function AdminStoriesTab({ token }: Props) {
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-white/50 mb-1.5 block">Ссылка на видео (mp4)</label>
+            <label className="text-xs text-white/50 mb-1.5 block">Видео для сторис</label>
             <input
-              type="url" value={videoUrl} onChange={e => setVideoUrl(e.target.value)}
-              placeholder="https://cdn.poehali.dev/.../video.mp4"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-pink-500/50"
+              ref={fileRef} type="file" accept="video/*" onChange={onPickFile} className="hidden"
             />
-            <p className="text-[11px] text-white/30 mt-1">Загрузи видео в любое CDN-хранилище и вставь ссылку. Формат — mp4, вертикальное 9:16, до 60 секунд.</p>
+            <div className="flex gap-2">
+              <button
+                type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                className="flex-shrink-0 px-4 py-3 rounded-xl bg-pink-500/10 border border-pink-500/30 text-pink-300 text-sm font-medium hover:bg-pink-500/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                <Icon name={uploading ? "Loader2" : "Upload"} size={16} className={uploading ? "animate-spin" : ""} />
+                {uploading ? `Загрузка ${uploadPct}%` : "Загрузить файл"}
+              </button>
+              <input
+                type="url" value={videoUrl} onChange={e => setVideoUrl(e.target.value)}
+                placeholder="или вставь ссылку на mp4..."
+                className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-pink-500/50"
+              />
+            </div>
+            {uploading && (
+              <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all" style={{ width: `${uploadPct}%` }} />
+              </div>
+            )}
+            {videoUrl && !uploading && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-emerald-300">
+                <Icon name="CheckCircle" size={13} />
+                <span className="truncate">Видео готово: {videoUrl.split("/").pop()}</span>
+              </div>
+            )}
+            <p className="text-[11px] text-white/30 mt-1.5">Формат — mp4, вертикальное 9:16, до 60 секунд, не более 150 МБ.</p>
           </div>
           <div>
             <label className="text-xs text-white/50 mb-1.5 block">Подпись (необязательно)</label>
