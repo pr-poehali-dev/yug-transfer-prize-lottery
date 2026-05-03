@@ -509,6 +509,17 @@ def handler(event: dict, context) -> dict:
     if method == 'POST' and action == 'watchdog':
         return resp(200, watchdog_check_and_revive())
 
+    # Принудительный запуск loop: генерит новый токен, дёргает loop в фоне.
+    # Удобно для ручного перезапуска без передачи токена.
+    if method == 'POST' and action == 'start':
+        s = get_settings()
+        if not s['enabled']:
+            return resp(200, {'ok': False, 'reason': 'disabled'})
+        new_token = hashlib.sha256(f"{time.time()}:{os.urandom(8).hex()}".encode()).hexdigest()[:32]
+        set_loop_token(new_token)
+        fire_self_loop(new_token)
+        return resp(200, {'ok': True, 'started': True, 'token_preview': new_token[:8] + '…'})
+
     # 24/7 СЛУШАТЕЛЬ событий (event-driven, экономит compute)
     if method == 'POST' and action == 'loop':
         body_raw = event.get('body') or '{}'
@@ -516,7 +527,7 @@ def handler(event: dict, context) -> dict:
             body_in = json.loads(body_raw)
         except Exception:
             body_in = {}
-        incoming_token = body_in.get('token', '')
+        incoming_token = body_in.get('token', '') or qs.get('token', '')
         s = get_settings()
         if not s['enabled']:
             return resp(200, {'ok': False, 'reason': 'disabled'})

@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.excluded_settings SET loop_token = 'go5h8k2m9p4r7v3w6x1y0z', loop_heartbeat = NOW() WHERE id = 1;
