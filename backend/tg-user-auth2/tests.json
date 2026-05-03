@@ -1,0 +1,6 @@
+{
+  "tests": [
+    {"name": "OPTIONS", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+    {"name": "GET unauth", "method": "GET", "path": "/", "expectedStatus": 401}
+  ]
+}

@@ -2,7 +2,12 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { TG_USER_AUTH_URL } from "./adminTypes";
 
-interface Props { token: string; }
+interface Props {
+  token: string;
+  authUrl?: string;
+  title?: string;
+  hint?: string;
+}
 
 interface Status {
   logged_in: boolean;
@@ -10,7 +15,10 @@ interface Status {
   user: { id: number; username: string; first_name: string } | null;
 }
 
-export function TgUserLogin({ token }: Props) {
+export function TgUserLogin({ token, authUrl, title, hint }: Props) {
+  const URL = authUrl || TG_USER_AUTH_URL;
+  const TITLE = title || "Telegram-аккаунт для сторис";
+  const HINT_DEFAULT = hint || "Не залогинен — войди по номеру телефона";
   const [status, setStatus] = useState<Status | null>(null);
   const [step, setStep] = useState<"idle" | "code" | "2fa">("idle");
   const [expanded, setExpanded] = useState(false);
@@ -23,7 +31,7 @@ export function TgUserLogin({ token }: Props) {
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
   const loadStatus = async () => {
-    const r = await fetch(TG_USER_AUTH_URL, { headers: { "X-Admin-Token": token } });
+    const r = await fetch(URL, { headers: { "X-Admin-Token": token } });
     setStatus(await r.json());
   };
 
@@ -33,7 +41,7 @@ export function TgUserLogin({ token }: Props) {
     if (!phone.trim()) { setError("Введи номер телефона"); return; }
     setLoading(true); setError("");
     try {
-      const r = await fetch(`${TG_USER_AUTH_URL}?action=send_code`, {
+      const r = await fetch(`${URL}?action=send_code`, {
         method: "POST", headers, body: JSON.stringify({ phone }),
       });
       const d = await r.json();
@@ -46,7 +54,7 @@ export function TgUserLogin({ token }: Props) {
     if (!code.trim()) { setError("Введи код из SMS"); return; }
     setLoading(true); setError("");
     try {
-      const r = await fetch(`${TG_USER_AUTH_URL}?action=verify_code`, {
+      const r = await fetch(`${URL}?action=verify_code`, {
         method: "POST", headers, body: JSON.stringify({ code }),
       });
       const d = await r.json();
@@ -61,7 +69,7 @@ export function TgUserLogin({ token }: Props) {
     if (!password) { setError("Введи облачный пароль"); return; }
     setLoading(true); setError("");
     try {
-      const r = await fetch(`${TG_USER_AUTH_URL}?action=verify_2fa`, {
+      const r = await fetch(`${URL}?action=verify_2fa`, {
         method: "POST", headers, body: JSON.stringify({ password }),
       });
       const d = await r.json();
@@ -73,7 +81,7 @@ export function TgUserLogin({ token }: Props) {
 
   const logout = async () => {
     if (!confirm("Выйти из Telegram?")) return;
-    await fetch(`${TG_USER_AUTH_URL}?action=logout`, { method: "POST", headers });
+    await fetch(`${URL}?action=logout`, { method: "POST", headers });
     await loadStatus();
   };
 
@@ -90,11 +98,11 @@ export function TgUserLogin({ token }: Props) {
           <Icon name={status.logged_in ? "UserCheck" : "User"} size={20} className={status.logged_in ? "text-emerald-400" : "text-cyan-400"} />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-white font-medium text-lg">Telegram-аккаунт для сторис</h3>
+          <h3 className="text-white font-medium text-lg">{TITLE}</h3>
           <p className="text-white/40 text-xs truncate">
             {status.logged_in
               ? `Залогинен: ${status.user?.first_name || ""} ${status.user?.username ? "@" + status.user.username : ""}`
-              : "Не залогинен — войди по номеру телефона"}
+              : HINT_DEFAULT}
           </p>
         </div>
         {status.logged_in && (
