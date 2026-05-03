@@ -165,6 +165,89 @@ def post_to_vk(photo_url: str, text: str, debug: bool = False):
     return out
 
 
+def vk_upload_photo_user(photo_url: str, user_id: str, log: list):
+    """Загружает фото на стену пользователя (без group_id)."""
+    try:
+        with urllib.request.urlopen(photo_url, timeout=15) as resp:
+            photo_bytes = resp.read()
+            content_type = resp.headers.get('Content-Type', 'image/jpeg')
+        log.append({'step': 'download', 'ok': True, 'size': len(photo_bytes)})
+    except Exception as e:
+        log.append({'step': 'download', 'ok': False, 'err': str(e)})
+        return None
+
+    server = vk_api('photos.getWallUploadServer', {})
+    log.append({'step': 'getWallUploadServer', 'resp': server})
+    upload_url = server.get('response', {}).get('upload_url')
+    if not upload_url:
+        return None
+
+    import uuid
+    boundary = uuid.uuid4().hex
+    ext = 'jpg'
+    if 'png' in content_type:
+        ext = 'png'
+    elif 'webp' in content_type:
+        ext = 'webp'
+
+    crlf = b'\r\n'
+    body = b''
+    body += b'--' + boundary.encode() + crlf
+    body += f'Content-Disposition: form-data; name="photo"; filename="photo.{ext}"'.encode() + crlf
+    body += f'Content-Type: {content_type}'.encode() + crlf + crlf
+    body += photo_bytes + crlf
+    body += b'--' + boundary.encode() + b'--' + crlf
+
+    req = urllib.request.Request(upload_url, data=body, headers={
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Content-Length': str(len(body)),
+    }, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            uploaded = json.loads(resp.read())
+        log.append({'step': 'upload', 'resp': uploaded})
+    except Exception as e:
+        log.append({'step': 'upload', 'ok': False, 'err': str(e)})
+        return None
+
+    saved = vk_api('photos.saveWallPhoto', {
+        'user_id': user_id,
+        'photo': uploaded.get('photo', ''),
+        'server': uploaded.get('server', ''),
+        'hash': uploaded.get('hash', ''),
+    })
+    log.append({'step': 'saveWallPhoto', 'resp': saved})
+    items = saved.get('response', [])
+    if not items:
+        return None
+    item = items[0]
+    return f"photo{item['owner_id']}_{item['id']}"
+
+
+def post_to_vk_user_wall(photo_url: str, text: str, debug: bool = False):
+    """Публикует на личную стену пользователя VK_USER_ID."""
+    user_id = os.environ.get('VK_USER_ID', '').strip()
+    if not user_id:
+        return {'ok': False, 'error': 'VK_USER_ID не задан'}
+    if not os.environ.get('VK_USER_TOKEN'):
+        return {'ok': False, 'error': 'VK_USER_TOKEN не задан'}
+
+    log = []
+    attachment = vk_upload_photo_user(photo_url, user_id, log) if photo_url else None
+    params = {'owner_id': user_id, 'message': text}
+    if attachment:
+        params['attachments'] = attachment
+
+    result = vk_api('wall.post', params)
+    if 'response' in result:
+        out = {'ok': True, 'post_id': result['response'].get('post_id'), 'attachment': attachment}
+    else:
+        out = {'ok': False, 'error': result.get('error', {}).get('error_msg', 'unknown'), 'attachment': attachment}
+    if debug:
+        out['log'] = log
+    return out
+
+
 def get_next_post():
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
@@ -212,6 +295,7 @@ def handler(event: dict, context) -> dict:
 
     qs = event.get('queryStringParameters') or {}
     forced_id = qs.get('post_id')
+    target = (qs.get('target') or '').strip()  # '', 'user_wall'
     if forced_id:
         try:
             row = get_post_by_id(int(forced_id))
@@ -227,6 +311,12 @@ def handler(event: dict, context) -> dict:
     post_id, photo, greeting, description = row
     tg_text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
     vk_text = strip_html(f"{greeting}\n\n{description}\n{CONTACTS}")
+
+    if target == 'user_wall':
+        vk_user = post_to_vk_user_wall(photo, vk_text, debug=True)
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
+            'ok': vk_user.get('ok', False), 'post_id': post_id, 'vk_user_wall': vk_user,
+        })}
 
     tg_result = tg_api('sendPhoto', {
         'chat_id': CHANNEL_ID,

@@ -10,7 +10,6 @@ POST ?action=check_scheduled — проверить и опубликовать 
 """
 import os
 import json
-import re
 import hashlib
 import base64
 import uuid
@@ -20,8 +19,6 @@ import urllib.request
 import urllib.parse
 import boto3
 from datetime import datetime, timezone
-
-VK_API_VERSION = '5.199'
 
 
 CORS = {
@@ -101,128 +98,6 @@ def tg_request(bot_token: str, method: str, payload: dict) -> dict:
             return {'ok': False, 'description': str(e)}
     except Exception as e:
         return {'ok': False, 'description': str(e)}
-
-
-def html_to_vk_text(html_text: str) -> str:
-    """Конвертирует HTML-разметку Telegram в плоский текст для ВК."""
-    if not html_text:
-        return ''
-    text = html_text
-    text = re.sub(r'<a\s+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', r'\2 (\1)', text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
-    text = re.sub(r'<[^>]+>', '', text)
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
-    return text.strip()
-
-
-def vk_api(method: str, params: dict) -> dict:
-    token = os.environ.get('VK_USER_TOKEN', '')
-    if not token:
-        return {'error': {'error_msg': 'VK_USER_TOKEN не задан'}}
-    params = {**params, 'access_token': token, 'v': VK_API_VERSION}
-    url = f"https://api.vk.com/method/{method}"
-    data = urllib.parse.urlencode(params).encode()
-    req = urllib.request.Request(url, data=data, method='POST')
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except Exception as e:
-        return {'error': {'error_msg': str(e)}}
-
-
-def vk_upload_photo_to_wall(photo_url: str, user_id: str) -> str:
-    """Загружает фото для постинга на стену пользователя. Возвращает attachment вида 'photoOWNER_ID'."""
-    try:
-        with urllib.request.urlopen(photo_url, timeout=15) as r:
-            photo_bytes = r.read()
-            content_type = r.headers.get('Content-Type', 'image/jpeg')
-    except Exception as e:
-        print(f"[VK] download photo failed: {e}")
-        return ''
-
-    server = vk_api('photos.getWallUploadServer', {})
-    upload_url = server.get('response', {}).get('upload_url', '')
-    if not upload_url:
-        print(f"[VK] no upload_url: {server}")
-        return ''
-
-    boundary = uuid.uuid4().hex
-    ext = 'jpg'
-    if 'png' in content_type: ext = 'png'
-    elif 'webp' in content_type: ext = 'webp'
-    crlf = b'\r\n'
-    body = b''
-    body += b'--' + boundary.encode() + crlf
-    body += f'Content-Disposition: form-data; name="photo"; filename="photo.{ext}"'.encode() + crlf
-    body += f'Content-Type: {content_type}'.encode() + crlf + crlf
-    body += photo_bytes + crlf
-    body += b'--' + boundary.encode() + b'--' + crlf
-
-    req = urllib.request.Request(upload_url, data=body, headers={
-        'Content-Type': f'multipart/form-data; boundary={boundary}',
-        'Content-Length': str(len(body)),
-    }, method='POST')
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            uploaded = json.loads(resp.read())
-    except Exception as e:
-        print(f"[VK] upload failed: {e}")
-        return ''
-
-    saved = vk_api('photos.saveWallPhoto', {
-        'user_id': user_id,
-        'photo': uploaded.get('photo', ''),
-        'server': uploaded.get('server', ''),
-        'hash': uploaded.get('hash', ''),
-    })
-    items = saved.get('response', [])
-    if not items:
-        print(f"[VK] saveWallPhoto failed: {saved}")
-        return ''
-    item = items[0]
-    return f"photo{item['owner_id']}_{item['id']}"
-
-
-def publish_to_vk_user_wall(post: dict) -> dict:
-    """Публикует пост на личную стену пользователя ВК."""
-    user_id = os.environ.get('VK_USER_ID', '').strip()
-    if not user_id:
-        return {'ok': False, 'error': 'VK_USER_ID не задан'}
-    if not os.environ.get('VK_USER_TOKEN', ''):
-        return {'ok': False, 'error': 'VK_USER_TOKEN не задан'}
-
-    raw_text = build_text_with_title(post)
-    text = html_to_vk_text(raw_text)
-
-    button_text = post.get('button_text', '')
-    button_url = post.get('button_url', '')
-    button2_text = post.get('button2_text', '')
-    button2_url = post.get('button2_url', '')
-    extras = []
-    if button_text and button_url:
-        extras.append(f"{button_text}: {button_url}")
-    if button2_text and button2_url:
-        extras.append(f"{button2_text}: {button2_url}")
-    if extras:
-        text = (text + "\n\n" if text else '') + "\n".join(extras)
-
-    attachment = ''
-    photo_url = post.get('photo_url', '')
-    if photo_url:
-        attachment = vk_upload_photo_to_wall(photo_url, user_id)
-
-    params = {
-        'owner_id': user_id,
-        'message': text,
-    }
-    if attachment:
-        params['attachments'] = attachment
-
-    result = vk_api('wall.post', params)
-    if 'response' in result:
-        return {'ok': True, 'post_id': result['response'].get('post_id'), 'attachment': attachment}
-    err = result.get('error', {}).get('error_msg', 'unknown')
-    return {'ok': False, 'error': err, 'attachment': attachment}
 
 
 def build_text_with_title(post: dict) -> str:
@@ -461,32 +336,6 @@ def handler(event: dict, context) -> dict:
         cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
         print(f"[POSTS] uploaded video note: {cdn_url}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'url': cdn_url})}
-
-    # ── POST ?action=test_vk_user — тестовая отправка на ЛИЧНУЮ стену ВК ────
-    if method == 'POST' and action == 'test_vk_user':
-        body = json.loads(event.get('body') or '{}')
-        post_id = body.get('post_id')
-        if not post_id:
-            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'post_id обязателен'})}
-
-        conn = psycopg2.connect(os.environ['DATABASE_URL'])
-        cur = conn.cursor()
-        cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id = %s",
-            (post_id,)
-        )
-        row = cur.fetchone()
-        cur.close(); conn.close()
-        if not row:
-            return {'statusCode': 404, 'headers': CORS, 'body': json.dumps({'error': 'Пост не найден'})}
-
-        post = row_to_post(row)
-        print(f"[POSTS] TEST publish to VK personal wall for post {post_id}")
-        result = publish_to_vk_user_wall(post)
-        print(f"[POSTS] VK personal wall result: {result}")
-        if not result['ok']:
-            return {'statusCode': 500, 'headers': CORS, 'body': json.dumps({'ok': False, 'error': result.get('error', 'Ошибка ВК')})}
-        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'vk_post_id': result.get('post_id')})}
 
     # ── POST ?action=publish — немедленная публикация ───────────────────────
     if method == 'POST' and action == 'publish':
