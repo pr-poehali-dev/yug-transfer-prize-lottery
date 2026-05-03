@@ -102,6 +102,26 @@ def fire_self_loop(token: str):
     threading.Thread(target=_go, daemon=True).start()
 
 
+def fire_self_watchdog_delayed(delay_sec: int = 30):
+    """Авто-самокрон: через delay_sec секунд дёргает свой watchdog.
+    Если loop уже жив — watchdog вернёт 'alive' и ничего не сделает.
+    Если loop мёртв — оживит. Это бесплатный keep-alive без внешнего cron.
+    """
+    def _go():
+        try:
+            time.sleep(delay_sec)
+            req = urllib.request.Request(
+                f"{SELF_URL}?action=watchdog",
+                data=b'{}',
+                headers={'Content-Type': 'application/json'},
+                method='POST',
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+    threading.Thread(target=_go, daemon=True).start()
+
+
 def watchdog_check_and_revive() -> dict:
     """Проверяет heartbeat. Поднимает loop ТОЛЬКО если loop_token уже задан (loop-режим явно включён).
     В cron-режиме (loop_token=NULL) ничего не делает — экономим compute.
@@ -505,12 +525,19 @@ def handler(event: dict, context) -> dict:
         finally:
             loop.close()
 
-    # Лёгкий watchdog-пинг без сканирования (для частого внешнего крона)
+    # Лёгкий watchdog-пинг + АВТО-САМОКРОН: планирует следующий пинг через 30 сек.
+    # Цепочка: watchdog → ждёт 30с → snова watchdog → … До тех пор пока loop жив.
     if method == 'POST' and action == 'watchdog':
-        return resp(200, watchdog_check_and_revive())
+        result = watchdog_check_and_revive()
+        # Самокрон работает только в loop-режиме (когда токен задан в БД)
+        s = get_settings()
+        if s['enabled'] and s.get('loop_token'):
+            fire_self_watchdog_delayed(30)
+            result['next_ping_in_sec'] = 30
+        return resp(200, result)
 
     # Принудительный запуск loop: генерит новый токен, дёргает loop в фоне.
-    # Удобно для ручного перезапуска без передачи токена.
+    # Также запускает цепочку авто-самокрона.
     if method == 'POST' and action == 'start':
         s = get_settings()
         if not s['enabled']:
@@ -518,7 +545,8 @@ def handler(event: dict, context) -> dict:
         new_token = hashlib.sha256(f"{time.time()}:{os.urandom(8).hex()}".encode()).hexdigest()[:32]
         set_loop_token(new_token)
         fire_self_loop(new_token)
-        return resp(200, {'ok': True, 'started': True, 'token_preview': new_token[:8] + '…'})
+        fire_self_watchdog_delayed(30)  # запускаем цепочку авто-самокрона
+        return resp(200, {'ok': True, 'started': True, 'token_preview': new_token[:8] + '…', 'autocron': 'enabled'})
 
     # 24/7 СЛУШАТЕЛЬ событий (event-driven, экономит compute)
     if method == 'POST' and action == 'loop':
@@ -540,6 +568,8 @@ def handler(event: dict, context) -> dict:
             cur_s = get_settings()
             if cur_s['enabled'] and cur_s['loop_token'] == incoming_token:
                 fire_self_loop(incoming_token)
+                # Параллельная страховка — независимая цепочка watchdog
+                fire_self_watchdog_delayed(30)
                 result['restarted'] = True
             return resp(200, result)
         finally:
