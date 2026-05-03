@@ -11,26 +11,31 @@ import os
 import json
 import re
 import time
+import random
 import hashlib
 import asyncio
 import threading
 import urllib.request
 import psycopg2
 
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, functions
 from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError
 from telethon.tl.functions.channels import GetAdminLogRequest
+from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.types import (
     ChannelAdminLogEventsFilter,
     ChannelAdminLogEventActionDeleteMessage,
 )
 
 SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
-LOOP_DURATION_SEC = 25  # макс время одного запуска (укладываемся в таймаут 30)
+LOOP_MIN_SEC = 20  # минимальная длительность цикла (рандомизация для естественности)
+LOOP_MAX_SEC = 28  # максимальная длительность цикла
 HEARTBEAT_EVERY_SEC = 10  # как часто обновлять heartbeat в БД
 WATCHDOG_DEAD_AFTER_SEC = 60  # если heartbeat старше — считаем loop мёртвым, поднимаем новый
 DELETER_BOT_USERNAMES = {'vsyarussiabot', 'ugtransferbot'}  # боты-удалятели (нижний регистр)
+FLOOD_ALERT_THRESHOLD_SEC = 60  # FloodWait > этого порога — создаём алерт
+HUMANIZE_PROBABILITY = 0.35  # вероятность «человеческого» действия за цикл
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -172,6 +177,89 @@ def get_session2() -> str:
     return r[0] if r else ''
 
 
+def get_session3() -> str:
+    """Backup-сессия. Возвращает '' если бэкап не залогинен."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_session3 WHERE id=1 AND logged_in=TRUE")
+    r = cur.fetchone()
+    cur.close(); conn.close()
+    return r[0] if r else ''
+
+
+def get_active_session() -> tuple:
+    """Возвращает (session_string, slot_number). Slot 2 = primary, 3 = backup.
+    При active_session=2 пробуем primary, при ошибке — fallback на backup автоматически.
+    """
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"SELECT active_session FROM {SCHEMA}.excluded_settings WHERE id=1")
+    r = cur.fetchone()
+    cur.close(); conn.close()
+    active = int(r[0]) if r and r[0] else 2
+    if active == 3:
+        s = get_session3()
+        if s:
+            return s, 3
+        # backup пуст — fallback на primary
+        return get_session2(), 2
+    s = get_session2()
+    if s:
+        return s, 2
+    # primary пуст — fallback на backup
+    return get_session3(), 3
+
+
+def switch_to_backup_session(reason: str = ''):
+    """Переключает активную сессию на backup (slot 3). Создаёт алерт."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"UPDATE {SCHEMA}.excluded_settings SET active_session=3 WHERE id=1")
+    conn.commit(); cur.close(); conn.close()
+    create_alert('session_switched_to_backup', 'critical', f'Primary упала: {reason}', {'reason': reason})
+
+
+def create_alert(alert_type: str, severity: str, message: str, payload: dict = None):
+    """Записывает алерт в БД для последующего показа в админке."""
+    try:
+        conn = db(); cur = conn.cursor()
+        payload_json = json.dumps(payload or {}, default=str).replace("'", "''")
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.watcher_alerts (alert_type, severity, message, payload) "
+            f"VALUES ('{esc(alert_type)}', '{esc(severity)}', '{esc(message)}', '{payload_json}'::jsonb)"
+        )
+        conn.commit(); cur.close(); conn.close()
+        print(f"[ALERT:{severity}] {alert_type}: {message}")
+    except Exception as e:
+        print(f"[create_alert failed] {e}")
+
+
+def humanize_enabled() -> bool:
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"SELECT humanize_enabled FROM {SCHEMA}.excluded_settings WHERE id=1")
+    r = cur.fetchone()
+    cur.close(); conn.close()
+    return bool(r[0]) if r else True
+
+
+async def humanize_action(client, target_entity):
+    """«Человеческое» действие: статус online, читаем сообщения, статус offline.
+    Снижает паттерн «бот всегда оффлайн, только запрашивает API»."""
+    try:
+        # Online
+        await client(UpdateStatusRequest(offline=False))
+        await asyncio.sleep(random.uniform(0.5, 1.5))
+        # Прочитать последние сообщения в группе (mark as read)
+        try:
+            await client.send_read_acknowledge(target_entity)
+        except Exception:
+            pass
+        await asyncio.sleep(random.uniform(0.8, 2.0))
+        # Offline
+        await client(UpdateStatusRequest(offline=True))
+        return True
+    except Exception as e:
+        print(f"[humanize] err: {e}")
+        return False
+
+
 def already_sent(user_id: int) -> bool:
     conn = db(); cur = conn.cursor()
     cur.execute(f"SELECT 1 FROM {SCHEMA}.excluded_drivers WHERE user_id={int(user_id)} AND message_sent=TRUE LIMIT 1")
@@ -196,9 +284,10 @@ async def run_scan() -> dict:
     if not settings['enabled']:
         return {'ok': False, 'reason': 'disabled'}
 
-    session_str = get_session2()
+    session_str, slot = get_active_session()
     if not session_str:
-        return {'ok': False, 'reason': 'not_logged_in', 'error': 'Залогинь второй аккаунт'}
+        create_alert('no_session', 'critical', 'Ни одна сессия не залогинена')
+        return {'ok': False, 'reason': 'not_logged_in', 'error': 'Залогинь хотя бы один аккаунт'}
 
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
@@ -299,6 +388,14 @@ async def run_scan() -> dict:
             except FloodWaitError as fe:
                 log_send(author_id, username, first_name, ev.id, f'flood:{fe.seconds}')
                 errors.append({'event_id': ev.id, 'reason': f'flood {fe.seconds}s'})
+                if fe.seconds >= FLOOD_ALERT_THRESHOLD_SEC:
+                    create_alert(
+                        'flood_wait', 'critical' if fe.seconds >= 300 else 'warn',
+                        f'FloodWait {fe.seconds}s при сканировании AdminLog',
+                        {'user_id': author_id, 'seconds': fe.seconds, 'context': 'run_scan'}
+                    )
+                    if fe.seconds >= 600 and get_session3():
+                        switch_to_backup_session(f'flood {fe.seconds}s')
                 break
             except Exception as e:
                 log_send(author_id, username, first_name, ev.id, f'err:{str(e)[:200]}')
@@ -355,6 +452,16 @@ async def process_deletion_message(client, msg, template: str) -> dict:
         return {'ok': True, 'user_id': user_id, 'username': username}
     except FloodWaitError as fe:
         log_send(user_id, username, first_name, msg.id, f'flood:{fe.seconds}')
+        # Алерт при FloodWait > порога
+        if fe.seconds >= FLOOD_ALERT_THRESHOLD_SEC:
+            create_alert(
+                'flood_wait', 'critical' if fe.seconds >= 300 else 'warn',
+                f'FloodWait {fe.seconds}s при отправке user_id={user_id}',
+                {'user_id': user_id, 'seconds': fe.seconds, 'context': 'process_deletion_message'}
+            )
+            # При очень больших FloodWait (>10 мин) переключаемся на backup
+            if fe.seconds >= 600 and get_session3():
+                switch_to_backup_session(f'flood {fe.seconds}s')
         return {'ok': False, 'reason': f'flood:{fe.seconds}'}
     except Exception as e:
         log_send(user_id, username, first_name, msg.id, f'err:{str(e)[:200]}')
@@ -363,18 +470,22 @@ async def process_deletion_message(client, msg, template: str) -> dict:
 
 async def run_listener(loop_token: str) -> dict:
     """Event-driven listener: спит до прихода update, при удалении — шлёт ЛС.
-    Работает 25 секунд, потом возвращает результат (handler перезапускает себя)."""
+    Работает 20-28 секунд (рандомизация), потом возвращает результат."""
     settings = get_settings()
     if not settings['enabled']:
         return {'ok': False, 'reason': 'disabled'}
 
-    session_str = get_session2()
+    session_str, slot = get_active_session()
     if not session_str:
+        create_alert('no_session', 'critical', 'Ни одна сессия не залогинена')
         return {'ok': False, 'reason': 'not_logged_in'}
 
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
     template = settings['message_template'] or 'Здравствуйте!'
+
+    # Рандомизация длительности цикла — снижает паттерн для детектора
+    loop_duration = random.uniform(LOOP_MIN_SEC, LOOP_MAX_SEC)
 
     try:
         target_entity = None
@@ -388,7 +499,12 @@ async def run_listener(loop_token: str) -> dict:
             target_chat_id = target_entity.id
         except Exception as e:
             await client.disconnect()
-            return {'ok': False, 'reason': f'no_access_to_group: {e}'}
+            err_str = str(e).lower()
+            # Если primary упал по auth/banned — переключаемся на backup
+            if slot == 2 and ('auth' in err_str or 'banned' in err_str or 'flood' in err_str or 'session' in err_str):
+                if get_session3():
+                    switch_to_backup_session(f'no_access: {str(e)[:120]}')
+            return {'ok': False, 'reason': f'no_access_to_group: {e}', 'slot': slot}
 
         sent_count = [0]
         events_seen = [0]
@@ -416,19 +532,26 @@ async def run_listener(loop_token: str) -> dict:
             except Exception as e:
                 print(f"[listener handler err] {e}")
 
-        # Слушаем 25 секунд (или пока loop_token не сменился).
+        # Слушаем рандомизированно (или пока loop_token не сменился).
         # В конце — один раз опрашиваем AdminLog (надёжный fallback).
         start = time.time()
         last_hb = 0
+        humanized = False
         try:
-            while time.time() - start < LOOP_DURATION_SEC:
+            # Один раз за цикл с вероятностью HUMANIZE_PROBABILITY делаем «человеческое» действие
+            if humanize_enabled() and random.random() < HUMANIZE_PROBABILITY:
+                await humanize_action(client, target_entity)
+                humanized = True
+
+            while time.time() - start < loop_duration:
                 if time.time() - last_hb > HEARTBEAT_EVERY_SEC:
                     cur_s = get_settings()
                     if not cur_s['enabled'] or cur_s['loop_token'] != loop_token:
                         break
                     heartbeat()
                     last_hb = time.time()
-                await asyncio.sleep(2)
+                # Рандомизация sleep — 1.5-2.5 сек вместо ровных 2
+                await asyncio.sleep(random.uniform(1.5, 2.5))
 
             # Fallback: опрос AdminLog (один раз за цикл)
             adminlog_sent = 0
@@ -580,6 +703,39 @@ def handler(event: dict, context) -> dict:
     if not verify_token(token):
         return resp(401, {'error': 'unauthorized'})
 
+    if method == 'GET' and action == 'alerts':
+        conn = db(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT id, created_at, alert_type, severity, message, payload, resolved "
+            f"FROM {SCHEMA}.watcher_alerts ORDER BY id DESC LIMIT 50"
+        )
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        items = [{
+            'id': r[0], 'created_at': r[1], 'alert_type': r[2], 'severity': r[3],
+            'message': r[4], 'payload': r[5], 'resolved': r[6],
+        } for r in rows]
+        return resp(200, {'items': items})
+
+    if method == 'POST' and action == 'switch_session':
+        body = json.loads(event.get('body') or '{}')
+        target = int(body.get('slot', 2))
+        if target not in (2, 3):
+            return resp(400, {'error': 'slot must be 2 or 3'})
+        conn = db(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.excluded_settings SET active_session={target} WHERE id=1")
+        conn.commit(); cur.close(); conn.close()
+        create_alert('manual_session_switch', 'info', f'Админ переключил на slot {target}', {'slot': target})
+        return resp(200, {'ok': True, 'active_session': target})
+
+    if method == 'POST' and action == 'resolve_alert':
+        body = json.loads(event.get('body') or '{}')
+        alert_id = int(body.get('id', 0))
+        conn = db(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.watcher_alerts SET resolved=TRUE WHERE id={alert_id}")
+        conn.commit(); cur.close(); conn.close()
+        return resp(200, {'ok': True})
+
     if method == 'GET' and action == 'history':
         conn = db(); cur = conn.cursor()
         cur.execute(
@@ -598,6 +754,22 @@ def handler(event: dict, context) -> dict:
         wd = watchdog_check_and_revive()
         s = get_settings()
         s['watchdog'] = wd
+        # Расширенный статус: активная сессия + алерты + наличие backup
+        conn = db(); cur = conn.cursor()
+        cur.execute(f"SELECT active_session, humanize_enabled FROM {SCHEMA}.excluded_settings WHERE id=1")
+        r = cur.fetchone()
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.tg_user_session2 WHERE id=1 AND logged_in=TRUE")
+        primary_ok = (cur.fetchone()[0] or 0) > 0
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.tg_user_session3 WHERE id=1 AND logged_in=TRUE")
+        backup_ok = (cur.fetchone()[0] or 0) > 0
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.watcher_alerts WHERE resolved=FALSE")
+        unresolved = int(cur.fetchone()[0] or 0)
+        cur.close(); conn.close()
+        s['active_session'] = int(r[0]) if r else 2
+        s['humanize_enabled'] = bool(r[1]) if r else True
+        s['primary_session_ok'] = primary_ok
+        s['backup_session_ok'] = backup_ok
+        s['unresolved_alerts'] = unresolved
         return resp(200, s)
 
     body = json.loads(event.get('body') or '{}')
