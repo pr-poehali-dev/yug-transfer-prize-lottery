@@ -103,17 +103,19 @@ def fire_self_loop(token: str):
 
 
 def watchdog_check_and_revive() -> dict:
-    """Проверяет heartbeat. Если loop мёртв (>WATCHDOG_DEAD_AFTER_SEC) — генерит новый токен и поднимает loop.
-    Возвращает {'revived': bool, 'reason': str, 'age_sec': int|None}.
+    """Проверяет heartbeat. Поднимает loop ТОЛЬКО если loop_token уже задан (loop-режим явно включён).
+    В cron-режиме (loop_token=NULL) ничего не делает — экономим compute.
     """
     s = get_settings()
     if not s['enabled']:
         return {'revived': False, 'reason': 'disabled'}
+    if not s.get('loop_token'):
+        return {'revived': False, 'reason': 'cron_mode'}
     hb = s.get('loop_heartbeat')
     age = None
     if hb is not None:
         try:
-            from datetime import datetime, timezone
+            from datetime import datetime
             now = datetime.now(hb.tzinfo) if hb.tzinfo else datetime.utcnow()
             age = int((now - hb).total_seconds())
         except Exception:

@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.excluded_settings SET loop_token = NULL, loop_heartbeat = NULL WHERE id = 1;
