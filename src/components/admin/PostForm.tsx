@@ -33,8 +33,6 @@ interface PostFormProps {
   formError: string;
   formSuccess: string;
   editingPublished: boolean;
-  expanded: boolean;
-  onExpandedChange: (v: boolean) => void;
   onFormChange: (patch: Partial<PostFormData>) => void;
   onScheduledAtChange: (v: string) => void;
   onEditInTgToggle: () => void;
@@ -47,7 +45,7 @@ interface PostFormProps {
 
 export function PostForm({
   form, editId, scheduledAt, editInTg, saving, publishing, uploading, uploadingVideo, videoProgress,
-  formError, formSuccess, editingPublished, expanded, onExpandedChange,
+  formError, formSuccess, editingPublished,
   onFormChange, onScheduledAtChange, onEditInTgToggle,
   onPhotoUpload, onVideoNoteUpload, onSave, onPublishNow, onReset,
 }: PostFormProps) {
@@ -60,42 +58,19 @@ export function PostForm({
     if (form.button2_text || form.button2_url) setShowButton2(true);
   }, [form.button2_text, form.button2_url]);
 
-  useEffect(() => {
-    if (editId) onExpandedChange(true);
-  }, [editId, onExpandedChange]);
-
   return (
     <div className="card-glow rounded-2xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => onExpandedChange(!expanded)}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/5 transition-colors border-b border-white/10"
-      >
-        <div className="flex items-center gap-2">
-          <Icon name={editId ? "Pencil" : "Plus"} size={14} className="text-purple-400" />
-          <span className="text-sm font-medium text-white">{editId ? "Редактирование поста" : "Новый пост"}</span>
+      {editId && (
+        <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/10">
+          <span className="text-xs text-purple-300 flex items-center gap-1">
+            <Icon name="Pencil" size={12} /> Редактирование поста
+          </span>
+          <button onClick={onReset} className="text-xs text-muted-foreground hover:text-white transition-colors flex items-center gap-1">
+            <Icon name="X" size={12} /> Отмена
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          {editId && (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={e => { e.stopPropagation(); onReset(); }}
-              onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); onReset(); } }}
-              className="text-xs text-muted-foreground hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <Icon name="X" size={12} /> Отмена
-            </span>
-          )}
-          <Icon
-            name="ChevronDown"
-            size={16}
-            className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`}
-          />
-        </div>
-      </button>
+      )}
 
-      {!expanded ? null : (
       <div className="p-3.5 space-y-2.5">
 
         {/* Название */}
@@ -358,7 +333,6 @@ export function PostForm({
           </button>
         </div>
       </div>
-      )}
     </div>
   );
 }

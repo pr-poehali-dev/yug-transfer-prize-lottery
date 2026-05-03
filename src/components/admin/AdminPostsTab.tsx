@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import Icon from "@/components/ui/icon";
 import { ADMIN_POSTS_URL, UPLOAD_VIDEO_URL } from "./adminTypes";
 import type { Post } from "./adminTypes";
 import { PostForm } from "./PostForm";
@@ -382,50 +383,67 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
   const editingPublished = editId !== null && posts.find(p => p.id === editId)?.status === "published";
 
   return (
-    <div>
-      <div className={`grid grid-cols-1 gap-6 items-start ${formExpanded ? "lg:grid-cols-2" : ""}`}>
-        <PostForm
-          form={form}
-          editId={editId}
-          scheduledAt={scheduledAt}
-          editInTg={editInTg}
-          saving={saving}
-          publishing={publishing}
-          uploading={uploading}
-          uploadingVideo={uploadingVideo}
-          videoProgress={videoProgress}
-          formError={formError}
-          formSuccess={formSuccess}
-          editingPublished={!!editingPublished}
-          expanded={formExpanded}
-          onExpandedChange={setFormExpanded}
-          onFormChange={patch => setForm(f => ({ ...f, ...patch }))}
-          onScheduledAtChange={setScheduledAt}
-          onEditInTgToggle={() => setEditInTg(v => !v)}
-          onPhotoUpload={handlePhotoUpload}
-          onVideoNoteUpload={handleVideoNoteUpload}
-          onSave={handleSave}
-          onPublishNow={handlePublishNow}
-          onReset={() => confirmLeave(resetForm)}
+    <div className="card-glow rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setFormExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
+      >
+        <div className="flex items-center gap-2">
+          <Icon name="Send" size={15} className="text-purple-400" />
+          <span className="text-sm font-medium text-white">Посты в канал</span>
+          <span className="text-[11px] text-white/40">· {posts.length}</span>
+        </div>
+        <Icon
+          name="ChevronDown"
+          size={16}
+          className={`text-white/50 transition-transform ${formExpanded ? "rotate-180" : ""}`}
         />
+      </button>
 
-        <PostList
-          posts={posts}
-          loading={loading}
-          statusFilter={statusFilter}
-          editId={editId}
-          publishingId={publishingId}
-          deleting={deleting}
-          editingInTgId={editingInTgId}
-          onFilterChange={sf => setStatusFilter(sf)}
-          onRefresh={() => fetchPosts(statusFilter)}
-          onPublish={handlePublishFromList}
-          onEditInTg={handleEditInTg}
-          onEdit={post => { confirmLeave(() => startEdit(post)); setFormExpanded(true); }}
-          onDelete={handleDelete}
-          onResetEdit={() => confirmLeave(resetForm)}
-        />
-      </div>
+      {formExpanded && (
+        <div className="p-4 space-y-4">
+          <PostForm
+            form={form}
+            editId={editId}
+            scheduledAt={scheduledAt}
+            editInTg={editInTg}
+            saving={saving}
+            publishing={publishing}
+            uploading={uploading}
+            uploadingVideo={uploadingVideo}
+            videoProgress={videoProgress}
+            formError={formError}
+            formSuccess={formSuccess}
+            editingPublished={!!editingPublished}
+            onFormChange={patch => setForm(f => ({ ...f, ...patch }))}
+            onScheduledAtChange={setScheduledAt}
+            onEditInTgToggle={() => setEditInTg(v => !v)}
+            onPhotoUpload={handlePhotoUpload}
+            onVideoNoteUpload={handleVideoNoteUpload}
+            onSave={handleSave}
+            onPublishNow={handlePublishNow}
+            onReset={() => confirmLeave(resetForm)}
+          />
+
+          <PostList
+            posts={posts}
+            loading={loading}
+            statusFilter={statusFilter}
+            editId={editId}
+            publishingId={publishingId}
+            deleting={deleting}
+            editingInTgId={editingInTgId}
+            onFilterChange={sf => setStatusFilter(sf)}
+            onRefresh={() => fetchPosts(statusFilter)}
+            onPublish={handlePublishFromList}
+            onEditInTg={handleEditInTg}
+            onEdit={post => confirmLeave(() => startEdit(post))}
+            onDelete={handleDelete}
+            onResetEdit={() => confirmLeave(resetForm)}
+          />
+        </div>
+      )}
     </div>
   );
 }
