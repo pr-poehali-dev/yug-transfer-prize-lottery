@@ -488,6 +488,85 @@ def handler(event: dict, context) -> dict:
         finally:
             loop.close()
 
+    # WHOIS: узнать кто такой пользователь по ID (для выяснения вторых ботов-удаляторов)
+    if action == 'whois':
+        qs2 = qs.get('id') or ''
+        try:
+            target_id = int(qs2)
+        except Exception:
+            return resp(400, {'error': 'pass ?id=<user_id>'})
+        session_str = get_session2()
+        if not session_str:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+        api_id = int(os.environ['TG_API_ID'])
+        api_hash = os.environ['TG_API_HASH']
+        async def _whois():
+            client = TelegramClient(StringSession(session_str), api_id, api_hash)
+            await client.connect()
+            try:
+                u = await client.get_entity(target_id)
+                return {
+                    'ok': True, 'id': target_id,
+                    'username': getattr(u, 'username', None),
+                    'first_name': getattr(u, 'first_name', None),
+                    'last_name': getattr(u, 'last_name', None),
+                    'is_bot': getattr(u, 'bot', False),
+                    'phone': getattr(u, 'phone', None),
+                }
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
+            finally:
+                try: await client.disconnect()
+                except Exception: pass
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        try:
+            return resp(200, loop.run_until_complete(_whois()))
+        finally:
+            loop.close()
+
+    # DEBUG: показать последние удаления из AdminLog (без фильтра)
+    if action == 'debug_log':
+        session_str = get_session2()
+        if not session_str:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+        api_id = int(os.environ['TG_API_ID'])
+        api_hash = os.environ['TG_API_HASH']
+        async def _dbg():
+            client = TelegramClient(StringSession(session_str), api_id, api_hash)
+            await client.connect()
+            try:
+                entity = await client.get_entity(TARGET_GROUP)
+                admin_log = await client(GetAdminLogRequest(
+                    channel=entity, q='',
+                    events_filter=ChannelAdminLogEventsFilter(delete=True),
+                    admins=[], max_id=0, min_id=0, limit=20,
+                ))
+                events_data = []
+                for ev in sorted(admin_log.events, key=lambda e: e.id, reverse=True):
+                    if not isinstance(ev.action, ChannelAdminLogEventActionDeleteMessage):
+                        continue
+                    deleted = ev.action.message
+                    from_id = getattr(deleted, 'from_id', None)
+                    author_id = getattr(from_id, 'user_id', None) if from_id else None
+                    events_data.append({
+                        'event_id': ev.id,
+                        'date': str(ev.date),
+                        'deleter_id': ev.user_id,
+                        'author_id': author_id,
+                        'text_preview': (getattr(deleted, 'message', '') or '')[:100],
+                    })
+                return {'ok': True, 'events': events_data, 'total': len(events_data)}
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
+            finally:
+                try: await client.disconnect()
+                except Exception: pass
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        try:
+            return resp(200, loop.run_until_complete(_dbg()))
+        finally:
+            loop.close()
+
     # Перезапуск цикла без авторизации (для случаев когда loop умер после деплоя)
     if (method == 'POST' or method == 'GET') and action == 'revive':
         s = get_settings()
