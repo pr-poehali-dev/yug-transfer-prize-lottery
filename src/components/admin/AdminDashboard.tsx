@@ -18,14 +18,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     <div className="min-h-screen mesh-bg">
       <header className="glass border-b border-white/5 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-base">🔐</div>
-            <div>
-              <span className="font-oswald text-lg font-bold text-white">ЮГ</span>
-              <span className="font-oswald text-lg font-bold grad-text"> ТРАНСФЕР</span>
-              <span className="text-xs text-muted-foreground ml-2">Админ</span>
-            </div>
-          </div>
+          <div className="flex items-center gap-3" />
           <div className="flex items-center gap-3">
             <a href="/" className="text-xs text-muted-foreground hover:text-white transition-colors flex items-center gap-1.5">
               <Icon name="ExternalLink" size={14} />На сайт
