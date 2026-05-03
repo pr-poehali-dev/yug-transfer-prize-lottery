@@ -28,6 +28,7 @@ from telethon.tl.types import (
 
 SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
 LOOP_DURATION_SEC = 25  # макс время одного запуска (укладываемся в таймаут 30)
+LOOP_PAUSE_SEC = 60  # пауза между циклами (экономия compute: 25/(25+60) ≈ 30% от 24/7)
 HEARTBEAT_EVERY_SEC = 10  # как часто обновлять heartbeat в БД
 DELETER_BOT_USERNAMES = {'vsyarussiabot', 'ugtransferbot'}  # боты-удалятели (нижний регистр)
 
@@ -85,10 +86,22 @@ def heartbeat():
     conn.commit(); cur.close(); conn.close()
 
 
-def fire_self_loop(token: str):
-    """Запускает себя же в фоне (POST ?action=loop) и сразу возвращается."""
+def fire_self_loop(token: str, delay_sec: int = 0):
+    """Запускает себя же в фоне (POST ?action=loop) и сразу возвращается.
+    delay_sec — пауза перед запуском следующего цикла (экономия compute)."""
     def _go():
         try:
+            if delay_sec > 0:
+                time.sleep(delay_sec)
+            # Перед стартом проверяем что цикл всё ещё актуален
+            try:
+                conn = db(); cur = conn.cursor()
+                cur.execute(f"SELECT enabled, loop_token FROM {SCHEMA}.excluded_settings WHERE id=1")
+                r = cur.fetchone(); cur.close(); conn.close()
+                if not r or not r[0] or r[1] != token:
+                    return  # выключен или токен сменился
+            except Exception:
+                pass
             req = urllib.request.Request(
                 f"{SELF_URL}?action=loop",
                 data=json.dumps({'token': token}).encode(),
@@ -494,8 +507,9 @@ def handler(event: dict, context) -> dict:
             result = loop.run_until_complete(run_listener(incoming_token))
             cur_s = get_settings()
             if cur_s['enabled'] and cur_s['loop_token'] == incoming_token:
-                fire_self_loop(incoming_token)
+                fire_self_loop(incoming_token, delay_sec=LOOP_PAUSE_SEC)
                 result['restarted'] = True
+                result['next_in_sec'] = LOOP_PAUSE_SEC
             return resp(200, result)
         finally:
             loop.close()
