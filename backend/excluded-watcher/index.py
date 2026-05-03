@@ -1,10 +1,10 @@
-"""Сканер группы @UG_DRIVER: ловит сообщения от @VsyaRussiabot ('удалил(а) сообщение от ...'),
-определяет автора удалённого сообщения и шлёт ему в ЛС шаблон от имени второго user-аккаунта.
+"""Слушатель удалений в @UG_DRIVER через Telethon updates.
+Экономный: спит до события, при удалении — обрабатывает.
 
 GET                         — статус
-POST ?action=settings       — обновить шаблон/enabled (старт/стоп цикла)
-POST ?action=run            — одноразовый ручной запуск
-POST ?action=loop           — цикл 24/7: сканит каждые 5 сек, в конце таймаута перезапускает себя
+POST ?action=settings       — обновить шаблон/enabled (старт/стоп слушателя)
+POST ?action=run            — одноразовый запуск (опрос AdminLog за всё с last_id)
+POST ?action=loop           — слушатель updates 24/7 (просыпается только на удаления)
 GET  ?action=history        — история отправок
 """
 import os
@@ -17,7 +17,7 @@ import threading
 import urllib.request
 import psycopg2
 
-from telethon import TelegramClient
+from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError
 from telethon.tl.functions.channels import GetAdminLogRequest
@@ -28,7 +28,8 @@ from telethon.tl.types import (
 
 SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
 LOOP_DURATION_SEC = 25  # макс время одного запуска (укладываемся в таймаут 30)
-SCAN_INTERVAL_SEC = 5   # пауза между сканами внутри цикла
+HEARTBEAT_EVERY_SEC = 10  # как часто обновлять heartbeat в БД
+DELETER_BOT_USERNAMES = {'vsyarussiabot', 'ugtransferbot'}  # боты-удалятели (нижний регистр)
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -254,6 +255,133 @@ async def run_scan() -> dict:
             pass
 
 
+async def process_deletion_message(client, msg, template: str) -> dict:
+    """Обрабатывает сообщение от бота-удалятора, шлёт ЛС автору удалённого сообщения."""
+    text = (msg.text or msg.message or '')
+    if not text:
+        return {'ok': False, 'reason': 'empty_text'}
+
+    # Триггер: "удалил(а)... от ИМЯ:" или просто факт удаления с reply
+    if not msg.reply_to_msg_id:
+        # без reply не знаем автора
+        return {'ok': False, 'reason': 'no_reply'}
+
+    # Берём автора удалённого сообщения через reply
+    try:
+        reply = await client.get_messages(msg.peer_id, ids=msg.reply_to_msg_id)
+    except Exception as e:
+        return {'ok': False, 'reason': f'get_reply: {e}'}
+
+    if not reply or not getattr(reply, 'sender_id', None):
+        return {'ok': False, 'reason': 'no_reply_sender'}
+
+    user_id = reply.sender_id
+    try:
+        u = await reply.get_sender()
+    except Exception:
+        u = None
+    username = (getattr(u, 'username', '') or '') if u else ''
+    first_name = (getattr(u, 'first_name', '') or '') if u else 'водитель'
+    is_bot = getattr(u, 'bot', False) if u else False
+
+    if is_bot:
+        return {'ok': False, 'reason': 'is_bot'}
+    if already_sent(user_id):
+        return {'ok': False, 'reason': 'already_sent'}
+
+    personalized = template.replace('{name}', first_name).replace('{username}', username or '')
+    try:
+        await client.send_message(user_id, personalized)
+        log_send(user_id, username, first_name, msg.id, 'ok')
+        return {'ok': True, 'user_id': user_id, 'username': username}
+    except FloodWaitError as fe:
+        log_send(user_id, username, first_name, msg.id, f'flood:{fe.seconds}')
+        return {'ok': False, 'reason': f'flood:{fe.seconds}'}
+    except Exception as e:
+        log_send(user_id, username, first_name, msg.id, f'err:{str(e)[:200]}')
+        return {'ok': False, 'reason': str(e)[:200]}
+
+
+async def run_listener(loop_token: str) -> dict:
+    """Event-driven listener: спит до прихода update, при удалении — шлёт ЛС.
+    Работает 25 секунд, потом возвращает результат (handler перезапускает себя)."""
+    settings = get_settings()
+    if not settings['enabled']:
+        return {'ok': False, 'reason': 'disabled'}
+
+    session_str = get_session2()
+    if not session_str:
+        return {'ok': False, 'reason': 'not_logged_in'}
+
+    api_id = int(os.environ['TG_API_ID'])
+    api_hash = os.environ['TG_API_HASH']
+    template = settings['message_template'] or 'Здравствуйте!'
+
+    try:
+        target_entity = None
+        target_chat_id = None
+        client = TelegramClient(StringSession(session_str), api_id, api_hash)
+        await client.connect()
+
+        # Получаем ID целевой группы один раз
+        try:
+            target_entity = await client.get_entity(TARGET_GROUP)
+            target_chat_id = target_entity.id
+        except Exception as e:
+            await client.disconnect()
+            return {'ok': False, 'reason': f'no_access_to_group: {e}'}
+
+        sent_count = [0]
+        events_seen = [0]
+
+        @client.on(events.NewMessage(chats=target_entity))
+        async def handler_new_msg(ev):
+            events_seen[0] += 1
+            try:
+                # Проверяем что отправитель — бот-удалятор
+                sender = await ev.get_sender() if ev.sender_id else None
+                sender_username = (getattr(sender, 'username', '') or '').lower() if sender else ''
+                if sender_username not in DELETER_BOT_USERNAMES:
+                    return
+                # Проверяем что это сообщение про удаление
+                text = (ev.raw_text or '')
+                if not re.search(r'удалил|deleted', text, re.IGNORECASE):
+                    return
+                print(f"[listener] DELETE-MSG from @{sender_username}: {text[:120]!r}")
+                res = await process_deletion_message(client, ev.message, template)
+                if res.get('ok'):
+                    sent_count[0] += 1
+                    print(f"[listener] sent to user_id={res.get('user_id')} @{res.get('username')}")
+                else:
+                    print(f"[listener] skip: {res.get('reason')}")
+            except Exception as e:
+                print(f"[listener handler err] {e}")
+
+        # Слушаем 25 секунд (или пока loop_token не сменился)
+        start = time.time()
+        last_hb = 0
+        try:
+            while time.time() - start < LOOP_DURATION_SEC:
+                # Heartbeat и проверка остановки
+                if time.time() - last_hb > HEARTBEAT_EVERY_SEC:
+                    cur_s = get_settings()
+                    if not cur_s['enabled'] or cur_s['loop_token'] != loop_token:
+                        break
+                    heartbeat()
+                    last_hb = time.time()
+                # Спим короткими порциями, чтобы handler успел отреагировать
+                await asyncio.sleep(2)
+        finally:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+
+        return {'ok': True, 'sent': sent_count[0], 'events_seen': events_seen[0], 'duration_sec': round(time.time() - start, 1)}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
 def handler(event: dict, context) -> dict:
     """Сканер исключённых: настройки, история и ручной запуск."""
     if event.get('httpMethod') == 'OPTIONS':
@@ -271,7 +399,7 @@ def handler(event: dict, context) -> dict:
         finally:
             loop.close()
 
-    # 24/7 цикл — без авторизации (защищён токеном из БД)
+    # 24/7 СЛУШАТЕЛЬ событий (event-driven, экономит compute)
     if method == 'POST' and action == 'loop':
         body_raw = event.get('body') or '{}'
         try:
@@ -280,41 +408,19 @@ def handler(event: dict, context) -> dict:
             body_in = {}
         incoming_token = body_in.get('token', '')
         s = get_settings()
-        # Проверка: цикл активен и токен совпадает
         if not s['enabled']:
             return resp(200, {'ok': False, 'reason': 'disabled'})
         if s['loop_token'] and incoming_token != s['loop_token']:
-            return resp(200, {'ok': False, 'reason': 'token_mismatch_old_loop_dies'})
+            return resp(200, {'ok': False, 'reason': 'token_mismatch'})
 
         loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
-        start = time.time()
-        scans = 0
-        total_sent = 0
         try:
-            while time.time() - start < LOOP_DURATION_SEC:
-                # проверяем что цикл всё ещё нужен
-                cur_s = get_settings()
-                if not cur_s['enabled'] or cur_s['loop_token'] != incoming_token:
-                    return resp(200, {'ok': True, 'stopped': True, 'scans': scans, 'sent': total_sent})
-                heartbeat()
-                try:
-                    res = loop.run_until_complete(run_scan())
-                    if res.get('ok'):
-                        total_sent += res.get('sent', 0)
-                except Exception as e:
-                    print(f"[loop scan err] {e}")
-                scans += 1
-                # Спим до следующего скана
-                remain = LOOP_DURATION_SEC - (time.time() - start)
-                if remain > SCAN_INTERVAL_SEC + 2:
-                    time.sleep(SCAN_INTERVAL_SEC)
-                else:
-                    break
-            # Цикл закончился — перезапускаем себя
+            result = loop.run_until_complete(run_listener(incoming_token))
             cur_s = get_settings()
             if cur_s['enabled'] and cur_s['loop_token'] == incoming_token:
                 fire_self_loop(incoming_token)
-            return resp(200, {'ok': True, 'scans': scans, 'sent': total_sent, 'restarted': True})
+                result['restarted'] = True
+            return resp(200, result)
         finally:
             loop.close()
 
