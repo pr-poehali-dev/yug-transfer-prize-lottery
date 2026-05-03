@@ -29,6 +29,7 @@ from telethon.tl.types import (
 SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
 LOOP_DURATION_SEC = 25  # макс время одного запуска (укладываемся в таймаут 30)
 HEARTBEAT_EVERY_SEC = 10  # как часто обновлять heartbeat в БД
+WATCHDOG_DEAD_AFTER_SEC = 60  # если heartbeat старше — считаем loop мёртвым, поднимаем новый
 DELETER_BOT_USERNAMES = {'vsyarussiabot', 'ugtransferbot'}  # боты-удалятели (нижний регистр)
 
 CORS = {
@@ -99,6 +100,30 @@ def fire_self_loop(token: str):
         except Exception:
             pass
     threading.Thread(target=_go, daemon=True).start()
+
+
+def watchdog_check_and_revive() -> dict:
+    """Проверяет heartbeat. Если loop мёртв (>WATCHDOG_DEAD_AFTER_SEC) — генерит новый токен и поднимает loop.
+    Возвращает {'revived': bool, 'reason': str, 'age_sec': int|None}.
+    """
+    s = get_settings()
+    if not s['enabled']:
+        return {'revived': False, 'reason': 'disabled'}
+    hb = s.get('loop_heartbeat')
+    age = None
+    if hb is not None:
+        try:
+            from datetime import datetime, timezone
+            now = datetime.now(hb.tzinfo) if hb.tzinfo else datetime.utcnow()
+            age = int((now - hb).total_seconds())
+        except Exception:
+            age = None
+    if hb is not None and age is not None and age < WATCHDOG_DEAD_AFTER_SEC:
+        return {'revived': False, 'reason': 'alive', 'age_sec': age}
+    new_token = hashlib.sha256(f"{time.time()}:{os.urandom(8).hex()}".encode()).hexdigest()[:32]
+    set_loop_token(new_token)
+    fire_self_loop(new_token)
+    return {'revived': True, 'reason': 'dead' if hb else 'no_heartbeat', 'age_sec': age, 'new_token': new_token[:8] + '…'}
 
 
 def save_settings(enabled=None, template=None, last_msg_id=None):
@@ -467,13 +492,20 @@ def handler(event: dict, context) -> dict:
     qs = event.get('queryStringParameters') or {}
     action = qs.get('action', '')
 
-    # Cron вызов без авторизации
+    # Cron вызов без авторизации (+ watchdog: оживляет упавший loop)
     if method == 'POST' and action == 'cron':
+        wd = watchdog_check_and_revive()
         loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
         try:
-            return resp(200, loop.run_until_complete(run_scan()))
+            r = loop.run_until_complete(run_scan())
+            r['watchdog'] = wd
+            return resp(200, r)
         finally:
             loop.close()
+
+    # Лёгкий watchdog-пинг без сканирования (для частого внешнего крона)
+    if method == 'POST' and action == 'watchdog':
+        return resp(200, watchdog_check_and_revive())
 
     # 24/7 СЛУШАТЕЛЬ событий (event-driven, экономит compute)
     if method == 'POST' and action == 'loop':
@@ -520,7 +552,9 @@ def handler(event: dict, context) -> dict:
         return resp(200, {'items': items})
 
     if method == 'GET':
+        wd = watchdog_check_and_revive()
         s = get_settings()
+        s['watchdog'] = wd
         return resp(200, s)
 
     body = json.loads(event.get('body') or '{}')
