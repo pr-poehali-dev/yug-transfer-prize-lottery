@@ -80,6 +80,16 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
 
     try:
+        if method == 'GET' and action == 'connections':
+            cur.execute(f"SELECT connection_id, user_id, username, is_enabled, can_reply, created_at FROM {SCHEMA}.business_connections ORDER BY id DESC LIMIT 20")
+            rows = cur.fetchall()
+            conns = [{
+                'connection_id': r[0], 'user_id': r[1], 'username': r[2],
+                'is_enabled': r[3], 'can_reply': r[4], 'created_at': r[5],
+            } for r in rows]
+            current = os.environ.get('TELEGRAM_BUSINESS_CONNECTION_ID', '').strip()
+            return resp(200, {'connections': conns, 'current_secret': current})
+
         if method == 'GET':
             cur.execute(f"SELECT id, video_url, caption, is_used, last_sent_at, last_status, created_at FROM {SCHEMA}.bot_stories ORDER BY id DESC")
             rows = cur.fetchall()

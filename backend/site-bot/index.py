@@ -63,6 +63,30 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 
     body = json.loads(event.get('body') or '{}')
+
+    bc = body.get('business_connection')
+    if bc:
+        try:
+            conn = psycopg2.connect(os.environ['DATABASE_URL'])
+            cur = conn.cursor()
+            conn_id = str(bc.get('id', '')).replace("'", "''")
+            user = bc.get('user') or {}
+            uid = int(user.get('id') or 0)
+            uname = str(user.get('username') or '').replace("'", "''")
+            is_enabled = bool(bc.get('is_enabled', True))
+            can_reply = bool(bc.get('can_reply', False))
+            raw = json.dumps(bc).replace("'", "''")
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.business_connections (connection_id, user_id, username, is_enabled, can_reply, raw) "
+                f"VALUES ('{conn_id}', {uid}, '{uname}', {is_enabled}, {can_reply}, '{raw}'::jsonb)"
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+        return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
+
     message = body.get('message')
     if not message:
         return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
