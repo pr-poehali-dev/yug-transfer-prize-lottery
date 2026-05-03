@@ -529,17 +529,9 @@ def handler(event: dict, context) -> dict:
         enabled = body.get('enabled')
         template = body.get('message_template')
         save_settings(enabled=enabled, template=template)
-        # Запускаем/перезапускаем цикл если включено
-        if enabled:
-            import secrets
-            new_token = secrets.token_hex(16)
-            set_loop_token(new_token)
-            fire_self_loop(new_token)
-            return resp(200, {'ok': True, 'loop_started': True})
-        else:
-            # Сбрасываем токен — старые циклы умрут на следующей итерации
-            set_loop_token('')
-            return resp(200, {'ok': True, 'loop_stopped': True})
+        # Останавливаем старый loop (если был) — теперь работаем по cron раз в минуту
+        set_loop_token('')
+        return resp(200, {'ok': True, 'mode': 'cron-1min'})
 
     if method == 'POST' and action == 'run':
         loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
