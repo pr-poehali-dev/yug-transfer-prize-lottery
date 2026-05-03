@@ -4,6 +4,7 @@ import { AdminTab } from "./adminTypes";
 import { AdminPostsTab } from "./AdminPostsTab";
 import { AdminBotTab } from "./AdminBotTab";
 import { AdminDriversTab } from "./AdminDriversTab";
+import { AdminStoriesTab } from "./AdminStoriesTab";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("posts");
@@ -11,6 +12,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
+    { id: "stories", label: "Сторис", icon: "Film" },
     { id: "drivers", label: "Водители", icon: "Car" },
   ];
 
@@ -79,6 +81,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               <AdminBotTab token={token} />
             </div>
           )}
+          {tab === "stories" && <AdminStoriesTab token={token} />}
           {tab === "drivers" && <AdminDriversTab token={token} />}
         </main>
       </div>

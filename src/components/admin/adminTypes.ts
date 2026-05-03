@@ -6,8 +6,19 @@ export const ADMIN_BOT_POSTS_URL = "https://functions.poehali.dev/9578d639-08e5-
 export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21";
 export const UPLOAD_VIDEO_URL = "https://functions.poehali.dev/f6d6a065-4281-4091-ac9e-9e3121bf2571";
 export const ADMIN_DRIVER_SUBS_URL = "https://functions.poehali.dev/95d0380a-04e8-4a3c-88db-9c256a11f1f6";
+export const ADMIN_BOT_STORIES_URL = "https://functions.poehali.dev/58582409-0dd6-4199-9901-fc7977290659";
 
-export type AdminTab = "posts" | "bot" | "drivers";
+export type AdminTab = "posts" | "bot" | "drivers" | "stories";
+
+export interface BotStory {
+  id: number;
+  video_url: string;
+  caption: string;
+  is_used: boolean;
+  last_sent_at: string | null;
+  last_status: string | null;
+  created_at: string | null;
+}
 
 export interface DriverSub {
   id: number;
