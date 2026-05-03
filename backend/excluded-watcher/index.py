@@ -24,6 +24,8 @@ from telethon.tl.functions.channels import GetAdminLogRequest
 from telethon.tl.types import (
     ChannelAdminLogEventsFilter,
     ChannelAdminLogEventActionDeleteMessage,
+    ChannelAdminLogEventActionParticipantToggleBan,
+    ChatBannedRights,
 )
 
 SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
@@ -184,30 +186,30 @@ async def run_scan() -> dict:
         except Exception as e:
             return {'ok': False, 'error': f'нет доступа к {TARGET_GROUP}: {e}'}
 
-        # Читаем АДМИН-ЛОГ группы — там фиксируются удаления сообщений ботом
-        # ВАЖНО: аккаунт должен быть админом группы @UG_DRIVER, иначе AdminLog недоступен
+        # Читаем АДМИН-ЛОГ группы — нас интересуют:
+        # 1) Удаления сообщений (delete=True) — старая логика
+        # 2) Изменения прав / баны (kick=True, ban=True) — новая логика для @VsyaRussiabot
         try:
             admin_log = await client(GetAdminLogRequest(
                 channel=entity,
                 q='',
                 events_filter=ChannelAdminLogEventsFilter(
-                    delete=True,
+                    delete=True, kick=True, ban=True,
                 ),
                 admins=[],
                 max_id=0,
-                min_id=last_id,  # берём только новые события после last_id
+                min_id=last_id,
                 limit=100,
             ))
         except Exception as e:
             return {'ok': False, 'error': f'AdminLog недоступен (аккаунт должен быть админом): {e}'}
 
         events = list(admin_log.events)
-        events.sort(key=lambda e: e.id)  # от старых к новым
+        events.sort(key=lambda e: e.id)
 
-        # Кеш юзеров из лога
         users_cache = {u.id: u for u in admin_log.users}
 
-        # Резолвим ID бота-удалятора (только его удаления нас интересуют)
+        # Резолвим ID бота-исключателя
         deleter_bot_ids = set()
         try:
             b = await client.get_entity(DELETER_BOT)
@@ -219,19 +221,35 @@ async def run_scan() -> dict:
             if ev.id > new_last_id:
                 new_last_id = ev.id
             action = ev.action
-            if not isinstance(action, ChannelAdminLogEventActionDeleteMessage):
-                continue
-            # Фильтр: реагируем только если удалил @VsyaRussiabot
-            if deleter_bot_ids and ev.user_id not in deleter_bot_ids:
-                print(f"[adminlog] skip event={ev.id} deleter_id={ev.user_id} (not VsyaRussiabot)")
-                continue
-            deleted = action.message
+
             author_id = None
-            # Достаём ID автора удалённого сообщения
-            if hasattr(deleted, 'from_id') and deleted.from_id:
-                from_id = deleted.from_id
-                # PeerUser имеет .user_id
-                author_id = getattr(from_id, 'user_id', None)
+
+            # Тип 1: бот удалил сообщение
+            if isinstance(action, ChannelAdminLogEventActionDeleteMessage):
+                if deleter_bot_ids and ev.user_id not in deleter_bot_ids:
+                    print(f"[adminlog] skip delete event={ev.id} deleter_id={ev.user_id} (not VsyaRussiabot)")
+                    continue
+                deleted = action.message
+                if hasattr(deleted, 'from_id') and deleted.from_id:
+                    author_id = getattr(deleted.from_id, 'user_id', None)
+
+            # Тип 2: бот ограничил права (ban) — основной триггер для @VsyaRussiabot
+            elif isinstance(action, ChannelAdminLogEventActionParticipantToggleBan):
+                if deleter_bot_ids and ev.user_id not in deleter_bot_ids:
+                    continue
+                # Проверяем что это именно ограничение (а не разбан)
+                new_p = getattr(action, 'new_participant', None)
+                br = getattr(new_p, 'banned_rights', None) if new_p else None
+                # Если send_messages=True значит ЗАПРЕЩЕНО писать (Telegram использует инверсную логику)
+                if not br or not getattr(br, 'send_messages', False):
+                    continue
+                # Достаём ID забаненного
+                peer = getattr(new_p, 'peer', None)
+                author_id = getattr(peer, 'user_id', None) if peer else None
+                print(f"[adminlog] BAN event={ev.id} bot_id={ev.user_id} target_user={author_id}")
+            else:
+                continue
+
             if not author_id:
                 print(f"[adminlog] event={ev.id} no author")
                 continue
@@ -396,23 +414,19 @@ async def run_listener(loop_token: str) -> dict:
                     last_hb = time.time()
                 await asyncio.sleep(2)
 
-            # Fallback: опрос AdminLog (один раз за цикл)
+            # Fallback: опрос AdminLog (один раз за цикл).
+            # Ловим и удаления (delete) и баны/restrict (kick+ban) — @VsyaRussiabot работает через restrict
             adminlog_sent = 0
             try:
-                from telethon.tl.functions.channels import GetAdminLogRequest as _GAL
-                from telethon.tl.types import (
-                    ChannelAdminLogEventsFilter as _F,
-                    ChannelAdminLogEventActionDeleteMessage as _DEL,
-                )
                 cur_s = get_settings()
                 last_id = cur_s['last_checked_msg_id']
-                admin_log = await client(_GAL(
-                    channel=target_entity, q='', events_filter=_F(delete=True),
+                admin_log = await client(GetAdminLogRequest(
+                    channel=target_entity, q='',
+                    events_filter=ChannelAdminLogEventsFilter(delete=True, kick=True, ban=True),
                     admins=[], max_id=0, min_id=last_id, limit=50,
                 ))
                 ev_list = sorted(admin_log.events, key=lambda e: e.id)
                 users_cache = {u.id: u for u in admin_log.users}
-                # Резолвим ID @VsyaRussiabot
                 deleter_bot_ids = set()
                 try:
                     b = await client.get_entity(DELETER_BOT)
@@ -423,14 +437,27 @@ async def run_listener(loop_token: str) -> dict:
                 for ev in ev_list:
                     if ev.id > new_max:
                         new_max = ev.id
-                    if not isinstance(ev.action, _DEL):
+                    author_id = None
+                    # Тип 1: удаление сообщения
+                    if isinstance(ev.action, ChannelAdminLogEventActionDeleteMessage):
+                        if deleter_bot_ids and ev.user_id not in deleter_bot_ids:
+                            continue
+                        deleted = ev.action.message
+                        from_id = getattr(deleted, 'from_id', None)
+                        author_id = getattr(from_id, 'user_id', None) if from_id else None
+                    # Тип 2: бан/restrict от @VsyaRussiabot
+                    elif isinstance(ev.action, ChannelAdminLogEventActionParticipantToggleBan):
+                        if deleter_bot_ids and ev.user_id not in deleter_bot_ids:
+                            continue
+                        new_p = getattr(ev.action, 'new_participant', None)
+                        br = getattr(new_p, 'banned_rights', None) if new_p else None
+                        if not br or not getattr(br, 'send_messages', False):
+                            continue  # не запрет, а разбан
+                        peer = getattr(new_p, 'peer', None)
+                        author_id = getattr(peer, 'user_id', None) if peer else None
+                        print(f"[adminlog-poll] BAN event={ev.id} target={author_id}")
+                    else:
                         continue
-                    # Фильтр: только удаления от @VsyaRussiabot
-                    if deleter_bot_ids and ev.user_id not in deleter_bot_ids:
-                        continue
-                    deleted = ev.action.message
-                    from_id = getattr(deleted, 'from_id', None)
-                    author_id = getattr(from_id, 'user_id', None) if from_id else None
                     if not author_id:
                         continue
                     user = users_cache.get(author_id)
@@ -488,25 +515,28 @@ def handler(event: dict, context) -> dict:
         finally:
             loop.close()
 
-    # WHOIS: узнать кто такой пользователь по ID (для выяснения вторых ботов-удаляторов)
+    # WHOIS: узнать кто такой пользователь по ID или username
     if action == 'whois':
-        qs2 = qs.get('id') or ''
-        try:
+        qs2 = qs.get('id') or qs.get('username') or ''
+        target_id = qs2
+        if qs2.isdigit() or (qs2.startswith('-') and qs2[1:].isdigit()):
             target_id = int(qs2)
-        except Exception:
-            return resp(400, {'error': 'pass ?id=<user_id>'})
-        session_str = get_session2()
-        if not session_str:
+        elif not qs2:
+            return resp(400, {'error': 'pass ?id=<user_id> или ?username=<name>'})
+
+        api_id_w = int(os.environ['TG_API_ID'])
+        api_hash_w = os.environ['TG_API_HASH']
+        session_str_w = get_session2()
+        if not session_str_w:
             return resp(200, {'ok': False, 'reason': 'not_logged_in'})
-        api_id = int(os.environ['TG_API_ID'])
-        api_hash = os.environ['TG_API_HASH']
-        async def _whois():
-            client = TelegramClient(StringSession(session_str), api_id, api_hash)
+        async def _whois2():
+            client = TelegramClient(StringSession(session_str_w), api_id_w, api_hash_w)
             await client.connect()
             try:
                 u = await client.get_entity(target_id)
                 return {
-                    'ok': True, 'id': target_id,
+                    'ok': True,
+                    'id': getattr(u, 'id', None),
                     'username': getattr(u, 'username', None),
                     'first_name': getattr(u, 'first_name', None),
                     'last_name': getattr(u, 'last_name', None),
@@ -520,11 +550,154 @@ def handler(event: dict, context) -> dict:
                 except Exception: pass
         loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
         try:
-            return resp(200, loop.run_until_complete(_whois()))
+            return resp(200, loop.run_until_complete(_whois2()))
         finally:
             loop.close()
 
-    # DEBUG: показать последние удаления из AdminLog (без фильтра)
+    # DEBUG: последние сообщения В ЧАТЕ от @VsyaRussiabot
+    if action == 'debug_chat':
+        session_str = get_session2()
+        if not session_str:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+        api_id = int(os.environ['TG_API_ID'])
+        api_hash = os.environ['TG_API_HASH']
+        async def _dbg_chat():
+            client = TelegramClient(StringSession(session_str), api_id, api_hash)
+            await client.connect()
+            try:
+                entity = await client.get_entity(TARGET_GROUP)
+                bot = await client.get_entity(DELETER_BOT)
+                # Берём последние 100 сообщений
+                msgs = await client.get_messages(entity, limit=100)
+                from_bot = []
+                for m in msgs:
+                    sender_id = getattr(m, 'sender_id', None) or 0
+                    if sender_id == bot.id:
+                        from_bot.append({
+                            'id': m.id, 'date': str(m.date),
+                            'text': (m.text or m.message or '')[:200],
+                            'reply_to': getattr(m, 'reply_to_msg_id', None),
+                        })
+                return {'ok': True, 'bot_id': bot.id, 'msgs_from_bot': from_bot, 'total_scanned': len(msgs)}
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
+            finally:
+                try: await client.disconnect()
+                except Exception: pass
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        try:
+            return resp(200, loop.run_until_complete(_dbg_chat()))
+        finally:
+            loop.close()
+
+    # DEBUG: ВСЕ события AdminLog за последние 30 минут — найти настоящий тип
+    if action == 'debug_all':
+        session_str = get_session2()
+        if not session_str:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+        api_id = int(os.environ['TG_API_ID'])
+        api_hash = os.environ['TG_API_HASH']
+        async def _dbg_all():
+            client = TelegramClient(StringSession(session_str), api_id, api_hash)
+            await client.connect()
+            try:
+                entity = await client.get_entity(TARGET_GROUP)
+                bot = await client.get_entity(DELETER_BOT)
+                # Все типы событий
+                admin_log = await client(GetAdminLogRequest(
+                    channel=entity, q='',
+                    events_filter=ChannelAdminLogEventsFilter(
+                        join=True, leave=True, invite=True, ban=True, unban=True,
+                        kick=True, unkick=True, promote=True, demote=True,
+                        info=True, settings=True, pinned=True,
+                        edit=True, delete=True, group_call=True, invites=True,
+                    ),
+                    admins=[], max_id=0, min_id=0, limit=50,
+                ))
+                events_data = []
+                for ev in sorted(admin_log.events, key=lambda e: e.id, reverse=True):
+                    info = {
+                        'event_id': ev.id, 'date': str(ev.date),
+                        'deleter_id': ev.user_id,
+                        'is_vsyarussia': ev.user_id == bot.id,
+                        'action_type': type(ev.action).__name__,
+                    }
+                    # Извлекаем target user если есть
+                    np = getattr(ev.action, 'new_participant', None)
+                    pp = getattr(ev.action, 'prev_participant', None)
+                    if np:
+                        peer = getattr(np, 'peer', None) or getattr(np, 'user_id', None)
+                        info['new_target'] = getattr(peer, 'user_id', None) if hasattr(peer, 'user_id') else peer
+                        br = getattr(np, 'banned_rights', None)
+                        if br:
+                            info['new_send_messages_banned'] = getattr(br, 'send_messages', False)
+                    if pp:
+                        peer = getattr(pp, 'peer', None) or getattr(pp, 'user_id', None)
+                        info['prev_target'] = getattr(peer, 'user_id', None) if hasattr(peer, 'user_id') else peer
+                    events_data.append(info)
+                return {'ok': True, 'bot_id': bot.id, 'total': len(events_data), 'events': events_data}
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
+            finally:
+                try: await client.disconnect()
+                except Exception: pass
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        try:
+            return resp(200, loop.run_until_complete(_dbg_all()))
+        finally:
+            loop.close()
+
+    # DEBUG: показать последние БАНЫ от @VsyaRussiabot
+    if action == 'debug_bans':
+        session_str = get_session2()
+        if not session_str:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+        api_id = int(os.environ['TG_API_ID'])
+        api_hash = os.environ['TG_API_HASH']
+        async def _dbg_bans():
+            client = TelegramClient(StringSession(session_str), api_id, api_hash)
+            await client.connect()
+            try:
+                entity = await client.get_entity(TARGET_GROUP)
+                bot = await client.get_entity(DELETER_BOT)
+                admin_log = await client(GetAdminLogRequest(
+                    channel=entity, q='',
+                    events_filter=ChannelAdminLogEventsFilter(delete=True, kick=True, ban=True),
+                    admins=[], max_id=0, min_id=0, limit=20,
+                ))
+                events_data = []
+                for ev in sorted(admin_log.events, key=lambda e: e.id, reverse=True):
+                    info = {
+                        'event_id': ev.id, 'date': str(ev.date),
+                        'deleter_id': ev.user_id,
+                        'is_vsyarussia': ev.user_id == bot.id,
+                        'action_type': type(ev.action).__name__,
+                    }
+                    if isinstance(ev.action, ChannelAdminLogEventActionParticipantToggleBan):
+                        np = getattr(ev.action, 'new_participant', None)
+                        peer = getattr(np, 'peer', None) if np else None
+                        br = getattr(np, 'banned_rights', None) if np else None
+                        info['target_user_id'] = getattr(peer, 'user_id', None) if peer else None
+                        info['send_messages_banned'] = getattr(br, 'send_messages', False) if br else None
+                        info['view_messages_banned'] = getattr(br, 'view_messages', False) if br else None
+                    elif isinstance(ev.action, ChannelAdminLogEventActionDeleteMessage):
+                        deleted = ev.action.message
+                        from_id = getattr(deleted, 'from_id', None)
+                        info['author_id'] = getattr(from_id, 'user_id', None) if from_id else None
+                    events_data.append(info)
+                return {'ok': True, 'bot_id': bot.id, 'events': events_data}
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
+            finally:
+                try: await client.disconnect()
+                except Exception: pass
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        try:
+            return resp(200, loop.run_until_complete(_dbg_bans()))
+        finally:
+            loop.close()
+
+    # DEBUG: показать последние события из AdminLog (все типы — удаления, баны, права)
     if action == 'debug_log':
         session_str = get_session2()
         if not session_str:
@@ -536,26 +709,49 @@ def handler(event: dict, context) -> dict:
             await client.connect()
             try:
                 entity = await client.get_entity(TARGET_GROUP)
+                # Все события — без фильтра, чтобы увидеть права/баны/удаления
                 admin_log = await client(GetAdminLogRequest(
                     channel=entity, q='',
-                    events_filter=ChannelAdminLogEventsFilter(delete=True),
-                    admins=[], max_id=0, min_id=0, limit=20,
+                    events_filter=None,
+                    admins=[], max_id=0, min_id=0, limit=30,
                 ))
                 events_data = []
                 for ev in sorted(admin_log.events, key=lambda e: e.id, reverse=True):
-                    if not isinstance(ev.action, ChannelAdminLogEventActionDeleteMessage):
-                        continue
-                    deleted = ev.action.message
-                    from_id = getattr(deleted, 'from_id', None)
-                    author_id = getattr(from_id, 'user_id', None) if from_id else None
-                    events_data.append({
+                    action_type = type(ev.action).__name__
+                    info = {
                         'event_id': ev.id,
                         'date': str(ev.date),
-                        'deleter_id': ev.user_id,
-                        'author_id': author_id,
-                        'text_preview': (getattr(deleted, 'message', '') or '')[:100],
-                    })
-                return {'ok': True, 'events': events_data, 'total': len(events_data)}
+                        'deleter_id': ev.user_id,  # кто совершил действие
+                        'action_type': action_type,
+                    }
+                    # Удаление сообщения
+                    if isinstance(ev.action, ChannelAdminLogEventActionDeleteMessage):
+                        deleted = ev.action.message
+                        from_id = getattr(deleted, 'from_id', None)
+                        info['author_id'] = getattr(from_id, 'user_id', None) if from_id else None
+                        info['text_preview'] = (getattr(deleted, 'message', '') or '')[:80]
+                    # Изменение прав / бан — извлекаем target user
+                    if hasattr(ev.action, 'new_participant'):
+                        np = ev.action.new_participant
+                        info['target_user_id'] = getattr(np, 'user_id', None) or getattr(np, 'peer', None)
+                    if hasattr(ev.action, 'prev_participant'):
+                        pp = ev.action.prev_participant
+                        info['prev_target_id'] = getattr(pp, 'user_id', None) or getattr(pp, 'peer', None)
+                    events_data.append(info)
+                # Кто такие deleter_id (топ)
+                deleter_ids = list({e['deleter_id'] for e in events_data if e.get('deleter_id')})
+                deleters_info = {}
+                for did in deleter_ids[:10]:
+                    try:
+                        u = await client.get_entity(did)
+                        deleters_info[str(did)] = {
+                            'username': getattr(u, 'username', None),
+                            'first_name': getattr(u, 'first_name', None),
+                            'is_bot': getattr(u, 'bot', False),
+                        }
+                    except Exception:
+                        deleters_info[str(did)] = {'error': 'unresolved'}
+                return {'ok': True, 'events': events_data, 'deleters': deleters_info, 'total': len(events_data)}
             except Exception as e:
                 return {'ok': False, 'error': str(e)}
             finally:
