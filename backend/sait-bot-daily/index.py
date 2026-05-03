@@ -326,17 +326,21 @@ def handler(event: dict, context) -> dict:
     })
 
     vk_result = post_to_vk(photo, vk_text)
+    vk_user_result = post_to_vk_user_wall(photo, vk_text)
 
     tg_status = 'ok' if tg_result.get('ok') else f"err:{(tg_result.get('description') or 'fail')[:200]}"
     vk_status = 'ok' if vk_result.get('ok') else f"err:{(vk_result.get('error') or 'fail')[:200]}"
+    vk_user_status = 'ok' if vk_user_result.get('ok') else f"err:{(vk_user_result.get('error') or 'fail')[:200]}"
     try:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         tg_safe = tg_status.replace("'", "''")
         vk_safe = vk_status.replace("'", "''")
+        vk_user_safe = vk_user_status.replace("'", "''")
         cur.execute(
             f"UPDATE {SCHEMA}.bot_daily_posts "
-            f"SET last_tg_status = '{tg_safe}', last_vk_status = '{vk_safe}', last_sent_at = NOW() "
+            f"SET last_tg_status = '{tg_safe}', last_vk_status = '{vk_safe}', "
+            f"last_vk_user_status = '{vk_user_safe}', last_sent_at = NOW() "
             f"WHERE id = {post_id}"
         )
         conn.commit()
@@ -355,5 +359,7 @@ def handler(event: dict, context) -> dict:
             'tg_status': tg_status,
             'vk': vk_result,
             'vk_status': vk_status,
+            'vk_user': vk_user_result,
+            'vk_user_status': vk_user_status,
         }),
     }
