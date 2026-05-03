@@ -12,7 +12,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
-    { id: "stories", label: "Сторис", icon: "Film" },
     { id: "drivers", label: "Водители", icon: "Car" },
   ];
 
@@ -79,9 +78,22 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               </div>
 
               <AdminBotTab token={token} />
+
+              <div className="relative py-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full h-px bg-gradient-to-r from-transparent via-pink-500/40 to-transparent" />
+                </div>
+                <div className="relative flex justify-center">
+                  <div className="px-4 py-1.5 rounded-full bg-pink-500/10 border border-pink-500/30 backdrop-blur-sm flex items-center gap-2">
+                    <Icon name="Film" size={14} className="text-pink-300" />
+                    <span className="text-pink-200 text-xs font-medium uppercase tracking-wider">Сторис</span>
+                  </div>
+                </div>
+              </div>
+
+              <AdminStoriesTab token={token} />
             </div>
           )}
-          {tab === "stories" && <AdminStoriesTab token={token} />}
           {tab === "drivers" && <AdminDriversTab token={token} />}
         </main>
       </div>
