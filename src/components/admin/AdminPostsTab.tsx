@@ -409,24 +409,22 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
           onReset={() => confirmLeave(resetForm)}
         />
 
-        {!formExpanded && (
-          <PostList
-            posts={posts}
-            loading={loading}
-            statusFilter={statusFilter}
-            editId={editId}
-            publishingId={publishingId}
-            deleting={deleting}
-            editingInTgId={editingInTgId}
-            onFilterChange={sf => setStatusFilter(sf)}
-            onRefresh={() => fetchPosts(statusFilter)}
-            onPublish={handlePublishFromList}
-            onEditInTg={handleEditInTg}
-            onEdit={post => { confirmLeave(() => startEdit(post)); setFormExpanded(true); }}
-            onDelete={handleDelete}
-            onResetEdit={() => confirmLeave(resetForm)}
-          />
-        )}
+        <PostList
+          posts={posts}
+          loading={loading}
+          statusFilter={statusFilter}
+          editId={editId}
+          publishingId={publishingId}
+          deleting={deleting}
+          editingInTgId={editingInTgId}
+          onFilterChange={sf => setStatusFilter(sf)}
+          onRefresh={() => fetchPosts(statusFilter)}
+          onPublish={handlePublishFromList}
+          onEditInTg={handleEditInTg}
+          onEdit={post => { confirmLeave(() => startEdit(post)); setFormExpanded(true); }}
+          onDelete={handleDelete}
+          onResetEdit={() => confirmLeave(resetForm)}
+        />
       </div>
     </div>
   );

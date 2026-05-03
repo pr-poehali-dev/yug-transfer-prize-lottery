@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import type { Post } from "./adminTypes";
 
@@ -31,8 +32,28 @@ export function PostList({
   posts, loading, statusFilter, editId, publishingId, deleting, editingInTgId,
   onFilterChange, onRefresh, onPublish, onEdit, onEditInTg, onDelete, onResetEdit,
 }: PostListProps) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <div className="space-y-3">
+    <div className="card-glow rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/5 transition-colors border-b border-white/10"
+      >
+        <div className="flex items-center gap-2">
+          <Icon name="List" size={14} className="text-purple-400" />
+          <span className="text-sm font-medium text-white">Опубликованные посты</span>
+          <span className="text-[11px] text-white/40">· {posts.length}</span>
+        </div>
+        <Icon
+          name="ChevronDown"
+          size={16}
+          className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {!expanded ? null : (
+      <div className="p-3.5 space-y-3">
       {/* Фильтры */}
       <div className="flex gap-1.5 flex-wrap">
         {(["", "draft", "scheduled", "published"] as const).map(key => {
@@ -170,6 +191,8 @@ export function PostList({
             </div>
           );
         })
+      )}
+      </div>
       )}
     </div>
   );
