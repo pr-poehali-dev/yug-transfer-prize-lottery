@@ -16,7 +16,9 @@ interface Settings {
 function isLoopAlive(heartbeat: string | null): boolean {
   if (!heartbeat) return false;
   const hb = new Date(heartbeat).getTime();
-  return Date.now() - hb < 60_000; // живой если был < 1 минуты назад
+  // С паузами 60с между циклами, нормальный heartbeat до ~90 сек
+  // Считаем мёртвым если > 2 мин
+  return Date.now() - hb < 120_000;
 }
 
 interface HistoryItem {
@@ -37,6 +39,7 @@ export function AdminExcludedTab({ token }: Props) {
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string>("");
+  const [reviving, setReviving] = useState(false);
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -75,6 +78,20 @@ export function AdminExcludedTab({ token }: Props) {
     } finally { setSaving(false); }
   };
 
+  const reviveLoop = async () => {
+    setReviving(true); setRunResult("");
+    try {
+      const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=revive`, { method: "POST" });
+      const d = await r.json();
+      if (d.ok) {
+        setRunResult(`Цикл перезапущен (${d.token_preview || "новый токен"})`);
+      } else {
+        setRunResult(`Ошибка: ${d.reason || d.hint || "?"}`);
+      }
+      setTimeout(load, 2000);
+    } finally { setReviving(false); }
+  };
+
   const runNow = async () => {
     setRunning(true); setRunResult("");
     try {
@@ -107,7 +124,7 @@ export function AdminExcludedTab({ token }: Props) {
           {settings && enabled && (
             <span className={`text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${isLoopAlive(settings.loop_heartbeat) ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${isLoopAlive(settings.loop_heartbeat) ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
-              {isLoopAlive(settings.loop_heartbeat) ? "слушает 24/7" : "цикл остановлен"}
+              {isLoopAlive(settings.loop_heartbeat) ? "работает" : "цикл остановлен"}
             </span>
           )}
         </div>
@@ -153,6 +170,11 @@ export function AdminExcludedTab({ token }: Props) {
               <button onClick={runNow} disabled={running || !enabled}
                 className="px-4 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm font-medium hover:bg-emerald-500/25 disabled:opacity-50">
                 {running ? "Проверка..." : "Проверить сейчас"}
+              </button>
+              <button onClick={reviveLoop} disabled={reviving || !enabled}
+                className="px-4 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 text-sm font-medium hover:bg-blue-500/25 disabled:opacity-50 inline-flex items-center gap-2">
+                <Icon name="RefreshCw" size={14} className={reviving ? "animate-spin" : ""} />
+                {reviving ? "Перезапуск..." : "Перезапустить цикл"}
               </button>
               {runResult && (
                 <span className="text-xs text-white/60 self-center">{runResult}</span>
