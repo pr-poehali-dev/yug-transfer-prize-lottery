@@ -37,7 +37,6 @@ export function AdminExcludedTab({ token }: Props) {
   const [template, setTemplate] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string>("");
   const [reviving, setReviving] = useState(false);
 
@@ -90,20 +89,6 @@ export function AdminExcludedTab({ token }: Props) {
       }
       setTimeout(load, 2000);
     } finally { setReviving(false); }
-  };
-
-  const runNow = async () => {
-    setRunning(true); setRunResult("");
-    try {
-      const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=run`, { method: "POST", headers });
-      const d = await r.json();
-      if (d.ok) {
-        setRunResult(`Готово: отправлено ${d.sent || 0} сообщений`);
-      } else {
-        setRunResult(`Ошибка: ${d.error || d.reason || "?"}`);
-      }
-      await loadHistory();
-    } finally { setRunning(false); }
   };
 
   return (
@@ -166,10 +151,6 @@ export function AdminExcludedTab({ token }: Props) {
               <button onClick={saveSettings} disabled={saving}
                 className="px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-sm font-medium hover:bg-amber-500/25 disabled:opacity-50">
                 {saving ? "Сохранение..." : "Сохранить"}
-              </button>
-              <button onClick={runNow} disabled={running || !enabled}
-                className="px-4 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm font-medium hover:bg-emerald-500/25 disabled:opacity-50">
-                {running ? "Проверка..." : "Проверить сейчас"}
               </button>
               <button onClick={reviveLoop} disabled={reviving || !enabled}
                 className="px-4 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 text-sm font-medium hover:bg-blue-500/25 disabled:opacity-50 inline-flex items-center gap-2">
