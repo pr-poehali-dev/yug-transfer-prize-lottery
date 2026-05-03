@@ -53,21 +53,48 @@ export function PostForm({
   const videoRef = useRef<HTMLInputElement>(null);
   const videoCaptureRef = useRef<HTMLInputElement>(null);
   const [showButton2, setShowButton2] = useState(!!(form.button2_text || form.button2_url));
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (form.button2_text || form.button2_url) setShowButton2(true);
   }, [form.button2_text, form.button2_url]);
 
+  useEffect(() => {
+    if (editId) setExpanded(true);
+  }, [editId]);
+
   return (
     <div className="card-glow rounded-2xl overflow-hidden">
-      {editId && (
-        <div className="flex items-center justify-end px-3.5 py-2 border-b border-white/10">
-          <button onClick={onReset} className="text-xs text-muted-foreground hover:text-white transition-colors flex items-center gap-1">
-            <Icon name="X" size={12} /> Отмена
-          </button>
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/5 transition-colors border-b border-white/10"
+      >
+        <div className="flex items-center gap-2">
+          <Icon name={editId ? "Pencil" : "Plus"} size={14} className="text-purple-400" />
+          <span className="text-sm font-medium text-white">{editId ? "Редактирование поста" : "Новый пост"}</span>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          {editId && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={e => { e.stopPropagation(); onReset(); }}
+              onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); onReset(); } }}
+              className="text-xs text-muted-foreground hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Icon name="X" size={12} /> Отмена
+            </span>
+          )}
+          <Icon
+            name="ChevronDown"
+            size={16}
+            className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
+        </div>
+      </button>
 
+      {!expanded ? null : (
       <div className="p-3.5 space-y-2.5">
 
         {/* Название */}
@@ -330,6 +357,7 @@ export function PostForm({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
