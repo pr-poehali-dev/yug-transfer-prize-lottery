@@ -29,10 +29,10 @@ from telethon.tl.types import (
 )
 
 SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
-LOOP_DURATION_SEC = 25  # макс время одного запуска (укладываемся в таймаут 30)
-LOOP_PAUSE_SEC = 180  # пауза между циклами (3 мин) — экономия compute: 25/(25+180) ≈ 12% от 24/7
-                       # При лимите 80ч/28дней даёт ~73ч расхода — укладываемся
-HEARTBEAT_EVERY_SEC = 10  # как часто обновлять heartbeat в БД
+LOOP_DURATION_SEC = 20  # макс время одного запуска (укладываемся в таймаут 30)
+LOOP_PAUSE_SEC = 600  # пауза между циклами (10 мин) — сильная экономия compute
+                       # 20/(20+600) ≈ 3.2% от 24/7 → ~23ч расхода/мес — большой запас
+HEARTBEAT_EVERY_SEC = 15  # как часто обновлять heartbeat в БД (реже = меньше DB-вызовов)
 DELETER_BOT_USERNAMES = {'vsyarussiabot', 'ugtransferbot'}  # боты-удалятели (нижний регистр)
 
 CORS = {

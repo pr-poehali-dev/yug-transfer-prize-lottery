@@ -17,7 +17,7 @@ def tg_api(method, payload):
     data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=4) as resp:
             return json.loads(resp.read())
     except Exception:
         return {}
@@ -91,11 +91,14 @@ def handler(event: dict, context) -> dict:
     if not message:
         return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
 
+    text = message.get('text', '') or ''
+    if not text.startswith('/start'):
+        return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
+
     chat_id = message['chat']['id']
-    text = message.get('text', '')
     first_name = message.get('from', {}).get('first_name', '')
 
-    if text.startswith('/start'):
+    if True:
         username = message.get('from', {}).get('username', '')
         try:
             conn = psycopg2.connect(os.environ['DATABASE_URL'])
