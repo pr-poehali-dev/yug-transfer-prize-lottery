@@ -4,6 +4,7 @@ import json
 import re
 import urllib.request
 import urllib.parse
+import urllib.error
 from datetime import date
 import psycopg2
 
@@ -43,14 +44,23 @@ def get_bot_token():
 
 
 def tg_api(method, payload):
-    url = f"https://api.telegram.org/bot{get_bot_token()}/{method}"
+    token = get_bot_token()
+    if not token:
+        return {'ok': False, 'description': 'TELEGRAM_BOT_TOKEN_2 пустой'}
+    url = f"https://api.telegram.org/bot{token}/{method}"
     data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())
-    except Exception:
-        return {}
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read())
+            return {'ok': False, 'description': f"HTTP {e.code}: {body.get('description', str(body))[:300]}"}
+        except Exception:
+            return {'ok': False, 'description': f"HTTP {e.code}"}
+    except Exception as e:
+        return {'ok': False, 'description': f"{type(e).__name__}: {str(e)[:300]}"}
 
 
 def strip_html(html_text: str) -> str:
