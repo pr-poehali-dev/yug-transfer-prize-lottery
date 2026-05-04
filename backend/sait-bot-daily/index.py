@@ -8,7 +8,7 @@ import urllib.error
 from datetime import date
 import psycopg2
 
-CHANNEL_ID = '@UG_DRIVER'
+CHANNEL_ID = '@ug_transfer_pro'
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA') or 't_p67171637_yug_transfer_prize_l'
 VK_API_VERSION = '5.199'
 
