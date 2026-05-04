@@ -509,8 +509,14 @@ def handler(event: dict, context) -> dict:
     qs = event.get('queryStringParameters') or {}
     action = qs.get('action', '')
 
-    # Cron вызов без авторизации
+    # Cron вызов: защита по секретному заголовку X-Cron-Secret
+    # Используется внешним планировщиком (cron-job.org), вызывает run_scan() — один проход
     if method == 'POST' and action == 'cron':
+        cron_secret = os.environ.get('CRON_SECRET', '')
+        headers_in = event.get('headers') or {}
+        provided = headers_in.get('X-Cron-Secret') or headers_in.get('x-cron-secret') or ''
+        if not cron_secret or provided != cron_secret:
+            return resp(401, {'error': 'invalid cron secret'})
         loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
         try:
             return resp(200, loop.run_until_complete(run_scan()))
