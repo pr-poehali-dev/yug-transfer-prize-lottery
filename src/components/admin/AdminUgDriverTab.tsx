@@ -30,6 +30,7 @@ interface Member {
   is_bot: boolean;
   is_premium: boolean;
   status: string;
+  source_group?: string;
   last_parsed_at: string | null;
 }
 
@@ -43,6 +44,7 @@ export function AdminUgDriverTab({ token }: Props) {
   const [page, setPage] = useState(0);
   const [parseMsg, setParseMsg] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "member" | "excluded">("");
+  const [groupInput, setGroupInput] = useState("");
   const PAGE_SIZE = 50;
 
   const headers = { "X-Admin-Token": token };
@@ -77,7 +79,8 @@ export function AdminUgDriverTab({ token }: Props) {
 
   const startParse = async () => {
     if (parsing) return;
-    if (!confirm("Запустить парсинг участников @UG_DRIVER? Может занять до 3 минут (несколько чанков).")) return;
+    const groupLabel = groupInput.trim() || "@UG_DRIVER";
+    if (!confirm(`Запустить парсинг участников ${groupLabel}? Может занять до 3 минут.`)) return;
     setParsing(true);
     let totalFetched = 0;
     let totalNew = 0;
@@ -85,10 +88,11 @@ export function AdminUgDriverTab({ token }: Props) {
     let action = "parse";
     try {
       for (let i = 0; i < 30; i++) {
-        setParseMsg(`Чанк ${i + 1}: парсим...`);
+        setParseMsg(`Чанк ${i + 1}: парсим ${groupLabel}...`);
         const r = await fetch(`${UG_DRIVER_PARSER_URL}?action=${action}`, {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ group: groupInput.trim() }),
         });
         const d = await r.json();
         if (!d.ok && d.error) {
@@ -102,7 +106,7 @@ export function AdminUgDriverTab({ token }: Props) {
         setParseMsg(`Прогресс: ${pct}% · загружено ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
         await loadStats();
         if (d.finished) {
-          setParseMsg(`Готово: всего ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
+          setParseMsg(`Готово: ${groupLabel} · всего ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
           break;
         }
         action = "parse_continue";
@@ -194,16 +198,30 @@ export function AdminUgDriverTab({ token }: Props) {
               </div>
             )}
 
-            <div className="flex gap-2 flex-wrap items-center">
-              <button
-                onClick={startParse}
-                disabled={parsing}
-                className="px-4 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-sm font-medium hover:bg-cyan-500/25 disabled:opacity-50 inline-flex items-center gap-2"
-              >
-                <Icon name={parsing ? "Loader2" : "Download"} size={14} className={parsing ? "animate-spin" : ""} />
-                {parsing ? "Парсинг..." : "Запустить парсинг"}
-              </button>
-              {parseMsg && <span className="text-xs text-white/60">{parseMsg}</span>}
+            <div className="space-y-2">
+              <div className="relative">
+                <Icon name="Link" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  value={groupInput}
+                  onChange={e => setGroupInput(e.target.value)}
+                  placeholder="@username группы или https://t.me/... (пусто = @UG_DRIVER)"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-white text-sm outline-none focus:border-cyan-500/50"
+                />
+              </div>
+              <p className="text-[11px] text-white/40">
+                Твой второй Telegram-аккаунт должен быть участником этой группы. Приватные ссылки t.me/+... работают если ты уже состоишь в группе.
+              </p>
+              <div className="flex gap-2 flex-wrap items-center">
+                <button
+                  onClick={startParse}
+                  disabled={parsing}
+                  className="px-4 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-sm font-medium hover:bg-cyan-500/25 disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  <Icon name={parsing ? "Loader2" : "Download"} size={14} className={parsing ? "animate-spin" : ""} />
+                  {parsing ? "Парсинг..." : "Запустить парсинг"}
+                </button>
+                {parseMsg && <span className="text-xs text-white/60">{parseMsg}</span>}
+              </div>
             </div>
           </div>
 
@@ -280,7 +298,10 @@ export function AdminUgDriverTab({ token }: Props) {
                           {m.is_bot && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">BOT</span>}
                           {m.is_premium && <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">PREMIUM</span>}
                         </div>
-                        <div className="text-[10px] text-white/40">ID: {m.user_id}</div>
+                        <div className="text-[10px] text-white/40">
+                          ID: {m.user_id}
+                          {m.source_group && <span className="ml-2">· {m.source_group}</span>}
+                        </div>
                       </div>
                     </div>
                     );

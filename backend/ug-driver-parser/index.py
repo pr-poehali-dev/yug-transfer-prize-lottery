@@ -88,10 +88,12 @@ def get_stats() -> dict:
             'excluded': excluded, 'members': members, 'last_run': last_run}
 
 
-def get_list(limit: int, offset: int, q: str, status_filter: str = '') -> dict:
+def get_list(limit: int, offset: int, q: str, status_filter: str = '', group_filter: str = '') -> dict:
     where = "WHERE 1=1"
     if status_filter in ('member', 'excluded'):
         where += f" AND status='{status_filter}'"
+    if group_filter:
+        where += f" AND source_group='{esc(group_filter)}'"
     if q:
         qe = esc(q)
         where += f" AND (username ILIKE '%{qe}%' OR first_name ILIKE '%{qe}%' OR last_name ILIKE '%{qe}%' OR CAST(user_id AS TEXT) ILIKE '%{qe}%')"
@@ -99,7 +101,7 @@ def get_list(limit: int, offset: int, q: str, status_filter: str = '') -> dict:
     cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.ug_driver_members {where}")
     total = cur.fetchone()[0]
     cur.execute(
-        f"SELECT user_id, username, first_name, last_name, is_bot, is_premium, status, last_parsed_at "
+        f"SELECT user_id, username, first_name, last_name, is_bot, is_premium, status, source_group, last_parsed_at "
         f"FROM {SCHEMA}.ug_driver_members {where} "
         f"ORDER BY last_parsed_at DESC LIMIT {int(limit)} OFFSET {int(offset)}"
     )
@@ -108,40 +110,65 @@ def get_list(limit: int, offset: int, q: str, status_filter: str = '') -> dict:
         items.append({
             'user_id': r[0], 'username': r[1] or '', 'first_name': r[2] or '',
             'last_name': r[3] or '', 'is_bot': r[4], 'is_premium': r[5],
-            'status': r[6], 'last_parsed_at': r[7],
+            'status': r[6], 'source_group': r[7] or '', 'last_parsed_at': r[8],
         })
     cur.close(); conn.close()
     return {'total': total, 'items': items}
 
 
-def get_or_create_run(new_run: bool) -> tuple:
-    """Возвращает (run_id, alphabet_pos). new_run=True — старт нового, False — продолжение."""
+def get_groups() -> list:
+    conn = db(); cur = conn.cursor()
+    cur.execute(
+        f"SELECT source_group, COUNT(*) FROM {SCHEMA}.ug_driver_members "
+        f"WHERE source_group IS NOT NULL AND source_group <> '' "
+        f"GROUP BY source_group ORDER BY COUNT(*) DESC"
+    )
+    items = [{'group': r[0], 'count': r[1]} for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return items
+
+
+def normalize_group(g: str) -> str:
+    """Нормализуем ссылку/юзернейм группы к виду @username или t.me/joinchat/..."""
+    g = (g or '').strip()
+    if not g:
+        return TARGET_GROUP
+    if g.startswith('https://t.me/') or g.startswith('http://t.me/') or g.startswith('t.me/'):
+        return g
+    if g.startswith('@'):
+        return g
+    return '@' + g
+
+
+def get_or_create_run(new_run: bool, source_group: str) -> tuple:
+    """Возвращает (run_id, alphabet_pos, source_group)."""
     conn = db(); cur = conn.cursor()
     if new_run:
         cur.execute(
-            f"INSERT INTO {SCHEMA}.ug_driver_parse_runs (status, total_fetched, new_members, updated_members) "
-            f"VALUES ('running', 0, 0, 0) RETURNING id"
+            f"INSERT INTO {SCHEMA}.ug_driver_parse_runs (status, total_fetched, new_members, updated_members, source_group, alphabet_pos) "
+            f"VALUES ('running', 0, 0, 0, '{esc(source_group)}', 0) RETURNING id"
         )
         run_id = cur.fetchone()[0]
         conn.commit(); cur.close(); conn.close()
-        return run_id, 0
+        return run_id, 0, source_group
     # продолжение последнего running/partial
     cur.execute(
-        f"SELECT id, COALESCE((error)::int, 0), total_fetched FROM {SCHEMA}.ug_driver_parse_runs "
+        f"SELECT id, COALESCE(alphabet_pos, 0), COALESCE(source_group, '{esc(TARGET_GROUP)}') FROM {SCHEMA}.ug_driver_parse_runs "
         f"WHERE status IN ('running','partial') ORDER BY id DESC LIMIT 1"
     )
     r = cur.fetchone()
     if not r:
         cur.execute(
-            f"INSERT INTO {SCHEMA}.ug_driver_parse_runs (status, total_fetched, new_members, updated_members) "
-            f"VALUES ('running', 0, 0, 0) RETURNING id"
+            f"INSERT INTO {SCHEMA}.ug_driver_parse_runs (status, total_fetched, new_members, updated_members, source_group, alphabet_pos) "
+            f"VALUES ('running', 0, 0, 0, '{esc(source_group)}', 0) RETURNING id"
         )
         run_id = cur.fetchone()[0]
         pos = 0
+        sg = source_group
     else:
-        run_id, pos, _ = r
+        run_id, pos, sg = r
     conn.commit(); cur.close(); conn.close()
-    return run_id, pos
+    return run_id, pos, sg
 
 
 def update_run_progress(run_id: int, pos: int, fetched: int, new_m: int, upd_m: int):
@@ -151,7 +178,7 @@ def update_run_progress(run_id: int, pos: int, fetched: int, new_m: int, upd_m: 
         f"total_fetched=total_fetched+{fetched}, "
         f"new_members=new_members+{new_m}, "
         f"updated_members=updated_members+{upd_m}, "
-        f"error='{pos}', status='partial' WHERE id={run_id}"
+        f"alphabet_pos={int(pos)}, status='partial' WHERE id={run_id}"
     )
     conn.commit(); cur.close(); conn.close()
 
@@ -167,7 +194,7 @@ def finalize_run(run_id: int, ok: bool, err: str = None):
     conn.commit(); cur.close(); conn.close()
 
 
-def upsert_user(u) -> int:
+def upsert_user(u, source_group: str) -> int:
     """Записывает участника. Возвращает 1 если новый, 0 если обновление."""
     username = (u.username or '').replace("'", "''")
     first_name = (u.first_name or '').replace("'", "''")
@@ -179,19 +206,21 @@ def upsert_user(u) -> int:
         'id': u.id, 'username': u.username,
         'first_name': u.first_name, 'last_name': u.last_name,
         'bot': is_bot, 'premium': is_premium,
+        'source': source_group,
     }).replace("'", "''")
 
     conn = db(); cur = conn.cursor()
     cur.execute(
         f"INSERT INTO {SCHEMA}.ug_driver_members "
-        f"(user_id, username, first_name, last_name, is_bot, is_premium, phone, status, last_parsed_at, raw) "
+        f"(user_id, username, first_name, last_name, is_bot, is_premium, phone, status, source_group, last_parsed_at, raw) "
         f"VALUES ({int(u.id)}, '{username}', '{first_name}', '{last_name}', "
-        f"{is_bot}, {is_premium}, '{phone}', 'member', NOW(), '{raw}'::jsonb) "
+        f"{is_bot}, {is_premium}, '{phone}', 'member', '{esc(source_group)}', NOW(), '{raw}'::jsonb) "
         f"ON CONFLICT (user_id) DO UPDATE SET "
         f"username=EXCLUDED.username, first_name=EXCLUDED.first_name, "
         f"last_name=EXCLUDED.last_name, is_bot=EXCLUDED.is_bot, "
         f"is_premium=EXCLUDED.is_premium, "
         f"phone=CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE {SCHEMA}.ug_driver_members.phone END, "
+        f"source_group=EXCLUDED.source_group, "
         f"last_parsed_at=NOW(), raw=EXCLUDED.raw "
         f"RETURNING (xmax = 0) AS inserted"
     )
@@ -200,7 +229,7 @@ def upsert_user(u) -> int:
     return inserted
 
 
-async def run_parse_chunk(new_run: bool) -> dict:
+async def run_parse_chunk(new_run: bool, group_input: str = '') -> dict:
     """Парсит чанк букв алфавита, ограничен по времени. Возвращает прогресс и нужно ли продолжать."""
     session_str = get_session2()
     if not session_str:
@@ -209,7 +238,8 @@ async def run_parse_chunk(new_run: bool) -> dict:
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
 
-    run_id, start_pos = get_or_create_run(new_run)
+    source_group = normalize_group(group_input) if new_run else (normalize_group(group_input) or TARGET_GROUP)
+    run_id, start_pos, source_group = get_or_create_run(new_run, source_group)
 
     started = time.time()
     total_fetched = 0
@@ -223,9 +253,9 @@ async def run_parse_chunk(new_run: bool) -> dict:
     await client.connect()
     try:
         try:
-            entity = await client.get_entity(TARGET_GROUP)
+            entity = await client.get_entity(source_group)
         except Exception as e:
-            raise Exception(f'нет доступа к {TARGET_GROUP}: {e}')
+            raise Exception(f'нет доступа к {source_group}: {e}')
 
         while pos < len(ALPHABET):
             if time.time() - started > TIME_LIMIT_SEC:
@@ -253,7 +283,7 @@ async def run_parse_chunk(new_run: bool) -> dict:
                         continue
                     seen_ids.add(u.id)
                     total_fetched += 1
-                    inserted = upsert_user(u)
+                    inserted = upsert_user(u, source_group)
                     if inserted:
                         new_members += 1
                     else:
@@ -279,6 +309,7 @@ async def run_parse_chunk(new_run: bool) -> dict:
     return {
         'ok': not error,
         'run_id': run_id,
+        'source_group': source_group,
         'total_fetched': total_fetched,
         'new_members': new_members,
         'updated_members': updated_members,
@@ -308,7 +339,10 @@ def handler(event: dict, context) -> dict:
             offset = int(qs.get('offset', 0) or 0)
             q = qs.get('q', '') or ''
             status_filter = qs.get('status', '') or ''
-            return resp(200, get_list(limit, offset, q, status_filter))
+            group_filter = qs.get('group', '') or ''
+            return resp(200, get_list(limit, offset, q, status_filter, group_filter))
+        if action == 'groups':
+            return resp(200, {'items': get_groups()})
         return resp(200, get_stats())
 
     if method == 'POST':
@@ -316,8 +350,16 @@ def handler(event: dict, context) -> dict:
             return resp(401, {'error': 'unauthorized'})
         if action in ('parse', 'parse_continue'):
             new_run = (action == 'parse')
+            group_input = ''
             try:
-                result = asyncio.run(run_parse_chunk(new_run))
+                body = json.loads(event.get('body') or '{}')
+                group_input = (body.get('group') or '').strip()
+            except Exception:
+                pass
+            if not group_input:
+                group_input = qs.get('group', '') or ''
+            try:
+                result = asyncio.run(run_parse_chunk(new_run, group_input))
                 return resp(200, result)
             except Exception as e:
                 return resp(500, {'ok': False, 'error': str(e)[:500]})
