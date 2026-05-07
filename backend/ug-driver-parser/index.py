@@ -12,8 +12,6 @@ import psycopg2
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsSearch
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -126,27 +124,29 @@ async def run_parse() -> dict:
         except Exception as e:
             raise Exception(f'нет доступа к {TARGET_GROUP}: {e}')
 
-        # Telegram возвращает максимум ~10000 участников.
-        # Делаем чанками по 200 через GetParticipantsRequest с offset.
-        offset = 0
-        limit = 200
+        # Telegram отдаёт макс ~200 через пустой поиск.
+        # Используем iter_participants(aggressive=True) — Telethon внутри
+        # перебирает алфавит и собирает всех участников до ~10000.
         seen_ids = set()
-        while True:
-            try:
-                participants = await client(GetParticipantsRequest(
-                    channel=entity,
-                    filter=ChannelParticipantsSearch(''),
-                    offset=offset, limit=limit, hash=0,
-                ))
-            except Exception as e:
-                error = f'fetch_error at offset={offset}: {e}'
-                break
+        batch = []
+        BATCH_SIZE = 50
 
-            users = participants.users
-            if not users:
-                break
+        async def flush(rows):
+            nonlocal new_members, updated_members
+            if not rows:
+                return
+            conn_b = db(); cur_b = conn_b.cursor()
+            for vals in rows:
+                cur_b.execute(vals)
+                inserted = cur_b.fetchone()[0]
+                if inserted:
+                    new_members += 1
+                else:
+                    updated_members += 1
+            conn_b.commit(); cur_b.close(); conn_b.close()
 
-            for u in users:
+        try:
+            async for u in client.iter_participants(entity, aggressive=True):
                 if u.id in seen_ids:
                     continue
                 seen_ids.add(u.id)
@@ -164,8 +164,7 @@ async def run_parse() -> dict:
                     'bot': is_bot, 'premium': is_premium,
                 }).replace("'", "''")
 
-                conn = db(); cur = conn.cursor()
-                cur.execute(
+                sql = (
                     f"INSERT INTO {SCHEMA}.ug_driver_members "
                     f"(user_id, username, first_name, last_name, is_bot, is_premium, phone, status, last_parsed_at, raw) "
                     f"VALUES ({int(u.id)}, '{username}', '{first_name}', '{last_name}', "
@@ -178,17 +177,13 @@ async def run_parse() -> dict:
                     f"last_parsed_at=NOW(), raw=EXCLUDED.raw "
                     f"RETURNING (xmax = 0) AS inserted"
                 )
-                inserted = cur.fetchone()[0]
-                if inserted:
-                    new_members += 1
-                else:
-                    updated_members += 1
-                conn.commit(); cur.close(); conn.close()
-
-            if len(users) < limit:
-                break
-            offset += limit
-            await asyncio.sleep(0.5)  # вежливая пауза для Telegram
+                batch.append(sql)
+                if len(batch) >= BATCH_SIZE:
+                    await flush(batch)
+                    batch = []
+            await flush(batch)
+        except Exception as e:
+            error = f'iter_error after {total_fetched}: {str(e)[:300]}'
 
     except Exception as e:
         error = str(e)[:500]
