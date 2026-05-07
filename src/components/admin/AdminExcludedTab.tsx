@@ -113,6 +113,20 @@ export function AdminExcludedTab({ token }: Props) {
     } finally { setSaving(false); }
   };
 
+  const togglePower = async (on: boolean) => {
+    if (saving) return;
+    if (!on && !confirm("Выключить авто-сообщения исключённым?\n\nФоновый слушатель остановится — экономия compute_seconds до конца месяца.")) return;
+    setSaving(true);
+    try {
+      setEnabled(on);
+      await fetch(`${EXCLUDED_WATCHER_URL}?action=settings`, {
+        method: "POST", headers,
+        body: JSON.stringify({ enabled: on, message_template: template }),
+      });
+      await load();
+    } finally { setSaving(false); }
+  };
+
   const reviveLoop = async () => {
     setReviving(true); setRunResult("");
     try {
@@ -189,6 +203,25 @@ export function AdminExcludedTab({ token }: Props) {
                 <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="w-4 h-4 accent-amber-400" />
                 <span className="text-sm text-white/70">Включено</span>
               </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                onClick={() => togglePower(true)}
+                disabled={saving || enabled}
+                className="px-4 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm font-semibold hover:bg-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition"
+              >
+                <Icon name="Power" size={16} />
+                {enabled ? "Уже включено" : (saving ? "Включаем..." : "Включить")}
+              </button>
+              <button
+                onClick={() => togglePower(false)}
+                disabled={saving || !enabled}
+                className="px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-sm font-semibold hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition"
+              >
+                <Icon name="PowerOff" size={16} />
+                {!enabled ? "Уже выключено" : (saving ? "Выключаем..." : "Выключить")}
+              </button>
             </div>
 
             <textarea
