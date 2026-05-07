@@ -62,8 +62,17 @@ export function AdminExcludedTab({ token }: Props) {
 
   useEffect(() => {
     if (!tabExpanded) return;
-    const id = setInterval(() => { load(); loadHistory(); }, 15_000);
-    return () => clearInterval(id);
+    const idStatus = setInterval(() => { load(); }, 60_000);
+    const idHistory = setInterval(() => { loadHistory(); }, 180_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') { load(); loadHistory(); }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(idStatus);
+      clearInterval(idHistory);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [tabExpanded]);
 
   const saveSettings = async () => {
