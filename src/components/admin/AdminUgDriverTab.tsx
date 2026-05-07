@@ -73,15 +73,47 @@ export function AdminUgDriverTab({ token }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabExpanded]);
 
+  const runResolvePhones = async () => {
+    setResolvingPhones(true);
+    let totalProcessed = 0;
+    let totalFound = 0;
+    try {
+      for (let i = 0; i < 200; i++) {
+        setPhonesMsg(`Подтягиваем телефоны · чанк ${i + 1}...`);
+        const r = await fetch(`${UG_DRIVER_PARSER_URL}?action=resolve_phones`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+        });
+        const d = await r.json();
+        if (!d.ok && d.error) {
+          setPhonesMsg(`Телефоны: остановка · ${d.error}`);
+          break;
+        }
+        totalProcessed += d.processed || 0;
+        totalFound += d.phones_found || 0;
+        setPhonesMsg(`Телефоны: обработано ${totalProcessed}, найдено ${totalFound}${d.finished ? " · готово" : "..."}`);
+        await loadStats();
+        if (d.finished) break;
+        await new Promise(res => setTimeout(res, 1500));
+      }
+      await loadMembers(search, page);
+    } catch (e) {
+      setPhonesMsg(`Телефоны: ошибка сети · ${(e as Error).message}`);
+    } finally {
+      setResolvingPhones(false);
+    }
+  };
+
   const startParse = async () => {
-    if (parsing) return;
+    if (parsing || resolvingPhones) return;
     const groupLabel = groupInput.trim() || "@UG_DRIVER";
-    if (!confirm(`Запустить парсинг участников ${groupLabel}? Может занять до 3 минут.`)) return;
+    if (!confirm(`Запустить парсинг ${groupLabel}?\n\nСначала соберём участников (до 3 мин), затем подтянем телефоны (5-15 мин).`)) return;
     setParsing(true);
     let totalFetched = 0;
     let totalNew = 0;
     let totalUpd = 0;
     let action = "parse";
+    let parsedOk = false;
     try {
       for (let i = 0; i < 60; i++) {
         setParseMsg(`Чанк ${i + 1}: парсим ${groupLabel}...`);
@@ -103,7 +135,8 @@ export function AdminUgDriverTab({ token }: Props) {
         setParseMsg(`Прогресс: ${pct}%${stageLabel} · загружено ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
         await loadStats();
         if (d.finished) {
-          setParseMsg(`Готово: ${groupLabel} · всего ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
+          setParseMsg(`Парсинг готов: ${groupLabel} · всего ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
+          parsedOk = true;
           break;
         }
         action = "parse_continue";
@@ -117,14 +150,17 @@ export function AdminUgDriverTab({ token }: Props) {
     } finally {
       setParsing(false);
     }
+    if (parsedOk) {
+      await runResolvePhones();
+    }
   };
 
   const resolvePhones = async () => {
-    if (resolvingPhones) return;
+    if (resolvingPhones || parsing) return;
     if (!confirm("Подтянуть телефоны через Telegram-аккаунт парсера?\n\nTelegram отдаёт номер только тем, у кого открыта приватность. Обычно 5-30% от общего числа. Может занять 5-15 минут.")) return;
-    setResolvingPhones(true);
     let totalProcessed = 0;
     let totalFound = 0;
+    setResolvingPhones(true);
     try {
       for (let i = 0; i < 200; i++) {
         setPhonesMsg(`Чанк ${i + 1}: проверяем 50 юзеров...`);
