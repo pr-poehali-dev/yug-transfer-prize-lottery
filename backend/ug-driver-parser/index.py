@@ -67,6 +67,10 @@ def get_stats() -> dict:
     with_username = cur.fetchone()[0]
     cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.ug_driver_members WHERE is_bot=TRUE")
     bots = cur.fetchone()[0]
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.ug_driver_members WHERE status='excluded'")
+    excluded = cur.fetchone()[0]
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.ug_driver_members WHERE status='member'")
+    members = cur.fetchone()[0]
     cur.execute(
         f"SELECT id, started_at, finished_at, status, total_fetched, new_members, updated_members, error "
         f"FROM {SCHEMA}.ug_driver_parse_runs ORDER BY id DESC LIMIT 1"
@@ -80,11 +84,14 @@ def get_stats() -> dict:
             'status': last[3], 'total_fetched': last[4],
             'new_members': last[5], 'updated_members': last[6], 'error': last[7],
         }
-    return {'total': total, 'with_username': with_username, 'bots': bots, 'last_run': last_run}
+    return {'total': total, 'with_username': with_username, 'bots': bots,
+            'excluded': excluded, 'members': members, 'last_run': last_run}
 
 
-def get_list(limit: int, offset: int, q: str) -> dict:
+def get_list(limit: int, offset: int, q: str, status_filter: str = '') -> dict:
     where = "WHERE 1=1"
+    if status_filter in ('member', 'excluded'):
+        where += f" AND status='{status_filter}'"
     if q:
         qe = esc(q)
         where += f" AND (username ILIKE '%{qe}%' OR first_name ILIKE '%{qe}%' OR last_name ILIKE '%{qe}%' OR CAST(user_id AS TEXT) ILIKE '%{qe}%')"
@@ -300,7 +307,8 @@ def handler(event: dict, context) -> dict:
             limit = min(int(qs.get('limit', 50) or 50), 500)
             offset = int(qs.get('offset', 0) or 0)
             q = qs.get('q', '') or ''
-            return resp(200, get_list(limit, offset, q))
+            status_filter = qs.get('status', '') or ''
+            return resp(200, get_list(limit, offset, q, status_filter))
         return resp(200, get_stats())
 
     if method == 'POST':

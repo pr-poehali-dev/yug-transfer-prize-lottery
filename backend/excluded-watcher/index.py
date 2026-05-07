@@ -159,6 +159,32 @@ def log_send(user_id, username, first_name, source_msg_id, status: str):
     conn.commit(); cur.close(); conn.close()
 
 
+def add_to_members_excluded(user_id, username, first_name, last_name=''):
+    """После успешной отправки ЛС — переносим юзера в общую БД ug_driver_members со статусом 'excluded'."""
+    if not user_id:
+        return
+    try:
+        raw = json.dumps({
+            'id': int(user_id), 'username': username,
+            'first_name': first_name, 'last_name': last_name,
+            'source': 'excluded_watcher',
+        }).replace("'", "''")
+        conn = db(); cur = conn.cursor()
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.ug_driver_members "
+            f"(user_id, username, first_name, last_name, status, last_parsed_at, raw) "
+            f"VALUES ({int(user_id)}, '{esc(username)}', '{esc(first_name)}', '{esc(last_name)}', "
+            f"'excluded', NOW(), '{raw}'::jsonb) "
+            f"ON CONFLICT (user_id) DO UPDATE SET "
+            f"status='excluded', last_parsed_at=NOW(), "
+            f"username=CASE WHEN EXCLUDED.username <> '' THEN EXCLUDED.username ELSE {SCHEMA}.ug_driver_members.username END, "
+            f"first_name=CASE WHEN EXCLUDED.first_name <> '' THEN EXCLUDED.first_name ELSE {SCHEMA}.ug_driver_members.first_name END"
+        )
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e:
+        print(f"[add_to_members_excluded err] {e}")
+
+
 async def run_scan() -> dict:
     """Сканирует @UG_DRIVER на сервисные сообщения от @VsyaRussiabot и шлёт ЛС."""
     settings = get_settings()
@@ -277,6 +303,7 @@ async def run_scan() -> dict:
             try:
                 await client.send_message(author_id, personalized)
                 log_send(author_id, username, first_name, ev.id, 'ok')
+                add_to_members_excluded(author_id, username, first_name, getattr(user, 'last_name', '') or '')
                 sent_count += 1
                 found.append({'user_id': author_id, 'username': username, 'first_name': first_name, 'event_id': ev.id})
             except FloodWaitError as fe:
@@ -335,6 +362,7 @@ async def process_deletion_message(client, msg, template: str) -> dict:
     try:
         await client.send_message(user_id, personalized)
         log_send(user_id, username, first_name, msg.id, 'ok')
+        add_to_members_excluded(user_id, username, first_name, getattr(u, 'last_name', '') or '' if u else '')
         return {'ok': True, 'user_id': user_id, 'username': username}
     except FloodWaitError as fe:
         log_send(user_id, username, first_name, msg.id, f'flood:{fe.seconds}')
@@ -478,6 +506,7 @@ async def run_listener(loop_token: str) -> dict:
                     try:
                         await client.send_message(author_id, personalized)
                         log_send(author_id, username, first_name, ev.id, 'ok')
+                        add_to_members_excluded(author_id, username, first_name, getattr(user, 'last_name', '') or '')
                         adminlog_sent += 1
                         print(f"[adminlog-poll] sent to @{username} (id={author_id})")
                     except FloodWaitError as fe:
