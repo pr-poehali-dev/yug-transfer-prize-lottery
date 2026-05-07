@@ -1,0 +1,1 @@
+UPDATE ug_driver_parse_runs SET status='timeout', finished_at=NOW(), total_fetched=1029, error='timeout 30s — partial parse' WHERE status='running';

@@ -68,21 +68,37 @@ export function AdminUgDriverTab({ token }: Props) {
 
   const startParse = async () => {
     if (parsing) return;
-    if (!confirm("Запустить парсинг участников @UG_DRIVER? Может занять до 2 минут.")) return;
+    if (!confirm("Запустить парсинг участников @UG_DRIVER? Может занять до 3 минут (несколько чанков).")) return;
     setParsing(true);
-    setParseMsg("Парсим участников группы...");
+    let totalFetched = 0;
+    let totalNew = 0;
+    let totalUpd = 0;
+    let action = "parse";
     try {
-      const r = await fetch(`${UG_DRIVER_PARSER_URL}?action=parse`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-      });
-      const d = await r.json();
-      if (d.ok) {
-        setParseMsg(`Готово: загружено ${d.total_fetched}, новых ${d.new_members}, обновлено ${d.updated_members}`);
-      } else {
-        setParseMsg(`Ошибка: ${d.error || "неизвестно"}`);
+      for (let i = 0; i < 30; i++) {
+        setParseMsg(`Чанк ${i + 1}: парсим...`);
+        const r = await fetch(`${UG_DRIVER_PARSER_URL}?action=${action}`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+        });
+        const d = await r.json();
+        if (!d.ok && d.error) {
+          setParseMsg(`Ошибка: ${d.error}`);
+          break;
+        }
+        totalFetched += d.total_fetched || 0;
+        totalNew += d.new_members || 0;
+        totalUpd += d.updated_members || 0;
+        const pct = Math.round(((d.pos || 0) / (d.total_letters || 1)) * 100);
+        setParseMsg(`Прогресс: ${pct}% · загружено ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
+        await loadStats();
+        if (d.finished) {
+          setParseMsg(`Готово: всего ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
+          break;
+        }
+        action = "parse_continue";
+        await new Promise(res => setTimeout(res, 800));
       }
-      await loadStats();
       await loadMembers("", 0);
       setPage(0);
       setSearch("");

@@ -1,17 +1,22 @@
 """Парсер участников группы @UG_DRIVER в БД.
 
-GET                — статистика (сколько участников в БД, последний парсинг)
-GET ?action=list   — список участников (с пагинацией: ?limit=50&offset=0&q=поиск)
-POST ?action=parse — запустить парсинг группы (нужен токен админа)
+GET                       — статистика
+GET ?action=list          — список участников (?limit=50&offset=0&q=...)
+POST ?action=parse        — запустить новый парсинг (чанк букв с time-limit)
+POST ?action=parse_continue — продолжить незавершённый парсинг (следующий чанк)
 """
 import os
 import json
+import time
+import string
 import hashlib
 import asyncio
 import psycopg2
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
+from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.types import ChannelParticipantsSearch
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -20,6 +25,11 @@ CORS = {
 }
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
 TARGET_GROUP = '@UG_DRIVER'
+
+# Алфавит для перебора (Telethon aggressive делает то же самое).
+# Разбили на массив, чтобы между вызовами помнить позицию.
+ALPHABET = ['', ' '] + list(string.ascii_lowercase) + list('абвгдеёжзийклмнопрстуфхцчшщъыьэюя') + list(string.digits)
+TIME_LIMIT_SEC = 22  # макс. время одного запуска (укладываемся в 30 сек таймаута)
 
 
 def verify_token(token: str) -> bool:
@@ -97,8 +107,94 @@ def get_list(limit: int, offset: int, q: str) -> dict:
     return {'total': total, 'items': items}
 
 
-async def run_parse() -> dict:
-    """Полный парсинг участников @UG_DRIVER."""
+def get_or_create_run(new_run: bool) -> tuple:
+    """Возвращает (run_id, alphabet_pos). new_run=True — старт нового, False — продолжение."""
+    conn = db(); cur = conn.cursor()
+    if new_run:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.ug_driver_parse_runs (status, total_fetched, new_members, updated_members) "
+            f"VALUES ('running', 0, 0, 0) RETURNING id"
+        )
+        run_id = cur.fetchone()[0]
+        conn.commit(); cur.close(); conn.close()
+        return run_id, 0
+    # продолжение последнего running/partial
+    cur.execute(
+        f"SELECT id, COALESCE((error)::int, 0), total_fetched FROM {SCHEMA}.ug_driver_parse_runs "
+        f"WHERE status IN ('running','partial') ORDER BY id DESC LIMIT 1"
+    )
+    r = cur.fetchone()
+    if not r:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.ug_driver_parse_runs (status, total_fetched, new_members, updated_members) "
+            f"VALUES ('running', 0, 0, 0) RETURNING id"
+        )
+        run_id = cur.fetchone()[0]
+        pos = 0
+    else:
+        run_id, pos, _ = r
+    conn.commit(); cur.close(); conn.close()
+    return run_id, pos
+
+
+def update_run_progress(run_id: int, pos: int, fetched: int, new_m: int, upd_m: int):
+    conn = db(); cur = conn.cursor()
+    cur.execute(
+        f"UPDATE {SCHEMA}.ug_driver_parse_runs SET "
+        f"total_fetched=total_fetched+{fetched}, "
+        f"new_members=new_members+{new_m}, "
+        f"updated_members=updated_members+{upd_m}, "
+        f"error='{pos}', status='partial' WHERE id={run_id}"
+    )
+    conn.commit(); cur.close(); conn.close()
+
+
+def finalize_run(run_id: int, ok: bool, err: str = None):
+    conn = db(); cur = conn.cursor()
+    status = 'success' if ok else 'failed'
+    err_sql = 'NULL' if not err else "'" + esc(err) + "'"
+    cur.execute(
+        f"UPDATE {SCHEMA}.ug_driver_parse_runs SET "
+        f"finished_at=NOW(), status='{status}', error={err_sql} WHERE id={run_id}"
+    )
+    conn.commit(); cur.close(); conn.close()
+
+
+def upsert_user(u) -> int:
+    """Записывает участника. Возвращает 1 если новый, 0 если обновление."""
+    username = (u.username or '').replace("'", "''")
+    first_name = (u.first_name or '').replace("'", "''")
+    last_name = (u.last_name or '').replace("'", "''")
+    is_bot = bool(getattr(u, 'bot', False))
+    is_premium = bool(getattr(u, 'premium', False))
+    phone = (getattr(u, 'phone', '') or '').replace("'", "''")
+    raw = json.dumps({
+        'id': u.id, 'username': u.username,
+        'first_name': u.first_name, 'last_name': u.last_name,
+        'bot': is_bot, 'premium': is_premium,
+    }).replace("'", "''")
+
+    conn = db(); cur = conn.cursor()
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.ug_driver_members "
+        f"(user_id, username, first_name, last_name, is_bot, is_premium, phone, status, last_parsed_at, raw) "
+        f"VALUES ({int(u.id)}, '{username}', '{first_name}', '{last_name}', "
+        f"{is_bot}, {is_premium}, '{phone}', 'member', NOW(), '{raw}'::jsonb) "
+        f"ON CONFLICT (user_id) DO UPDATE SET "
+        f"username=EXCLUDED.username, first_name=EXCLUDED.first_name, "
+        f"last_name=EXCLUDED.last_name, is_bot=EXCLUDED.is_bot, "
+        f"is_premium=EXCLUDED.is_premium, "
+        f"phone=CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE {SCHEMA}.ug_driver_members.phone END, "
+        f"last_parsed_at=NOW(), raw=EXCLUDED.raw "
+        f"RETURNING (xmax = 0) AS inserted"
+    )
+    inserted = 1 if cur.fetchone()[0] else 0
+    conn.commit(); cur.close(); conn.close()
+    return inserted
+
+
+async def run_parse_chunk(new_run: bool) -> dict:
+    """Парсит чанк букв алфавита, ограничен по времени. Возвращает прогресс и нужно ли продолжать."""
     session_str = get_session2()
     if not session_str:
         return {'ok': False, 'error': 'not_logged_in: Залогинь второй Telegram-аккаунт'}
@@ -106,15 +202,15 @@ async def run_parse() -> dict:
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
 
-    conn = db(); cur = conn.cursor()
-    cur.execute(f"INSERT INTO {SCHEMA}.ug_driver_parse_runs (status) VALUES ('running') RETURNING id")
-    run_id = cur.fetchone()[0]
-    conn.commit(); cur.close(); conn.close()
+    run_id, start_pos = get_or_create_run(new_run)
 
+    started = time.time()
     total_fetched = 0
     new_members = 0
     updated_members = 0
+    seen_ids = set()
     error = None
+    pos = start_pos
 
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     await client.connect()
@@ -124,97 +220,70 @@ async def run_parse() -> dict:
         except Exception as e:
             raise Exception(f'нет доступа к {TARGET_GROUP}: {e}')
 
-        # Telegram отдаёт макс ~200 через пустой поиск.
-        # Используем iter_participants(aggressive=True) — Telethon внутри
-        # перебирает алфавит и собирает всех участников до ~10000.
-        seen_ids = set()
-        batch = []
-        BATCH_SIZE = 50
-
-        async def flush(rows):
-            nonlocal new_members, updated_members
-            if not rows:
-                return
-            conn_b = db(); cur_b = conn_b.cursor()
-            for vals in rows:
-                cur_b.execute(vals)
-                inserted = cur_b.fetchone()[0]
-                if inserted:
-                    new_members += 1
-                else:
-                    updated_members += 1
-            conn_b.commit(); cur_b.close(); conn_b.close()
-
-        try:
-            async for u in client.iter_participants(entity, aggressive=True):
-                if u.id in seen_ids:
-                    continue
-                seen_ids.add(u.id)
-                total_fetched += 1
-
-                username = (u.username or '').replace("'", "''")
-                first_name = (u.first_name or '').replace("'", "''")
-                last_name = (u.last_name or '').replace("'", "''")
-                is_bot = bool(getattr(u, 'bot', False))
-                is_premium = bool(getattr(u, 'premium', False))
-                phone = (getattr(u, 'phone', '') or '').replace("'", "''")
-                raw = json.dumps({
-                    'id': u.id, 'username': u.username,
-                    'first_name': u.first_name, 'last_name': u.last_name,
-                    'bot': is_bot, 'premium': is_premium,
-                }).replace("'", "''")
-
-                sql = (
-                    f"INSERT INTO {SCHEMA}.ug_driver_members "
-                    f"(user_id, username, first_name, last_name, is_bot, is_premium, phone, status, last_parsed_at, raw) "
-                    f"VALUES ({int(u.id)}, '{username}', '{first_name}', '{last_name}', "
-                    f"{is_bot}, {is_premium}, '{phone}', 'member', NOW(), '{raw}'::jsonb) "
-                    f"ON CONFLICT (user_id) DO UPDATE SET "
-                    f"username=EXCLUDED.username, first_name=EXCLUDED.first_name, "
-                    f"last_name=EXCLUDED.last_name, is_bot=EXCLUDED.is_bot, "
-                    f"is_premium=EXCLUDED.is_premium, "
-                    f"phone=CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE {SCHEMA}.ug_driver_members.phone END, "
-                    f"last_parsed_at=NOW(), raw=EXCLUDED.raw "
-                    f"RETURNING (xmax = 0) AS inserted"
-                )
-                batch.append(sql)
-                if len(batch) >= BATCH_SIZE:
-                    await flush(batch)
-                    batch = []
-            await flush(batch)
-        except Exception as e:
-            error = f'iter_error after {total_fetched}: {str(e)[:300]}'
-
+        while pos < len(ALPHABET):
+            if time.time() - started > TIME_LIMIT_SEC:
+                break
+            letter = ALPHABET[pos]
+            offset = 0
+            limit = 200
+            while True:
+                if time.time() - started > TIME_LIMIT_SEC:
+                    break
+                try:
+                    participants = await client(GetParticipantsRequest(
+                        channel=entity,
+                        filter=ChannelParticipantsSearch(letter),
+                        offset=offset, limit=limit, hash=0,
+                    ))
+                except Exception as e:
+                    error = f'fetch_error letter={letter!r}: {str(e)[:200]}'
+                    break
+                users = participants.users
+                if not users:
+                    break
+                for u in users:
+                    if u.id in seen_ids:
+                        continue
+                    seen_ids.add(u.id)
+                    total_fetched += 1
+                    inserted = upsert_user(u)
+                    if inserted:
+                        new_members += 1
+                    else:
+                        updated_members += 1
+                if len(users) < limit:
+                    break
+                offset += limit
+            pos += 1
     except Exception as e:
-        error = str(e)[:500]
+        error = str(e)[:300]
     finally:
         try:
             await client.disconnect()
         except Exception:
             pass
 
-    status = 'failed' if error else 'success'
-    error_sql = 'NULL' if not error else "'" + esc(error) + "'"
-    conn = db(); cur = conn.cursor()
-    cur.execute(
-        f"UPDATE {SCHEMA}.ug_driver_parse_runs SET "
-        f"finished_at=NOW(), status='{status}', "
-        f"total_fetched={total_fetched}, new_members={new_members}, "
-        f"updated_members={updated_members}, error={error_sql} "
-        f"WHERE id={run_id}"
-    )
-    conn.commit(); cur.close(); conn.close()
+    update_run_progress(run_id, pos, total_fetched, new_members, updated_members)
+
+    finished = pos >= len(ALPHABET)
+    if finished or error:
+        finalize_run(run_id, ok=(not error), err=error)
 
     return {
-        'ok': not error, 'run_id': run_id,
+        'ok': not error,
+        'run_id': run_id,
         'total_fetched': total_fetched,
-        'new_members': new_members, 'updated_members': updated_members,
+        'new_members': new_members,
+        'updated_members': updated_members,
+        'pos': pos,
+        'total_letters': len(ALPHABET),
+        'finished': finished,
         'error': error,
     }
 
 
 def handler(event: dict, context) -> dict:
-    """Парсер участников @UG_DRIVER. GET — статистика/список, POST ?action=parse — запустить парсинг."""
+    """Парсер участников @UG_DRIVER. POST ?action=parse — старт, ?action=parse_continue — продолжить."""
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -237,9 +306,10 @@ def handler(event: dict, context) -> dict:
     if method == 'POST':
         if not verify_token(token):
             return resp(401, {'error': 'unauthorized'})
-        if action == 'parse':
+        if action in ('parse', 'parse_continue'):
+            new_run = (action == 'parse')
             try:
-                result = asyncio.run(run_parse())
+                result = asyncio.run(run_parse_chunk(new_run))
                 return resp(200, result)
             except Exception as e:
                 return resp(500, {'ok': False, 'error': str(e)[:500]})
