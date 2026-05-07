@@ -8,8 +8,6 @@ interface Stats {
   total: number;
   with_username: number;
   bots: number;
-  excluded?: number;
-  members?: number;
   last_run: {
     id: number;
     started_at: string | null;
@@ -43,7 +41,6 @@ export function AdminUgDriverTab({ token }: Props) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [parseMsg, setParseMsg] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"" | "member" | "excluded">("");
   const [groupInput, setGroupInput] = useState("");
   const PAGE_SIZE = 50;
 
@@ -55,8 +52,8 @@ export function AdminUgDriverTab({ token }: Props) {
     setStats(d);
   };
 
-  const loadMembers = async (q = search, p = page, status = statusFilter) => {
-    const url = `${UG_DRIVER_PARSER_URL}?action=list&limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}&q=${encodeURIComponent(q)}&status=${status}`;
+  const loadMembers = async (q = search, p = page) => {
+    const url = `${UG_DRIVER_PARSER_URL}?action=list&limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}&q=${encodeURIComponent(q)}`;
     const r = await fetch(url, { headers });
     const d = await r.json();
     setMembers(d.items || []);
@@ -66,16 +63,10 @@ export function AdminUgDriverTab({ token }: Props) {
   useEffect(() => {
     if (tabExpanded) {
       loadStats();
-      loadMembers("", 0, statusFilter);
+      loadMembers("", 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabExpanded]);
-
-  const onStatusChange = (s: "" | "member" | "excluded") => {
-    setStatusFilter(s);
-    setPage(0);
-    loadMembers(search, 0, s);
-  };
 
   const startParse = async () => {
     if (parsing) return;
@@ -125,12 +116,12 @@ export function AdminUgDriverTab({ token }: Props) {
   const onSearchChange = (v: string) => {
     setSearch(v);
     setPage(0);
-    loadMembers(v, 0, statusFilter);
+    loadMembers(v, 0);
   };
 
   const goPage = (p: number) => {
     setPage(p);
-    loadMembers(search, p, statusFilter);
+    loadMembers(search, p);
   };
 
   const totalPages = Math.max(1, Math.ceil(memberTotal / PAGE_SIZE));
@@ -168,22 +159,18 @@ export function AdminUgDriverTab({ token }: Props) {
             </div>
 
             {stats && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="rounded-xl bg-white/3 border border-white/5 p-3">
                   <div className="text-2xl font-bold text-white">{stats.total.toLocaleString("ru-RU")}</div>
                   <div className="text-[11px] text-white/40">всего в БД</div>
                 </div>
                 <div className="rounded-xl bg-white/3 border border-white/5 p-3">
-                  <div className="text-2xl font-bold text-cyan-300">{(stats.members ?? 0).toLocaleString("ru-RU")}</div>
-                  <div className="text-[11px] text-white/40">в группе</div>
-                </div>
-                <div className="rounded-xl bg-red-500/5 border border-red-500/20 p-3">
-                  <div className="text-2xl font-bold text-red-300">{(stats.excluded ?? 0).toLocaleString("ru-RU")}</div>
-                  <div className="text-[11px] text-white/40">исключённых</div>
-                </div>
-                <div className="rounded-xl bg-white/3 border border-white/5 p-3">
                   <div className="text-2xl font-bold text-emerald-300">{stats.with_username.toLocaleString("ru-RU")}</div>
                   <div className="text-[11px] text-white/40">с @username</div>
+                </div>
+                <div className="rounded-xl bg-white/3 border border-white/5 p-3">
+                  <div className="text-2xl font-bold text-amber-300">{stats.bots}</div>
+                  <div className="text-[11px] text-white/40">ботов</div>
                 </div>
               </div>
             )}
@@ -234,30 +221,6 @@ export function AdminUgDriverTab({ token }: Props) {
                 <h3 className="text-white font-medium text-lg">Участники</h3>
                 <p className="text-white/40 text-xs">{memberTotal.toLocaleString("ru-RU")} записей</p>
               </div>
-            </div>
-
-            <div className="flex gap-1.5 mb-3 flex-wrap">
-              {([
-                { v: "", label: "Все", color: "white" },
-                { v: "member", label: "В группе", color: "cyan" },
-                { v: "excluded", label: "Исключённые", color: "red" },
-              ] as const).map(f => (
-                <button
-                  key={f.v}
-                  onClick={() => onStatusChange(f.v)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                    statusFilter === f.v
-                      ? f.color === "red"
-                        ? "bg-red-500/20 border-red-500/40 text-red-200"
-                        : f.color === "cyan"
-                          ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-200"
-                          : "bg-white/15 border-white/30 text-white"
-                      : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
             </div>
 
             <div className="relative mb-3">
