@@ -1,0 +1,1 @@
+UPDATE ug_driver_parse_runs SET status='timeout', finished_at=NOW(), error='stuck running — closed by upgrade' WHERE status='running';

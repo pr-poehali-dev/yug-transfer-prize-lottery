@@ -16,7 +16,10 @@ import psycopg2
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsSearch
+from telethon.tl.types import (
+    ChannelParticipantsSearch,
+    ChannelParticipantsRecent,
+)
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -26,10 +29,28 @@ CORS = {
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
 TARGET_GROUP = '@UG_DRIVER'
 
-# Алфавит для перебора (Telethon aggressive делает то же самое).
-# Разбили на массив, чтобы между вызовами помнить позицию.
-ALPHABET = ['', ' '] + list(string.ascii_lowercase) + list('абвгдеёжзийклмнопрстуфхцчшщъыьэюя') + list(string.digits)
+# Стратегии парсинга, идут последовательно:
+# 0..N1 — пустой/одиночные буквы (поиск)
+# N1..N2 — двухбуквенные сочетания (для сложных групп)
+# N2 — recent (последние присоединившиеся)
+# N2+1 — scan сообщений (кто недавно писал)
+_SINGLE = [''] + list(string.ascii_lowercase) + list('абвгдеёжзийклмнопрстуфхцчшщъыьэюя') + list(string.digits)
+# Самые частые двухбуквенные начала имён рус/eng — чтобы вытащить ещё немного
+_DOUBLE_RU = ['ал', 'ан', 'ар', 'ас', 'ба', 'бо', 'ва', 'ви', 'во', 'га', 'да', 'дм',
+              'ев', 'ег', 'ел', 'жи', 'за', 'ив', 'ил', 'ка', 'ко', 'кр', 'ле', 'ма',
+              'ми', 'мо', 'на', 'не', 'ни', 'ол', 'па', 'пе', 'по', 'ра', 'ро', 'ру',
+              'са', 'се', 'ср', 'ст', 'та', 'те', 'ти', 'то', 'тр', 'ул', 'ус', 'ха',
+              'ча', 'ше', 'ши', 'эл', 'юр', 'як']
+_DOUBLE_EN = ['al', 'an', 'ar', 'be', 'bo', 'br', 'ch', 'da', 'di', 'do', 'el',
+              'fa', 'ga', 'gr', 'ha', 'ja', 'jo', 'ka', 'le', 'ma', 'mi', 'mo',
+              'ni', 'pa', 'ra', 'sa', 'se', 'sh', 'st', 'ta', 'th', 'va', 'vi']
+ALPHABET = _SINGLE + _DOUBLE_RU + _DOUBLE_EN
+RECENT_POS = len(ALPHABET)         # позиция стратегии «recent»
+MSG_SCAN_POS = len(ALPHABET) + 1   # позиция стратегии «scan сообщений»
+TOTAL_STAGES = len(ALPHABET) + 2
+
 TIME_LIMIT_SEC = 22  # макс. время одного запуска (укладываемся в 30 сек таймаута)
+MSG_SCAN_LIMIT = 3000  # сколько последних сообщений в группе сканируем суммарно
 
 
 def verify_token(token: str) -> bool:
@@ -254,6 +275,18 @@ async def run_parse_chunk(new_run: bool, group_input: str = '') -> dict:
     error = None
     pos = start_pos
 
+    def store(u):
+        nonlocal total_fetched, new_members, updated_members
+        if u.id in seen_ids:
+            return
+        seen_ids.add(u.id)
+        total_fetched += 1
+        inserted = upsert_user(u, source_group)
+        if inserted:
+            new_members += 1
+        else:
+            updated_members += 1
+
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     await client.connect()
     try:
@@ -262,6 +295,7 @@ async def run_parse_chunk(new_run: bool, group_input: str = '') -> dict:
         except Exception as e:
             raise Exception(f'нет доступа к {source_group}: {e}')
 
+        # СТРАТЕГИЯ 1: перебор букв (одиночных + двухбуквенных)
         while pos < len(ALPHABET):
             if time.time() - started > TIME_LIMIT_SEC:
                 break
@@ -284,18 +318,43 @@ async def run_parse_chunk(new_run: bool, group_input: str = '') -> dict:
                 if not users:
                     break
                 for u in users:
-                    if u.id in seen_ids:
-                        continue
-                    seen_ids.add(u.id)
-                    total_fetched += 1
-                    inserted = upsert_user(u, source_group)
-                    if inserted:
-                        new_members += 1
-                    else:
-                        updated_members += 1
+                    store(u)
                 if len(users) < limit:
                     break
                 offset += limit
+            pos += 1
+
+        # СТРАТЕГИЯ 2: «Recent» — последние 200 присоединившихся (Telegram отдаёт отдельно)
+        if pos == RECENT_POS and time.time() - started < TIME_LIMIT_SEC:
+            try:
+                participants = await client(GetParticipantsRequest(
+                    channel=entity,
+                    filter=ChannelParticipantsRecent(),
+                    offset=0, limit=200, hash=0,
+                ))
+                for u in participants.users:
+                    store(u)
+            except Exception as e:
+                error = f'recent_error: {str(e)[:200]}'
+            pos += 1
+
+        # СТРАТЕГИЯ 3: scan последних сообщений группы — кто писал, тот точно есть
+        if pos == MSG_SCAN_POS and time.time() - started < TIME_LIMIT_SEC:
+            try:
+                msg_count = 0
+                async for msg in client.iter_messages(entity, limit=MSG_SCAN_LIMIT):
+                    if time.time() - started > TIME_LIMIT_SEC:
+                        break
+                    msg_count += 1
+                    sender = None
+                    try:
+                        sender = await msg.get_sender()
+                    except Exception:
+                        sender = None
+                    if sender and not getattr(sender, 'bot', False):
+                        store(sender)
+            except Exception as e:
+                error = f'msg_scan_error: {str(e)[:200]}'
             pos += 1
     except Exception as e:
         error = str(e)[:300]
@@ -307,7 +366,7 @@ async def run_parse_chunk(new_run: bool, group_input: str = '') -> dict:
 
     update_run_progress(run_id, pos, total_fetched, new_members, updated_members)
 
-    finished = pos >= len(ALPHABET)
+    finished = pos >= TOTAL_STAGES
     if finished or error:
         finalize_run(run_id, ok=(not error), err=error)
 
@@ -319,7 +378,9 @@ async def run_parse_chunk(new_run: bool, group_input: str = '') -> dict:
         'new_members': new_members,
         'updated_members': updated_members,
         'pos': pos,
-        'total_letters': len(ALPHABET),
+        'total_letters': TOTAL_STAGES,
+        'total_stages': TOTAL_STAGES,
+        'stage': 'letters' if pos < len(ALPHABET) else ('recent' if pos == RECENT_POS else 'msg_scan' if pos == MSG_SCAN_POS else 'done'),
         'finished': finished,
         'error': error,
     }

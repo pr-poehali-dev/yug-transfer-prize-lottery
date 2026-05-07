@@ -79,7 +79,7 @@ export function AdminUgDriverTab({ token }: Props) {
     let totalUpd = 0;
     let action = "parse";
     try {
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 60; i++) {
         setParseMsg(`Чанк ${i + 1}: парсим ${groupLabel}...`);
         const r = await fetch(`${UG_DRIVER_PARSER_URL}?action=${action}`, {
           method: "POST",
@@ -94,8 +94,9 @@ export function AdminUgDriverTab({ token }: Props) {
         totalFetched += d.total_fetched || 0;
         totalNew += d.new_members || 0;
         totalUpd += d.updated_members || 0;
-        const pct = Math.round(((d.pos || 0) / (d.total_letters || 1)) * 100);
-        setParseMsg(`Прогресс: ${pct}% · загружено ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
+        const pct = Math.round(((d.pos || 0) / (d.total_stages || d.total_letters || 1)) * 100);
+        const stageLabel = d.stage === "recent" ? " · Recent" : d.stage === "msg_scan" ? " · Сканируем сообщения" : d.stage === "done" ? " · Финал" : "";
+        setParseMsg(`Прогресс: ${pct}%${stageLabel} · загружено ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
         await loadStats();
         if (d.finished) {
           setParseMsg(`Готово: ${groupLabel} · всего ${totalFetched}, новых ${totalNew}, обновлено ${totalUpd}`);
