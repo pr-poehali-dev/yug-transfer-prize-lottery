@@ -51,7 +51,7 @@ MSG_SCAN_POS = len(ALPHABET) + 1   # позиция стратегии «scan с
 TOTAL_STAGES = len(ALPHABET) + 2
 
 TIME_LIMIT_SEC = 280  # макс. время одного запуска (таймаут функции 300 сек, оставляем буфер)
-MSG_SCAN_LIMIT = 8000  # сколько последних сообщений в группе сканируем за чанк
+MSG_SCAN_LIMIT = 2000  # сколько последних сообщений в группе сканируем за чанк (экономия бюджета)
 
 
 def verify_token(token: str) -> bool:
