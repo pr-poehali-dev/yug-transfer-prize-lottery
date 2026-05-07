@@ -1,0 +1,1 @@
+UPDATE ug_driver_parse_runs SET finished_at=NOW(), status='success' WHERE id IN (11, 12) AND finished_at IS NULL;
