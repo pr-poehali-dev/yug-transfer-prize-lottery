@@ -51,10 +51,15 @@ def db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
 
-def get_session2() -> str:
+def get_parser_session() -> str:
+    """Берём сессию ПЕРСОНАЛЬНОГО парсер-аккаунта (tg_user_session3),
+    если он не залогинен — фолбэк на tg_user_session2 (исключения)."""
     conn = db(); cur = conn.cursor()
-    cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_session2 WHERE id=1 AND logged_in=TRUE")
+    cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_session3 WHERE id=1 AND logged_in=TRUE")
     r = cur.fetchone()
+    if not r:
+        cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_session2 WHERE id=1 AND logged_in=TRUE")
+        r = cur.fetchone()
     cur.close(); conn.close()
     return r[0] if r else ''
 
@@ -231,9 +236,9 @@ def upsert_user(u, source_group: str) -> int:
 
 async def run_parse_chunk(new_run: bool, group_input: str = '') -> dict:
     """Парсит чанк букв алфавита, ограничен по времени. Возвращает прогресс и нужно ли продолжать."""
-    session_str = get_session2()
+    session_str = get_parser_session()
     if not session_str:
-        return {'ok': False, 'error': 'not_logged_in: Залогинь второй Telegram-аккаунт'}
+        return {'ok': False, 'error': 'not_logged_in: Залогинь Telegram-аккаунт для парсинга'}
 
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']

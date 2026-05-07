@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
-import { UG_DRIVER_PARSER_URL } from "./adminTypes";
+import { UG_DRIVER_PARSER_URL, TG_USER_AUTH3_URL } from "./adminTypes";
+import { TgUserLogin } from "./TgUserLogin";
 
 interface Props { token: string; }
 
@@ -147,6 +148,13 @@ export function AdminUgDriverTab({ token }: Props) {
 
       {tabExpanded && (
         <div className="p-4 space-y-4">
+          <TgUserLogin
+            token={token}
+            authUrl={TG_USER_AUTH3_URL}
+            title="Telegram-аккаунт для парсинга"
+            hint="Войди отдельным номером — этот аккаунт будет использоваться только для сбора участников. Должен быть в группах, которые парсишь."
+          />
+
           <div className="rounded-2xl border border-white/8 p-5" style={{ background: "rgba(255,255,255,0.02)" }}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center flex-shrink-0">

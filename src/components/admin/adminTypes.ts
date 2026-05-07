@@ -10,6 +10,7 @@ export const ADMIN_BOT_STORIES_URL = "https://functions.poehali.dev/58582409-0dd
 export const TG_USER_AUTH_URL = "https://functions.poehali.dev/1d230a4a-3752-4182-9d42-e67398b99b97";
 export const TG_USER_STORY_URL = "https://functions.poehali.dev/e47b662c-3d9d-42c4-aa13-dda080f9a777";
 export const TG_USER_AUTH2_URL = "https://functions.poehali.dev/731984b0-8855-47a8-a7b1-6c6a4ec6d87f";
+export const TG_USER_AUTH3_URL = "https://functions.poehali.dev/7c94c192-79f9-47ae-ad25-aa912509f6df";
 export const EXCLUDED_WATCHER_URL = "https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520";
 export const UG_DRIVER_PARSER_URL = "https://functions.poehali.dev/d7944323-8734-4dd3-a3a9-8787dbb57ac4";
 
