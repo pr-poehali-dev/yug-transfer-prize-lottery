@@ -13,6 +13,17 @@ interface Settings {
   loop_heartbeat: string | null;
 }
 
+function fmtAgo(ts: number | null): string {
+  if (!ts) return "—";
+  const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (sec < 5) return "только что";
+  if (sec < 60) return `${sec} сек назад`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} мин назад`;
+  const h = Math.floor(min / 60);
+  return `${h} ч назад`;
+}
+
 function isLoopAlive(heartbeat: string | null): boolean {
   if (!heartbeat) return false;
   const hb = new Date(heartbeat).getTime();
@@ -39,6 +50,9 @@ export function AdminExcludedTab({ token }: Props) {
   const [saving, setSaving] = useState(false);
   const [runResult, setRunResult] = useState<string>("");
   const [reviving, setReviving] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [, setNowTick] = useState(0);
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -48,6 +62,7 @@ export function AdminExcludedTab({ token }: Props) {
     setSettings(d);
     setTemplate(d.message_template || "");
     setEnabled(!!d.enabled);
+    setLastUpdated(Date.now());
   };
 
   const loadHistory = async () => {
@@ -55,6 +70,18 @@ export function AdminExcludedTab({ token }: Props) {
     const d = await r.json();
     setHistory(d.items || []);
   };
+
+  const refreshNow = async () => {
+    setRefreshing(true);
+    try { await Promise.all([load(), loadHistory()]); }
+    finally { setRefreshing(false); }
+  };
+
+  useEffect(() => {
+    if (!tabExpanded) return;
+    const id = setInterval(() => setNowTick(t => t + 1), 10_000);
+    return () => clearInterval(id);
+  }, [tabExpanded]);
 
   useEffect(() => {
     if (tabExpanded) { load(); loadHistory(); }
@@ -127,6 +154,21 @@ export function AdminExcludedTab({ token }: Props) {
 
       {tabExpanded && (
         <div className="p-4 space-y-6">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <span className="text-[11px] text-white/40 inline-flex items-center gap-1.5">
+              <Icon name="Clock" size={12} />
+              Данные обновлены: {fmtAgo(lastUpdated)}
+            </span>
+            <button
+              onClick={refreshNow}
+              disabled={refreshing}
+              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/70 text-xs hover:bg-white/10 disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              <Icon name="RefreshCw" size={12} className={refreshing ? "animate-spin" : ""} />
+              Обновить
+            </button>
+          </div>
+
           <TgUserLogin
             token={token}
             authUrl={TG_USER_AUTH2_URL}
