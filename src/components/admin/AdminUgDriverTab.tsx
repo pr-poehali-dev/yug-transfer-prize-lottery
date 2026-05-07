@@ -8,6 +8,7 @@ interface Props { token: string; }
 interface Stats {
   total: number;
   with_username: number;
+  with_phone?: number;
   bots: number;
   last_run: {
     id: number;
@@ -30,6 +31,7 @@ interface Member {
   is_premium: boolean;
   status: string;
   source_group?: string;
+  phone?: string;
   last_parsed_at: string | null;
 }
 
@@ -43,6 +45,8 @@ export function AdminUgDriverTab({ token }: Props) {
   const [page, setPage] = useState(0);
   const [parseMsg, setParseMsg] = useState("");
   const [groupInput, setGroupInput] = useState("");
+  const [resolvingPhones, setResolvingPhones] = useState(false);
+  const [phonesMsg, setPhonesMsg] = useState("");
   const PAGE_SIZE = 50;
 
   const headers = { "X-Admin-Token": token };
@@ -115,6 +119,39 @@ export function AdminUgDriverTab({ token }: Props) {
     }
   };
 
+  const resolvePhones = async () => {
+    if (resolvingPhones) return;
+    if (!confirm("Подтянуть телефоны через Telegram-аккаунт парсера?\n\nTelegram отдаёт номер только тем, у кого открыта приватность. Обычно 5-30% от общего числа. Может занять 5-15 минут.")) return;
+    setResolvingPhones(true);
+    let totalProcessed = 0;
+    let totalFound = 0;
+    try {
+      for (let i = 0; i < 200; i++) {
+        setPhonesMsg(`Чанк ${i + 1}: проверяем 50 юзеров...`);
+        const r = await fetch(`${UG_DRIVER_PARSER_URL}?action=resolve_phones`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+        });
+        const d = await r.json();
+        if (!d.ok && d.error) {
+          setPhonesMsg(`Остановка: ${d.error}`);
+          break;
+        }
+        totalProcessed += d.processed || 0;
+        totalFound += d.phones_found || 0;
+        setPhonesMsg(`Обработано ${totalProcessed}, найдено телефонов ${totalFound}${d.finished ? " · готово" : "..."}`);
+        await loadStats();
+        if (d.finished) break;
+        await new Promise(res => setTimeout(res, 1500));
+      }
+      await loadMembers(search, page);
+    } catch (e) {
+      setPhonesMsg(`Ошибка сети: ${(e as Error).message}`);
+    } finally {
+      setResolvingPhones(false);
+    }
+  };
+
   const onSearchChange = (v: string) => {
     setSearch(v);
     setPage(0);
@@ -168,7 +205,7 @@ export function AdminUgDriverTab({ token }: Props) {
             </div>
 
             {stats && (
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <div className="rounded-xl bg-white/3 border border-white/5 p-3">
                   <div className="text-2xl font-bold text-white">{stats.total.toLocaleString("ru-RU")}</div>
                   <div className="text-[11px] text-white/40">всего в БД</div>
@@ -176,6 +213,10 @@ export function AdminUgDriverTab({ token }: Props) {
                 <div className="rounded-xl bg-white/3 border border-white/5 p-3">
                   <div className="text-2xl font-bold text-emerald-300">{stats.with_username.toLocaleString("ru-RU")}</div>
                   <div className="text-[11px] text-white/40">с @username</div>
+                </div>
+                <div className="rounded-xl bg-green-500/5 border border-green-500/20 p-3">
+                  <div className="text-2xl font-bold text-green-300">{(stats.with_phone ?? 0).toLocaleString("ru-RU")}</div>
+                  <div className="text-[11px] text-white/40">с телефоном</div>
                 </div>
                 <div className="rounded-xl bg-white/3 border border-white/5 p-3">
                   <div className="text-2xl font-bold text-amber-300">{stats.bots}</div>
@@ -210,13 +251,22 @@ export function AdminUgDriverTab({ token }: Props) {
               <div className="flex gap-2 flex-wrap items-center">
                 <button
                   onClick={startParse}
-                  disabled={parsing}
+                  disabled={parsing || resolvingPhones}
                   className="px-4 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-sm font-medium hover:bg-cyan-500/25 disabled:opacity-50 inline-flex items-center gap-2"
                 >
                   <Icon name={parsing ? "Loader2" : "Download"} size={14} className={parsing ? "animate-spin" : ""} />
                   {parsing ? "Парсинг..." : "Запустить парсинг"}
                 </button>
-                {parseMsg && <span className="text-xs text-white/60">{parseMsg}</span>}
+                <button
+                  onClick={resolvePhones}
+                  disabled={parsing || resolvingPhones}
+                  className="px-4 py-2.5 rounded-xl bg-green-500/15 border border-green-500/30 text-green-300 text-sm font-medium hover:bg-green-500/25 disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  <Icon name={resolvingPhones ? "Loader2" : "Phone"} size={14} className={resolvingPhones ? "animate-spin" : ""} />
+                  {resolvingPhones ? "Подтягиваем..." : "Подтянуть телефоны"}
+                </button>
+                {parseMsg && <span className="text-xs text-white/60 w-full">{parseMsg}</span>}
+                {phonesMsg && <span className="text-xs text-green-300/70 w-full">{phonesMsg}</span>}
               </div>
             </div>
           </div>
@@ -264,6 +314,11 @@ export function AdminUgDriverTab({ token }: Props) {
                           {m.username && (
                             <a href={`https://t.me/${m.username}`} target="_blank" rel="noreferrer" className="text-[11px] text-cyan-300 hover:underline">
                               @{m.username}
+                            </a>
+                          )}
+                          {m.phone && (
+                            <a href={`tel:+${m.phone.replace(/[^0-9]/g, "")}`} className="text-[11px] text-green-300 hover:underline inline-flex items-center gap-1">
+                              <Icon name="Phone" size={10} />+{m.phone.replace(/[^0-9]/g, "")}
                             </a>
                           )}
                           {isExcluded && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/25 text-red-200 inline-flex items-center gap-1"><Icon name="UserX" size={9} />ИСКЛЮЧЁН</span>}

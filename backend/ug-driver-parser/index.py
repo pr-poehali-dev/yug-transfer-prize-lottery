@@ -16,6 +16,7 @@ import psycopg2
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     ChannelParticipantsSearch,
     ChannelParticipantsRecent,
@@ -97,6 +98,8 @@ def get_stats() -> dict:
     excluded = cur.fetchone()[0]
     cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.ug_driver_members WHERE status='member'")
     members = cur.fetchone()[0]
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.ug_driver_members WHERE phone IS NOT NULL AND phone <> ''")
+    with_phone = cur.fetchone()[0]
     cur.execute(
         f"SELECT id, started_at, finished_at, status, total_fetched, new_members, updated_members, error "
         f"FROM {SCHEMA}.ug_driver_parse_runs ORDER BY id DESC LIMIT 1"
@@ -111,7 +114,7 @@ def get_stats() -> dict:
             'new_members': last[5], 'updated_members': last[6], 'error': last[7],
         }
     return {'total': total, 'with_username': with_username, 'bots': bots,
-            'excluded': excluded, 'members': members, 'last_run': last_run}
+            'excluded': excluded, 'members': members, 'with_phone': with_phone, 'last_run': last_run}
 
 
 def get_list(limit: int, offset: int, q: str, status_filter: str = '', group_filter: str = '') -> dict:
@@ -127,7 +130,7 @@ def get_list(limit: int, offset: int, q: str, status_filter: str = '', group_fil
     cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.ug_driver_members {where}")
     total = cur.fetchone()[0]
     cur.execute(
-        f"SELECT user_id, username, first_name, last_name, is_bot, is_premium, status, source_group, last_parsed_at "
+        f"SELECT user_id, username, first_name, last_name, is_bot, is_premium, status, source_group, phone, last_parsed_at "
         f"FROM {SCHEMA}.ug_driver_members {where} "
         f"ORDER BY last_parsed_at DESC LIMIT {int(limit)} OFFSET {int(offset)}"
     )
@@ -136,10 +139,113 @@ def get_list(limit: int, offset: int, q: str, status_filter: str = '', group_fil
         items.append({
             'user_id': r[0], 'username': r[1] or '', 'first_name': r[2] or '',
             'last_name': r[3] or '', 'is_bot': r[4], 'is_premium': r[5],
-            'status': r[6], 'source_group': r[7] or '', 'last_parsed_at': r[8],
+            'status': r[6], 'source_group': r[7] or '', 'phone': r[8] or '',
+            'last_parsed_at': r[9],
         })
     cur.close(); conn.close()
     return {'total': total, 'items': items}
+
+
+def get_users_without_phone(limit: int) -> list:
+    """Возвращает (user_id, username) спарсенных юзеров без телефона."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(
+        f"SELECT user_id, COALESCE(username,'') FROM {SCHEMA}.ug_driver_members "
+        f"WHERE (phone IS NULL OR phone='') AND is_bot=FALSE "
+        f"ORDER BY last_parsed_at DESC LIMIT {int(limit)}"
+    )
+    items = [(r[0], r[1]) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return items
+
+
+def update_phone(user_id: int, phone: str):
+    if not phone:
+        return
+    conn = db(); cur = conn.cursor()
+    cur.execute(
+        f"UPDATE {SCHEMA}.ug_driver_members SET phone='{esc(phone)}' WHERE user_id={int(user_id)}"
+    )
+    conn.commit(); cur.close(); conn.close()
+
+
+async def resolve_phones_chunk(batch_size: int = 50) -> dict:
+    """Пытается подтянуть телефоны для участников БД через GetFullUser.
+    Telegram отдаёт телефон только тем, у кого настройка приватности 'Все' / 'Контакты' открыта."""
+    session_str = get_parser_session()
+    if not session_str:
+        return {'ok': False, 'error': 'not_logged_in: Залогинь Telegram-аккаунт для парсинга'}
+
+    candidates = get_users_without_phone(batch_size)
+    if not candidates:
+        return {'ok': True, 'finished': True, 'processed': 0, 'phones_found': 0,
+                'remaining': 0, 'message': 'Все юзеры обработаны'}
+
+    api_id = int(os.environ['TG_API_ID'])
+    api_hash = os.environ['TG_API_HASH']
+    started = time.time()
+    processed = 0
+    phones_found = 0
+    error = None
+
+    client = TelegramClient(StringSession(session_str), api_id, api_hash)
+    await client.connect()
+    try:
+        for user_id, username in candidates:
+            if time.time() - started > TIME_LIMIT_SEC:
+                break
+            try:
+                # Сначала пробуем по username (Telegram чаще отдаёт профиль),
+                # если username нет — по user_id напрямую
+                if username:
+                    entity = await client.get_entity(username)
+                else:
+                    try:
+                        entity = await client.get_input_entity(user_id)
+                    except Exception:
+                        entity = None
+                if not entity:
+                    processed += 1
+                    continue
+                phone = (getattr(entity, 'phone', '') or '').strip()
+                if not phone:
+                    # Пробуем расширенный профиль
+                    try:
+                        full = await client(GetFullUserRequest(entity))
+                        u = full.users[0] if getattr(full, 'users', None) else None
+                        if u:
+                            phone = (getattr(u, 'phone', '') or '').strip()
+                    except Exception:
+                        pass
+                if phone:
+                    update_phone(user_id, phone)
+                    phones_found += 1
+                processed += 1
+            except Exception as e:
+                msg = str(e)[:120]
+                if 'FloodWait' in msg or 'flood' in msg.lower():
+                    error = f'flood_wait: {msg}'
+                    break
+                processed += 1
+                continue
+            await asyncio.sleep(0.4)  # пауза 400мс между запросами
+    except Exception as e:
+        error = str(e)[:300]
+    finally:
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+
+    remaining = len(get_users_without_phone(1))  # есть ли ещё кто-то
+    return {
+        'ok': not error,
+        'processed': processed,
+        'phones_found': phones_found,
+        'remaining': 'есть' if remaining else 0,
+        'finished': remaining == 0 and not error,
+        'error': error,
+    }
 
 
 def get_groups() -> list:
@@ -426,6 +532,12 @@ def handler(event: dict, context) -> dict:
                 group_input = qs.get('group', '') or ''
             try:
                 result = asyncio.run(run_parse_chunk(new_run, group_input))
+                return resp(200, result)
+            except Exception as e:
+                return resp(500, {'ok': False, 'error': str(e)[:500]})
+        if action == 'resolve_phones':
+            try:
+                result = asyncio.run(resolve_phones_chunk(50))
                 return resp(200, result)
             except Exception as e:
                 return resp(500, {'ok': False, 'error': str(e)[:500]})
