@@ -1,5 +1,6 @@
 """Публикация сторис в канал @ug_transfer_pro через Telethon (user-аккаунт).
 POST {video_url, caption?} — публикует сторис, возвращает {ok, story_id}.
+v2: автообрезка ffmpeg до 720x1280, ≤60с.
 """
 import os
 import json
@@ -7,6 +8,8 @@ import hashlib
 import asyncio
 import urllib.request
 import tempfile
+import subprocess
+import shutil
 import psycopg2
 
 from telethon import TelegramClient
@@ -41,6 +44,48 @@ def get_session() -> str:
     r = cur.fetchone()
     cur.close(); conn.close()
     return r[0] if r else ''
+
+
+def has_ffmpeg() -> bool:
+    return shutil.which('ffmpeg') is not None
+
+
+def transcode_to_story(src_path: str) -> tuple:
+    """Приводит видео к формату Telegram Stories: 720x1280 9:16, до 60с, H.264/AAC.
+    Горизонтальное видео обрезается по центру (crop), длинное — режется до 60с.
+    Возвращает (out_path, w, h, duration). Если ffmpeg недоступен — возвращает исходник.
+    """
+    if not has_ffmpeg():
+        print("[transcode] ffmpeg не найден, пропускаю обрезку")
+        return src_path, 0, 0, 0
+
+    out_path = src_path.replace('.mp4', '_story.mp4')
+    if out_path == src_path:
+        out_path = src_path + '_story.mp4'
+
+    # scale=увеличиваем чтобы покрыть 720x1280, crop=обрезаем по центру до 720x1280
+    vf = "scale='if(gt(a,9/16),-2,720)':'if(gt(a,9/16),1280,-2)',crop=720:1280"
+
+    cmd = [
+        'ffmpeg', '-y', '-i', src_path,
+        '-t', '60',
+        '-vf', vf,
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26',
+        '-pix_fmt', 'yuv420p',
+        '-movflags', '+faststart',
+        '-c:a', 'aac', '-b:a', '96k',
+        '-r', '30',
+        out_path,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, timeout=120)
+        if proc.returncode != 0:
+            print(f"[transcode] ffmpeg failed: {proc.stderr.decode('utf-8', 'ignore')[-500:]}")
+            return src_path, 0, 0, 0
+        return out_path, 720, 1280, 0
+    except Exception as e:
+        print(f"[transcode] {e}")
+        return src_path, 0, 0, 0
 
 
 def probe_video(path: str) -> dict:
@@ -95,29 +140,37 @@ async def post_story(video_url: str, caption: str) -> dict:
         return {'ok': False, 'error': f'Видео слишком большое: {len(video_bytes)//1024//1024} МБ. Telegram лимит для сторис — 30 МБ.'}
 
     tmp_path = None
+    out_path = None
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as f:
             f.write(video_bytes)
             tmp_path = f.name
 
-        # Читаем реальные параметры файла
+        # Читаем параметры исходника
         probe = probe_video(tmp_path)
-        real_w = probe.get('w') or 720
-        real_h = probe.get('h') or 1280
-        real_dur = probe.get('duration') or 0
-        print(f"[post_story] probe: w={real_w} h={real_h} dur={real_dur}s size={len(video_bytes)}")
+        src_w = probe.get('w') or 0
+        src_h = probe.get('h') or 0
+        src_dur = probe.get('duration') or 0
+        print(f"[post_story] src: w={src_w} h={src_h} dur={src_dur}s size={len(video_bytes)}")
 
-        # Проверка: Telegram Stories требует вертикальное видео
-        if real_w and real_h and real_w >= real_h:
-            return {'ok': False, 'error': f'Видео горизонтальное ({real_w}x{real_h}). Telegram Stories принимает только вертикальные (9:16, например 720x1280).'}
-        if real_dur and real_dur > 60:
-            return {'ok': False, 'error': f'Видео {real_dur} сек — Telegram Stories принимает до 60 сек.'}
+        # Автообрезка: ffmpeg приведёт к 720x1280, ≤60с, H.264/AAC
+        out_path, ow, oh, _ = transcode_to_story(tmp_path)
+        upload_path = out_path
+        final_probe = probe_video(upload_path) if out_path != tmp_path else probe
+        real_w = final_probe.get('w') or ow or 720
+        real_h = final_probe.get('h') or oh or 1280
+        real_dur = final_probe.get('duration') or min(src_dur, 60) if src_dur else 0
+        print(f"[post_story] upload: w={real_w} h={real_h} dur={real_dur}s file={upload_path}")
+
+        upload_size = os.path.getsize(upload_path)
+        if upload_size > 30 * 1024 * 1024:
+            return {'ok': False, 'error': f'После обрезки видео {upload_size//1024//1024} МБ — лимит сторис 30 МБ.'}
 
         await client.connect()
         peer = await client.get_input_entity(CHANNEL)
 
-        file = await client.upload_file(tmp_path)
+        file = await client.upload_file(upload_path)
         media = InputMediaUploadedDocument(
             file=file,
             mime_type='video/mp4',
@@ -146,6 +199,8 @@ async def post_story(video_url: str, caption: str) -> dict:
             pass
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+        if out_path and out_path != tmp_path and os.path.exists(out_path):
+            os.unlink(out_path)
 
 
 def handler(event: dict, context) -> dict:
