@@ -662,6 +662,125 @@ def handler(event: dict, context) -> dict:
         } for r in rows]
         return resp(200, {'ok': True, 'items': items, 'count': len(items)})
 
+    # SEND ONE: отправить повторно одному водителю по id записи
+    if method == 'POST' and action == 'send_one':
+        headers_in = event.get('headers') or {}
+        token = headers_in.get('X-Admin-Token') or headers_in.get('x-admin-token') or ''
+        if not verify_token(token):
+            return resp(401, {'error': 'invalid token'})
+        body_in = json.loads(event.get('body') or '{}')
+        rec_id = int(body_in.get('id') or 0)
+        if not rec_id:
+            return resp(400, {'ok': False, 'error': 'id required'})
+
+        session_str_o = get_session2()
+        if not session_str_o:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+
+        settings_o = get_settings()
+        template_o = settings_o['message_template'] or 'Здравствуйте!'
+
+        conn = db(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT user_id, username, first_name FROM {SCHEMA}.excluded_drivers WHERE id={rec_id}"
+        )
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        if not row:
+            return resp(404, {'ok': False, 'error': 'not_found'})
+
+        uid_o = int(row[0] or 0)
+        uname_o = row[1] or ''
+        fname_o = row[2] or 'водитель'
+        if not uid_o:
+            return resp(400, {'ok': False, 'error': 'no_user_id'})
+
+        personalized_o = template_o.replace('{name}', fname_o).replace('{username}', uname_o)
+
+        api_id_o = int(os.environ['TG_API_ID'])
+        api_hash_o = os.environ['TG_API_HASH']
+
+        async def _send_one():
+            client = TelegramClient(StringSession(session_str_o), api_id_o, api_hash_o)
+            await client.connect()
+            try:
+                target = uid_o
+                try:
+                    target = await client.get_input_entity(uid_o)
+                except Exception:
+                    if uname_o:
+                        try:
+                            target = await client.get_input_entity(uname_o)
+                        except Exception:
+                            target = uid_o
+                await client.send_message(target, personalized_o)
+                c2 = db(); cu2 = c2.cursor()
+                cu2.execute(
+                    f"UPDATE {SCHEMA}.excluded_drivers "
+                    f"SET resend_queued=FALSE, resend_status='ok', resend_at=NOW(), "
+                    f"message_sent=TRUE, send_status='ok' "
+                    f"WHERE id={rec_id}"
+                )
+                c2.commit(); cu2.close(); c2.close()
+                return {'ok': True}
+            except Exception as e:
+                err_text = str(e)[:200].replace("'", "''")
+                c2 = db(); cu2 = c2.cursor()
+                cu2.execute(
+                    f"UPDATE {SCHEMA}.excluded_drivers "
+                    f"SET resend_status='err:{err_text}', resend_at=NOW() "
+                    f"WHERE id={rec_id}"
+                )
+                c2.commit(); cu2.close(); c2.close()
+                return {'ok': False, 'error': str(e)[:200]}
+            finally:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+
+        loop_o = asyncio.new_event_loop(); asyncio.set_event_loop(loop_o)
+        try:
+            return resp(200, loop_o.run_until_complete(_send_one()))
+        finally:
+            loop_o.close()
+
+    # DELETE ONE: удалить запись из истории
+    if method == 'POST' and action == 'delete_one':
+        headers_in = event.get('headers') or {}
+        token = headers_in.get('X-Admin-Token') or headers_in.get('x-admin-token') or ''
+        if not verify_token(token):
+            return resp(401, {'error': 'invalid token'})
+        body_in = json.loads(event.get('body') or '{}')
+        rec_id = int(body_in.get('id') or 0)
+        if not rec_id:
+            return resp(400, {'ok': False, 'error': 'id required'})
+        conn = db(); cur = conn.cursor()
+        cur.execute(f"DELETE FROM {SCHEMA}.excluded_drivers WHERE id={rec_id}")
+        conn.commit(); cur.close(); conn.close()
+        return resp(200, {'ok': True})
+
+    # UPDATE ONE: править имя/username записи
+    if method == 'POST' and action == 'update_one':
+        headers_in = event.get('headers') or {}
+        token = headers_in.get('X-Admin-Token') or headers_in.get('x-admin-token') or ''
+        if not verify_token(token):
+            return resp(401, {'error': 'invalid token'})
+        body_in = json.loads(event.get('body') or '{}')
+        rec_id = int(body_in.get('id') or 0)
+        if not rec_id:
+            return resp(400, {'ok': False, 'error': 'id required'})
+        first_name = (body_in.get('first_name') or '').strip()
+        username = (body_in.get('username') or '').strip().lstrip('@')
+        conn = db(); cur = conn.cursor()
+        cur.execute(
+            f"UPDATE {SCHEMA}.excluded_drivers "
+            f"SET first_name='{esc(first_name)}', username='{esc(username)}' "
+            f"WHERE id={rec_id}"
+        )
+        conn.commit(); cur.close(); conn.close()
+        return resp(200, {'ok': True})
+
     # SCAN: помечает всех неотправленных как queued (готовит очередь для Отправить)
     if method == 'POST' and action == 'scan':
         headers_in = event.get('headers') or {}
@@ -1031,14 +1150,14 @@ def handler(event: dict, context) -> dict:
     if method == 'GET' and action == 'history':
         conn = db(); cur = conn.cursor()
         cur.execute(
-            f"SELECT user_id, username, first_name, message_sent, message_sent_at, send_status "
+            f"SELECT id, user_id, username, first_name, message_sent, message_sent_at, send_status "
             f"FROM {SCHEMA}.excluded_drivers ORDER BY id DESC LIMIT 50"
         )
         rows = cur.fetchall()
         cur.close(); conn.close()
         items = [{
-            'user_id': r[0], 'username': r[1], 'first_name': r[2],
-            'message_sent': r[3], 'message_sent_at': r[4], 'send_status': r[5],
+            'id': r[0], 'user_id': r[1], 'username': r[2], 'first_name': r[3],
+            'message_sent': r[4], 'message_sent_at': r[5], 'send_status': r[6],
         } for r in rows]
         return resp(200, {'items': items})
 

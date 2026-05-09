@@ -33,6 +33,7 @@ function isLoopAlive(heartbeat: string | null): boolean {
 }
 
 interface HistoryItem {
+  id: number;
   user_id: number;
   username: string;
   first_name: string;
@@ -55,6 +56,10 @@ export function AdminExcludedTab({ token }: Props) {
   const [resendQueue, setResendQueue] = useState<{ queued: number; ok: number; failed: number } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [resendList, setResendList] = useState<Array<{ id: number; user_id: number; username: string; first_name: string; send_status: string; queued: boolean }> | null>(null);
+  const [sendingOneId, setSendingOneId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [, setNowTick] = useState(0);
@@ -179,6 +184,42 @@ export function AdminExcludedTab({ token }: Props) {
   useEffect(() => {
     if (tabExpanded) loadResendQueue();
   }, [tabExpanded]);
+
+  const sendOne = async (id: number) => {
+    setSendingOneId(id);
+    try {
+      const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=send_one`, {
+        method: "POST", headers, body: JSON.stringify({ id }),
+      });
+      const d = await r.json();
+      if (!d.ok) alert(`Не удалось отправить: ${d.error || d.reason || "?"}`);
+      await loadHistory();
+    } finally { setSendingOneId(null); }
+  };
+
+  const deleteOne = async (id: number) => {
+    if (!confirm("Удалить запись из истории?")) return;
+    await fetch(`${EXCLUDED_WATCHER_URL}?action=delete_one`, {
+      method: "POST", headers, body: JSON.stringify({ id }),
+    });
+    await loadHistory();
+  };
+
+  const startEdit = (h: HistoryItem) => {
+    setEditingId(h.id);
+    setEditName(h.first_name || "");
+    setEditUsername(h.username || "");
+  };
+
+  const saveEdit = async () => {
+    if (editingId == null) return;
+    await fetch(`${EXCLUDED_WATCHER_URL}?action=update_one`, {
+      method: "POST", headers,
+      body: JSON.stringify({ id: editingId, first_name: editName, username: editUsername }),
+    });
+    setEditingId(null);
+    await loadHistory();
+  };
 
   const reviveLoop = async () => {
     setReviving(true); setRunResult("");
@@ -405,21 +446,72 @@ export function AdminExcludedTab({ token }: Props) {
               <p className="text-white/30 text-center py-6 text-sm">Пока никому не отправляли</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {history.map((h, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/3 border border-white/8">
+                {history.map((h) => (
+                  <div key={h.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/3 border border-white/8">
                     <Icon
                       name={h.message_sent ? "CheckCircle" : "AlertCircle"}
                       size={16}
-                      className={h.message_sent ? "text-emerald-400" : "text-red-400"}
+                      className={`flex-shrink-0 ${h.message_sent ? "text-emerald-400" : "text-red-400"}`}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm truncate">
-                        {h.first_name || "?"} {h.username && <span className="text-white/40">@{h.username}</span>}
-                      </p>
-                      <p className="text-white/40 text-[11px] truncate">
-                        {h.message_sent_at && new Date(h.message_sent_at).toLocaleString("ru-RU")}
-                        {h.send_status && h.send_status !== "ok" && ` · ${h.send_status}`}
-                      </p>
+                      {editingId === h.id ? (
+                        <div className="flex gap-2">
+                          <input
+                            value={editName} onChange={e => setEditName(e.target.value)}
+                            placeholder="Имя"
+                            className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs outline-none focus:border-amber-500/50"
+                          />
+                          <input
+                            value={editUsername} onChange={e => setEditUsername(e.target.value)}
+                            placeholder="username"
+                            className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs outline-none focus:border-amber-500/50"
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-white text-sm truncate">
+                            {h.first_name || "?"} {h.username && <span className="text-white/40">@{h.username}</span>}
+                          </p>
+                          <p className="text-white/40 text-[11px] truncate">
+                            {h.message_sent_at && new Date(h.message_sent_at).toLocaleString("ru-RU")}
+                            {h.send_status && h.send_status !== "ok" && ` · ${h.send_status}`}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      {editingId === h.id ? (
+                        <>
+                          <button onClick={saveEdit} title="Сохранить"
+                            className="w-8 h-8 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 flex items-center justify-center">
+                            <Icon name="Check" size={14} className="text-emerald-400" />
+                          </button>
+                          <button onClick={() => setEditingId(null)} title="Отмена"
+                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center">
+                            <Icon name="X" size={14} className="text-white/50" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => sendOne(h.id)} disabled={sendingOneId === h.id}
+                            title="Отправить повторно"
+                            className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center disabled:opacity-40"
+                          >
+                            {sendingOneId === h.id
+                              ? <div className="w-3 h-3 border border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                              : <Icon name="Send" size={14} className="text-emerald-400" />}
+                          </button>
+                          <button onClick={() => startEdit(h)} title="Редактировать"
+                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center">
+                            <Icon name="Pencil" size={14} className="text-white/50" />
+                          </button>
+                          <button onClick={() => deleteOne(h.id)} title="Удалить"
+                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 flex items-center justify-center">
+                            <Icon name="Trash2" size={14} className="text-white/50 hover:text-red-400" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
