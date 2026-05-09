@@ -719,6 +719,15 @@ def handler(event: dict, context) -> dict:
         set_setting('warmup_start_date', str(date.today()))
         return resp(200, {'ok': True, 'state': get_warmup_state()})
 
+    if action == 'warmup_set_day':
+        from datetime import date, timedelta
+        day = int(body.get('day', 1))
+        if day < 1: day = 1
+        # Если хотим день N, ставим start_date = today - (N - 1) дней
+        new_start = date.today() - timedelta(days=(day - 1))
+        set_setting('warmup_start_date', str(new_start))
+        return resp(200, {'ok': True, 'state': get_warmup_state()})
+
     if action == 'warmup_run':
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

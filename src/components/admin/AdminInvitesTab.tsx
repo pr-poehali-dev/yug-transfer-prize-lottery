@@ -1,9 +1,7 @@
 import Icon from "@/components/ui/icon";
 import { AdminAccountsManager } from "./AdminAccountsManager";
 import { AdminInviteImport } from "./AdminInviteImport";
-import { AdminInviteRunner } from "./AdminInviteRunner";
-import { AdminWarmup } from "./AdminWarmup";
-import { AdminFullPower } from "./AdminFullPower";
+import { AdminInviteCenter } from "./AdminInviteCenter";
 
 export function AdminInvitesTab({ token }: { token: string }) {
   return (
@@ -37,9 +35,7 @@ export function AdminInvitesTab({ token }: { token: string }) {
 
       <AdminAccountsManager token={token} />
       <AdminInviteImport token={token} />
-      <AdminFullPower token={token} />
-      <AdminWarmup token={token} />
-      <AdminInviteRunner token={token} />
+      <AdminInviteCenter token={token} />
     </div>
   );
 }
