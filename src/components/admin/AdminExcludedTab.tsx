@@ -51,6 +51,7 @@ export function AdminExcludedTab({ token }: Props) {
   const [runResult, setRunResult] = useState<string>("");
   const [reviving, setReviving] = useState(false);
   const [resending, setResending] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(false);
   const [resendQueue, setResendQueue] = useState<{ queued: number; ok: number; failed: number } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -256,12 +257,40 @@ export function AdminExcludedTab({ token }: Props) {
               </button>
             </div>
 
-            <textarea
-              value={template} onChange={e => setTemplate(e.target.value)}
-              rows={10}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-500/50 resize-none font-mono"
-              placeholder="Текст сообщения — используй {name} для имени"
-            />
+            <div className="rounded-xl border border-white/10 bg-white/3 overflow-hidden">
+              <div className="flex items-start gap-2 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  {!editingTemplate ? (
+                    <p className="text-white/80 text-sm whitespace-pre-wrap line-clamp-3">
+                      {template?.trim() ? template : <span className="text-white/30">Текст не задан</span>}
+                    </p>
+                  ) : (
+                    <textarea
+                      value={template} onChange={e => setTemplate(e.target.value)}
+                      rows={10} autoFocus
+                      className="w-full bg-transparent border-0 text-white text-sm outline-none resize-none font-mono p-0"
+                      placeholder="Текст сообщения — используй {name} для имени"
+                    />
+                  )}
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => setEditingTemplate(v => !v)}
+                    title={editingTemplate ? "Свернуть" : "Редактировать"}
+                    className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <Icon name={editingTemplate ? "ChevronUp" : "Pencil"} size={14} className="text-white/60" />
+                  </button>
+                  <button
+                    onClick={() => { if (confirm("Очистить текст шаблона?")) setTemplate(""); }}
+                    title="Очистить"
+                    className="w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 flex items-center justify-center"
+                  >
+                    <Icon name="Trash2" size={14} className="text-white/50 hover:text-red-400" />
+                  </button>
+                </div>
+              </div>
+            </div>
 
             <div className="flex gap-2 mt-3 flex-wrap">
               <button onClick={saveSettings} disabled={saving}
