@@ -24,6 +24,7 @@ export function AdminInviteImport({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
@@ -60,24 +61,40 @@ export function AdminInviteImport({ token }: { token: string }) {
       return;
     }
     setBusy(true); setErr(null); setResult(null);
+    setProgress({ done: 0, total: items.length });
+
+    const BATCH = 300;
+    let inserted = 0, skipped_dup = 0, skipped_bad = 0;
+    let lastJson: { stats?: InviteStats; recent?: InviteTarget[] } | null = null;
+
     try {
-      const r = await fetch(`${INVITE_TARGETS_URL}?action=import`, {
-        method: "POST", headers,
-        body: JSON.stringify({ items, source }),
-      });
-      const j = await r.json();
-      if (j.error) {
-        setErr(j.error);
-      } else {
-        setResult({ inserted: j.inserted, skipped_dup: j.skipped_dup, skipped_bad: j.skipped_bad });
-        setStats(j.stats || null);
-        setRecent(j.recent || []);
-        setText("");
+      for (let i = 0; i < items.length; i += BATCH) {
+        const chunk = items.slice(i, i + BATCH);
+        const r = await fetch(`${INVITE_TARGETS_URL}?action=import`, {
+          method: "POST", headers,
+          body: JSON.stringify({ items: chunk, source }),
+        });
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}`);
+        }
+        const j = await r.json();
+        if (j.error) throw new Error(j.error);
+        inserted += j.inserted || 0;
+        skipped_dup += j.skipped_dup || 0;
+        skipped_bad += j.skipped_bad || 0;
+        lastJson = j;
+        setProgress({ done: Math.min(i + BATCH, items.length), total: items.length });
       }
+      setResult({ inserted, skipped_dup, skipped_bad });
+      if (lastJson?.stats) setStats(lastJson.stats);
+      if (lastJson?.recent) setRecent(lastJson.recent);
+      setText("");
     } catch (e) {
-      setErr(String(e));
+      setErr(`Ошибка: ${String(e)}. Загружено до ошибки: ${inserted}`);
+      await load();
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -208,6 +225,21 @@ export function AdminInviteImport({ token }: { token: string }) {
               Очистить поле
             </button>
           </div>
+
+          {progress && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Загрузка батчами...</span>
+                <span className="font-mono">{progress.done} / {progress.total}</span>
+              </div>
+              <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all"
+                  style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {result && (
             <div className="text-xs bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-emerald-200">
