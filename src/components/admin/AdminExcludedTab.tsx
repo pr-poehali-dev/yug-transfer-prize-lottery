@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import Icon from "@/components/ui/icon";
 import { EXCLUDED_WATCHER_URL, TG_USER_AUTH2_URL } from "./adminTypes";
 import { TgUserLogin } from "./TgUserLogin";
@@ -186,14 +187,22 @@ export function AdminExcludedTab({ token }: Props) {
   }, [tabExpanded]);
 
   const sendOne = async (id: number) => {
+    const item = history.find(h => h.id === id);
+    const who = item ? (item.first_name || item.username || `#${id}`) : `#${id}`;
     setSendingOneId(id);
     try {
       const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=send_one`, {
         method: "POST", headers, body: JSON.stringify({ id }),
       });
       const d = await r.json();
-      if (!d.ok) alert(`Не удалось отправить: ${d.error || d.reason || "?"}`);
+      if (d.ok) {
+        toast.success(`Сообщение отправлено: ${who}`);
+      } else {
+        toast.error(`Не отправлено: ${who}`, { description: d.error || d.reason || "неизвестная ошибка" });
+      }
       await loadHistory();
+    } catch (e) {
+      toast.error("Сбой соединения", { description: e instanceof Error ? e.message : String(e) });
     } finally { setSendingOneId(null); }
   };
 
@@ -202,6 +211,7 @@ export function AdminExcludedTab({ token }: Props) {
     await fetch(`${EXCLUDED_WATCHER_URL}?action=delete_one`, {
       method: "POST", headers, body: JSON.stringify({ id }),
     });
+    toast.success("Запись удалена");
     await loadHistory();
   };
 
@@ -217,6 +227,7 @@ export function AdminExcludedTab({ token }: Props) {
       method: "POST", headers,
       body: JSON.stringify({ id: editingId, first_name: editName, username: editUsername }),
     });
+    toast.success("Изменения сохранены");
     setEditingId(null);
     await loadHistory();
   };
