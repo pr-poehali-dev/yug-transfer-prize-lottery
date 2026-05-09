@@ -160,7 +160,8 @@ def handler(event: dict, context) -> dict:
                 return resp(404, {'error': 'not_found'})
 
             # Публикуем через user-аккаунт (Telethon) — обращаемся к tg-user-story
-            user_story_url = 'https://functions.poehali.dev/e47b662c-3d9d-42c4-aa13-dda080f9a777'
+            user_story_url = os.environ.get('TG_USER_STORY_URL', 'https://functions.poehali.dev/e47b662c-3d9d-42c4-aa13-dda080f9a777')
+            print(f"[send_now] sid={sid} url={row[0][:80]} target={user_story_url}")
             admin_login = os.environ.get('ADMIN_LOGIN', '')
             admin_password = os.environ.get('ADMIN_PASSWORD', '')
             admin_token = hashlib.sha256(f"{admin_login}:{admin_password}:admin_secret_2026".encode()).hexdigest()
@@ -174,12 +175,16 @@ def handler(event: dict, context) -> dict:
             try:
                 with urllib.request.urlopen(req, timeout=120) as rr:
                     r = json.loads(rr.read())
+                    print(f"[send_now] response: {r}")
             except urllib.error.HTTPError as e:
                 try:
-                    r = json.loads(e.read().decode())
+                    raw = e.read().decode()
+                    print(f"[send_now] HTTPError {e.code}: {raw[:300]}")
+                    r = json.loads(raw)
                 except Exception:
                     r = {'ok': False, 'error': f'HTTP {e.code}'}
             except Exception as e:
+                print(f"[send_now] exception: {e}")
                 r = {'ok': False, 'error': str(e)}
 
             tg_desc = r.get('description') or r.get('error') or 'unknown'

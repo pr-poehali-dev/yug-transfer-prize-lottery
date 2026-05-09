@@ -47,14 +47,7 @@ def get_session() -> str:
 
 
 def get_ffmpeg_path():
-    """Возвращает путь к ffmpeg: сначала pip-пакет imageio-ffmpeg, потом системный."""
-    try:
-        import imageio_ffmpeg
-        p = imageio_ffmpeg.get_ffmpeg_exe()
-        if p and os.path.exists(p):
-            return p
-    except Exception as e:
-        print(f"[ffmpeg] imageio_ffmpeg err: {e}")
+    """Возвращает путь к системному ffmpeg, если есть."""
     return shutil.which('ffmpeg')
 
 
@@ -163,15 +156,26 @@ async def post_story(video_url: str, caption: str) -> dict:
         src_w = probe.get('w') or 0
         src_h = probe.get('h') or 0
         src_dur = probe.get('duration') or 0
-        print(f"[post_story] src: w={src_w} h={src_h} dur={src_dur}s size={len(video_bytes)}")
+        print(f"[post_story] src: w={src_w} h={src_h} dur={src_dur}s size={len(video_bytes)} ffmpeg={get_ffmpeg_path()}")
 
-        # Автообрезка: ffmpeg приведёт к 720x1280, ≤60с, H.264/AAC
-        out_path, ow, oh, _ = transcode_to_story(tmp_path)
-        upload_path = out_path
-        final_probe = probe_video(upload_path) if out_path != tmp_path else probe
-        real_w = final_probe.get('w') or ow or 720
-        real_h = final_probe.get('h') or oh or 1280
-        real_dur = final_probe.get('duration') or min(src_dur, 60) if src_dur else 0
+        # Если есть ffmpeg — обрезаем; иначе проверяем что видео уже подходит
+        if get_ffmpeg_path():
+            out_path, ow, oh, _ = transcode_to_story(tmp_path)
+            upload_path = out_path
+            final_probe = probe_video(upload_path) if out_path != tmp_path else probe
+            real_w = final_probe.get('w') or ow or 720
+            real_h = final_probe.get('h') or oh or 1280
+            real_dur = final_probe.get('duration') or min(src_dur, 60) if src_dur else 0
+        else:
+            # ffmpeg недоступен — проверяем требования и отправляем как есть
+            if src_w and src_h and src_w >= src_h:
+                return {'ok': False, 'error': f'Видео горизонтальное ({src_w}x{src_h}). Telegram Stories требует вертикальное (9:16). Обрежь видео заранее или загрузи вертикальное.'}
+            if src_dur and src_dur > 60:
+                return {'ok': False, 'error': f'Видео {src_dur} сек — Telegram Stories принимает до 60 сек.'}
+            upload_path = tmp_path
+            real_w = src_w or 720
+            real_h = src_h or 1280
+            real_dur = src_dur or 0
         print(f"[post_story] upload: w={real_w} h={real_h} dur={real_dur}s file={upload_path}")
 
         upload_size = os.path.getsize(upload_path)
@@ -216,12 +220,14 @@ async def post_story(video_url: str, caption: str) -> dict:
 
 def handler(event: dict, context) -> dict:
     """Публикует сторис через user-аккаунт. Принимает video_url и caption."""
+    print(f"[handler] v3 method={event.get('httpMethod')} path={event.get('path')}")
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': {**CORS, 'Access-Control-Max-Age': '86400'}, 'body': ''}
 
     headers = event.get('headers') or {}
     token = headers.get('x-admin-token') or headers.get('X-Admin-Token') or ''
     if not verify_token(token):
+        print(f"[handler] unauthorized, token len={len(token)}")
         return resp(401, {'error': 'unauthorized'})
 
     body = json.loads(event.get('body') or '{}')
