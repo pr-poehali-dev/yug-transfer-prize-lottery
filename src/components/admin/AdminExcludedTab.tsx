@@ -446,8 +446,8 @@ export function AdminExcludedTab({ token }: Props) {
               <p className="text-white/30 text-center py-6 text-sm">Пока никому не отправляли</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {history.map((h) => (
-                  <div key={h.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/3 border border-white/8">
+                {history.map((h, i) => (
+                  <div key={h.id ?? `row-${i}`} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/3 border border-white/8">
                     <Icon
                       name={h.message_sent ? "CheckCircle" : "AlertCircle"}
                       size={16}
