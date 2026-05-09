@@ -232,30 +232,29 @@ export function AdminExcludedTab({ token }: Props) {
                 <h3 className="text-white font-medium text-lg">Настройки</h3>
                 <p className="text-white/40 text-xs">Группа @UG_DRIVER · триггер @VsyaRussiabot · переменные {"{name}"} {"{username}"}</p>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="w-4 h-4 accent-amber-400" />
-                <span className="text-sm text-white/70">Включено</span>
-              </label>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <button
-                onClick={() => togglePower(true)}
-                disabled={saving || enabled}
-                className="px-4 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm font-semibold hover:bg-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition"
+            <button
+              onClick={() => togglePower(!enabled)}
+              disabled={saving}
+              className={`w-full mb-4 px-4 py-3 rounded-xl border text-sm font-semibold inline-flex items-center justify-between gap-3 transition disabled:opacity-50 ${
+                enabled
+                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25"
+                  : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"
+              }`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <Icon name={enabled ? "Power" : "PowerOff"} size={16} />
+                {saving ? "Меняем..." : enabled ? "Авто-сообщения включены" : "Авто-сообщения выключены"}
+              </span>
+              <span
+                className={`relative w-10 h-5 rounded-full transition ${enabled ? "bg-emerald-500" : "bg-white/20"}`}
               >
-                <Icon name="Power" size={16} />
-                {enabled ? "Уже включено" : (saving ? "Включаем..." : "Включить")}
-              </button>
-              <button
-                onClick={() => togglePower(false)}
-                disabled={saving || !enabled}
-                className="px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-sm font-semibold hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition"
-              >
-                <Icon name="PowerOff" size={16} />
-                {!enabled ? "Уже выключено" : (saving ? "Выключаем..." : "Выключить")}
-              </button>
-            </div>
+                <span
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${enabled ? "left-5" : "left-0.5"}`}
+                />
+              </span>
+            </button>
 
             <div className="rounded-xl border border-white/10 bg-white/3 overflow-hidden">
               <div className="flex items-start gap-2 px-4 py-3">
