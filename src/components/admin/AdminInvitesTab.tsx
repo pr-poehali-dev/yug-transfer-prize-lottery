@@ -1,11 +1,14 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
+import { AdminAccountsManager } from "./AdminAccountsManager";
 
-export function AdminInvitesTab({ token: _token }: { token: string }) {
+export function AdminInvitesTab({ token }: { token: string }) {
   const [dailyLimit, setDailyLimit] = useState(15);
 
   return (
     <div className="space-y-4">
+      <AdminAccountsManager token={token} />
+
       <div className="glass rounded-2xl p-5 border border-white/5">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
