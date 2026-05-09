@@ -20,6 +20,7 @@ export function AdminInviteImport({ token }: { token: string }) {
   const [stats, setStats] = useState<InviteStats | null>(null);
   const [recent, setRecent] = useState<InviteTarget[]>([]);
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -140,26 +141,44 @@ export function AdminInviteImport({ token }: { token: string }) {
   }
 
   return (
-    <div className="glass rounded-2xl p-5 border border-white/5">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
-          <Icon name="ListPlus" size={20} />
-        </div>
-        <div className="flex-1">
-          <h3 className="text-base font-semibold">Список кандидатов на приглашение</h3>
-          <p className="text-xs text-muted-foreground">Загрузи CSV/TSV или вставь юзернеймы вручную</p>
-        </div>
+    <div className="glass rounded-2xl p-4 border border-white/5">
+      <div className="flex items-center gap-3">
         <button
-          onClick={() => setOpen(!open)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm hover:opacity-90 transition"
+          onClick={() => setCollapsed(!collapsed)}
+          className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center hover:opacity-90 transition shrink-0"
+          title={collapsed ? "Раскрыть" : "Свернуть"}
         >
-          <Icon name={open ? "X" : "Upload"} size={15} />
-          {open ? "Закрыть" : "Загрузить"}
+          <Icon name="ListPlus" size={14} />
         </button>
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex-1 min-w-0 flex items-center gap-2 text-left"
+        >
+          <h3 className="text-sm font-semibold flex-shrink-0">Кандидаты</h3>
+          {stats && (
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+              <span>·</span>
+              <span><b className="text-amber-300">{stats.pending}</b> ожидают</span>
+              <span>·</span>
+              <span><b className="text-green-300">{stats.added}</b> добавлено</span>
+              {stats.failed > 0 && <><span>·</span><span><b className="text-red-300">{stats.failed}</b> ошибок</span></>}
+            </div>
+          )}
+          <Icon name={collapsed ? "ChevronDown" : "ChevronUp"} size={14} className="text-muted-foreground ml-auto shrink-0" />
+        </button>
+        {!collapsed && (
+          <button
+            onClick={() => setOpen(!open)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs hover:opacity-90 transition shrink-0"
+          >
+            <Icon name={open ? "X" : "Upload"} size={13} />
+            {open ? "Закрыть" : "Загрузить"}
+          </button>
+        )}
       </div>
 
-      {stats && (
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-4">
+      {!collapsed && stats && (
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mt-4 mb-4">
           <StatCard label="Всего" value={stats.total} color="text-white" />
           <StatCard label="Ожидают" value={stats.pending} color="text-amber-300" />
           <StatCard label="Добавлено" value={stats.added} color="text-green-300" />
@@ -169,6 +188,7 @@ export function AdminInviteImport({ token }: { token: string }) {
         </div>
       )}
 
+      {!collapsed && (<>
       {open && (
         <div className="border border-white/10 rounded-xl p-4 bg-white/[0.02] space-y-3 mb-4">
           <div className="flex items-center justify-between">
@@ -303,6 +323,7 @@ export function AdminInviteImport({ token }: { token: string }) {
           </div>
         )}
       </div>
+      </>)}
     </div>
   );
 }
