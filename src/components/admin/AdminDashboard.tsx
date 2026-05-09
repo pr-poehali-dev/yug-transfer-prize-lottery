@@ -6,7 +6,6 @@ import { AdminBotTab } from "./AdminBotTab";
 import { AdminDriversTab } from "./AdminDriversTab";
 import { AdminStoriesTab } from "./AdminStoriesTab";
 import { AdminExcludedTab } from "./AdminExcludedTab";
-import { AdminUgDriverTab } from "./AdminUgDriverTab";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("posts");
@@ -69,7 +68,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               <AdminBotTab token={token} />
               <AdminStoriesTab token={token} />
               <AdminExcludedTab token={token} />
-              <AdminUgDriverTab token={token} />
             </div>
           )}
           {tab === "drivers" && <AdminDriversTab token={token} />}
