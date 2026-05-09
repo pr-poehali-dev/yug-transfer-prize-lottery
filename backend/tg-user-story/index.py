@@ -1,6 +1,6 @@
 """Публикация сторис в канал @ug_transfer_pro через Telethon (user-аккаунт).
 POST {video_url, caption?} — публикует сторис, возвращает {ok, story_id}.
-v2: автообрезка ffmpeg до 720x1280, ≤60с.
+v3: автообрезка через imageio-ffmpeg.
 """
 import os
 import json
