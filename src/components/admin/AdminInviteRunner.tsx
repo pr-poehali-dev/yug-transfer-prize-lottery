@@ -2,6 +2,15 @@ import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { INVITE_RUNNER_URL } from "./adminTypes";
 
+interface WarmupState {
+  enabled: boolean;
+  start_date: string | null;
+  day_num: number;
+  accounts_today: number;
+  per_account_today: number;
+  today: string;
+}
+
 interface RunnerStatus {
   target_group: string;
   daily_limit: number;
@@ -15,6 +24,29 @@ interface RunnerStatus {
   } | null;
   queue: { pending: number; added: number; privacy: number; failed: number };
   recent_runs: RunLog[];
+  warmup: WarmupState;
+  warmup_schedule: Record<string, [number, number]>;
+}
+
+interface WarmupAccountResult {
+  ok: boolean;
+  account: string;
+  account_id?: number;
+  added?: number;
+  privacy?: number;
+  failed?: number;
+  ban_triggered?: boolean;
+  ban_note?: string;
+  error?: string;
+}
+
+interface WarmupRunResult {
+  ok: boolean;
+  state?: WarmupState;
+  message?: string;
+  accounts_processed?: number;
+  total_added?: number;
+  results?: WarmupAccountResult[];
 }
 
 interface RunLog {
@@ -100,6 +132,32 @@ export function AdminInviteRunner({ token }: { token: string }) {
       }
     } catch (e) {
       alert(`Ошибка: ${String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function warmupAction(action: "warmup_start" | "warmup_stop" | "warmup_reset" | "warmup_run") {
+    if (action === "warmup_run") {
+      if (!confirm(`Запустить прогрев на сегодня?\n\nСистема возьмёт ${status?.warmup.accounts_today} аккаунт(ов) × ${status?.warmup.per_account_today} инвайт(ов).\nЗаймёт несколько минут.`)) return;
+    }
+    if (action === "warmup_reset") {
+      if (!confirm("Сбросить прогрев и начать с дня 1 заново?")) return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch(`${INVITE_RUNNER_URL}?action=${action}`, {
+        method: "POST", headers, body: "{}",
+      });
+      const j = await r.json();
+      if (action === "warmup_run") {
+        const res = j as WarmupRunResult;
+        const summary = res.results?.map(x =>
+          `${x.ok ? "✅" : "❌"} ${x.account}: +${x.added || 0} добавлено${x.ban_triggered ? " (БАН!)" : ""}${x.error ? " — " + x.error : ""}`
+        ).join("\n") || res.message || "Готово";
+        alert(`День ${res.state?.day_num}: всего добавлено ${res.total_added || 0}\n\n${summary}`);
+      }
+      await load();
     } finally {
       setBusy(false);
     }

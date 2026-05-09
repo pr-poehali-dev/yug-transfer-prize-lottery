@@ -41,10 +41,19 @@ def get_target_group() -> str:
         return '@UG_DRIVER'
 
 
-DAILY_INVITE_LIMIT = 30          # макс инвайтов/сутки на аккаунт
-PAUSE_MIN_SEC = 90               # мин пауза между инвайтами
-PAUSE_MAX_SEC = 180              # макс пауза между инвайтами
-MAX_BATCH_SIZE = 10              # макс инвайтов за один HTTP-запуск (чтобы влезть в таймаут функции)
+DAILY_INVITE_LIMIT = 30          # макс инвайтов/сутки на аккаунт (после прогрева)
+PAUSE_MIN_SEC = 90               # мин пауза между инвайтами в одной пачке
+PAUSE_MAX_SEC = 180              # макс пауза между инвайтами в одной пачке
+MAX_BATCH_SIZE = 10              # макс инвайтов за один HTTP-запуск
+
+# Расписание прогрева: день (1-based) -> (сколько аккаунтов работают, инвайтов с каждого)
+# День 1: 1 аккаунт × 1 инвайт. День 2: 2×2. День 3: 3×3. День 4+: 4×4 ... до DAILY_INVITE_LIMIT
+WARMUP_SCHEDULE = {
+    1: (1, 1),
+    2: (2, 2),
+    3: (3, 3),
+    4: (4, 4),
+}
 
 
 def verify_token(token: str) -> bool:
@@ -64,6 +73,96 @@ def resp(status: int, body: dict) -> dict:
 
 def db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
+
+
+def get_setting(key: str, default: str = '') -> str:
+    try:
+        conn = db(); cur = conn.cursor()
+        cur.execute(f"SELECT value FROM {SCHEMA}.app_settings WHERE key='{esc(key)}'")
+        r = cur.fetchone(); cur.close(); conn.close()
+        return (r[0] if r else default).strip()
+    except Exception:
+        return default
+
+
+def set_setting(key: str, value: str):
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.app_settings (key, value, updated_at)
+        VALUES ('{esc(key)}', '{esc(value)}', NOW())
+        ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()
+    """)
+    conn.commit(); cur.close(); conn.close()
+
+
+def get_warmup_state() -> dict:
+    """Возвращает: enabled, start_date, day_num, accounts_today, per_account_today."""
+    enabled = get_setting('warmup_enabled', 'false') == 'true'
+    start_str = get_setting('warmup_start_date', '')
+
+    conn = db(); cur = conn.cursor()
+    cur.execute("SELECT CURRENT_DATE")
+    today = cur.fetchone()[0]
+    cur.close(); conn.close()
+
+    if not start_str:
+        return {'enabled': enabled, 'start_date': None, 'day_num': 0,
+                'accounts_today': 0, 'per_account_today': 0, 'today': str(today)}
+
+    from datetime import date
+    try:
+        y, m, d = start_str.split('-')
+        start_d = date(int(y), int(m), int(d))
+    except Exception:
+        return {'enabled': enabled, 'start_date': start_str, 'day_num': 0,
+                'accounts_today': 0, 'per_account_today': 0, 'today': str(today)}
+
+    delta = (today - start_d).days + 1  # день 1 = старт
+    if delta < 1:
+        delta = 1
+
+    if delta in WARMUP_SCHEDULE:
+        accs, per = WARMUP_SCHEDULE[delta]
+    else:
+        # после 4-го дня — каждый день по 4 аккаунта × N (растёт на 1 в день до DAILY_INVITE_LIMIT)
+        per = min(4 + (delta - 4), DAILY_INVITE_LIMIT)
+        accs = 4
+
+    return {
+        'enabled': enabled, 'start_date': start_str, 'day_num': delta,
+        'accounts_today': accs, 'per_account_today': per, 'today': str(today),
+    }
+
+
+def get_warmup_accounts(limit: int) -> list:
+    """Берёт первые N не-забаненных аккаунтов (по id), которые сегодня ещё не работали."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT id, label, phone, session_string,
+               COALESCE(daily_invites_used, 0), daily_reset_date,
+               warmup_last_invite_date
+        FROM {SCHEMA}.tg_user_accounts
+        WHERE is_banned=FALSE
+          AND (warmup_last_invite_date IS NULL OR warmup_last_invite_date < CURRENT_DATE)
+        ORDER BY id ASC
+        LIMIT {int(limit)}
+    """)
+    rows = cur.fetchall(); cur.close(); conn.close()
+    return [{
+        'id': r[0], 'label': r[1], 'phone': r[2], 'session_string': r[3],
+        'daily_invites_used': int(r[4] or 0), 'daily_reset_date': r[5],
+        'warmup_last_invite_date': r[6],
+    } for r in rows]
+
+
+def mark_warmup_done(account_id: int):
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        UPDATE {SCHEMA}.tg_user_accounts
+        SET warmup_last_invite_date = CURRENT_DATE
+        WHERE id = {int(account_id)}
+    """)
+    conn.commit(); cur.close(); conn.close()
 
 
 def get_active_account() -> dict:
@@ -339,6 +438,144 @@ async def run_batch(size: int) -> dict:
     }
 
 
+async def invite_one_user(client, target_entity, target: dict, account_id: int) -> dict:
+    """Один инвайт. Возвращает {status, reason}. Меняет БД (статус кандидата + счётчик)."""
+    uname = target['username']
+    try:
+        user_entity = await client.get_entity(uname)
+    except (UsernameInvalidError, UsernameNotOccupiedError, ValueError):
+        update_target(target['id'], 'failed', 'username не существует', account_id)
+        return {'username': uname, 'status': 'failed', 'reason': 'не существует'}
+    except FloodWaitError as fw:
+        return {'username': uname, 'status': 'flood_wait', 'reason': f'{fw.seconds}s', 'fw_seconds': fw.seconds}
+    except Exception as e:
+        update_target(target['id'], 'failed', f'resolve: {e}', account_id)
+        return {'username': uname, 'status': 'failed', 'reason': str(e)[:120]}
+
+    try:
+        await client(InviteToChannelRequest(channel=target_entity, users=[user_entity]))
+        update_target(target['id'], 'added', '', account_id)
+        increment_account_usage(account_id)
+        return {'username': uname, 'status': 'added'}
+    except UserPrivacyRestrictedError:
+        update_target(target['id'], 'privacy', 'USER_PRIVACY_RESTRICTED', account_id)
+        return {'username': uname, 'status': 'privacy'}
+    except UserAlreadyParticipantError:
+        update_target(target['id'], 'added', 'already in group', account_id)
+        return {'username': uname, 'status': 'already_in'}
+    except (UserNotMutualContactError, UserKickedError, UserBlockedError,
+            UserBotError, UserIdInvalidError, InputUserDeactivatedError) as e:
+        update_target(target['id'], 'failed', type(e).__name__, account_id)
+        return {'username': uname, 'status': 'failed', 'reason': type(e).__name__}
+    except UserChannelsTooMuchError:
+        update_target(target['id'], 'failed', 'у юзера слишком много каналов', account_id)
+        return {'username': uname, 'status': 'failed', 'reason': 'too_many_channels'}
+    except PeerFloodError:
+        return {'username': uname, 'status': 'peer_flood', 'reason': 'PEER_FLOOD'}
+    except FloodWaitError as fw:
+        return {'username': uname, 'status': 'flood_wait', 'reason': f'{fw.seconds}s', 'fw_seconds': fw.seconds}
+    except (ChatWriteForbiddenError, ChatAdminRequiredError) as e:
+        return {'username': uname, 'status': 'no_rights', 'reason': type(e).__name__}
+    except Exception as e:
+        update_target(target['id'], 'failed', str(e)[:200], account_id)
+        return {'username': uname, 'status': 'failed', 'reason': str(e)[:120]}
+
+
+async def run_warmup_for_account(acc: dict, per_account: int) -> dict:
+    """Делает per_account инвайтов с одного аккаунта. Между инвайтами пауза 90-180 сек."""
+    api_id = int(os.environ['TG_API_ID'])
+    api_hash = os.environ['TG_API_HASH']
+    target_group = get_target_group()
+
+    targets = get_pending_targets(per_account)
+    if not targets:
+        return {'ok': False, 'account': acc['label'], 'error': 'Нет pending кандидатов'}
+
+    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
+    await client.connect()
+    added = 0; privacy = 0; failed = 0; ban = False; ban_note = ''
+    results = []
+
+    try:
+        if not await client.is_user_authorized():
+            mark_account_banned(acc['id'], 'Сессия невалидна')
+            return {'ok': False, 'account': acc['label'], 'error': 'Сессия мертва, помечен бан'}
+        try:
+            target_entity = await client.get_entity(target_group)
+        except Exception as e:
+            return {'ok': False, 'account': acc['label'], 'error': f'Группа {target_group}: {e}'}
+
+        for i, t in enumerate(targets):
+            r = await invite_one_user(client, target_entity, t, acc['id'])
+            results.append(r)
+            if r['status'] == 'added' or r['status'] == 'already_in': added += 1
+            elif r['status'] == 'privacy': privacy += 1
+            elif r['status'] in ('peer_flood',):
+                ban = True; ban_note = f'PEER_FLOOD на {r["username"]}'; break
+            elif r['status'] == 'flood_wait' and r.get('fw_seconds', 0) > 3600:
+                ban = True; ban_note = f'FloodWait {r.get("fw_seconds")}s'; break
+            elif r['status'] == 'no_rights':
+                ban_note = f'Нет прав: {r["reason"]}'; break
+            else: failed += 1
+
+            if i < len(targets) - 1 and not ban:
+                await asyncio.sleep(random.randint(PAUSE_MIN_SEC, PAUSE_MAX_SEC))
+    finally:
+        await client.disconnect()
+
+    log_run(acc['id'], len(results), added, privacy, failed, ban, ban_note)
+    if ban:
+        mark_account_banned(acc['id'], ban_note)
+    else:
+        # Помечаем что аккаунт сегодня уже отработал в режиме прогрева
+        mark_warmup_done(acc['id'])
+
+    return {
+        'ok': True, 'account': acc['label'], 'account_id': acc['id'],
+        'added': added, 'privacy': privacy, 'failed': failed,
+        'ban_triggered': ban, 'ban_note': ban_note, 'results': results,
+    }
+
+
+async def run_warmup_day() -> dict:
+    """Запускает дневную пачку прогрева согласно расписанию."""
+    state = get_warmup_state()
+    if not state['start_date']:
+        # Первый запуск — устанавливаем сегодняшнюю дату как старт
+        from datetime import date
+        today = str(date.today())
+        set_setting('warmup_start_date', today)
+        state = get_warmup_state()
+
+    accs_today = state['accounts_today']
+    per_acc = state['per_account_today']
+
+    accounts = get_warmup_accounts(accs_today)
+    if not accounts:
+        return {
+            'ok': True, 'state': state,
+            'message': f'День {state["day_num"]}: ни один аккаунт сегодня не доступен (либо все уже отработали, либо все в бане)',
+            'results': [],
+        }
+
+    all_results = []
+    for i, acc in enumerate(accounts):
+        result = await run_warmup_for_account(acc, per_acc)
+        all_results.append(result)
+        # Большая пауза между разными аккаунтами (5-15 мин) — но в HTTP не влезет, делаем короче
+        if i < len(accounts) - 1:
+            await asyncio.sleep(60)  # 1 мин между аккаунтами в одном запуске
+
+    total_added = sum(r.get('added', 0) for r in all_results)
+    return {
+        'ok': True,
+        'state': state,
+        'accounts_processed': len(all_results),
+        'total_added': total_added,
+        'results': all_results,
+    }
+
+
 def get_status() -> dict:
     acc = get_active_account()
     conn = db(); cur = conn.cursor()
@@ -360,6 +597,8 @@ def get_status() -> dict:
         'active_account': acc or None,
         'queue': {'pending': row[0], 'added': row[1], 'privacy': row[2], 'failed': row[3]},
         'recent_runs': recent_logs(20),
+        'warmup': get_warmup_state(),
+        'warmup_schedule': WARMUP_SCHEDULE,
     }
 
 
@@ -389,6 +628,31 @@ def handler(event: dict, context) -> dict:
         asyncio.set_event_loop(loop)
         try:
             result = loop.run_until_complete(run_batch(size))
+            return resp(200, result)
+        finally:
+            loop.close()
+
+    if action == 'warmup_start':
+        from datetime import date
+        set_setting('warmup_enabled', 'true')
+        if not get_setting('warmup_start_date', ''):
+            set_setting('warmup_start_date', str(date.today()))
+        return resp(200, {'ok': True, 'state': get_warmup_state()})
+
+    if action == 'warmup_stop':
+        set_setting('warmup_enabled', 'false')
+        return resp(200, {'ok': True, 'state': get_warmup_state()})
+
+    if action == 'warmup_reset':
+        from datetime import date
+        set_setting('warmup_start_date', str(date.today()))
+        return resp(200, {'ok': True, 'state': get_warmup_state()})
+
+    if action == 'warmup_run':
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_warmup_day())
             return resp(200, result)
         finally:
             loop.close()
