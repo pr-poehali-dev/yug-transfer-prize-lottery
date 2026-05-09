@@ -643,6 +643,45 @@ def handler(event: dict, context) -> dict:
         cur.close(); conn.close()
         return resp(200, {'queued': int(r[0] or 0), 'ok': int(r[1] or 0), 'failed': int(r[2] or 0)})
 
+    # RESEND list: список тех, кому не отправили (для UI «Сканировать»)
+    if method == 'GET' and action == 'resend_list':
+        conn = db(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT id, user_id, username, first_name, send_status, resend_queued "
+            f"FROM {SCHEMA}.excluded_drivers "
+            f"WHERE user_id IS NOT NULL AND user_id <> 0 "
+            f"AND (message_sent=FALSE OR send_status IS NULL OR send_status LIKE 'err:%' OR send_status LIKE 'flood:%') "
+            f"AND (resend_status IS NULL OR resend_status <> 'ok') "
+            f"ORDER BY id DESC LIMIT 200"
+        )
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        items = [{
+            'id': r[0], 'user_id': r[1], 'username': r[2] or '',
+            'first_name': r[3] or '', 'send_status': r[4] or '', 'queued': bool(r[5]),
+        } for r in rows]
+        return resp(200, {'ok': True, 'items': items, 'count': len(items)})
+
+    # SCAN: помечает всех неотправленных как queued (готовит очередь для Отправить)
+    if method == 'POST' and action == 'scan':
+        headers_in = event.get('headers') or {}
+        token = headers_in.get('X-Admin-Token') or headers_in.get('x-admin-token') or ''
+        if not verify_token(token):
+            return resp(401, {'error': 'invalid token'})
+        conn = db(); cur = conn.cursor()
+        cur.execute(
+            f"UPDATE {SCHEMA}.excluded_drivers SET resend_queued=TRUE "
+            f"WHERE user_id IS NOT NULL AND user_id <> 0 "
+            f"AND (message_sent=FALSE OR send_status IS NULL OR send_status LIKE 'err:%' OR send_status LIKE 'flood:%') "
+            f"AND (resend_status IS NULL OR resend_status <> 'ok') "
+            f"AND resend_queued=FALSE"
+        )
+        added = cur.rowcount
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.excluded_drivers WHERE resend_queued=TRUE")
+        total = int(cur.fetchone()[0] or 0)
+        conn.commit(); cur.close(); conn.close()
+        return resp(200, {'ok': True, 'added': int(added or 0), 'total_queued': total})
+
     # WHOIS: узнать кто такой пользователь по ID или username
     if action == 'whois':
         qs2 = qs.get('id') or qs.get('username') or ''

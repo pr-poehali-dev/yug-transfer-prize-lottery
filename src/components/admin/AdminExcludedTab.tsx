@@ -53,6 +53,8 @@ export function AdminExcludedTab({ token }: Props) {
   const [resending, setResending] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(false);
   const [resendQueue, setResendQueue] = useState<{ queued: number; ok: number; failed: number } | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [resendList, setResendList] = useState<Array<{ id: number; user_id: number; username: string; first_name: string; send_status: string; queued: boolean }> | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [, setNowTick] = useState(0);
@@ -140,15 +142,33 @@ export function AdminExcludedTab({ token }: Props) {
     }
   };
 
+  const runScan = async () => {
+    if (scanning) return;
+    setScanning(true); setRunResult("");
+    try {
+      const r1 = await fetch(`${EXCLUDED_WATCHER_URL}?action=scan`, { method: "POST", headers });
+      const d1 = await r1.json();
+      if (!d1.ok) { setRunResult(`Ошибка сканирования: ${d1.error || "?"}`); return; }
+      const r2 = await fetch(`${EXCLUDED_WATCHER_URL}?action=resend_list`, { headers: { "X-Admin-Token": token } });
+      const d2 = await r2.json();
+      setResendList(d2.items || []);
+      setRunResult(`Найдено ${d2.count || 0} водителей · добавлено в очередь ${d1.added || 0}`);
+      await loadResendQueue();
+    } finally { setScanning(false); }
+  };
+
   const runResend = async () => {
     if (resending) return;
-    if (!confirm(`Запустить повторную рассылку для ${resendQueue?.queued || 0} водителей?\n\nОтправка идёт по 1 сообщению каждые 2 секунды.`)) return;
+    if (!confirm(`Отправить ${resendQueue?.queued || 0} сообщений?\n\nПо 1 сообщению каждые 2 секунды.`)) return;
     setResending(true); setRunResult("");
     try {
       const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=resend`, { method: "POST", headers });
       const d = await r.json();
       if (d.ok) {
         setRunResult(`Отправлено: ${d.sent || 0} из ${d.queue_size || 0}${d.errors?.length ? `, ошибок: ${d.errors.length}` : ""}`);
+        const r2 = await fetch(`${EXCLUDED_WATCHER_URL}?action=resend_list`, { headers: { "X-Admin-Token": token } });
+        const d2 = await r2.json();
+        setResendList(d2.items || []);
       } else {
         setRunResult(`Ошибка: ${d.reason || d.error || "?"}`);
       }
@@ -303,16 +323,65 @@ export function AdminExcludedTab({ token }: Props) {
                 <Icon name="RefreshCw" size={14} className={reviving ? "animate-spin" : ""} />
                 {reviving ? "Перезапуск..." : "Перезапустить цикл"}
               </button>
-              <button onClick={runResend} disabled={resending || !resendQueue || resendQueue.queued === 0}
-                title={!resendQueue?.queued ? "Очередь пуста" : `Дослать ${resendQueue.queued} сообщений`}
-                className="px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
-                <Icon name="Send" size={14} className={resending ? "animate-pulse" : ""} />
-                {resending ? "Отправляем..." : `Повторная рассылка${resendQueue?.queued ? ` · ${resendQueue.queued}` : ""}`}
-              </button>
+              {(!resendQueue || resendQueue.queued === 0) ? (
+                <button onClick={runScan} disabled={scanning}
+                  title="Найти всех, кому не дошло сообщение"
+                  className="px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 disabled:opacity-40 inline-flex items-center gap-2">
+                  <Icon name="Search" size={14} className={scanning ? "animate-pulse" : ""} />
+                  {scanning ? "Сканирую..." : "Сканировать"}
+                </button>
+              ) : (
+                <>
+                  <button onClick={runResend} disabled={resending}
+                    className="px-3 py-2.5 rounded-xl bg-pink-500/15 border border-pink-500/30 text-pink-300 text-sm font-medium hover:bg-pink-500/25 disabled:opacity-40 inline-flex items-center gap-2">
+                    <Icon name="Send" size={14} className={resending ? "animate-pulse" : ""} />
+                    {resending ? "Отправляем..." : `Отправить · ${resendQueue.queued}`}
+                  </button>
+                  <button onClick={runScan} disabled={scanning}
+                    title="Пересканировать"
+                    className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 inline-flex items-center justify-center">
+                    <Icon name="RefreshCw" size={14} className={scanning ? "animate-spin" : ""} />
+                  </button>
+                </>
+              )}
               {runResult && (
                 <span className="text-xs text-white/60 ml-auto">{runResult}</span>
               )}
             </div>
+
+            {resendList && resendList.length > 0 && (
+              <div className="mt-3 rounded-xl border border-white/8 bg-white/3 overflow-hidden">
+                <div className="px-3 py-2 border-b border-white/8 flex items-center justify-between">
+                  <span className="text-xs text-white/60 inline-flex items-center gap-2">
+                    <Icon name="Users" size={12} />
+                    В очереди на отправку: {resendList.filter(r => r.queued).length}
+                  </span>
+                  <button onClick={() => setResendList(null)} className="text-white/40 hover:text-white/70">
+                    <Icon name="X" size={14} />
+                  </button>
+                </div>
+                <div className="max-h-60 overflow-y-auto divide-y divide-white/5">
+                  {resendList.map(r => (
+                    <div key={r.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                      <Icon name={r.queued ? "Clock" : "AlertCircle"} size={12} className={r.queued ? "text-amber-400" : "text-white/30"} />
+                      <span className="text-white/80 truncate flex-1">
+                        {r.first_name || "?"}
+                        {r.username && <span className="text-white/40 ml-1">@{r.username}</span>}
+                      </span>
+                      {r.send_status && r.send_status !== "ok" && (
+                        <span className="text-white/40 text-[10px] truncate max-w-[120px]" title={r.send_status}>{r.send_status}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {resendList && resendList.length === 0 && (
+              <div className="mt-3 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs inline-flex items-center gap-2">
+                <Icon name="CheckCircle" size={14} />
+                Всем уже отправлено — рассылать некому
+              </div>
+            )}
 
             {settings?.last_run_at && (
               <p className="text-[11px] text-white/30 mt-2">
