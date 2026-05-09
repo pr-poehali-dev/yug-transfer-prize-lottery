@@ -292,23 +292,26 @@ export function AdminExcludedTab({ token }: Props) {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-3 flex-wrap">
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
               <button onClick={saveSettings} disabled={saving}
-                className="px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-sm font-medium hover:bg-amber-500/25 disabled:opacity-50">
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-2">
+                <Icon name="Save" size={14} />
                 {saving ? "Сохранение..." : "Сохранить"}
               </button>
               <button onClick={reviveLoop} disabled={reviving || !enabled}
-                className="px-4 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 text-sm font-medium hover:bg-blue-500/25 disabled:opacity-50 inline-flex items-center gap-2">
+                title={!enabled ? "Сначала включи авто-сообщения" : "Перезапустить фоновый цикл"}
+                className="px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
                 <Icon name="RefreshCw" size={14} className={reviving ? "animate-spin" : ""} />
                 {reviving ? "Перезапуск..." : "Перезапустить цикл"}
               </button>
               <button onClick={runResend} disabled={resending || !resendQueue || resendQueue.queued === 0}
-                className="px-4 py-2.5 rounded-xl bg-pink-500/15 border border-pink-500/30 text-pink-300 text-sm font-medium hover:bg-pink-500/25 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
+                title={!resendQueue?.queued ? "Очередь пуста" : `Дослать ${resendQueue.queued} сообщений`}
+                className="px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
                 <Icon name="Send" size={14} className={resending ? "animate-pulse" : ""} />
-                {resending ? "Отправляем..." : `Повторная рассылка${resendQueue ? ` (${resendQueue.queued} в очереди)` : ""}`}
+                {resending ? "Отправляем..." : `Повторная рассылка${resendQueue?.queued ? ` · ${resendQueue.queued}` : ""}`}
               </button>
               {runResult && (
-                <span className="text-xs text-white/60 self-center">{runResult}</span>
+                <span className="text-xs text-white/60 ml-auto">{runResult}</span>
               )}
             </div>
 
