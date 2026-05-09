@@ -46,8 +46,16 @@ def get_session() -> str:
     return r[0] if r else ''
 
 
-def has_ffmpeg() -> bool:
-    return shutil.which('ffmpeg') is not None
+def get_ffmpeg_path():
+    """Возвращает путь к ffmpeg: сначала pip-пакет imageio-ffmpeg, потом системный."""
+    try:
+        import imageio_ffmpeg
+        p = imageio_ffmpeg.get_ffmpeg_exe()
+        if p and os.path.exists(p):
+            return p
+    except Exception as e:
+        print(f"[ffmpeg] imageio_ffmpeg err: {e}")
+    return shutil.which('ffmpeg')
 
 
 def transcode_to_story(src_path: str) -> tuple:
@@ -55,9 +63,11 @@ def transcode_to_story(src_path: str) -> tuple:
     Горизонтальное видео обрезается по центру (crop), длинное — режется до 60с.
     Возвращает (out_path, w, h, duration). Если ffmpeg недоступен — возвращает исходник.
     """
-    if not has_ffmpeg():
-        print("[transcode] ffmpeg не найден, пропускаю обрезку")
+    ffmpeg_bin = get_ffmpeg_path()
+    if not ffmpeg_bin:
+        print("[transcode] ffmpeg не найден ни через imageio_ffmpeg, ни в PATH")
         return src_path, 0, 0, 0
+    print(f"[transcode] using ffmpeg: {ffmpeg_bin}")
 
     out_path = src_path.replace('.mp4', '_story.mp4')
     if out_path == src_path:
@@ -67,7 +77,7 @@ def transcode_to_story(src_path: str) -> tuple:
     vf = "scale='if(gt(a,9/16),-2,720)':'if(gt(a,9/16),1280,-2)',crop=720:1280"
 
     cmd = [
-        'ffmpeg', '-y', '-i', src_path,
+        ffmpeg_bin, '-y', '-i', src_path,
         '-t', '60',
         '-vf', vf,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26',
@@ -82,6 +92,7 @@ def transcode_to_story(src_path: str) -> tuple:
         if proc.returncode != 0:
             print(f"[transcode] ffmpeg failed: {proc.stderr.decode('utf-8', 'ignore')[-500:]}")
             return src_path, 0, 0, 0
+        print(f"[transcode] ok: {os.path.getsize(out_path)} bytes")
         return out_path, 720, 1280, 0
     except Exception as e:
         print(f"[transcode] {e}")

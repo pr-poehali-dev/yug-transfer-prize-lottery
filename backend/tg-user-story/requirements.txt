@@ -1,3 +1,4 @@
 telethon
 psycopg2-binary
 hachoir
+imageio-ffmpeg
