@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { INVITE_RUNNER_URL } from "./adminTypes";
+import { useInviteProgress } from "./InviteProgressContext";
 
 interface WarmupState {
   enabled: boolean;
@@ -82,6 +83,7 @@ export function AdminInviteRunner({ token }: { token: string }) {
   const [batchSize, setBatchSize] = useState(3);
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<RunResult | null>(null);
+  const { start: startProgress, stop: stopProgress } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -119,6 +121,12 @@ export function AdminInviteRunner({ token }: { token: string }) {
 
     setBusy(true);
     setLastResult(null);
+    startProgress({
+      mode: "batch",
+      title: `Инвайт пачки: ${size} человек с «${status.active_account.label}»`,
+      subtitle: `Между инвайтами 90-180 сек`,
+      estimatedSec: size * 135,
+    });
     try {
       const r = await fetch(`${INVITE_RUNNER_URL}?action=run_batch`, {
         method: "POST", headers,
@@ -134,6 +142,7 @@ export function AdminInviteRunner({ token }: { token: string }) {
       alert(`Ошибка: ${String(e)}`);
     } finally {
       setBusy(false);
+      stopProgress();
     }
   }
 

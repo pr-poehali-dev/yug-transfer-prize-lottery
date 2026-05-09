@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { TG_ACCOUNTS_URL, TgAccount } from "./adminTypes";
+import { useInviteProgress } from "./InviteProgressContext";
 
 type Step = "idle" | "phone" | "code" | "2fa";
 
@@ -17,6 +18,7 @@ export function AdminAccountsManager({ token }: { token: string }) {
   const [targetGroup, setTargetGroup] = useState("");
   const [targetEdit, setTargetEdit] = useState("");
   const [targetSaving, setTargetSaving] = useState(false);
+  const { start: startProgress, stop: stopProgress } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -161,12 +163,21 @@ export function AdminAccountsManager({ token }: { token: string }) {
   async function joinGroupOne(acc: TgAccount) {
     if (!targetGroup) { alert("Сначала укажи целевую группу выше"); return; }
     if (!confirm(`Аккаунт «${acc.label}» вступит в ${targetGroup}. Продолжить?`)) return;
-    const j = await call("join_group", { id: acc.id });
-    if (j.ok) {
-      const status = j.status === "already_in" ? "уже был в группе" : "успешно вступил";
-      alert(`✅ ${acc.label}: ${status}`);
-    } else {
-      alert(`❌ ${acc.label}: ${j.error || "ошибка"}`);
+    startProgress({
+      mode: "join_group",
+      title: `${acc.label} вступает в ${targetGroup}`,
+      estimatedSec: 8,
+    });
+    try {
+      const j = await call("join_group", { id: acc.id });
+      if (j.ok) {
+        const status = j.status === "already_in" ? "уже был в группе" : "успешно вступил";
+        alert(`✅ ${acc.label}: ${status}`);
+      } else {
+        alert(`❌ ${acc.label}: ${j.error || "ошибка"}`);
+      }
+    } finally {
+      stopProgress();
     }
   }
 
@@ -175,14 +186,23 @@ export function AdminAccountsManager({ token }: { token: string }) {
     const active = accounts.filter(a => !a.is_banned);
     if (active.length === 0) { alert("Нет рабочих аккаунтов"); return; }
     if (!confirm(`Все ${active.length} аккаунта (-ов) вступят в ${targetGroup}.\nЗаймёт ~${active.length * 5} секунд. Продолжить?`)) return;
-    const j = await call("join_group", { all: true });
-    if (j.results) {
-      const ok = j.results.filter((r: { ok: boolean }) => r.ok).length;
-      const fail = j.results.length - ok;
-      const details = j.results.map((r: { label: string; ok: boolean; status?: string; error?: string }) =>
-        `${r.ok ? "✅" : "❌"} ${r.label}: ${r.status || r.error}`
-      ).join("\n");
-      alert(`Готово: успех ${ok}, ошибок ${fail}\n\n${details}`);
+    startProgress({
+      mode: "join_group",
+      title: `${active.length} аккаунт(ов) вступают в ${targetGroup}`,
+      estimatedSec: active.length * 6,
+    });
+    try {
+      const j = await call("join_group", { all: true });
+      if (j.results) {
+        const ok = j.results.filter((r: { ok: boolean }) => r.ok).length;
+        const fail = j.results.length - ok;
+        const details = j.results.map((r: { label: string; ok: boolean; status?: string; error?: string }) =>
+          `${r.ok ? "✅" : "❌"} ${r.label}: ${r.status || r.error}`
+        ).join("\n");
+        alert(`Готово: успех ${ok}, ошибок ${fail}\n\n${details}`);
+      }
+    } finally {
+      stopProgress();
     }
   }
 

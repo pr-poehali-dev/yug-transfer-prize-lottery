@@ -7,6 +7,8 @@ import { AdminDriversTab } from "./AdminDriversTab";
 import { AdminStoriesTab } from "./AdminStoriesTab";
 import { AdminExcludedTab } from "./AdminExcludedTab";
 import { AdminInvitesTab } from "./AdminInvitesTab";
+import { InviteProgressProvider } from "./InviteProgressContext";
+import { InviteProgressBanner } from "./InviteProgressBanner";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("posts");
@@ -19,6 +21,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   ];
 
   return (
+    <InviteProgressProvider>
     <div className="min-h-screen mesh-bg">
       <header className="glass border-b border-white/5 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between h-16">
@@ -32,6 +35,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
             </button>
           </div>
         </div>
+        <InviteProgressBanner />
       </header>
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 flex gap-6">
@@ -77,5 +81,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
         </main>
       </div>
     </div>
+    </InviteProgressProvider>
   );
 }

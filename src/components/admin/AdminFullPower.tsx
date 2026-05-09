@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { INVITE_RUNNER_URL } from "./adminTypes";
+import { useInviteProgress } from "./InviteProgressContext";
 
 interface FullPowerAccount {
   id: number;
@@ -31,6 +32,7 @@ export function AdminFullPower({ token }: { token: string }) {
   const [data, setData] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [batchSize, setBatchSize] = useState(5);
+  const { start: startProgress, stop: stopProgress } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -60,6 +62,15 @@ export function AdminFullPower({ token }: { token: string }) {
     )) return;
 
     setBusy(true);
+    const accCount = data!.full_power_accounts.length;
+    // оценка времени: total инвайтов × 135 сек средняя пауза + (accCount-1) × 45 сек между аккаунтами
+    const estimated = total * 135 + Math.max(0, accCount - 1) * 45;
+    startProgress({
+      mode: "full_power",
+      title: `Полная мощность: ${accCount} × ${batchSize} = ${total} человек`,
+      subtitle: `Прогретые аккаунты, паузы 90-180 сек`,
+      estimatedSec: estimated,
+    });
     try {
       const r = await fetch(`${INVITE_RUNNER_URL}?action=run_full_power`, {
         method: "POST", headers,
@@ -79,6 +90,7 @@ export function AdminFullPower({ token }: { token: string }) {
       alert(`Ошибка: ${String(e)}`);
     } finally {
       setBusy(false);
+      stopProgress();
     }
   }
 

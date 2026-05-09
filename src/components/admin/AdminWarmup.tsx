@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { INVITE_RUNNER_URL } from "./adminTypes";
+import { useInviteProgress } from "./InviteProgressContext";
 
 interface WarmupState {
   enabled: boolean;
@@ -28,6 +29,7 @@ interface WarmupAccountResult {
 export function AdminWarmup({ token }: { token: string }) {
   const [data, setData] = useState<RunnerStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const { start: startProgress, stop: stopProgress } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -55,6 +57,19 @@ export function AdminWarmup({ token }: { token: string }) {
       if (!confirm("Сбросить прогрев — начать с дня 1 заново?")) return;
     }
     setBusy(true);
+    if (act === "warmup_run") {
+      const accs = data?.warmup.accounts_today || 0;
+      const per = data?.warmup.per_account_today || 0;
+      const total = accs * per;
+      // оценка: на каждый инвайт ~135 сек средняя пауза + 60 сек между аккаунтами
+      const estimated = total * 135 + Math.max(0, accs - 1) * 60;
+      startProgress({
+        mode: "warmup",
+        title: `Прогрев день ${data?.warmup.day_num}: ${accs} × ${per} = ${total} человек`,
+        subtitle: `Между инвайтами 90-180 сек, между аккаунтами 60 сек`,
+        estimatedSec: estimated,
+      });
+    }
     try {
       const r = await fetch(`${INVITE_RUNNER_URL}?action=${act}`, {
         method: "POST", headers, body: "{}",
@@ -69,6 +84,7 @@ export function AdminWarmup({ token }: { token: string }) {
       await load();
     } finally {
       setBusy(false);
+      if (act === "warmup_run") stopProgress();
     }
   }
 
