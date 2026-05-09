@@ -552,6 +552,106 @@ def handler(event: dict, context) -> dict:
         finally:
             loop.close()
 
+    # RESEND: повторная рассылка по resend_queued=TRUE
+    # POST ?action=resend  Header: X-Admin-Token
+    if method == 'POST' and action == 'resend':
+        headers_in = event.get('headers') or {}
+        token = headers_in.get('X-Admin-Token') or headers_in.get('x-admin-token') or ''
+        if not verify_token(token):
+            return resp(401, {'error': 'invalid token'})
+
+        session_str_r = get_session2()
+        if not session_str_r:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+
+        settings_r = get_settings()
+        template_r = settings_r['message_template'] or 'Здравствуйте!'
+
+        # Берём очередь
+        conn = db(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT id, user_id, username, first_name FROM {SCHEMA}.excluded_drivers "
+            f"WHERE resend_queued=TRUE AND user_id IS NOT NULL AND user_id <> 0 "
+            f"ORDER BY id ASC LIMIT 100"
+        )
+        queue = cur.fetchall()
+        cur.close(); conn.close()
+
+        if not queue:
+            return resp(200, {'ok': True, 'sent': 0, 'queue_empty': True})
+
+        api_id_r = int(os.environ['TG_API_ID'])
+        api_hash_r = os.environ['TG_API_HASH']
+
+        async def _resend():
+            client = TelegramClient(StringSession(session_str_r), api_id_r, api_hash_r)
+            await client.connect()
+            sent_ok = 0
+            errors_list = []
+            try:
+                for row in queue:
+                    rec_id, uid, uname, fname = row
+                    uid = int(uid) if uid else 0
+                    fname = fname or 'водитель'
+                    uname = uname or ''
+                    personalized = template_r.replace('{name}', fname).replace('{username}', uname)
+                    try:
+                        await client.send_message(uid, personalized)
+                        c2 = db(); cu2 = c2.cursor()
+                        cu2.execute(
+                            f"UPDATE {SCHEMA}.excluded_drivers "
+                            f"SET resend_queued=FALSE, resend_status='ok', resend_at=NOW() "
+                            f"WHERE id={int(rec_id)}"
+                        )
+                        c2.commit(); cu2.close(); c2.close()
+                        sent_ok += 1
+                        await asyncio.sleep(2)
+                    except FloodWaitError as fe:
+                        c2 = db(); cu2 = c2.cursor()
+                        cu2.execute(
+                            f"UPDATE {SCHEMA}.excluded_drivers "
+                            f"SET resend_status='flood:{int(fe.seconds)}', resend_at=NOW() "
+                            f"WHERE id={int(rec_id)}"
+                        )
+                        c2.commit(); cu2.close(); c2.close()
+                        errors_list.append({'id': rec_id, 'reason': f'flood:{fe.seconds}'})
+                        break
+                    except Exception as e:
+                        err_text = str(e)[:200].replace("'", "''")
+                        c2 = db(); cu2 = c2.cursor()
+                        cu2.execute(
+                            f"UPDATE {SCHEMA}.excluded_drivers "
+                            f"SET resend_queued=FALSE, resend_status='err:{err_text}', resend_at=NOW() "
+                            f"WHERE id={int(rec_id)}"
+                        )
+                        c2.commit(); cu2.close(); c2.close()
+                        errors_list.append({'id': rec_id, 'reason': str(e)[:200]})
+            finally:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+            return {'ok': True, 'sent': sent_ok, 'queue_size': len(queue), 'errors': errors_list}
+
+        loop_r = asyncio.new_event_loop(); asyncio.set_event_loop(loop_r)
+        try:
+            return resp(200, loop_r.run_until_complete(_resend()))
+        finally:
+            loop_r.close()
+
+    # RESEND status: посмотреть очередь
+    if method == 'GET' and action == 'resend_status':
+        conn = db(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT COUNT(*) FILTER (WHERE resend_queued=TRUE) AS queued, "
+            f"COUNT(*) FILTER (WHERE resend_status='ok') AS ok, "
+            f"COUNT(*) FILTER (WHERE resend_status LIKE 'err:%' OR resend_status LIKE 'flood:%') AS failed "
+            f"FROM {SCHEMA}.excluded_drivers"
+        )
+        r = cur.fetchone()
+        cur.close(); conn.close()
+        return resp(200, {'queued': int(r[0] or 0), 'ok': int(r[1] or 0), 'failed': int(r[2] or 0)})
+
     # WHOIS: узнать кто такой пользователь по ID или username
     if action == 'whois':
         qs2 = qs.get('id') or qs.get('username') or ''
