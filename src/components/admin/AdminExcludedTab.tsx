@@ -44,7 +44,10 @@ export function AdminExcludedTab({ token }: Props) {
     const r = await fetch(EXCLUDED_WATCHER_URL, { headers: { "X-Admin-Token": token } });
     const d = await r.json();
     setSettings(d);
-    setTemplate(d.message_template || "");
+    // Не перезаписываем шаблон, если пользователь его сейчас редактирует
+    if (!editingTemplate) {
+      setTemplate(d.message_template || "");
+    }
     setEnabled(!!d.enabled);
     setLastUpdated(Date.now());
   };
