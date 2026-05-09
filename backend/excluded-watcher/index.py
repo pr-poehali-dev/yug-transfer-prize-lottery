@@ -60,6 +60,32 @@ def resp(status: int, body: dict) -> dict:
     return {'statusCode': status, 'headers': CORS, 'body': json.dumps(body, default=str)}
 
 
+def personalize(template: str, first_name: str, username: str) -> str:
+    """Подставляет имя/username в шаблон.
+    Поддерживает {name} и {username}. Если переменных нет — добавляет приветствие.
+    Корректно обрабатывает 'Уважаемый !' (вставит имя перед !).
+    """
+    fname = (first_name or '').strip() or 'водитель'
+    uname = (username or '').strip()
+    txt = template or ''
+
+    # 1) подставим явные плейсхолдеры
+    txt = txt.replace('{name}', fname).replace('{username}', uname)
+
+    # 2) исправим случай 'Уважаемый !' / 'Уважаемая !' — вставим имя перед !
+    txt = re.sub(r'(Уважаем(?:ый|ая|ые))\s*([!,])', rf'\1 {fname}\2', txt)
+
+    # 3) исправим случай 'Здравствуйте !' / 'Привет !'
+    txt = re.sub(r'(Здравствуй(?:те)?|Привет|Добрый день|Добрый вечер|Доброе утро)\s*([!,])',
+                 rf'\1, {fname}\2', txt)
+
+    # 4) если в тексте нет имени и нет привычного приветствия — добавим в начало
+    if fname not in txt and not re.match(r'^\s*(Уважаем|Здравствуй|Привет|Добрый|Доброе)', txt):
+        txt = f"Здравствуйте, {fname}!\n\n{txt}"
+
+    return txt
+
+
 def db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
@@ -273,7 +299,7 @@ async def run_scan() -> dict:
             if already_sent(author_id):
                 continue
 
-            personalized = template.replace('{name}', first_name).replace('{username}', username or '')
+            personalized = personalize(template, first_name, username)
             try:
                 await client.send_message(author_id, personalized)
                 log_send(author_id, username, first_name, ev.id, 'ok')
@@ -331,7 +357,7 @@ async def process_deletion_message(client, msg, template: str) -> dict:
     if already_sent(user_id):
         return {'ok': False, 'reason': 'already_sent'}
 
-    personalized = template.replace('{name}', first_name).replace('{username}', username or '')
+    personalized = personalize(template, first_name, username)
     try:
         await client.send_message(user_id, personalized)
         log_send(user_id, username, first_name, msg.id, 'ok')
@@ -474,7 +500,7 @@ async def run_listener(loop_token: str) -> dict:
                         continue
                     username = getattr(user, 'username', '') or ''
                     first_name = getattr(user, 'first_name', '') or 'водитель'
-                    personalized = template.replace('{name}', first_name).replace('{username}', username or '')
+                    personalized = personalize(template, first_name, username)
                     try:
                         await client.send_message(author_id, personalized)
                         log_send(author_id, username, first_name, ev.id, 'ok')
@@ -575,7 +601,7 @@ def handler(event: dict, context) -> dict:
                     uid = int(uid) if uid else 0
                     fname = fname or 'водитель'
                     uname = uname or ''
-                    personalized = template_r.replace('{name}', fname).replace('{username}', uname)
+                    personalized = personalize(template_r, fname, uname)
                     try:
                         # Резолвим: сначала по ID (из кэша), иначе по @username
                         target = uid
@@ -695,7 +721,7 @@ def handler(event: dict, context) -> dict:
         if not uid_o:
             return resp(400, {'ok': False, 'error': 'no_user_id'})
 
-        personalized_o = template_o.replace('{name}', fname_o).replace('{username}', uname_o)
+        personalized_o = personalize(template_o, fname_o, uname_o)
 
         api_id_o = int(os.environ['TG_API_ID'])
         api_hash_o = os.environ['TG_API_HASH']
