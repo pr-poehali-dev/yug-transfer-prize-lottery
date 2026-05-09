@@ -12,7 +12,7 @@ export const TG_USER_STORY_URL = "https://functions.poehali.dev/e47b662c-3d9d-42
 export const TG_USER_AUTH2_URL = "https://functions.poehali.dev/731984b0-8855-47a8-a7b1-6c6a4ec6d87f";
 export const EXCLUDED_WATCHER_URL = "https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520";
 
-export type AdminTab = "posts" | "bot" | "drivers" | "stories";
+export type AdminTab = "posts" | "bot" | "drivers" | "stories" | "invites";
 
 export interface BotStory {
   id: number;
