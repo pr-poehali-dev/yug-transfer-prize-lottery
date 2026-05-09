@@ -50,6 +50,8 @@ export function AdminExcludedTab({ token }: Props) {
   const [saving, setSaving] = useState(false);
   const [runResult, setRunResult] = useState<string>("");
   const [reviving, setReviving] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendQueue, setResendQueue] = useState<{ queued: number; ok: number; failed: number } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [, setNowTick] = useState(0);
@@ -126,6 +128,36 @@ export function AdminExcludedTab({ token }: Props) {
       await load();
     } finally { setSaving(false); }
   };
+
+  const loadResendQueue = async () => {
+    try {
+      const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=resend_status`, { headers: { "X-Admin-Token": token } });
+      const d = await r.json();
+      setResendQueue({ queued: d.queued || 0, ok: d.ok || 0, failed: d.failed || 0 });
+    } catch (_e) {
+      // ignore
+    }
+  };
+
+  const runResend = async () => {
+    if (resending) return;
+    if (!confirm(`Запустить повторную рассылку для ${resendQueue?.queued || 0} водителей?\n\nОтправка идёт по 1 сообщению каждые 2 секунды.`)) return;
+    setResending(true); setRunResult("");
+    try {
+      const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=resend`, { method: "POST", headers });
+      const d = await r.json();
+      if (d.ok) {
+        setRunResult(`Отправлено: ${d.sent || 0} из ${d.queue_size || 0}${d.errors?.length ? `, ошибок: ${d.errors.length}` : ""}`);
+      } else {
+        setRunResult(`Ошибка: ${d.reason || d.error || "?"}`);
+      }
+      await loadResendQueue();
+    } finally { setResending(false); }
+  };
+
+  useEffect(() => {
+    if (tabExpanded) loadResendQueue();
+  }, [tabExpanded]);
 
   const reviveLoop = async () => {
     setReviving(true); setRunResult("");
@@ -240,6 +272,11 @@ export function AdminExcludedTab({ token }: Props) {
                 className="px-4 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 text-sm font-medium hover:bg-blue-500/25 disabled:opacity-50 inline-flex items-center gap-2">
                 <Icon name="RefreshCw" size={14} className={reviving ? "animate-spin" : ""} />
                 {reviving ? "Перезапуск..." : "Перезапустить цикл"}
+              </button>
+              <button onClick={runResend} disabled={resending || !resendQueue || resendQueue.queued === 0}
+                className="px-4 py-2.5 rounded-xl bg-pink-500/15 border border-pink-500/30 text-pink-300 text-sm font-medium hover:bg-pink-500/25 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
+                <Icon name="Send" size={14} className={resending ? "animate-pulse" : ""} />
+                {resending ? "Отправляем..." : `Повторная рассылка${resendQueue ? ` (${resendQueue.queued} в очереди)` : ""}`}
               </button>
               {runResult && (
                 <span className="text-xs text-white/60 self-center">{runResult}</span>
