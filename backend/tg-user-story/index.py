@@ -43,6 +43,39 @@ def get_session() -> str:
     return r[0] if r else ''
 
 
+def probe_video(path: str) -> dict:
+    """Читаем реальные параметры видео (w, h, duration_sec) через hachoir."""
+    try:
+        from hachoir.parser import createParser
+        from hachoir.metadata import extractMetadata
+        parser = createParser(path)
+        if not parser:
+            return {}
+        with parser:
+            meta = extractMetadata(parser)
+        if not meta:
+            return {}
+        w = h = 0
+        dur = 0
+        try:
+            w = int(meta.get('width'))
+        except Exception:
+            pass
+        try:
+            h = int(meta.get('height'))
+        except Exception:
+            pass
+        try:
+            d = meta.get('duration')
+            dur = int(d.total_seconds()) if hasattr(d, 'total_seconds') else int(d)
+        except Exception:
+            pass
+        return {'w': w, 'h': h, 'duration': dur}
+    except Exception as e:
+        print(f"[probe_video] {e}")
+        return {}
+
+
 async def post_story(video_url: str, caption: str) -> dict:
     session_str = get_session()
     if not session_str:
@@ -57,12 +90,29 @@ async def post_story(video_url: str, caption: str) -> dict:
     except Exception as e:
         return {'ok': False, 'error': f'download: {e}'}
 
+    # Telegram Stories: до 30 МБ
+    if len(video_bytes) > 30 * 1024 * 1024:
+        return {'ok': False, 'error': f'Видео слишком большое: {len(video_bytes)//1024//1024} МБ. Telegram лимит для сторис — 30 МБ.'}
+
     tmp_path = None
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as f:
             f.write(video_bytes)
             tmp_path = f.name
+
+        # Читаем реальные параметры файла
+        probe = probe_video(tmp_path)
+        real_w = probe.get('w') or 720
+        real_h = probe.get('h') or 1280
+        real_dur = probe.get('duration') or 0
+        print(f"[post_story] probe: w={real_w} h={real_h} dur={real_dur}s size={len(video_bytes)}")
+
+        # Проверка: Telegram Stories требует вертикальное видео
+        if real_w and real_h and real_w >= real_h:
+            return {'ok': False, 'error': f'Видео горизонтальное ({real_w}x{real_h}). Telegram Stories принимает только вертикальные (9:16, например 720x1280).'}
+        if real_dur and real_dur > 60:
+            return {'ok': False, 'error': f'Видео {real_dur} сек — Telegram Stories принимает до 60 сек.'}
 
         await client.connect()
         peer = await client.get_input_entity(CHANNEL)
@@ -71,7 +121,12 @@ async def post_story(video_url: str, caption: str) -> dict:
         media = InputMediaUploadedDocument(
             file=file,
             mime_type='video/mp4',
-            attributes=[DocumentAttributeVideo(duration=0, w=720, h=1280, supports_streaming=True)],
+            attributes=[DocumentAttributeVideo(
+                duration=real_dur or 0,
+                w=real_w,
+                h=real_h,
+                supports_streaming=True,
+            )],
         )
 
         result = await client(SendStoryRequest(
@@ -81,7 +136,7 @@ async def post_story(video_url: str, caption: str) -> dict:
             caption=caption or None,
             period=172800,
         ))
-        return {'ok': True, 'result': str(result)[:500]}
+        return {'ok': True, 'result': str(result)[:500], 'probe': probe}
     except Exception as e:
         return {'ok': False, 'error': str(e)}
     finally:
