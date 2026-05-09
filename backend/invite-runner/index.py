@@ -29,7 +29,17 @@ CORS = {
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
 }
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
-TARGET_GROUP = '@UG_DRIVER'
+
+
+def get_target_group() -> str:
+    try:
+        conn = psycopg2.connect(os.environ['DATABASE_URL']); cur = conn.cursor()
+        cur.execute(f"SELECT value FROM {SCHEMA}.app_settings WHERE key='target_group'")
+        r = cur.fetchone(); cur.close(); conn.close()
+        return (r[0] if r else '@UG_DRIVER').strip()
+    except Exception:
+        return '@UG_DRIVER'
+
 
 DAILY_INVITE_LIMIT = 30          # макс инвайтов/сутки на аккаунт
 PAUSE_MIN_SEC = 90               # мин пауза между инвайтами
@@ -226,13 +236,14 @@ async def run_batch(size: int) -> dict:
     ban_note = ''
     results = []
 
+    target_group = get_target_group()
     try:
         # резолвим целевую группу
         try:
-            target_entity = await client.get_entity(TARGET_GROUP)
+            target_entity = await client.get_entity(target_group)
         except Exception as e:
             await client.disconnect()
-            return {'ok': False, 'error': f'Не могу найти {TARGET_GROUP}: {e}. Аккаунт должен быть участником этой группы.'}
+            return {'ok': False, 'error': f'Не могу найти {target_group}: {e}. Аккаунт должен быть участником этой группы.'}
 
         for i, t in enumerate(targets):
             attempted += 1
@@ -291,7 +302,7 @@ async def run_batch(size: int) -> dict:
                 break
             except (ChatWriteForbiddenError, ChatAdminRequiredError) as e:
                 # это уже наша проблема (нет прав в чате) — стопаем весь батч
-                ban_note = f'Нет прав в {TARGET_GROUP}: {type(e).__name__}'
+                ban_note = f'Нет прав в {target_group}: {type(e).__name__}'
                 await client.disconnect()
                 log_run(acc['id'], attempted, added, privacy, failed, False, ban_note)
                 return {'ok': False, 'error': ban_note, 'results': results}
@@ -342,7 +353,7 @@ def get_status() -> dict:
     row = cur.fetchone()
     cur.close(); conn.close()
     return {
-        'target_group': TARGET_GROUP,
+        'target_group': get_target_group(),
         'daily_limit': DAILY_INVITE_LIMIT,
         'pause_range_sec': [PAUSE_MIN_SEC, PAUSE_MAX_SEC],
         'max_batch': MAX_BATCH_SIZE,

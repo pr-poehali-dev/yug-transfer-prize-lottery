@@ -14,6 +14,9 @@ export function AdminAccountsManager({ token }: { token: string }) {
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [targetGroup, setTargetGroup] = useState("");
+  const [targetEdit, setTargetEdit] = useState("");
+  const [targetSaving, setTargetSaving] = useState(false);
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -22,8 +25,33 @@ export function AdminAccountsManager({ token }: { token: string }) {
       const r = await fetch(TG_ACCOUNTS_URL, { headers });
       const j = await r.json();
       setAccounts(j.accounts || []);
+      if (j.target_group) {
+        setTargetGroup(j.target_group);
+        setTargetEdit(j.target_group);
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveTarget() {
+    const v = targetEdit.trim();
+    if (!v) { alert("Укажи ссылку или @username группы"); return; }
+    setTargetSaving(true);
+    try {
+      const r = await fetch(`${TG_ACCOUNTS_URL}?action=set_target`, {
+        method: "POST", headers, body: JSON.stringify({ target: v }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setTargetGroup(j.target_group);
+        setTargetEdit(j.target_group);
+        alert(`Цель сохранена: ${j.target_group}`);
+      } else {
+        alert(j.error || "Ошибка");
+      }
+    } finally {
+      setTargetSaving(false);
     }
   }
 
@@ -99,7 +127,8 @@ export function AdminAccountsManager({ token }: { token: string }) {
   }
 
   async function joinGroupOne(acc: TgAccount) {
-    if (!confirm(`Аккаунт «${acc.label}» вступит в @UG_DRIVER. Продолжить?`)) return;
+    if (!targetGroup) { alert("Сначала укажи целевую группу выше"); return; }
+    if (!confirm(`Аккаунт «${acc.label}» вступит в ${targetGroup}. Продолжить?`)) return;
     const j = await call("join_group", { id: acc.id });
     if (j.ok) {
       const status = j.status === "already_in" ? "уже был в группе" : "успешно вступил";
@@ -110,9 +139,10 @@ export function AdminAccountsManager({ token }: { token: string }) {
   }
 
   async function joinGroupAll() {
+    if (!targetGroup) { alert("Сначала укажи целевую группу выше"); return; }
     const active = accounts.filter(a => !a.is_banned);
     if (active.length === 0) { alert("Нет рабочих аккаунтов"); return; }
-    if (!confirm(`Все ${active.length} аккаунта (-ов) вступят в @UG_DRIVER.\nЗаймёт ~${active.length * 5} секунд. Продолжить?`)) return;
+    if (!confirm(`Все ${active.length} аккаунта (-ов) вступят в ${targetGroup}.\nЗаймёт ~${active.length * 5} секунд. Продолжить?`)) return;
     const j = await call("join_group", { all: true });
     if (j.results) {
       const ok = j.results.filter((r: { ok: boolean }) => r.ok).length;
@@ -136,15 +166,15 @@ export function AdminAccountsManager({ token }: { token: string }) {
         </div>
         {step === "idle" && (
           <div className="flex items-center gap-2">
-            {accounts.filter(a => !a.is_banned).length > 0 && (
+            {accounts.filter(a => !a.is_banned).length > 0 && targetGroup && (
               <button
                 onClick={joinGroupAll}
                 disabled={busy}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs hover:bg-white/10 transition disabled:opacity-50"
-                title="Все аккаунты вступят в @UG_DRIVER"
+                title={`Все аккаунты вступят в ${targetGroup}`}
               >
                 <Icon name="LogIn" size={14} />
-                Все в @UG_DRIVER
+                Все в группу
               </button>
             )}
             <button
@@ -156,6 +186,32 @@ export function AdminAccountsManager({ token }: { token: string }) {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="mb-4 p-3 rounded-xl bg-white/[0.02] border border-white/10">
+        <div className="flex items-center gap-2 mb-2">
+          <Icon name="Target" size={13} className="text-blue-400" />
+          <label className="text-xs font-semibold">Целевая группа (куда инвайтим)</label>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={targetEdit}
+            onChange={(e) => setTargetEdit(e.target.value)}
+            placeholder="@UG_DRIVER или https://t.me/+AbC..."
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500"
+          />
+          <button
+            onClick={saveTarget}
+            disabled={targetSaving || targetEdit.trim() === targetGroup}
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition disabled:opacity-40"
+          >
+            {targetSaving ? "..." : "Сохранить"}
+          </button>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1.5">
+          Можно: <code className="text-blue-300">@username</code>, <code className="text-blue-300">https://t.me/username</code> или invite-ссылку <code className="text-blue-300">https://t.me/+AbCd...</code>
+        </p>
       </div>
 
       {loading ? (

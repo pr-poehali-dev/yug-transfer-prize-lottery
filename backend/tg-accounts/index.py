@@ -18,13 +18,50 @@ import psycopg2
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.errors import (
     SessionPasswordNeededError, PhoneCodeInvalidError, PhoneNumberInvalidError,
     UserAlreadyParticipantError, ChannelsTooMuchError, InviteHashExpiredError,
     FloodWaitError, ChannelPrivateError,
 )
 
-TARGET_GROUP = '@UG_DRIVER'
+
+def get_target_group() -> str:
+    """Читает целевую группу из app_settings."""
+    try:
+        conn = psycopg2.connect(os.environ['DATABASE_URL']); cur = conn.cursor()
+        cur.execute(f"SELECT value FROM {os.environ.get('MAIN_DB_SCHEMA', 'public')}.app_settings WHERE key='target_group'")
+        r = cur.fetchone(); cur.close(); conn.close()
+        return (r[0] if r else '@UG_DRIVER').strip()
+    except Exception:
+        return '@UG_DRIVER'
+
+
+def parse_invite_hash(s: str) -> str:
+    """Из 't.me/+AbCdEf' или 't.me/joinchat/AbCdEf' достаёт hash. Иначе ''."""
+    s = (s or '').strip()
+    import re
+    m = re.search(r'(?:t\.me/|telegram\.me/)\+([A-Za-z0-9_-]+)', s)
+    if m:
+        return m.group(1)
+    m = re.search(r'(?:t\.me/|telegram\.me/)joinchat/([A-Za-z0-9_-]+)', s)
+    if m:
+        return m.group(1)
+    if s.startswith('+'):
+        return s[1:]
+    return ''
+
+
+def parse_username(s: str) -> str:
+    """Из '@name' или 't.me/name' достаёт username. Иначе ''."""
+    s = (s or '').strip().lstrip('@')
+    import re
+    m = re.search(r'(?:t\.me/|telegram\.me/)([A-Za-z][A-Za-z0-9_]{3,31})$', s)
+    if m:
+        return m.group(1)
+    if re.match(r'^[A-Za-z][A-Za-z0-9_]{3,31}$', s):
+        return s
+    return ''
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -236,13 +273,17 @@ def get_all_account_ids() -> list:
     return [r[0] for r in rows]
 
 
-async def join_group_one(account_id: int) -> dict:
-    """Аккаунт вступает в TARGET_GROUP."""
+async def join_group_one(account_id: int, target: str = '') -> dict:
+    """Аккаунт вступает в группу. target: @username или t.me/+inviteHash."""
     acc = get_account_session(account_id)
     if not acc:
         return {'ok': False, 'error': 'Аккаунт не найден'}
     if acc['is_banned']:
         return {'ok': False, 'error': f'{acc["label"]}: аккаунт помечен забаненным'}
+
+    target = (target or get_target_group()).strip()
+    invite_hash = parse_invite_hash(target)
+    username = parse_username(target) if not invite_hash else ''
 
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
@@ -253,17 +294,32 @@ async def join_group_one(account_id: int) -> dict:
             return {'ok': False, 'account_id': account_id, 'label': acc['label'],
                     'error': 'Сессия невалидна'}
         try:
-            entity = await client.get_entity(TARGET_GROUP)
-        except Exception as e:
-            return {'ok': False, 'account_id': account_id, 'label': acc['label'],
-                    'error': f'Не могу найти {TARGET_GROUP}: {e}'}
-        try:
-            await client(JoinChannelRequest(entity))
-            return {'ok': True, 'account_id': account_id, 'label': acc['label'],
-                    'status': 'joined', 'group': TARGET_GROUP}
-        except UserAlreadyParticipantError:
-            return {'ok': True, 'account_id': account_id, 'label': acc['label'],
-                    'status': 'already_in', 'group': TARGET_GROUP}
+            if invite_hash:
+                # приватная группа по invite-ссылке
+                try:
+                    await client(ImportChatInviteRequest(invite_hash))
+                    return {'ok': True, 'account_id': account_id, 'label': acc['label'],
+                            'status': 'joined', 'group': target}
+                except UserAlreadyParticipantError:
+                    return {'ok': True, 'account_id': account_id, 'label': acc['label'],
+                            'status': 'already_in', 'group': target}
+            elif username:
+                # публичная группа по username
+                try:
+                    entity = await client.get_entity(username)
+                except Exception as e:
+                    return {'ok': False, 'account_id': account_id, 'label': acc['label'],
+                            'error': f'@{username} не найден в Telegram. Проверь правильность ссылки.'}
+                try:
+                    await client(JoinChannelRequest(entity))
+                    return {'ok': True, 'account_id': account_id, 'label': acc['label'],
+                            'status': 'joined', 'group': f'@{username}'}
+                except UserAlreadyParticipantError:
+                    return {'ok': True, 'account_id': account_id, 'label': acc['label'],
+                            'status': 'already_in', 'group': f'@{username}'}
+            else:
+                return {'ok': False, 'account_id': account_id, 'label': acc['label'],
+                        'error': f'Не понял формат: "{target}". Нужно @username или t.me/+invite'}
         except FloodWaitError as fw:
             return {'ok': False, 'account_id': account_id, 'label': acc['label'],
                     'error': f'FloodWait {fw.seconds} сек'}
@@ -277,17 +333,26 @@ async def join_group_one(account_id: int) -> dict:
         await client.disconnect()
 
 
-async def join_group_all() -> dict:
-    """Все не забаненные аккаунты по очереди вступают в TARGET_GROUP."""
+async def join_group_all(target: str = '') -> dict:
+    """Все не забаненные аккаунты вступают в группу."""
     ids = get_all_account_ids()
     results = []
     for i, aid in enumerate(ids):
-        r = await join_group_one(aid)
+        r = await join_group_one(aid, target)
         results.append(r)
-        # пауза между аккаунтами чтобы не словить flood
         if i < len(ids) - 1:
             await asyncio.sleep(3)
-    return {'ok': True, 'total': len(results), 'results': results}
+    return {'ok': True, 'total': len(results), 'results': results, 'target': target or get_target_group()}
+
+
+def set_target_group(value: str):
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.app_settings (key, value, updated_at)
+        VALUES ('target_group', '{esc(value)}', NOW())
+        ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()
+    """)
+    conn.commit(); cur.close(); conn.close()
 
 
 def handler(event: dict, context) -> dict:
@@ -305,7 +370,7 @@ def handler(event: dict, context) -> dict:
     action = qs.get('action', '')
 
     if method == 'GET':
-        return resp(200, {'accounts': list_accounts()})
+        return resp(200, {'accounts': list_accounts(), 'target_group': get_target_group()})
 
     body = json.loads(event.get('body') or '{}')
 
@@ -321,6 +386,12 @@ def handler(event: dict, context) -> dict:
     if action == 'update_label':
         update_label(int(body.get('id', 0)), body.get('label', ''))
         return resp(200, {'ok': True, 'accounts': list_accounts()})
+    if action == 'set_target':
+        val = (body.get('target') or '').strip()
+        if not val:
+            return resp(400, {'error': 'target required'})
+        set_target_group(val)
+        return resp(200, {'ok': True, 'target_group': get_target_group()})
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -341,12 +412,13 @@ def handler(event: dict, context) -> dict:
             label = body.get('label', '').strip()
             return resp(200, loop.run_until_complete(verify_2fa(phone, password, label)))
         if action == 'join_group':
+            target = (body.get('target') or '').strip()
             if body.get('all') is True:
-                return resp(200, loop.run_until_complete(join_group_all()))
+                return resp(200, loop.run_until_complete(join_group_all(target)))
             account_id = int(body.get('id', 0))
             if not account_id:
                 return resp(400, {'error': 'id required (или all=true)'})
-            return resp(200, loop.run_until_complete(join_group_one(account_id)))
+            return resp(200, loop.run_until_complete(join_group_one(account_id, target)))
         return resp(400, {'error': 'unknown action'})
     finally:
         loop.close()
