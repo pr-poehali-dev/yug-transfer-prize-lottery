@@ -135,7 +135,8 @@ def get_warmup_state() -> dict:
 
 
 def get_warmup_accounts(limit: int) -> list:
-    """Берёт первые N не-забаненных аккаунтов (по id), которые сегодня ещё не работали."""
+    """Берёт N не-забаненных аккаунтов сегодня не работавших.
+    Активный — всегда первый. Дальше по возрастанию id."""
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
         SELECT id, label, phone, session_string,
@@ -144,7 +145,7 @@ def get_warmup_accounts(limit: int) -> list:
         FROM {SCHEMA}.tg_user_accounts
         WHERE is_banned=FALSE
           AND (warmup_last_invite_date IS NULL OR warmup_last_invite_date < CURRENT_DATE)
-        ORDER BY id ASC
+        ORDER BY is_active DESC, id ASC
         LIMIT {int(limit)}
     """)
     rows = cur.fetchall(); cur.close(); conn.close()
