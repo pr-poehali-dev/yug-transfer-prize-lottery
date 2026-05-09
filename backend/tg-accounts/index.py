@@ -94,7 +94,8 @@ def list_accounts() -> list:
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
         SELECT id, label, phone, is_active, is_banned, daily_invites_used,
-               daily_reset_date, last_used_at, created_at, notes
+               daily_reset_date, last_used_at, created_at, notes,
+               COALESCE(needs_warmup, TRUE)
         FROM {SCHEMA}.tg_user_accounts ORDER BY id ASC
     """)
     rows = cur.fetchall()
@@ -106,6 +107,7 @@ def list_accounts() -> list:
         'last_used_at': str(r[7]) if r[7] else None,
         'created_at': str(r[8]) if r[8] else None,
         'notes': r[9] or '',
+        'needs_warmup': r[10],
     } for r in rows]
 
 
@@ -475,6 +477,15 @@ def handler(event: dict, context) -> dict:
             return resp(400, {'error': 'target required'})
         set_target_group(val)
         return resp(200, {'ok': True, 'target_group': get_target_group()})
+    if action == 'toggle_warmup':
+        account_id = int(body.get('id', 0))
+        needs = bool(body.get('needs_warmup', True))
+        if not account_id:
+            return resp(400, {'error': 'id required'})
+        conn = db(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.tg_user_accounts SET needs_warmup={'TRUE' if needs else 'FALSE'} WHERE id={account_id}")
+        conn.commit(); cur.close(); conn.close()
+        return resp(200, {'ok': True, 'accounts': list_accounts()})
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

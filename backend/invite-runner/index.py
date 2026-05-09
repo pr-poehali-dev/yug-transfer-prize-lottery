@@ -135,8 +135,8 @@ def get_warmup_state() -> dict:
 
 
 def get_warmup_accounts(limit: int) -> list:
-    """Берёт N не-забаненных аккаунтов сегодня не работавших.
-    Активный — всегда первый. Дальше по возрастанию id."""
+    """Берёт только аккаунты которым НУЖЕН прогрев (needs_warmup=TRUE).
+    Не забаненные, сегодня в прогреве не работавшие."""
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
         SELECT id, label, phone, session_string,
@@ -144,6 +144,7 @@ def get_warmup_accounts(limit: int) -> list:
                warmup_last_invite_date
         FROM {SCHEMA}.tg_user_accounts
         WHERE is_banned=FALSE
+          AND needs_warmup=TRUE
           AND (warmup_last_invite_date IS NULL OR warmup_last_invite_date < CURRENT_DATE)
         ORDER BY is_active DESC, id ASC
         LIMIT {int(limit)}
@@ -164,6 +165,37 @@ def mark_warmup_done(account_id: int):
         WHERE id = {int(account_id)}
     """)
     conn.commit(); cur.close(); conn.close()
+
+
+def get_full_power_accounts() -> list:
+    """Берёт все прогретые аккаунты (needs_warmup=FALSE) у которых остался дневной лимит."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT id, label, phone, session_string,
+               COALESCE(daily_invites_used, 0), daily_reset_date
+        FROM {SCHEMA}.tg_user_accounts
+        WHERE is_banned=FALSE AND needs_warmup=FALSE
+        ORDER BY is_active DESC, id ASC
+    """)
+    rows = cur.fetchall(); cur.close(); conn.close()
+    today = None
+    conn = db(); cur = conn.cursor()
+    cur.execute("SELECT CURRENT_DATE")
+    today = cur.fetchone()[0]
+    cur.close(); conn.close()
+    accounts = []
+    for r in rows:
+        used = int(r[4] or 0)
+        reset_date = r[5]
+        if reset_date is None or reset_date < today:
+            used = 0
+        remaining = max(0, DAILY_INVITE_LIMIT - used)
+        if remaining > 0:
+            accounts.append({
+                'id': r[0], 'label': r[1], 'phone': r[2], 'session_string': r[3],
+                'daily_invites_used': used, 'daily_remaining': remaining,
+            })
+    return accounts
 
 
 def get_active_account() -> dict:
@@ -538,6 +570,37 @@ async def run_warmup_for_account(acc: dict, per_account: int) -> dict:
     }
 
 
+async def run_full_power_batch(batch_per_account: int = 5) -> dict:
+    """Запускает пачку инвайтов сразу со всех прогретых аккаунтов (needs_warmup=FALSE).
+    Каждый делает batch_per_account инвайтов. Лимит 30/сутки на аккаунт всё равно соблюдается.
+    Между инвайтами на одном аккаунте — пауза 90-180 сек.
+    Между разными аккаунтами — пауза 30-60 сек.
+    """
+    accounts = get_full_power_accounts()
+    if not accounts:
+        return {'ok': False, 'error': 'Нет прогретых аккаунтов с остатком на сегодня'}
+
+    all_results = []
+    total_added = 0
+    for i, acc in enumerate(accounts):
+        # Сколько брать на этот раз: min(batch, остаток дня, что есть в очереди)
+        take = min(batch_per_account, acc['daily_remaining'])
+        result = await run_warmup_for_account(acc, take)
+        all_results.append(result)
+        total_added += result.get('added', 0)
+        if i < len(accounts) - 1:
+            await asyncio.sleep(random.randint(30, 60))
+
+    return {
+        'ok': True,
+        'mode': 'full_power',
+        'batch_per_account': batch_per_account,
+        'accounts_processed': len(all_results),
+        'total_added': total_added,
+        'results': all_results,
+    }
+
+
 async def run_warmup_day() -> dict:
     """Запускает дневную пачку прогрева согласно расписанию."""
     state = get_warmup_state()
@@ -590,6 +653,11 @@ def get_status() -> dict:
     """)
     row = cur.fetchone()
     cur.close(); conn.close()
+    full_power = get_full_power_accounts()
+    full_power_summary = [{
+        'id': a['id'], 'label': a['label'],
+        'remaining': a['daily_remaining'], 'used': a['daily_invites_used'],
+    } for a in full_power]
     return {
         'target_group': get_target_group(),
         'daily_limit': DAILY_INVITE_LIMIT,
@@ -600,6 +668,8 @@ def get_status() -> dict:
         'recent_runs': recent_logs(20),
         'warmup': get_warmup_state(),
         'warmup_schedule': WARMUP_SCHEDULE,
+        'full_power_accounts': full_power_summary,
+        'full_power_total_remaining': sum(a['daily_remaining'] for a in full_power),
     }
 
 
@@ -657,5 +727,27 @@ def handler(event: dict, context) -> dict:
             return resp(200, result)
         finally:
             loop.close()
+
+    if action == 'run_full_power':
+        batch = int(body.get('batch_per_account', 5))
+        if batch < 1: batch = 1
+        if batch > MAX_BATCH_SIZE: batch = MAX_BATCH_SIZE
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_full_power_batch(batch))
+            return resp(200, result)
+        finally:
+            loop.close()
+
+    if action == 'set_warmup_flag':
+        account_id = int(body.get('id', 0))
+        needs = bool(body.get('needs_warmup', True))
+        if not account_id:
+            return resp(400, {'error': 'id required'})
+        conn = db(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.tg_user_accounts SET needs_warmup={'TRUE' if needs else 'FALSE'} WHERE id={account_id}")
+        conn.commit(); cur.close(); conn.close()
+        return resp(200, {'ok': True})
 
     return resp(400, {'error': 'unknown action'})

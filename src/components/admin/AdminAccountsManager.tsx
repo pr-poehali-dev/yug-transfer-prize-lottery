@@ -133,6 +133,15 @@ export function AdminAccountsManager({ token }: { token: string }) {
     await call("activate", { id });
   }
 
+  async function toggleWarmup(acc: TgAccount) {
+    const next = !acc.needs_warmup;
+    const msg = next
+      ? `Включить ПРОГРЕВ для «${acc.label}»? Аккаунт будет работать по расписанию (1→2→3→4 инвайта в день).`
+      : `Перевести «${acc.label}» в ПОЛНУЮ МОЩНОСТЬ (30 инвайтов/сутки)? Делай это только если аккаунт прогретый/купленный.`;
+    if (!confirm(msg)) return;
+    await call("toggle_warmup", { id: acc.id, needs_warmup: next });
+  }
+
   async function remove(id: number) {
     if (!confirm("Удалить этот аккаунт из пула?")) return;
     await call("delete", { id });
@@ -269,7 +278,7 @@ export function AdminAccountsManager({ token }: { token: string }) {
                 "bg-muted-foreground/30"
               }`} />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium truncate">{acc.label}</span>
                   {acc.is_active && !acc.is_banned && (
                     <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-green-500/20 text-green-300">активный</span>
@@ -277,6 +286,18 @@ export function AdminAccountsManager({ token }: { token: string }) {
                   {acc.is_banned && (
                     <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-300">бан</span>
                   )}
+                  <button
+                    onClick={() => toggleWarmup(acc)}
+                    disabled={busy}
+                    title={acc.needs_warmup ? "В режиме прогрева — клик чтобы включить полную мощность" : "Полная мощность — клик чтобы перевести на прогрев"}
+                    className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded transition hover:opacity-80 ${
+                      acc.needs_warmup
+                        ? "bg-orange-500/20 text-orange-300"
+                        : "bg-purple-500/20 text-purple-300"
+                    }`}
+                  >
+                    {acc.needs_warmup ? "🔥 прогрев" : "⚡ полная мощность"}
+                  </button>
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-0.5">
                   {acc.phone || "—"} · сегодня: {acc.daily_invites_used}

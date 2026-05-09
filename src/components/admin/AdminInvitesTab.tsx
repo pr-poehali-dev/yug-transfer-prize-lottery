@@ -3,6 +3,7 @@ import { AdminAccountsManager } from "./AdminAccountsManager";
 import { AdminInviteImport } from "./AdminInviteImport";
 import { AdminInviteRunner } from "./AdminInviteRunner";
 import { AdminWarmup } from "./AdminWarmup";
+import { AdminFullPower } from "./AdminFullPower";
 
 export function AdminInvitesTab({ token }: { token: string }) {
   return (
@@ -36,6 +37,7 @@ export function AdminInvitesTab({ token }: { token: string }) {
 
       <AdminAccountsManager token={token} />
       <AdminInviteImport token={token} />
+      <AdminFullPower token={token} />
       <AdminWarmup token={token} />
       <AdminInviteRunner token={token} />
     </div>
