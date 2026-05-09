@@ -49,3 +49,22 @@ export function isLoopAlive(heartbeat: string | null): boolean {
   // Считаем мёртвым если > 4 мин
   return Date.now() - hb < 240_000;
 }
+
+export function personalize(template: string, firstName: string, username: string): string {
+  const fname = (firstName || "").trim() || "водитель";
+  const uname = (username || "").trim();
+  let txt = template || "";
+
+  txt = txt.replaceAll("{name}", fname).replaceAll("{username}", uname);
+
+  txt = txt.replace(/(Уважаем(?:ый|ая|ые))\s*([!,])/g, `$1 ${fname}$2`);
+  txt = txt.replace(
+    /(Здравствуй(?:те)?|Привет|Добрый день|Добрый вечер|Доброе утро)\s*([!,])/g,
+    `$1, ${fname}$2`,
+  );
+
+  if (!txt.includes(fname) && !/^\s*(Уважаем|Здравствуй|Привет|Добрый|Доброе)/.test(txt)) {
+    txt = `Здравствуйте, ${fname}!\n\n${txt}`;
+  }
+  return txt;
+}

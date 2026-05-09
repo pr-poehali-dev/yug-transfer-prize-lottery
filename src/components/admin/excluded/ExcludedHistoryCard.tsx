@@ -1,8 +1,9 @@
 import Icon from "@/components/ui/icon";
-import type { HistoryItem } from "./excludedTypes";
+import { type HistoryItem, personalize } from "./excludedTypes";
 
 interface Props {
   history: HistoryItem[];
+  template: string;
   editingId: number | null;
   editName: string;
   setEditName: (v: string) => void;
@@ -18,6 +19,7 @@ interface Props {
 
 export function ExcludedHistoryCard({
   history,
+  template,
   editingId,
   editName,
   setEditName,
@@ -46,75 +48,94 @@ export function ExcludedHistoryCard({
         <p className="text-white/30 text-center py-6 text-sm">Пока никому не отправляли</p>
       ) : (
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {history.map((h, i) => (
-            <div key={h.id ?? `row-${i}`} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/3 border border-white/8">
-              <Icon
-                name={h.message_sent ? "CheckCircle" : "AlertCircle"}
-                size={16}
-                className={`flex-shrink-0 ${h.message_sent ? "text-emerald-400" : "text-red-400"}`}
-              />
-              <div className="flex-1 min-w-0">
-                {editingId === h.id ? (
-                  <div className="flex gap-2">
-                    <input
-                      value={editName} onChange={e => setEditName(e.target.value)}
-                      placeholder="Имя"
-                      className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs outline-none focus:border-amber-500/50"
-                    />
-                    <input
-                      value={editUsername} onChange={e => setEditUsername(e.target.value)}
-                      placeholder="username"
-                      className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs outline-none focus:border-amber-500/50"
-                    />
+          {history.map((h, i) => {
+            const isEditing = editingId === h.id;
+            return (
+            <div key={h.id ?? `row-${i}`} className={`rounded-lg border ${isEditing ? "border-amber-500/30 bg-amber-500/5" : "bg-white/3 border-white/8"}`}>
+              <div className="flex items-center gap-3 p-2.5">
+                <Icon
+                  name={h.message_sent ? "CheckCircle" : "AlertCircle"}
+                  size={16}
+                  className={`flex-shrink-0 ${h.message_sent ? "text-emerald-400" : "text-red-400"}`}
+                />
+                <div className="flex-1 min-w-0">
+                  {isEditing ? (
+                    <div className="flex gap-2">
+                      <input
+                        value={editName} onChange={e => setEditName(e.target.value)}
+                        placeholder="Имя"
+                        className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs outline-none focus:border-amber-500/50"
+                      />
+                      <input
+                        value={editUsername} onChange={e => setEditUsername(e.target.value)}
+                        placeholder="username"
+                        className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs outline-none focus:border-amber-500/50"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-white text-sm truncate">
+                        {h.first_name || "?"} {h.username && <span className="text-white/40">@{h.username}</span>}
+                      </p>
+                      <p className="text-white/40 text-[11px] truncate">
+                        {h.message_sent_at && new Date(h.message_sent_at).toLocaleString("ru-RU")}
+                        {h.send_status && h.send_status !== "ok" && ` · ${h.send_status}`}
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  {isEditing ? (
+                    <>
+                      <button onClick={saveEdit} title="Сохранить"
+                        className="w-8 h-8 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 flex items-center justify-center">
+                        <Icon name="Check" size={14} className="text-emerald-400" />
+                      </button>
+                      <button onClick={() => setEditingId(null)} title="Отмена"
+                        className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center">
+                        <Icon name="X" size={14} className="text-white/50" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => sendOne(h.id)} disabled={sendingOneId === h.id}
+                        title="Отправить повторно"
+                        className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center disabled:opacity-40"
+                      >
+                        {sendingOneId === h.id
+                          ? <div className="w-3 h-3 border border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                          : <Icon name="Send" size={14} className="text-emerald-400" />}
+                      </button>
+                      <button onClick={() => startEdit(h)} title="Редактировать"
+                        className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center">
+                        <Icon name="Pencil" size={14} className="text-white/50" />
+                      </button>
+                      <button onClick={() => deleteOne(h.id)} title="Удалить"
+                        className="w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 flex items-center justify-center">
+                        <Icon name="Trash2" size={14} className="text-white/50 hover:text-red-400" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {isEditing && (
+                <div className="px-3 pb-3 pt-1">
+                  <p className="text-[10px] text-white/40 mb-1.5 inline-flex items-center gap-1">
+                    <Icon name="MessageSquare" size={11} />
+                    Превью сообщения для {editName || "водителя"}:
+                  </p>
+                  <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white/80 text-xs whitespace-pre-wrap max-h-40 overflow-y-auto">
+                    {template?.trim()
+                      ? personalize(template, editName, editUsername)
+                      : <span className="text-white/30">Текст шаблона не задан</span>}
                   </div>
-                ) : (
-                  <>
-                    <p className="text-white text-sm truncate">
-                      {h.first_name || "?"} {h.username && <span className="text-white/40">@{h.username}</span>}
-                    </p>
-                    <p className="text-white/40 text-[11px] truncate">
-                      {h.message_sent_at && new Date(h.message_sent_at).toLocaleString("ru-RU")}
-                      {h.send_status && h.send_status !== "ok" && ` · ${h.send_status}`}
-                    </p>
-                  </>
-                )}
-              </div>
-              <div className="flex gap-1 flex-shrink-0">
-                {editingId === h.id ? (
-                  <>
-                    <button onClick={saveEdit} title="Сохранить"
-                      className="w-8 h-8 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 flex items-center justify-center">
-                      <Icon name="Check" size={14} className="text-emerald-400" />
-                    </button>
-                    <button onClick={() => setEditingId(null)} title="Отмена"
-                      className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center">
-                      <Icon name="X" size={14} className="text-white/50" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => sendOne(h.id)} disabled={sendingOneId === h.id}
-                      title="Отправить повторно"
-                      className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center disabled:opacity-40"
-                    >
-                      {sendingOneId === h.id
-                        ? <div className="w-3 h-3 border border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-                        : <Icon name="Send" size={14} className="text-emerald-400" />}
-                    </button>
-                    <button onClick={() => startEdit(h)} title="Редактировать"
-                      className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center">
-                      <Icon name="Pencil" size={14} className="text-white/50" />
-                    </button>
-                    <button onClick={() => deleteOne(h.id)} title="Удалить"
-                      className="w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 flex items-center justify-center">
-                      <Icon name="Trash2" size={14} className="text-white/50 hover:text-red-400" />
-                    </button>
-                  </>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
