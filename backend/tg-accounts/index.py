@@ -345,6 +345,89 @@ async def join_group_all(target: str = '') -> dict:
     return {'ok': True, 'total': len(results), 'results': results, 'target': target or get_target_group()}
 
 
+async def check_target(target: str = '') -> dict:
+    """Диагностика: что находится по ссылке/username. Использует первый рабочий аккаунт."""
+    target = (target or get_target_group()).strip()
+    invite_hash = parse_invite_hash(target)
+    username = parse_username(target) if not invite_hash else ''
+
+    ids = get_all_account_ids()
+    if not ids:
+        return {'ok': False, 'error': 'Нет рабочих аккаунтов для проверки'}
+
+    acc = get_account_session(ids[0])
+    api_id = int(os.environ['TG_API_ID'])
+    api_hash = os.environ['TG_API_HASH']
+    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            return {'ok': False, 'error': f'Сессия аккаунта «{acc["label"]}» невалидна'}
+
+        if invite_hash:
+            try:
+                info = await client(CheckChatInviteRequest(invite_hash))
+                title = getattr(info, 'title', None) or getattr(getattr(info, 'chat', None), 'title', '?')
+                return {
+                    'ok': True, 'mode': 'invite_link', 'title': title,
+                    'can_invite': True,
+                    'message': f'Приватная группа «{title}» — по invite-ссылке вступать можно. Прямой инвайт работает только если ты участник.',
+                }
+            except Exception as e:
+                return {'ok': False, 'error': f'Invite-ссылка невалидна: {type(e).__name__}: {e}'}
+
+        if not username:
+            return {'ok': False, 'error': f'Не понял формат: "{target}"'}
+
+        try:
+            entity = await client.get_entity(username)
+        except Exception as e:
+            return {'ok': False, 'error': f'@{username} не найден: {type(e).__name__}'}
+
+        # Что за объект — канал, мегагруппа, юзер?
+        from telethon.tl.types import Channel, Chat, User
+        if isinstance(entity, User):
+            return {
+                'ok': False,
+                'mode': 'user',
+                'title': f'{entity.first_name or ""} {entity.last_name or ""}'.strip() or f'@{username}',
+                'can_invite': False,
+                'message': f'@{username} — это пользователь Telegram, а не группа. Инвайт сюда невозможен.',
+            }
+        if isinstance(entity, Channel):
+            is_megagroup = bool(getattr(entity, 'megagroup', False))
+            is_broadcast = bool(getattr(entity, 'broadcast', False))
+            participants = getattr(entity, 'participants_count', None)
+            if is_broadcast and not is_megagroup:
+                return {
+                    'ok': False,
+                    'mode': 'channel',
+                    'title': entity.title,
+                    'participants': participants,
+                    'can_invite': False,
+                    'message': (f'❌ «{entity.title}» — это КАНАЛ ({participants} подписчиков), а не группа-чат. '
+                                f'Telegram запрещает массово добавлять подписчиков в каналы. '
+                                f'Найди связанный с каналом ЧАТ-обсуждение (group/megagroup) и используй его username.'),
+                }
+            return {
+                'ok': True,
+                'mode': 'megagroup' if is_megagroup else 'group',
+                'title': entity.title,
+                'participants': participants,
+                'can_invite': True,
+                'message': f'✅ «{entity.title}» — это группа ({participants} участников). Инвайт работает.',
+            }
+        if isinstance(entity, Chat):
+            return {
+                'ok': True, 'mode': 'small_group', 'title': entity.title,
+                'can_invite': True,
+                'message': f'✅ «{entity.title}» — обычная маленькая группа. Инвайт работает.',
+            }
+        return {'ok': False, 'error': f'Неизвестный тип сущности: {type(entity).__name__}'}
+    finally:
+        await client.disconnect()
+
+
 def set_target_group(value: str):
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
@@ -419,6 +502,9 @@ def handler(event: dict, context) -> dict:
             if not account_id:
                 return resp(400, {'error': 'id required (или all=true)'})
             return resp(200, loop.run_until_complete(join_group_one(account_id, target)))
+        if action == 'check_target':
+            target = (body.get('target') or '').strip()
+            return resp(200, loop.run_until_complete(check_target(target)))
         return resp(400, {'error': 'unknown action'})
     finally:
         loop.close()

@@ -55,6 +55,29 @@ export function AdminAccountsManager({ token }: { token: string }) {
     }
   }
 
+  async function checkTarget() {
+    const v = targetEdit.trim() || targetGroup;
+    if (!v) { alert("Сначала введи ссылку"); return; }
+    setTargetSaving(true);
+    try {
+      const r = await fetch(`${TG_ACCOUNTS_URL}?action=check_target`, {
+        method: "POST", headers, body: JSON.stringify({ target: v }),
+      });
+      const j = await r.json();
+      const lines = [
+        `Цель: ${v}`,
+        j.title ? `Название: ${j.title}` : "",
+        j.mode ? `Тип: ${j.mode}` : "",
+        j.participants ? `Участников: ${j.participants}` : "",
+        "",
+        j.message || j.error || "",
+      ].filter(Boolean).join("\n");
+      alert(lines);
+    } finally {
+      setTargetSaving(false);
+    }
+  }
+
   useEffect(() => { load(); }, []);
 
   async function call(action: string, body: Record<string, unknown>) {
@@ -202,6 +225,14 @@ export function AdminAccountsManager({ token }: { token: string }) {
             className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500"
           />
           <button
+            onClick={checkTarget}
+            disabled={targetSaving}
+            className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs hover:bg-white/10 transition disabled:opacity-40"
+            title="Проверить что находится по ссылке"
+          >
+            <Icon name="Search" size={13} />
+          </button>
+          <button
             onClick={saveTarget}
             disabled={targetSaving || targetEdit.trim() === targetGroup}
             className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition disabled:opacity-40"
@@ -211,6 +242,7 @@ export function AdminAccountsManager({ token }: { token: string }) {
         </div>
         <p className="text-[11px] text-muted-foreground mt-1.5">
           Можно: <code className="text-blue-300">@username</code>, <code className="text-blue-300">https://t.me/username</code> или invite-ссылку <code className="text-blue-300">https://t.me/+AbCd...</code>
+          {" · "}<button onClick={checkTarget} className="text-blue-400 hover:underline">проверить группу</button>
         </p>
       </div>
 
