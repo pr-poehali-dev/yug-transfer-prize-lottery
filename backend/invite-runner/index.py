@@ -198,6 +198,84 @@ def get_full_power_accounts() -> list:
     return accounts
 
 
+def active_run_start(mode: str, title: str, subtitle: str, total: int, estimated_sec: int):
+    """Помечает начало запуска в БД."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        UPDATE {SCHEMA}.invite_active_run SET
+            is_active = TRUE,
+            mode = '{esc(mode)}',
+            title = '{esc(title[:200])}',
+            subtitle = '{esc(subtitle[:200])}',
+            total_planned = {int(total)},
+            progress_done = 0,
+            progress_added = 0,
+            progress_privacy = 0,
+            progress_failed = 0,
+            started_at = NOW(),
+            estimated_sec = {int(estimated_sec)},
+            last_message = '',
+            last_heartbeat = NOW()
+        WHERE id = 1
+    """)
+    conn.commit(); cur.close(); conn.close()
+
+
+def active_run_progress(done: int = None, done_inc: int = 0, added: int = None, privacy: int = None, failed: int = None, message: str = ''):
+    """Обновляет счётчики прогресса.
+    done = абсолютное значение, done_inc = +N к текущему."""
+    sets = ['last_heartbeat = NOW()']
+    if done is not None: sets.append(f"progress_done = {int(done)}")
+    elif done_inc: sets.append(f"progress_done = progress_done + {int(done_inc)}")
+    if added: sets.append(f"progress_added = progress_added + {int(added)}")
+    if privacy: sets.append(f"progress_privacy = progress_privacy + {int(privacy)}")
+    if failed: sets.append(f"progress_failed = progress_failed + {int(failed)}")
+    if message: sets.append(f"last_message = '{esc(message[:200])}'")
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"UPDATE {SCHEMA}.invite_active_run SET {', '.join(sets)} WHERE id = 1")
+    conn.commit(); cur.close(); conn.close()
+
+
+def active_run_finish():
+    """Снимает флаг активного запуска."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"UPDATE {SCHEMA}.invite_active_run SET is_active = FALSE WHERE id = 1")
+    conn.commit(); cur.close(); conn.close()
+
+
+def get_active_run() -> dict:
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT is_active, mode, title, subtitle, total_planned,
+               progress_done, progress_added, progress_privacy, progress_failed,
+               started_at, estimated_sec, last_message, last_heartbeat
+        FROM {SCHEMA}.invite_active_run WHERE id = 1
+    """)
+    r = cur.fetchone(); cur.close(); conn.close()
+    if not r:
+        return {'is_active': False}
+    # Если heartbeat старше 90 секунд — считаем зависшим, чистим
+    is_active = r[0]
+    heartbeat = r[12]
+    if is_active and heartbeat:
+        from datetime import datetime, timezone, timedelta
+        try:
+            hb = heartbeat if heartbeat.tzinfo else heartbeat.replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - hb) > timedelta(seconds=300):
+                active_run_finish()
+                return {'is_active': False, 'stale': True}
+        except Exception:
+            pass
+    return {
+        'is_active': is_active,
+        'mode': r[1], 'title': r[2], 'subtitle': r[3],
+        'total_planned': r[4], 'progress_done': r[5],
+        'progress_added': r[6], 'progress_privacy': r[7], 'progress_failed': r[8],
+        'started_at': str(r[9]) if r[9] else None,
+        'estimated_sec': r[10], 'last_message': r[11],
+    }
+
+
 def get_active_account() -> dict:
     """Активный, не забаненный, с дневным остатком > 0."""
     conn = db(); cur = conn.cursor()
@@ -352,6 +430,14 @@ async def run_batch(size: int) -> dict:
     if not targets:
         return {'ok': True, 'message': 'В очереди нет кандидатов со статусом pending.', 'attempted': 0}
 
+    estimated = take * 135
+    active_run_start(
+        mode='batch',
+        title=f'Ручной запуск: {take} инвайтов с «{acc["label"]}»',
+        subtitle='Пауза 90-180 сек между инвайтами',
+        total=take, estimated_sec=estimated,
+    )
+
     client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
     await client.connect()
 
@@ -443,6 +529,16 @@ async def run_batch(size: int) -> dict:
                 failed += 1
                 results.append({'username': uname, 'status': 'failed', 'reason': str(e)[:120]})
 
+            # обновляем прогресс
+            try:
+                last = results[-1] if results else {}
+                active_run_progress(
+                    done=attempted,
+                    message=f'@{last.get("username", "")} → {last.get("status", "")}',
+                )
+            except Exception:
+                pass
+
             # пауза между инвайтами (кроме последнего)
             if i < len(targets) - 1 and not ban_triggered:
                 pause = random.randint(PAUSE_MIN_SEC, PAUSE_MAX_SEC)
@@ -450,6 +546,7 @@ async def run_batch(size: int) -> dict:
 
     finally:
         await client.disconnect()
+        active_run_finish()
 
     log_run(acc['id'], attempted, added, privacy, failed, ban_triggered, ban_note)
 
@@ -541,15 +638,31 @@ async def run_warmup_for_account(acc: dict, per_account: int) -> dict:
         for i, t in enumerate(targets):
             r = await invite_one_user(client, target_entity, t, acc['id'])
             results.append(r)
-            if r['status'] == 'added' or r['status'] == 'already_in': added += 1
-            elif r['status'] == 'privacy': privacy += 1
+            inc_added = inc_priv = inc_fail = 0
+            if r['status'] == 'added' or r['status'] == 'already_in':
+                added += 1; inc_added = 1
+            elif r['status'] == 'privacy':
+                privacy += 1; inc_priv = 1
             elif r['status'] in ('peer_flood',):
-                ban = True; ban_note = f'PEER_FLOOD на {r["username"]}'; break
+                ban = True; ban_note = f'PEER_FLOOD на {r["username"]}'
+                active_run_progress(message=ban_note); break
             elif r['status'] == 'flood_wait' and r.get('fw_seconds', 0) > 3600:
-                ban = True; ban_note = f'FloodWait {r.get("fw_seconds")}s'; break
+                ban = True; ban_note = f'FloodWait {r.get("fw_seconds")}s'
+                active_run_progress(message=ban_note); break
             elif r['status'] == 'no_rights':
-                ban_note = f'Нет прав: {r["reason"]}'; break
-            else: failed += 1
+                ban_note = f'Нет прав: {r["reason"]}'
+                active_run_progress(message=ban_note); break
+            else:
+                failed += 1; inc_fail = 1
+
+            try:
+                active_run_progress(
+                    done_inc=1,
+                    added=inc_added, privacy=inc_priv, failed=inc_fail,
+                    message=f'{acc["label"]}: @{r["username"]} → {r["status"]}'
+                )
+            except Exception:
+                pass
 
             if i < len(targets) - 1 and not ban:
                 await asyncio.sleep(random.randint(PAUSE_MIN_SEC, PAUSE_MAX_SEC))
@@ -571,25 +684,32 @@ async def run_warmup_for_account(acc: dict, per_account: int) -> dict:
 
 
 async def run_full_power_batch(batch_per_account: int = 5) -> dict:
-    """Запускает пачку инвайтов сразу со всех прогретых аккаунтов (needs_warmup=FALSE).
-    Каждый делает batch_per_account инвайтов. Лимит 30/сутки на аккаунт всё равно соблюдается.
-    Между инвайтами на одном аккаунте — пауза 90-180 сек.
-    Между разными аккаунтами — пауза 30-60 сек.
-    """
+    """Запускает пачку инвайтов сразу со всех прогретых аккаунтов (needs_warmup=FALSE)."""
     accounts = get_full_power_accounts()
     if not accounts:
         return {'ok': False, 'error': 'Нет прогретых аккаунтов с остатком на сегодня'}
 
+    total = sum(min(batch_per_account, a['daily_remaining']) for a in accounts)
+    estimated = total * 135 + max(0, len(accounts) - 1) * 45
+    active_run_start(
+        mode='full_power',
+        title=f'Полная мощность: {len(accounts)} × {batch_per_account} = {total} человек',
+        subtitle=f'Прогретые аккаунты, паузы 90-180 сек',
+        total=total, estimated_sec=estimated,
+    )
+
     all_results = []
     total_added = 0
-    for i, acc in enumerate(accounts):
-        # Сколько брать на этот раз: min(batch, остаток дня, что есть в очереди)
-        take = min(batch_per_account, acc['daily_remaining'])
-        result = await run_warmup_for_account(acc, take)
-        all_results.append(result)
-        total_added += result.get('added', 0)
-        if i < len(accounts) - 1:
-            await asyncio.sleep(random.randint(30, 60))
+    try:
+        for i, acc in enumerate(accounts):
+            take = min(batch_per_account, acc['daily_remaining'])
+            result = await run_warmup_for_account(acc, take)
+            all_results.append(result)
+            total_added += result.get('active_run_skip', 0) or result.get('added', 0)
+            if i < len(accounts) - 1:
+                await asyncio.sleep(random.randint(30, 60))
+    finally:
+        active_run_finish()
 
     return {
         'ok': True,
@@ -622,13 +742,24 @@ async def run_warmup_day() -> dict:
             'results': [],
         }
 
+    total = len(accounts) * per_acc
+    estimated = total * 135 + max(0, len(accounts) - 1) * 60
+    active_run_start(
+        mode='warmup',
+        title=f'Прогрев день {state["day_num"]}: {len(accounts)} × {per_acc} = {total} человек',
+        subtitle='Пауза 90-180 сек между инвайтами',
+        total=total, estimated_sec=estimated,
+    )
+
     all_results = []
-    for i, acc in enumerate(accounts):
-        result = await run_warmup_for_account(acc, per_acc)
-        all_results.append(result)
-        # Большая пауза между разными аккаунтами (5-15 мин) — но в HTTP не влезет, делаем короче
-        if i < len(accounts) - 1:
-            await asyncio.sleep(60)  # 1 мин между аккаунтами в одном запуске
+    try:
+        for i, acc in enumerate(accounts):
+            result = await run_warmup_for_account(acc, per_acc)
+            all_results.append(result)
+            if i < len(accounts) - 1:
+                await asyncio.sleep(60)
+    finally:
+        active_run_finish()
 
     total_added = sum(r.get('added', 0) for r in all_results)
     return {
@@ -670,6 +801,7 @@ def get_status() -> dict:
         'warmup_schedule': WARMUP_SCHEDULE,
         'full_power_accounts': full_power_summary,
         'full_power_total_remaining': sum(a['daily_remaining'] for a in full_power),
+        'active_run': get_active_run(),
     }
 
 
@@ -748,6 +880,10 @@ def handler(event: dict, context) -> dict:
             return resp(200, result)
         finally:
             loop.close()
+
+    if action == 'cancel_run':
+        active_run_finish()
+        return resp(200, {'ok': True})
 
     if action == 'set_warmup_flag':
         account_id = int(body.get('id', 0))

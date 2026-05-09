@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { INVITE_TARGETS_URL, InviteStats, InviteTarget } from "./adminTypes";
+import { useInviteProgress } from "./InviteProgressContext";
 
 interface ImportResult {
   inserted: number;
@@ -27,6 +28,7 @@ export function AdminInviteImport({ token }: { token: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { progress: inviteProgress, refreshTrigger } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -42,6 +44,17 @@ export function AdminInviteImport({ token }: { token: string }) {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Авто-обновление пока идёт инвайт + после завершения
+  useEffect(() => {
+    if (!inviteProgress?.active) return;
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [inviteProgress?.active]);
+
+  useEffect(() => {
+    if (refreshTrigger > 0) load();
+  }, [refreshTrigger]);
 
   function parseInput(raw: string): string[] {
     const lines = raw.split(/[\n,;\t]+/);

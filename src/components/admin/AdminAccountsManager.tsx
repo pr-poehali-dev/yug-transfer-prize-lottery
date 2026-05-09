@@ -18,7 +18,7 @@ export function AdminAccountsManager({ token }: { token: string }) {
   const [targetGroup, setTargetGroup] = useState("");
   const [targetEdit, setTargetEdit] = useState("");
   const [targetSaving, setTargetSaving] = useState(false);
-  const { start: startProgress, stop: stopProgress } = useInviteProgress();
+  const { start: startProgress, stop: stopProgress, progress, refreshTrigger } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -35,6 +35,17 @@ export function AdminAccountsManager({ token }: { token: string }) {
       setLoading(false);
     }
   }
+
+  // Авто-обновление каждые 5 сек пока идёт инвайт + после завершения
+  useEffect(() => {
+    if (!progress?.active) return;
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [progress?.active]);
+
+  useEffect(() => {
+    if (refreshTrigger > 0) load();
+  }, [refreshTrigger]);
 
   async function saveTarget() {
     const v = targetEdit.trim();

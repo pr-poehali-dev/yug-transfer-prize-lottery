@@ -21,7 +21,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   ];
 
   return (
-    <InviteProgressProvider>
+    <InviteProgressProvider token={token}>
     <div className="min-h-screen mesh-bg">
       <header className="glass border-b border-white/5 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between h-16">

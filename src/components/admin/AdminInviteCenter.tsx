@@ -65,7 +65,7 @@ export function AdminInviteCenter({ token }: { token: string }) {
   const [batchSize, setBatchSize] = useState(5);
   const [warmupDay, setWarmupDay] = useState(1);
   const [manualSize, setManualSize] = useState(3);
-  const { start: startProgress, stop: stopProgress } = useInviteProgress();
+  const { start: startProgress, stop: stopProgress, progress, refreshTrigger } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -81,6 +81,18 @@ export function AdminInviteCenter({ token }: { token: string }) {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Авто-обновление каждые 5 сек пока идёт инвайт
+  useEffect(() => {
+    if (!progress?.active) return;
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [progress?.active]);
+
+  // Перезагрузка после завершения активного запуска
+  useEffect(() => {
+    if (refreshTrigger > 0) load();
+  }, [refreshTrigger]);
 
   async function runFullPower() {
     if (!status?.full_power_accounts?.length) {

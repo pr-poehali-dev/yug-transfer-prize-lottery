@@ -18,7 +18,7 @@ function formatElapsed(ms: number): string {
 }
 
 export function InviteProgressBanner() {
-  const { progress } = useInviteProgress();
+  const { progress, cancelRun } = useInviteProgress();
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -31,27 +31,43 @@ export function InviteProgressBanner() {
 
   const meta = MODE_META[progress.mode] || MODE_META.batch;
   const elapsed = now - progress.startedAt;
-  const estMs = (progress.estimatedSec || 0) * 1000;
-  const pct = estMs > 0 ? Math.min(100, (elapsed / estMs) * 100) : null;
+  const total = progress.totalPlanned || 0;
+  const done = progress.done || 0;
+
+  let pct: number | null = null;
+  if (total > 0) {
+    pct = Math.min(100, (done / total) * 100);
+  } else if (progress.estimatedSec) {
+    pct = Math.min(100, (elapsed / (progress.estimatedSec * 1000)) * 100);
+  }
+
+  async function onCancel() {
+    if (!confirm("Отменить текущий запуск?\n\nПометит активный запуск как завершённый.")) return;
+    await cancelRun();
+  }
 
   return (
     <div className={`w-full bg-gradient-to-r ${meta.gradient} text-white shadow-lg animate-in slide-in-from-top duration-300`}>
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-2.5 flex items-center gap-3">
-        <div className="relative flex items-center justify-center">
+        <div className="relative flex items-center justify-center shrink-0">
           <div className="absolute inset-0 rounded-full bg-white/30 animate-ping" />
           <div className="relative w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
             <Icon name={meta.icon} size={14} />
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs uppercase font-bold tracking-wider opacity-90">{meta.label}</span>
-            <Icon name="Loader2" size={12} className="animate-spin opacity-80" />
+            <Icon name="Loader2" size={12} className="animate-spin opacity-80 shrink-0" />
             <span className="text-sm font-medium truncate">{progress.title}</span>
           </div>
-          {progress.subtitle && (
-            <div className="text-[11px] opacity-85 truncate">{progress.subtitle}</div>
-          )}
+          <div className="flex items-center gap-2 text-[11px] opacity-90 mt-0.5 flex-wrap">
+            {total > 0 && <span className="font-mono font-bold">{done}/{total}</span>}
+            {(progress.added ?? 0) > 0 && (<><span>·</span><span>✅ <b>{progress.added}</b></span></>)}
+            {(progress.privacy ?? 0) > 0 && (<><span>·</span><span>🔒 {progress.privacy}</span></>)}
+            {(progress.failed ?? 0) > 0 && (<><span>·</span><span>✗ {progress.failed}</span></>)}
+            {progress.lastMessage && (<><span>·</span><span className="truncate opacity-75 italic">{progress.lastMessage}</span></>)}
+          </div>
         </div>
         <div className="text-right shrink-0">
           <div className="text-xs font-mono font-bold">{formatElapsed(elapsed)}</div>
@@ -59,9 +75,16 @@ export function InviteProgressBanner() {
             <div className="text-[10px] opacity-80">из ~{Math.ceil(progress.estimatedSec / 60)} мин</div>
           )}
         </div>
+        <button
+          onClick={onCancel}
+          className="shrink-0 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition"
+          title="Сбросить флаг активного запуска (операция продолжит работать на сервере)"
+        >
+          <Icon name="X" size={14} />
+        </button>
       </div>
       {pct !== null && (
-        <div className="h-0.5 bg-white/20 w-full">
+        <div className="h-1 bg-white/20 w-full">
           <div
             className="h-full bg-white transition-all duration-1000"
             style={{ width: `${pct}%` }}
