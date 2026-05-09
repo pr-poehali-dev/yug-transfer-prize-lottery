@@ -98,6 +98,32 @@ export function AdminAccountsManager({ token }: { token: string }) {
     await call("update_label", { id: acc.id, label: next });
   }
 
+  async function joinGroupOne(acc: TgAccount) {
+    if (!confirm(`Аккаунт «${acc.label}» вступит в @UG_DRIVER. Продолжить?`)) return;
+    const j = await call("join_group", { id: acc.id });
+    if (j.ok) {
+      const status = j.status === "already_in" ? "уже был в группе" : "успешно вступил";
+      alert(`✅ ${acc.label}: ${status}`);
+    } else {
+      alert(`❌ ${acc.label}: ${j.error || "ошибка"}`);
+    }
+  }
+
+  async function joinGroupAll() {
+    const active = accounts.filter(a => !a.is_banned);
+    if (active.length === 0) { alert("Нет рабочих аккаунтов"); return; }
+    if (!confirm(`Все ${active.length} аккаунта (-ов) вступят в @UG_DRIVER.\nЗаймёт ~${active.length * 5} секунд. Продолжить?`)) return;
+    const j = await call("join_group", { all: true });
+    if (j.results) {
+      const ok = j.results.filter((r: { ok: boolean }) => r.ok).length;
+      const fail = j.results.length - ok;
+      const details = j.results.map((r: { label: string; ok: boolean; status?: string; error?: string }) =>
+        `${r.ok ? "✅" : "❌"} ${r.label}: ${r.status || r.error}`
+      ).join("\n");
+      alert(`Готово: успех ${ok}, ошибок ${fail}\n\n${details}`);
+    }
+  }
+
   return (
     <div className="glass rounded-2xl p-5 border border-white/5">
       <div className="flex items-center gap-3 mb-4">
@@ -109,13 +135,26 @@ export function AdminAccountsManager({ token }: { token: string }) {
           <p className="text-xs text-muted-foreground">При бане одного — переключай на запасной</p>
         </div>
         {step === "idle" && (
-          <button
-            onClick={() => setStep("phone")}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm hover:opacity-90 transition"
-          >
-            <Icon name="Plus" size={15} />
-            Подключить
-          </button>
+          <div className="flex items-center gap-2">
+            {accounts.filter(a => !a.is_banned).length > 0 && (
+              <button
+                onClick={joinGroupAll}
+                disabled={busy}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs hover:bg-white/10 transition disabled:opacity-50"
+                title="Все аккаунты вступят в @UG_DRIVER"
+              >
+                <Icon name="LogIn" size={14} />
+                Все в @UG_DRIVER
+              </button>
+            )}
+            <button
+              onClick={() => setStep("phone")}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm hover:opacity-90 transition"
+            >
+              <Icon name="Plus" size={15} />
+              Подключить
+            </button>
+          </div>
         )}
       </div>
 
@@ -156,6 +195,12 @@ export function AdminAccountsManager({ token }: { token: string }) {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                {!acc.is_banned && (
+                  <button onClick={() => joinGroupOne(acc)} disabled={busy}
+                    className="p-2 rounded-lg hover:bg-white/10 text-blue-400 transition" title="Вступить в @UG_DRIVER">
+                    <Icon name="LogIn" size={14} />
+                  </button>
+                )}
                 {!acc.is_active && !acc.is_banned && (
                   <button onClick={() => activate(acc.id)} disabled={busy}
                     className="p-2 rounded-lg hover:bg-white/10 text-green-400 transition" title="Сделать активным">

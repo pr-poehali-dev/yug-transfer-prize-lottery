@@ -7,6 +7,7 @@ POST ?action=activate     — переключить активный аккау
 POST ?action=delete       — удалить аккаунт
 POST ?action=mark_banned  — пометить аккаунт как забаненный
 POST ?action=update_label — переименовать аккаунт
+POST ?action=join_group   — аккаунт вступает в @UG_DRIVER (id или all=true)
 """
 import os
 import json
@@ -16,7 +17,14 @@ import psycopg2
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, PhoneNumberInvalidError
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.errors import (
+    SessionPasswordNeededError, PhoneCodeInvalidError, PhoneNumberInvalidError,
+    UserAlreadyParticipantError, ChannelsTooMuchError, InviteHashExpiredError,
+    FloodWaitError, ChannelPrivateError,
+)
+
+TARGET_GROUP = '@UG_DRIVER'
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -209,6 +217,79 @@ def update_label(account_id: int, label: str):
     conn.commit(); cur.close(); conn.close()
 
 
+def get_account_session(account_id: int) -> dict:
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT id, label, session_string, is_banned
+        FROM {SCHEMA}.tg_user_accounts WHERE id={int(account_id)}
+    """)
+    r = cur.fetchone(); cur.close(); conn.close()
+    if not r:
+        return {}
+    return {'id': r[0], 'label': r[1], 'session_string': r[2], 'is_banned': r[3]}
+
+
+def get_all_account_ids() -> list:
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"SELECT id FROM {SCHEMA}.tg_user_accounts WHERE is_banned=FALSE ORDER BY id ASC")
+    rows = cur.fetchall(); cur.close(); conn.close()
+    return [r[0] for r in rows]
+
+
+async def join_group_one(account_id: int) -> dict:
+    """Аккаунт вступает в TARGET_GROUP."""
+    acc = get_account_session(account_id)
+    if not acc:
+        return {'ok': False, 'error': 'Аккаунт не найден'}
+    if acc['is_banned']:
+        return {'ok': False, 'error': f'{acc["label"]}: аккаунт помечен забаненным'}
+
+    api_id = int(os.environ['TG_API_ID'])
+    api_hash = os.environ['TG_API_HASH']
+    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            return {'ok': False, 'account_id': account_id, 'label': acc['label'],
+                    'error': 'Сессия невалидна'}
+        try:
+            entity = await client.get_entity(TARGET_GROUP)
+        except Exception as e:
+            return {'ok': False, 'account_id': account_id, 'label': acc['label'],
+                    'error': f'Не могу найти {TARGET_GROUP}: {e}'}
+        try:
+            await client(JoinChannelRequest(entity))
+            return {'ok': True, 'account_id': account_id, 'label': acc['label'],
+                    'status': 'joined', 'group': TARGET_GROUP}
+        except UserAlreadyParticipantError:
+            return {'ok': True, 'account_id': account_id, 'label': acc['label'],
+                    'status': 'already_in', 'group': TARGET_GROUP}
+        except FloodWaitError as fw:
+            return {'ok': False, 'account_id': account_id, 'label': acc['label'],
+                    'error': f'FloodWait {fw.seconds} сек'}
+        except (ChannelsTooMuchError, ChannelPrivateError, InviteHashExpiredError) as e:
+            return {'ok': False, 'account_id': account_id, 'label': acc['label'],
+                    'error': type(e).__name__}
+        except Exception as e:
+            return {'ok': False, 'account_id': account_id, 'label': acc['label'],
+                    'error': str(e)[:200]}
+    finally:
+        await client.disconnect()
+
+
+async def join_group_all() -> dict:
+    """Все не забаненные аккаунты по очереди вступают в TARGET_GROUP."""
+    ids = get_all_account_ids()
+    results = []
+    for i, aid in enumerate(ids):
+        r = await join_group_one(aid)
+        results.append(r)
+        # пауза между аккаунтами чтобы не словить flood
+        if i < len(ids) - 1:
+            await asyncio.sleep(3)
+    return {'ok': True, 'total': len(results), 'results': results}
+
+
 def handler(event: dict, context) -> dict:
     """Управление пулом user-аккаунтов Telegram для авто-приглашений."""
     if event.get('httpMethod') == 'OPTIONS':
@@ -259,6 +340,13 @@ def handler(event: dict, context) -> dict:
             password = body.get('password', '')
             label = body.get('label', '').strip()
             return resp(200, loop.run_until_complete(verify_2fa(phone, password, label)))
+        if action == 'join_group':
+            if body.get('all') is True:
+                return resp(200, loop.run_until_complete(join_group_all()))
+            account_id = int(body.get('id', 0))
+            if not account_id:
+                return resp(400, {'error': 'id required (или all=true)'})
+            return resp(200, loop.run_until_complete(join_group_one(account_id)))
         return resp(400, {'error': 'unknown action'})
     finally:
         loop.close()
