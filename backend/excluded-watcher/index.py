@@ -589,6 +589,16 @@ def handler(event: dict, context) -> dict:
             sent_ok = 0
             errors_list = []
             try:
+                # Прогрев кэша: тянем участников @UG_DRIVER, чтобы Telethon знал access_hash
+                try:
+                    target_entity = await client.get_entity(TARGET_GROUP)
+                    cnt = 0
+                    async for _u in client.iter_participants(target_entity, limit=5000):
+                        cnt += 1
+                    print(f"[resend] participants warmed up: {cnt}")
+                except Exception as e:
+                    print(f"[resend] participants warmup err: {e}")
+
                 for row in queue:
                     rec_id, uid, uname, fname = row
                     uid = int(uid) if uid else 0
@@ -596,7 +606,17 @@ def handler(event: dict, context) -> dict:
                     uname = uname or ''
                     personalized = template_r.replace('{name}', fname).replace('{username}', uname)
                     try:
-                        await client.send_message(uid, personalized)
+                        # Резолвим: сначала по ID (из кэша), иначе по @username
+                        target = uid
+                        try:
+                            target = await client.get_input_entity(uid)
+                        except Exception:
+                            if uname:
+                                try:
+                                    target = await client.get_input_entity(uname)
+                                except Exception:
+                                    target = uid
+                        await client.send_message(target, personalized)
                         c2 = db(); cu2 = c2.cursor()
                         cu2.execute(
                             f"UPDATE {SCHEMA}.excluded_drivers "
