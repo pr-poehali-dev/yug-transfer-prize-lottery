@@ -13,8 +13,9 @@ import psycopg2
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import InviteToChannelRequest
+from telethon.tl.functions.channels import InviteToChannelRequest, GetParticipantRequest
 from telethon.tl.functions.contacts import ResolveUsernameRequest
+from telethon.errors import UserNotParticipantError
 from telethon.errors import (
     FloodWaitError, UserPrivacyRestrictedError, UserNotMutualContactError,
     UserChannelsTooMuchError, UserKickedError, UserAlreadyParticipantError,
@@ -489,17 +490,35 @@ async def run_batch(size: int) -> dict:
 
             try:
                 await client(InviteToChannelRequest(channel=target_entity, users=[user_entity]))
-                update_target(t['id'], 'added', '', acc['id'])
-                increment_account_usage(acc['id'])
-                added += 1
-                results.append({'username': uname, 'status': 'added'})
+                # ВАЖНО: Telegram может вернуть "успех" но НЕ добавить юзера
+                # (тихий PEER_FLOOD, privacy и т.п.). Проверяем реальное участие.
+                really_in_group = False
+                try:
+                    await client(GetParticipantRequest(channel=target_entity, participant=user_entity))
+                    really_in_group = True
+                except UserNotParticipantError:
+                    really_in_group = False
+                except Exception:
+                    # Если проверка сломалась — считаем что добавили, чтобы не дублить попытки
+                    really_in_group = True
+
+                if really_in_group:
+                    update_target(t['id'], 'added', '', acc['id'])
+                    increment_account_usage(acc['id'])
+                    added += 1
+                    results.append({'username': uname, 'status': 'added'})
+                else:
+                    # Telegram «проглотил» инвайт но юзера в группе нет
+                    update_target(t['id'], 'failed', 'silent_drop: not in group after invite', acc['id'])
+                    failed += 1
+                    results.append({'username': uname, 'status': 'failed', 'reason': 'silent_drop'})
             except UserPrivacyRestrictedError:
                 update_target(t['id'], 'privacy', 'USER_PRIVACY_RESTRICTED', acc['id'])
                 privacy += 1
                 results.append({'username': uname, 'status': 'privacy'})
             except UserAlreadyParticipantError:
+                # already_in — НЕ инкрементим счётчик, т.к. это не новое добавление
                 update_target(t['id'], 'added', 'already in group', acc['id'])
-                added += 1
                 results.append({'username': uname, 'status': 'already_in'})
             except (UserNotMutualContactError, UserKickedError, UserBlockedError,
                     UserBotError, UserIdInvalidError, InputUserDeactivatedError) as e:
