@@ -93,15 +93,37 @@ def db():
 
 def get_settings() -> dict:
     conn = db(); cur = conn.cursor()
-    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat FROM {SCHEMA}.excluded_settings WHERE id=1")
+    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat, EXTRACT(EPOCH FROM (NOW() - loop_heartbeat)) FROM {SCHEMA}.excluded_settings WHERE id=1")
     r = cur.fetchone()
     cur.close(); conn.close()
     if not r:
-        return {'enabled': False, 'message_template': '', 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None}
+        return {'enabled': False, 'message_template': '', 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None, 'loop_alive': False, 'loop_age_sec': None}
+    age = int(r[6] or 999999) if r[6] is not None else None
+    # Цикл считается живым если heartbeat был не более 5 минут назад
+    alive = bool(r[0]) and age is not None and age < 300
     return {
         'enabled': r[0], 'message_template': r[1], 'last_checked_msg_id': int(r[2] or 0),
         'last_run_at': r[3], 'loop_token': r[4], 'loop_heartbeat': r[5],
+        'loop_alive': alive, 'loop_age_sec': age,
     }
+
+
+def auto_revive_if_needed() -> dict:
+    """Если цикл должен работать (enabled=TRUE) но heartbeat старше 5 минут — возрождает его.
+    Вызывается на любом GET — пользователь зашёл в админку и фронт спросил статус → починили."""
+    try:
+        s = get_settings()
+        if not s.get('enabled'):
+            return {'revived': False, 'reason': 'disabled'}
+        if s.get('loop_alive'):
+            return {'revived': False, 'reason': 'alive'}
+        import secrets as _secrets
+        new_token = _secrets.token_hex(16)
+        set_loop_token(new_token)
+        fire_self_loop(new_token)
+        return {'revived': True, 'age_sec': s.get('loop_age_sec')}
+    except Exception as e:
+        return {'revived': False, 'error': str(e)[:200]}
 
 
 def set_loop_token(token: str):
@@ -1293,7 +1315,12 @@ def handler(event: dict, context) -> dict:
         return resp(200, {'items': items})
 
     if method == 'GET':
+        # Авто-починка цикла: если фоновый слушатель умер (heartbeat > 5 мин), а enabled=TRUE — оживляем
+        revive_info = auto_revive_if_needed()
         s = get_settings()
+        if revive_info.get('revived'):
+            s['auto_revived'] = True
+            s['auto_revived_after_sec'] = revive_info.get('age_sec')
         return resp(200, s)
 
     body = json.loads(event.get('body') or '{}')

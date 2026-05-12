@@ -4,6 +4,10 @@ export interface Settings {
   last_checked_msg_id: number;
   last_run_at: string | null;
   loop_heartbeat: string | null;
+  loop_alive?: boolean;
+  loop_age_sec?: number | null;
+  auto_revived?: boolean;
+  auto_revived_after_sec?: number | null;
 }
 
 export interface HistoryItem {

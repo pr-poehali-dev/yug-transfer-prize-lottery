@@ -50,6 +50,13 @@ export function AdminExcludedTab({ token }: Props) {
     }
     setEnabled(!!d.enabled);
     setLastUpdated(Date.now());
+    // Если бэкенд автоматически возродил умерший цикл — показываем уведомление
+    if (d.auto_revived) {
+      const downMin = d.auto_revived_after_sec ? Math.round(d.auto_revived_after_sec / 60) : 0;
+      toast.success("Слушатель восстановлен", {
+        description: downMin > 0 ? `Был неактивен ${downMin} мин. Сейчас снова работает.` : "Цикл перезапущен.",
+      });
+    }
   };
 
   const loadHistory = async () => {
