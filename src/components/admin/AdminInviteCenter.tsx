@@ -310,9 +310,35 @@ export function AdminInviteCenter({ token }: { token: string }) {
                 <span className="font-bold text-purple-300 text-base">{status.full_power_total_remaining}</span>
               </div>
 
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Быстрый выбор: инвайтов с каждого аккаунта</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 3, 5, 10].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setBatchSize(n)}
+                      disabled={busy}
+                      className={`relative py-2.5 rounded-lg text-sm font-bold transition border ${
+                        batchSize === n
+                          ? "bg-gradient-to-br from-purple-600 to-pink-600 border-purple-400 text-white shadow-lg shadow-purple-500/30"
+                          : "bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10 hover:text-white"
+                      } disabled:opacity-40`}
+                    >
+                      ×{n}
+                      <div className={`text-[10px] font-normal mt-0.5 ${batchSize === n ? "opacity-90" : "opacity-60"}`}>
+                        ={fpAccs.length * n} чел
+                      </div>
+                      {n === 10 && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-black text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none">МАХ</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex items-end gap-3">
                 <div className="flex-1">
-                  <label className="text-xs text-muted-foreground mb-1 block">Инвайтов с каждого за раз (1-10)</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">Или вручную (1-10)</label>
                   <input
                     type="number" min={1} max={10} value={batchSize}
                     onChange={(e) => setBatchSize(Math.max(1, Math.min(10, parseInt(e.target.value) || 5)))}
