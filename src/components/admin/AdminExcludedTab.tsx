@@ -146,6 +146,65 @@ export function AdminExcludedTab({ token }: Props) {
     } finally { setScanning(false); }
   };
 
+  // ОДНА КНОПКА: пересканить admin-лог с начала + обогатить + отправить всем неотправленным
+  const runFullSweep = async () => {
+    if (scanning || resending) return;
+    if (!confirm("Просканировать всю историю admin-лога и отправить сообщения всем, кому ещё не отправляли?\n\nЭто может занять 1-3 минуты.")) return;
+    setScanning(true); setRunResult("1/4 Сканируем admin-лог @UG_DRIVER…");
+    try {
+      // 1) Сканируем admin-лог — функция сама создаёт записи + сразу шлёт ЛС с сохранением access_hash
+      const r1 = await fetch(`${EXCLUDED_WATCHER_URL}?action=run`, { method: "POST", headers });
+      const d1 = await r1.json();
+      const newSent = d1.sent || 0;
+      const newFound = d1.found?.length || 0;
+
+      // 2) Обогащаем access_hash для старых записей
+      setRunResult(`2/4 Обогащаем access_hash для старых записей…`);
+      let enriched = 0;
+      try {
+        const re = await fetch(`${EXCLUDED_WATCHER_URL}?action=enrich_hashes`, { method: "POST", headers });
+        const de = await re.json();
+        enriched = de.updated_records || 0;
+      } catch (_e) {/* не критично */}
+
+      // 3) Помечаем всех непросигналенных как queued
+      setRunResult(`3/4 Готовим очередь рассылки…`);
+      const r3 = await fetch(`${EXCLUDED_WATCHER_URL}?action=scan`, { method: "POST", headers });
+      const d3 = await r3.json();
+      const queued = d3.total_queued || 0;
+
+      // 4) Запускаем рассылку
+      setResending(true);
+      setRunResult(`4/4 Отправляем ${queued} сообщений…`);
+      const r4 = await fetch(`${EXCLUDED_WATCHER_URL}?action=resend`, { method: "POST", headers });
+      const d4 = await r4.json();
+      const resendSent = d4.sent || 0;
+      const resendErrs = d4.errors?.length || 0;
+
+      setRunResult(
+        `✅ Готово! Найдено новых: ${newFound}, мгновенно отправлено: ${newSent}\n` +
+        `Обогащено access_hash: ${enriched}\n` +
+        `Дополнительно разослано: ${resendSent} из ${queued} (ошибок: ${resendErrs})`
+      );
+      toast.success(`Отправлено: ${newSent + resendSent}`, {
+        description: `Новых ограниченных: ${newFound} · в очереди было: ${queued} · ошибок: ${resendErrs}`,
+      });
+
+      // Обновляем UI
+      const rl = await fetch(`${EXCLUDED_WATCHER_URL}?action=resend_list`, { headers: { "X-Admin-Token": token } });
+      const dl = await rl.json();
+      setResendList(dl.items || []);
+      await loadResendQueue();
+      await loadHistory();
+    } catch (e) {
+      setRunResult(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error("Не удалось завершить рассылку", { description: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setScanning(false);
+      setResending(false);
+    }
+  };
+
   const runResend = async () => {
     if (resending) return;
     if (!confirm(`Отправить ${resendQueue?.queued || 0} сообщений?\n\nСистема сначала автоматически обогатит данные (access_hash) — это позволит писать даже водителям, которые вышли из группы. Потом отправит по 1 сообщению каждые 2 секунды.`)) return;
@@ -293,6 +352,7 @@ export function AdminExcludedTab({ token }: Props) {
             resendList={resendList}
             setResendList={setResendList}
             runResult={runResult}
+            runFullSweep={runFullSweep}
           />
 
           <ExcludedHistoryCard

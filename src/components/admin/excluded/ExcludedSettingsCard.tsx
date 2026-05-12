@@ -21,6 +21,7 @@ interface Props {
   resendList: ResendItem[] | null;
   setResendList: (v: ResendItem[] | null) => void;
   runResult: string;
+  runFullSweep: () => void;
 }
 
 export function ExcludedSettingsCard({
@@ -43,6 +44,7 @@ export function ExcludedSettingsCard({
   resendList,
   setResendList,
   runResult,
+  runFullSweep,
 }: Props) {
   return (
     <div className="rounded-2xl border border-white/8 p-5" style={{ background: "rgba(255,255,255,0.02)" }}>
@@ -112,6 +114,16 @@ export function ExcludedSettingsCard({
           </div>
         </div>
       </div>
+
+      <button
+        onClick={runFullSweep}
+        disabled={scanning || resending || !enabled}
+        title={!enabled ? "Сначала включи авто-сообщения" : "Сканировать admin-лог + обогатить + отправить всем"}
+        className="w-full mt-3 px-4 py-3 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white text-sm font-bold hover:opacity-90 disabled:opacity-40 inline-flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20"
+      >
+        <Icon name={scanning || resending ? "Loader2" : "Zap"} size={16} className={scanning || resending ? "animate-spin" : ""} />
+        {scanning || resending ? "Идёт рассылка…" : "Найти и отправить всем за сегодня"}
+      </button>
 
       <div className="flex items-center gap-2 mt-3 flex-wrap">
         <button onClick={saveSettings} disabled={saving}
