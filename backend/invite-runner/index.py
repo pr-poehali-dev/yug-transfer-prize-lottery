@@ -611,8 +611,10 @@ async def invite_one_user(client, target_entity, target: dict, account_id: int) 
         return {'username': uname, 'status': 'failed', 'reason': str(e)[:120]}
 
 
-async def run_warmup_for_account(acc: dict, per_account: int) -> dict:
-    """Делает per_account инвайтов с одного аккаунта. Между инвайтами пауза 90-180 сек."""
+async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False) -> dict:
+    """Делает per_account инвайтов с одного аккаунта.
+    fast=False — пауза 90-180 сек (безопасно, для прогрева).
+    fast=True  — без пауз (быстрый режим «полной мощности» — 1 клик = 10 инвайтов мгновенно)."""
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
     target_group = get_target_group()
@@ -665,7 +667,11 @@ async def run_warmup_for_account(acc: dict, per_account: int) -> dict:
                 pass
 
             if i < len(targets) - 1 and not ban:
-                await asyncio.sleep(random.randint(PAUSE_MIN_SEC, PAUSE_MAX_SEC))
+                if fast:
+                    # Быстрый режим: мини-пауза 0.3-0.8 сек чтобы не получить мгновенный flood от API
+                    await asyncio.sleep(random.uniform(0.3, 0.8))
+                else:
+                    await asyncio.sleep(random.randint(PAUSE_MIN_SEC, PAUSE_MAX_SEC))
     finally:
         await client.disconnect()
 
@@ -690,24 +696,31 @@ async def run_full_power_batch(batch_per_account: int = 5) -> dict:
         return {'ok': False, 'error': 'Нет прогретых аккаунтов с остатком на сегодня'}
 
     total = sum(min(batch_per_account, a['daily_remaining']) for a in accounts)
-    estimated = total * 135 + max(0, len(accounts) - 1) * 45
+    # Быстрый режим: ~1 сек на инвайт, все аккаунты параллельно
+    estimated = max(5, batch_per_account * 2)
     active_run_start(
         mode='full_power',
-        title=f'Полная мощность: {len(accounts)} × {batch_per_account} = {total} человек',
-        subtitle=f'Прогретые аккаунты, паузы 90-180 сек',
+        title=f'Полная мощность ×{batch_per_account}: {total} человек одним залпом',
+        subtitle=f'{len(accounts)} аккаунтов параллельно, без задержек',
         total=total, estimated_sec=estimated,
     )
 
-    all_results = []
+    all_results: list = []
     total_added = 0
     try:
-        for i, acc in enumerate(accounts):
+        tasks = []
+        for acc in accounts:
             take = min(batch_per_account, acc['daily_remaining'])
-            result = await run_warmup_for_account(acc, take)
-            all_results.append(result)
-            total_added += result.get('active_run_skip', 0) or result.get('added', 0)
-            if i < len(accounts) - 1:
-                await asyncio.sleep(random.randint(30, 60))
+            if take <= 0:
+                continue
+            tasks.append(run_warmup_for_account(acc, take, fast=True))
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        for r in raw_results:
+            if isinstance(r, Exception):
+                all_results.append({'ok': False, 'error': str(r)[:200]})
+                continue
+            all_results.append(r)
+            total_added += r.get('added', 0)
     finally:
         active_run_finish()
 

@@ -101,17 +101,17 @@ export function AdminInviteCenter({ token }: { token: string }) {
     }
     const total = status.full_power_accounts.length * batchSize;
     if (!confirm(
-      `Запустить пачку?\n\n${status.full_power_accounts.length} × ${batchSize} = ${total} человек\n\n` +
-      `Между инвайтами 90-180 сек, между аккаунтами 30-60 сек. Может занять до 15 минут.`
+      `Залить ${total} человек одним залпом?\n\n${status.full_power_accounts.length} аккаунтов × ${batchSize} = ${total}\n\n` +
+      `Без задержек, все аккаунты параллельно. Займёт ~${Math.max(5, batchSize * 2)} сек.`
     )) return;
 
     setBusy(true);
     const accCount = status.full_power_accounts.length;
-    const estimated = total * 135 + Math.max(0, accCount - 1) * 45;
+    const estimated = Math.max(5, batchSize * 2);
     startProgress({
       mode: "full_power",
-      title: `Полная мощность: ${accCount} × ${batchSize} = ${total} человек`,
-      subtitle: `Прогретые аккаунты, паузы 90-180 сек`,
+      title: `Полная мощность ×${batchSize}: ${total} человек одним залпом`,
+      subtitle: `${accCount} аккаунтов параллельно, без задержек`,
       estimatedSec: estimated,
     });
     try {
@@ -355,7 +355,7 @@ export function AdminInviteCenter({ token }: { token: string }) {
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Чтобы выдать дневную норму ({fpAccs.length * status.daily_limit} чел) — запусти {Math.ceil(status.daily_limit / batchSize)} раз с интервалами 1-2 часа
+                ⚡ Без задержек: 1 клик = {fpAccs.length * batchSize} инвайтов сразу. Дневная норма ({fpAccs.length * status.daily_limit} чел) — {Math.ceil(status.daily_limit / batchSize)} нажатий.
               </p>
             </>
           )}
