@@ -167,14 +167,17 @@ def mark_warmup_done(account_id: int):
     conn.commit(); cur.close(); conn.close()
 
 
-def get_full_power_accounts() -> list:
-    """Берёт все прогретые аккаунты (needs_warmup=FALSE) у которых остался дневной лимит."""
+def get_full_power_accounts(include_warmup: bool = True) -> list:
+    """Берёт аккаунты у которых остался дневной лимит.
+    include_warmup=True — берёт ВСЕ незабаненные аккаунты (упрощённая логика).
+    include_warmup=False — только прогретые (needs_warmup=FALSE)."""
     conn = db(); cur = conn.cursor()
+    where = "is_banned=FALSE" if include_warmup else "is_banned=FALSE AND needs_warmup=FALSE"
     cur.execute(f"""
         SELECT id, label, phone, session_string,
                COALESCE(daily_invites_used, 0), daily_reset_date
         FROM {SCHEMA}.tg_user_accounts
-        WHERE is_banned=FALSE AND needs_warmup=FALSE
+        WHERE {where}
         ORDER BY is_active DESC, id ASC
     """)
     rows = cur.fetchall(); cur.close(); conn.close()
