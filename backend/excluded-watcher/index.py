@@ -191,8 +191,12 @@ def get_session2() -> str:
 
 
 def already_sent(user_id: int) -> bool:
+    """Уже отправляли или знаем что аккаунт мёртв → пропускаем."""
     conn = db(); cur = conn.cursor()
-    cur.execute(f"SELECT 1 FROM {SCHEMA}.excluded_drivers WHERE user_id={int(user_id)} AND message_sent=TRUE LIMIT 1")
+    cur.execute(
+        f"SELECT 1 FROM {SCHEMA}.excluded_drivers "
+        f"WHERE user_id={int(user_id)} AND (message_sent=TRUE OR is_unreachable=TRUE) LIMIT 1"
+    )
     r = cur.fetchone()
     cur.close(); conn.close()
     return r is not None
@@ -200,13 +204,19 @@ def already_sent(user_id: int) -> bool:
 
 def log_send(user_id, username, first_name, source_msg_id, status: str, access_hash=None):
     """Записывает результат отправки + сохраняет access_hash чтобы потом писать
-    даже водителям, которые ушли из группы."""
+    даже водителям, которые ушли из группы.
+    Если ошибка указывает на удалённый аккаунт Telegram — помечаем is_unreachable=TRUE."""
+    sl = (status or '').lower()
+    is_dead = (
+        'user was' in sl or 'user_deactivated' in sl or 'user_id_invalid' in sl or
+        'peer_id_invalid' in sl or 'input user deactivated' in sl
+    )
     conn = db(); cur = conn.cursor()
     ah_sql = f"{int(access_hash)}" if access_hash is not None else "NULL"
     cur.execute(
-        f"INSERT INTO {SCHEMA}.excluded_drivers (user_id, username, first_name, source_msg_id, message_sent, message_sent_at, send_status, access_hash) "
+        f"INSERT INTO {SCHEMA}.excluded_drivers (user_id, username, first_name, source_msg_id, message_sent, message_sent_at, send_status, access_hash, is_unreachable) "
         f"VALUES ({int(user_id) if user_id else 0}, '{esc(username)}', '{esc(first_name)}', "
-        f"{int(source_msg_id) if source_msg_id else 0}, {'TRUE' if status == 'ok' else 'FALSE'}, NOW(), '{esc(status)}', {ah_sql})"
+        f"{int(source_msg_id) if source_msg_id else 0}, {'TRUE' if status == 'ok' else 'FALSE'}, NOW(), '{esc(status)}', {ah_sql}, {'TRUE' if is_dead else 'FALSE'})"
     )
     conn.commit(); cur.close(); conn.close()
 
@@ -669,10 +679,12 @@ def handler(event: dict, context) -> dict:
         template_r = settings_r['message_template'] or 'Здравствуйте!'
 
         # Берём очередь + access_hash для прямого резолва тех, кто вышел из группы
+        # Пропускаем удалённые из Telegram аккаунты (is_unreachable=TRUE)
         conn = db(); cur = conn.cursor()
         cur.execute(
             f"SELECT id, user_id, username, first_name, access_hash FROM {SCHEMA}.excluded_drivers "
             f"WHERE resend_queued=TRUE AND user_id IS NOT NULL AND user_id <> 0 "
+            f"AND is_unreachable = FALSE "
             f"ORDER BY id ASC LIMIT 100"
         )
         queue = cur.fetchall()
@@ -762,14 +774,31 @@ def handler(event: dict, context) -> dict:
                         break
                     except Exception as e:
                         err_text = str(e)[:200].replace("'", "''")
-                        c2 = db(); cu2 = c2.cursor()
-                        cu2.execute(
-                            f"UPDATE {SCHEMA}.excluded_drivers "
-                            f"SET resend_queued=FALSE, resend_status='err:{err_text}', resend_at=NOW() "
-                            f"WHERE id={int(rec_id)}"
+                        # Финальные ошибки Telegram — помечаем аккаунт как мёртвый навсегда
+                        err_lower = str(e).lower()
+                        is_dead = (
+                            'user was' in err_lower or
+                            'user_deactivated' in err_lower or
+                            'user_id_invalid' in err_lower or
+                            'peer_id_invalid' in err_lower or
+                            'input user deactivated' in err_lower
                         )
+                        c2 = db(); cu2 = c2.cursor()
+                        if is_dead:
+                            cu2.execute(
+                                f"UPDATE {SCHEMA}.excluded_drivers "
+                                f"SET resend_queued=FALSE, is_unreachable=TRUE, "
+                                f"resend_status='account_gone: {err_text}', resend_at=NOW() "
+                                f"WHERE id={int(rec_id)}"
+                            )
+                        else:
+                            cu2.execute(
+                                f"UPDATE {SCHEMA}.excluded_drivers "
+                                f"SET resend_queued=FALSE, resend_status='err:{err_text}', resend_at=NOW() "
+                                f"WHERE id={int(rec_id)}"
+                            )
                         c2.commit(); cu2.close(); c2.close()
-                        errors_list.append({'id': rec_id, 'reason': str(e)[:200]})
+                        errors_list.append({'id': rec_id, 'reason': str(e)[:200], 'dead': is_dead})
             finally:
                 try:
                     await client.disconnect()
@@ -803,6 +832,7 @@ def handler(event: dict, context) -> dict:
             f"SELECT id, user_id, username, first_name, send_status, resend_queued "
             f"FROM {SCHEMA}.excluded_drivers "
             f"WHERE user_id IS NOT NULL AND user_id <> 0 "
+            f"AND is_unreachable = FALSE "  # скрываем удалённые из Telegram аккаунты
             f"AND (message_sent=FALSE OR send_status IS NULL OR send_status LIKE 'err:%' OR send_status LIKE 'flood:%') "
             f"AND (resend_status IS NULL OR resend_status <> 'ok') "
             f"ORDER BY id DESC LIMIT 200"
@@ -944,6 +974,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"UPDATE {SCHEMA}.excluded_drivers SET resend_queued=TRUE "
             f"WHERE user_id IS NOT NULL AND user_id <> 0 "
+            f"AND is_unreachable = FALSE "  # пропускаем удалённые аккаунты Telegram
             f"AND (message_sent=FALSE OR send_status IS NULL OR send_status LIKE 'err:%' OR send_status LIKE 'flood:%') "
             f"AND (resend_status IS NULL OR resend_status <> 'ok') "
             f"AND resend_queued=FALSE"
