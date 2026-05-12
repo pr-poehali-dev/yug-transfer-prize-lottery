@@ -26,6 +26,7 @@ from telethon.tl.types import (
     ChannelAdminLogEventActionDeleteMessage,
     ChannelAdminLogEventActionParticipantToggleBan,
     ChatBannedRights,
+    InputPeerUser,
 )
 
 SELF_URL = 'https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520'
@@ -175,12 +176,15 @@ def already_sent(user_id: int) -> bool:
     return r is not None
 
 
-def log_send(user_id, username, first_name, source_msg_id, status: str):
+def log_send(user_id, username, first_name, source_msg_id, status: str, access_hash=None):
+    """Записывает результат отправки + сохраняет access_hash чтобы потом писать
+    даже водителям, которые ушли из группы."""
     conn = db(); cur = conn.cursor()
+    ah_sql = f"{int(access_hash)}" if access_hash is not None else "NULL"
     cur.execute(
-        f"INSERT INTO {SCHEMA}.excluded_drivers (user_id, username, first_name, source_msg_id, message_sent, message_sent_at, send_status) "
+        f"INSERT INTO {SCHEMA}.excluded_drivers (user_id, username, first_name, source_msg_id, message_sent, message_sent_at, send_status, access_hash) "
         f"VALUES ({int(user_id) if user_id else 0}, '{esc(username)}', '{esc(first_name)}', "
-        f"{int(source_msg_id) if source_msg_id else 0}, {'TRUE' if status == 'ok' else 'FALSE'}, NOW(), '{esc(status)}')"
+        f"{int(source_msg_id) if source_msg_id else 0}, {'TRUE' if status == 'ok' else 'FALSE'}, NOW(), '{esc(status)}', {ah_sql})"
     )
     conn.commit(); cur.close(); conn.close()
 
@@ -300,17 +304,18 @@ async def run_scan() -> dict:
                 continue
 
             personalized = personalize(template, first_name, username)
+            ah = getattr(user, 'access_hash', None)
             try:
                 await client.send_message(author_id, personalized)
-                log_send(author_id, username, first_name, ev.id, 'ok')
+                log_send(author_id, username, first_name, ev.id, 'ok', access_hash=ah)
                 sent_count += 1
                 found.append({'user_id': author_id, 'username': username, 'first_name': first_name, 'event_id': ev.id})
             except FloodWaitError as fe:
-                log_send(author_id, username, first_name, ev.id, f'flood:{fe.seconds}')
+                log_send(author_id, username, first_name, ev.id, f'flood:{fe.seconds}', access_hash=ah)
                 errors.append({'event_id': ev.id, 'reason': f'flood {fe.seconds}s'})
                 break
             except Exception as e:
-                log_send(author_id, username, first_name, ev.id, f'err:{str(e)[:200]}')
+                log_send(author_id, username, first_name, ev.id, f'err:{str(e)[:200]}', access_hash=ah)
                 errors.append({'event_id': ev.id, 'reason': str(e)[:200]})
 
         if new_last_id > last_id:
@@ -358,15 +363,16 @@ async def process_deletion_message(client, msg, template: str) -> dict:
         return {'ok': False, 'reason': 'already_sent'}
 
     personalized = personalize(template, first_name, username)
+    ah = getattr(u, 'access_hash', None) if u else None
     try:
         await client.send_message(user_id, personalized)
-        log_send(user_id, username, first_name, msg.id, 'ok')
+        log_send(user_id, username, first_name, msg.id, 'ok', access_hash=ah)
         return {'ok': True, 'user_id': user_id, 'username': username}
     except FloodWaitError as fe:
-        log_send(user_id, username, first_name, msg.id, f'flood:{fe.seconds}')
+        log_send(user_id, username, first_name, msg.id, f'flood:{fe.seconds}', access_hash=ah)
         return {'ok': False, 'reason': f'flood:{fe.seconds}'}
     except Exception as e:
-        log_send(user_id, username, first_name, msg.id, f'err:{str(e)[:200]}')
+        log_send(user_id, username, first_name, msg.id, f'err:{str(e)[:200]}', access_hash=ah)
         return {'ok': False, 'reason': str(e)[:200]}
 
 
@@ -549,6 +555,82 @@ def handler(event: dict, context) -> dict:
         finally:
             loop.close()
 
+    # ENRICH: пробегает admin-log и заполняет access_hash для существующих записей.
+    # Нужно если водители уже в БД, но без access_hash — теперь сможем им писать даже после выхода.
+    if method == 'POST' and action == 'enrich_hashes':
+        headers_in = event.get('headers') or {}
+        token = headers_in.get('X-Admin-Token') or headers_in.get('x-admin-token') or ''
+        if not verify_token(token):
+            return resp(401, {'error': 'invalid token'})
+
+        session_str_e = get_session2()
+        if not session_str_e:
+            return resp(200, {'ok': False, 'reason': 'not_logged_in'})
+
+        api_id_e = int(os.environ['TG_API_ID'])
+        api_hash_e = os.environ['TG_API_HASH']
+
+        async def _enrich():
+            client = TelegramClient(StringSession(session_str_e), api_id_e, api_hash_e)
+            await client.connect()
+            updated = 0
+            scanned_users = 0
+            try:
+                target_entity = await client.get_entity(TARGET_GROUP)
+                # 1) Тянем всю историю admin-лога — там есть users с access_hash
+                from telethon.tl.types import ChannelAdminLogEventsFilter as _Filter
+                max_id = 0
+                seen_user_ids = {}
+                for _ in range(20):  # до 20 страниц по 100 = 2000 событий
+                    al = await client(GetAdminLogRequest(
+                        channel=target_entity,
+                        q='',
+                        events_filter=_Filter(
+                            join=False, leave=False, invite=False,
+                            ban=True, unban=False, kick=False, unkick=False,
+                            promote=False, demote=False, info=False,
+                            settings=False, pinned=False, edit=False, delete=True,
+                        ),
+                        admins=[],
+                        max_id=max_id,
+                        min_id=0,
+                        limit=100,
+                    ))
+                    if not al.events:
+                        break
+                    for u in al.users:
+                        ah = getattr(u, 'access_hash', None)
+                        if ah is not None:
+                            seen_user_ids[u.id] = ah
+                            scanned_users += 1
+                    max_id = min(e.id for e in al.events) - 1
+                    if max_id <= 0:
+                        break
+                # 2) Обновляем в БД тех, кого нашли
+                if seen_user_ids:
+                    conn = db(); cur = conn.cursor()
+                    for uid, ah in seen_user_ids.items():
+                        cur.execute(
+                            f"UPDATE {SCHEMA}.excluded_drivers SET access_hash={int(ah)} "
+                            f"WHERE user_id={int(uid)} AND access_hash IS NULL"
+                        )
+                        updated += cur.rowcount
+                    conn.commit(); cur.close(); conn.close()
+                return {'ok': True, 'scanned_users': scanned_users, 'updated_records': updated, 'unique_users_with_hash': len(seen_user_ids)}
+            except Exception as e:
+                return {'ok': False, 'error': str(e)[:300]}
+            finally:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        try:
+            return resp(200, loop.run_until_complete(_enrich()))
+        finally:
+            loop.close()
+
     # RESEND: повторная рассылка по resend_queued=TRUE
     # POST ?action=resend  Header: X-Admin-Token
     if method == 'POST' and action == 'resend':
@@ -564,10 +646,10 @@ def handler(event: dict, context) -> dict:
         settings_r = get_settings()
         template_r = settings_r['message_template'] or 'Здравствуйте!'
 
-        # Берём очередь
+        # Берём очередь + access_hash для прямого резолва тех, кто вышел из группы
         conn = db(); cur = conn.cursor()
         cur.execute(
-            f"SELECT id, user_id, username, first_name FROM {SCHEMA}.excluded_drivers "
+            f"SELECT id, user_id, username, first_name, access_hash FROM {SCHEMA}.excluded_drivers "
             f"WHERE resend_queued=TRUE AND user_id IS NOT NULL AND user_id <> 0 "
             f"ORDER BY id ASC LIMIT 100"
         )
@@ -597,31 +679,24 @@ def handler(event: dict, context) -> dict:
                     print(f"[resend] participants warmup err: {e}")
 
                 for row in queue:
-                    rec_id, uid, uname, fname = row
+                    rec_id, uid, uname, fname, ah = row
                     uid = int(uid) if uid else 0
                     fname = fname or 'водитель'
                     uname = uname or ''
+                    ah = int(ah) if ah is not None else None
                     personalized = personalize(template_r, fname, uname)
 
-                    # Если нет ни кэша (вышел из группы), ни @username — невозможно достучаться.
-                    # Снимаем из очереди со статусом "unreachable" чтобы кнопка не висела пустой.
-                    if not uname:
+                    # Стратегия резолва, по приоритету:
+                    # 1) Сохранённый access_hash → InputPeerUser напрямую (работает даже после выхода из группы)
+                    # 2) Кэш Telethon (если водитель ещё в группе)
+                    # 3) @username (если есть)
+                    target = None
+                    if ah is not None:
                         try:
-                            await client.get_input_entity(uid)
+                            target = InputPeerUser(user_id=uid, access_hash=ah)
                         except Exception:
-                            c2 = db(); cu2 = c2.cursor()
-                            cu2.execute(
-                                f"UPDATE {SCHEMA}.excluded_drivers "
-                                f"SET resend_queued=FALSE, resend_status='unreachable:вышел из группы и нет @username', resend_at=NOW() "
-                                f"WHERE id={int(rec_id)}"
-                            )
-                            c2.commit(); cu2.close(); c2.close()
-                            errors_list.append({'id': rec_id, 'reason': 'unreachable'})
-                            continue
-
-                    try:
-                        # Резолвим: сначала по ID (из кэша), иначе по @username
-                        target = uid
+                            target = None
+                    if target is None:
                         try:
                             target = await client.get_input_entity(uid)
                         except Exception:
@@ -629,7 +704,20 @@ def handler(event: dict, context) -> dict:
                                 try:
                                     target = await client.get_input_entity(uname)
                                 except Exception:
-                                    target = uid
+                                    target = None
+
+                    if target is None:
+                        c2 = db(); cu2 = c2.cursor()
+                        cu2.execute(
+                            f"UPDATE {SCHEMA}.excluded_drivers "
+                            f"SET resend_queued=FALSE, resend_status='unreachable: нет access_hash, вышел из группы, нет @username', resend_at=NOW() "
+                            f"WHERE id={int(rec_id)}"
+                        )
+                        c2.commit(); cu2.close(); c2.close()
+                        errors_list.append({'id': rec_id, 'reason': 'unreachable'})
+                        continue
+
+                    try:
                         await client.send_message(target, personalized)
                         c2 = db(); cu2 = c2.cursor()
                         cu2.execute(

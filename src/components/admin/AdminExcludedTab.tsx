@@ -141,9 +141,20 @@ export function AdminExcludedTab({ token }: Props) {
 
   const runResend = async () => {
     if (resending) return;
-    if (!confirm(`Отправить ${resendQueue?.queued || 0} сообщений?\n\nПо 1 сообщению каждые 2 секунды.`)) return;
-    setResending(true); setRunResult("");
+    if (!confirm(`Отправить ${resendQueue?.queued || 0} сообщений?\n\nСистема сначала автоматически обогатит данные (access_hash) — это позволит писать даже водителям, которые вышли из группы. Потом отправит по 1 сообщению каждые 2 секунды.`)) return;
+    setResending(true); setRunResult("Обогащаем данные (access_hash)...");
     try {
+      // 1) Сначала обогащаем access_hash из admin-лога — это позволит писать тем, кто вышел из группы
+      try {
+        const re = await fetch(`${EXCLUDED_WATCHER_URL}?action=enrich_hashes`, { method: "POST", headers });
+        const de = await re.json();
+        if (de.ok) {
+          setRunResult(`Обогащено ${de.updated_records || 0} записей. Отправляю...`);
+        }
+      } catch (_e) {
+        // не критично — едем дальше
+      }
+      // 2) Сама рассылка
       const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=resend`, { method: "POST", headers });
       const d = await r.json();
       if (d.ok) {
