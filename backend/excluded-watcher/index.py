@@ -602,6 +602,23 @@ def handler(event: dict, context) -> dict:
                     fname = fname or 'водитель'
                     uname = uname or ''
                     personalized = personalize(template_r, fname, uname)
+
+                    # Если нет ни кэша (вышел из группы), ни @username — невозможно достучаться.
+                    # Снимаем из очереди со статусом "unreachable" чтобы кнопка не висела пустой.
+                    if not uname:
+                        try:
+                            await client.get_input_entity(uid)
+                        except Exception:
+                            c2 = db(); cu2 = c2.cursor()
+                            cu2.execute(
+                                f"UPDATE {SCHEMA}.excluded_drivers "
+                                f"SET resend_queued=FALSE, resend_status='unreachable:вышел из группы и нет @username', resend_at=NOW() "
+                                f"WHERE id={int(rec_id)}"
+                            )
+                            c2.commit(); cu2.close(); c2.close()
+                            errors_list.append({'id': rec_id, 'reason': 'unreachable'})
+                            continue
+
                     try:
                         # Резолвим: сначала по ID (из кэша), иначе по @username
                         target = uid
