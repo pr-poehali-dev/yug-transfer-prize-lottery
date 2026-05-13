@@ -42,7 +42,7 @@ def get_target_group() -> str:
         return '@UG_DRIVER'
 
 
-DAILY_INVITE_LIMIT = 30          # макс инвайтов/сутки на аккаунт (после прогрева)
+DAILY_INVITE_LIMIT = 100000      # лимит снят: контроль вручную
 PAUSE_MIN_SEC = 90               # мин пауза между инвайтами в одной пачке
 PAUSE_MAX_SEC = 180              # макс пауза между инвайтами в одной пачке
 MAX_BATCH_SIZE = 10              # макс инвайтов за один HTTP-запуск
