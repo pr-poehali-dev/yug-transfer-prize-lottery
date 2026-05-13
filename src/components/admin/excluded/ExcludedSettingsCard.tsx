@@ -7,6 +7,10 @@ interface Props {
   saving: boolean;
   template: string;
   setTemplate: (v: string) => void;
+  photoUrl: string;
+  uploadingPhoto: boolean;
+  uploadPhoto: (f: File) => void;
+  removePhoto: () => void;
   editingTemplate: boolean;
   setEditingTemplate: (fn: (v: boolean) => boolean) => void;
   togglePower: (on: boolean) => void;
@@ -30,6 +34,10 @@ export function ExcludedSettingsCard({
   saving,
   template,
   setTemplate,
+  photoUrl,
+  uploadingPhoto,
+  uploadPhoto,
+  removePhoto,
   editingTemplate,
   setEditingTemplate,
   togglePower,
@@ -111,6 +119,51 @@ export function ExcludedSettingsCard({
             >
               <Icon name="Trash2" size={14} className="text-white/50 hover:text-red-400" />
             </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-white/10 bg-white/3 p-3">
+        <div className="flex items-center gap-3">
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt="превью"
+              className="w-20 h-20 rounded-lg object-cover border border-white/10 flex-shrink-0"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-lg border border-dashed border-white/15 bg-white/3 flex items-center justify-center flex-shrink-0">
+              <Icon name="Image" size={22} className="text-white/30" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="text-white/80 text-sm font-medium">Фото к сообщению</div>
+            <div className="text-white/40 text-xs mt-0.5">
+              {photoUrl ? "Будет отправлено вместе с текстом" : "Необязательно. JPG/PNG до ~5 МБ"}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <label
+                className={`px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/80 text-xs hover:bg-white/10 cursor-pointer inline-flex items-center gap-1.5 ${uploadingPhoto ? "opacity-50 pointer-events-none" : ""}`}
+              >
+                <Icon name={uploadingPhoto ? "Loader2" : "Upload"} size={12} className={uploadingPhoto ? "animate-spin" : ""} />
+                {uploadingPhoto ? "Загрузка..." : photoUrl ? "Заменить" : "Загрузить фото"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = ""; }}
+                />
+              </label>
+              {photoUrl && (
+                <button
+                  onClick={removePhoto}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-red-300 text-xs hover:bg-red-500/15 inline-flex items-center gap-1.5"
+                >
+                  <Icon name="Trash2" size={12} />
+                  Убрать
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

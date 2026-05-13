@@ -21,6 +21,8 @@ export function AdminExcludedTab({ token }: Props) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [template, setTemplate] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [runResult, setRunResult] = useState<string>("");
@@ -48,6 +50,7 @@ export function AdminExcludedTab({ token }: Props) {
     if (!editingTemplate) {
       setTemplate(d.message_template || "");
     }
+    setPhotoUrl(d.photo_url || "");
     setEnabled(!!d.enabled);
     setLastUpdated(Date.now());
     // Если бэкенд автоматически возродил умерший цикл — показываем уведомление
@@ -101,7 +104,7 @@ export function AdminExcludedTab({ token }: Props) {
     try {
       await fetch(`${EXCLUDED_WATCHER_URL}?action=settings`, {
         method: "POST", headers,
-        body: JSON.stringify({ enabled, message_template: template }),
+        body: JSON.stringify({ enabled, message_template: template, photo_url: photoUrl }),
       });
       await load();
     } finally { setSaving(false); }
@@ -115,10 +118,44 @@ export function AdminExcludedTab({ token }: Props) {
       setEnabled(on);
       await fetch(`${EXCLUDED_WATCHER_URL}?action=settings`, {
         method: "POST", headers,
-        body: JSON.stringify({ enabled: on, message_template: template }),
+        body: JSON.stringify({ enabled: on, message_template: template, photo_url: photoUrl }),
       });
       await load();
     } finally { setSaving(false); }
+  };
+
+  const uploadPhoto = async (file: File) => {
+    setUploadingPhoto(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const r = await fetch(`${EXCLUDED_WATCHER_URL}?action=upload_photo`, {
+            method: "POST", headers,
+            body: JSON.stringify({ image: reader.result }),
+          });
+          const d = await r.json();
+          if (d.ok && d.url) {
+            setPhotoUrl(d.url);
+            toast.success("Фото загружено");
+          } else {
+            toast.error("Ошибка загрузки", { description: d.error || "?" });
+          }
+        } catch (e) {
+          toast.error("Ошибка загрузки", { description: e instanceof Error ? e.message : String(e) });
+        } finally {
+          setUploadingPhoto(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removePhoto = () => {
+    if (!confirm("Удалить фото из сообщения?")) return;
+    setPhotoUrl("");
   };
 
   const loadResendQueue = async () => {
@@ -338,6 +375,10 @@ export function AdminExcludedTab({ token }: Props) {
             saving={saving}
             template={template}
             setTemplate={setTemplate}
+            photoUrl={photoUrl}
+            uploadingPhoto={uploadingPhoto}
+            uploadPhoto={uploadPhoto}
+            removePhoto={removePhoto}
             editingTemplate={editingTemplate}
             setEditingTemplate={setEditingTemplate}
             togglePower={togglePower}

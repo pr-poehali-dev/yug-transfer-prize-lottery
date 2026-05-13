@@ -433,6 +433,7 @@ async def run_listener(loop_token: str) -> dict:
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
     template = settings['message_template'] or 'Здравствуйте!'
+    photo_url = settings.get('photo_url') or ''
 
     try:
         target_entity = None
@@ -465,7 +466,7 @@ async def run_listener(loop_token: str) -> dict:
                 if not re.search(r'удалил|deleted', text, re.IGNORECASE):
                     return
                 print(f"[listener] DELETE-MSG from @{sender_username}: {text[:120]!r}")
-                res = await process_deletion_message(client, ev.message, template)
+                res = await process_deletion_message(client, ev.message, template, photo_url)
                 if res.get('ok'):
                     sent_count[0] += 1
                     print(f"[listener] sent to user_id={res.get('user_id')} @{res.get('username')}")
@@ -551,7 +552,7 @@ async def run_listener(loop_token: str) -> dict:
                     first_name = getattr(user, 'first_name', '') or 'водитель'
                     personalized = personalize(template, first_name, username)
                     try:
-                        await client.send_message(author_id, personalized)
+                        await send_personalized(client, author_id, personalized, photo_url)
                         log_send(author_id, username, first_name, ev.id, 'ok')
                         adminlog_sent += 1
                         print(f"[adminlog-poll] sent to @{username} (id={author_id})")
@@ -688,6 +689,7 @@ def handler(event: dict, context) -> dict:
 
         settings_r = get_settings()
         template_r = settings_r['message_template'] or 'Здравствуйте!'
+        photo_url_r = settings_r.get('photo_url') or ''
 
         # Берём очередь + access_hash для прямого резолва тех, кто вышел из группы
         # Пропускаем удалённые из Telegram аккаунты (is_unreachable=TRUE)
@@ -763,7 +765,7 @@ def handler(event: dict, context) -> dict:
                         continue
 
                     try:
-                        await client.send_message(target, personalized)
+                        await send_personalized(client, target, personalized, photo_url_r)
                         c2 = db(); cu2 = c2.cursor()
                         cu2.execute(
                             f"UPDATE {SCHEMA}.excluded_drivers "
@@ -1367,10 +1369,40 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get('body') or '{}')
 
+    if method == 'POST' and action == 'upload_photo':
+        import base64, uuid
+        import boto3
+        data_url = body.get('image', '')
+        if not data_url:
+            return resp(400, {'error': 'image обязателен'})
+        if ',' in data_url:
+            header, encoded = data_url.split(',', 1)
+            ext = 'jpg'
+            if 'png' in header: ext = 'png'
+            elif 'gif' in header: ext = 'gif'
+            elif 'webp' in header: ext = 'webp'
+            ct = f'image/{ "jpeg" if ext == "jpg" else ext }'
+        else:
+            encoded = data_url; ext = 'jpg'; ct = 'image/jpeg'
+        try:
+            image_bytes = base64.b64decode(encoded)
+        except Exception:
+            return resp(400, {'error': 'битый base64'})
+        key = f"excluded/{uuid.uuid4().hex}.{ext}"
+        s3 = boto3.client(
+            's3', endpoint_url='https://bucket.poehali.dev',
+            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+        )
+        s3.put_object(Bucket='files', Key=key, Body=image_bytes, ContentType=ct)
+        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        return resp(200, {'ok': True, 'url': cdn_url})
+
     if method == 'POST' and action == 'settings':
         enabled = body.get('enabled')
         template = body.get('message_template')
-        save_settings(enabled=enabled, template=template)
+        photo_url = body.get('photo_url')
+        save_settings(enabled=enabled, template=template, photo_url=photo_url)
         # Запускаем/перезапускаем цикл если включено
         if enabled:
             import secrets
