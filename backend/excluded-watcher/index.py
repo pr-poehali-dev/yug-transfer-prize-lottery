@@ -189,18 +189,61 @@ def save_settings(enabled=None, template=None, last_msg_id=None, photo_url=None,
     conn.commit(); cur.close(); conn.close()
 
 
+_PHOTO_CACHE: dict = {}
+
+
+def _fetch_photo_bytes(url: str):
+    """Скачивает фото по URL и кэширует. Возвращает BytesIO с .name (Telethon хочет имя файла)."""
+    import io
+    url = (url or '').strip()
+    if not url:
+        return None
+    if url in _PHOTO_CACHE:
+        data, name = _PHOTO_CACHE[url]
+    else:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = r.read()
+        except Exception as e:
+            print(f"[send] cannot fetch photo {url}: {e}")
+            return None
+        # Имя файла с правильным расширением — Telethon определяет MIME по нему
+        ext = 'jpg'
+        lo = url.lower()
+        for e in ('png', 'webp', 'gif', 'jpeg', 'jpg'):
+            if e in lo:
+                ext = 'jpeg' if e == 'jpg' else e
+                break
+        name = f'photo.{ext}'
+        _PHOTO_CACHE[url] = (data, name)
+    bio = io.BytesIO(data)
+    bio.name = name
+    return bio
+
+
 async def send_personalized(client, target, text: str, photo_url: str = '', button_text: str = '', button_url: str = ''):
-    """Отправляет текст. Если photo_url — фото с подписью. Если button_text+button_url — добавляет inline-кнопку."""
-    from telethon.tl.custom import Button
-    buttons = None
+    """Отправляет текст. Фото — как файл-байты с подписью. Кнопка — HTML-ссылка в конце (для user-сессий
+    обычные inline-кнопки не доступны, только у ботов)."""
     bt = (button_text or '').strip()
     bu = (button_url or '').strip()
+    # Кнопка → последняя строка как HTML-ссылка с эмодзи (выглядит как кнопка)
+    final_text = text or ''
     if bt and bu:
-        buttons = [[Button.url(bt, bu)]]
-    if photo_url and photo_url.strip():
-        await client.send_file(target, photo_url.strip(), caption=text, buttons=buttons)
-    else:
-        await client.send_message(target, text, buttons=buttons)
+        # html.escape чтобы кавычки/амперсанды не ломали разметку
+        import html as _html
+        safe_text = _html.escape(bt)
+        final_text = f"{final_text}\n\n👉 <a href=\"{bu}\">{safe_text}</a>"
+
+    purl = (photo_url or '').strip()
+    if purl:
+        photo = _fetch_photo_bytes(purl)
+        if photo is not None:
+            await client.send_file(target, photo, caption=final_text, parse_mode='html')
+            return
+        # если фото скачать не смогли — отправим хотя бы текст
+        print(f"[send] photo fetch failed, sending text only")
+    await client.send_message(target, final_text, parse_mode='html', link_preview=False)
 
 
 def get_session2() -> str:
