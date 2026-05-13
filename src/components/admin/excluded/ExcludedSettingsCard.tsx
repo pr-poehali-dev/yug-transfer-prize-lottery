@@ -64,243 +64,199 @@ export function ExcludedSettingsCard({
   runFullSweep,
 }: Props) {
   return (
-    <div className="rounded-2xl border border-white/8 p-5" style={{ background: "rgba(255,255,255,0.02)" }}>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-          <Icon name="Settings" size={20} className="text-amber-400" />
+    <div className="rounded-2xl border border-white/8 p-3" style={{ background: "rgba(255,255,255,0.02)" }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+          <Icon name="Settings" size={14} className="text-amber-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-white font-medium text-lg">Настройки</h3>
-          <p className="text-white/40 text-xs">Группа @UG_DRIVER · триггер @VsyaRussiabot · переменные {"{name}"} {"{username}"}</p>
+          <h3 className="text-white font-medium text-sm leading-tight">Настройки</h3>
+          <p className="text-white/40 text-[10px] leading-tight">Группа @UG_DRIVER · триггер @VsyaRussiabot · {"{name}"} {"{username}"}</p>
         </div>
-      </div>
-
-      <button
-        onClick={() => togglePower(!enabled)}
-        disabled={saving}
-        className={`w-full mb-4 px-4 py-3 rounded-xl border text-sm font-semibold inline-flex items-center justify-between gap-3 transition disabled:opacity-50 ${
-          enabled
-            ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25"
-            : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"
-        }`}
-      >
-        <span className="inline-flex items-center gap-2">
-          <Icon name={enabled ? "Power" : "PowerOff"} size={16} />
-          {saving ? "Меняем..." : enabled ? "Авто-сообщения включены" : "Авто-сообщения выключены"}
-        </span>
-        <span
-          className={`relative w-10 h-5 rounded-full transition ${enabled ? "bg-emerald-500" : "bg-white/20"}`}
+        <button
+          onClick={() => togglePower(!enabled)}
+          disabled={saving}
+          title={enabled ? "Авто-сообщения включены" : "Авто-сообщения выключены"}
+          className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition disabled:opacity-50 ${
+            enabled
+              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25"
+              : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"
+          }`}
         >
-          <span
-            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${enabled ? "left-5" : "left-0.5"}`}
-          />
-        </span>
-      </button>
-
-      <div className="rounded-xl border border-white/10 bg-white/3 overflow-hidden">
-        <div className="flex items-start gap-2 px-4 py-3">
-          <div className="flex-1 min-w-0">
-            {!editingTemplate ? (
-              <p className="text-white/80 text-sm whitespace-pre-wrap line-clamp-3">
-                {template?.trim() ? template : <span className="text-white/30">Текст не задан</span>}
-              </p>
-            ) : (
-              <textarea
-                value={template} onChange={e => setTemplate(e.target.value)}
-                rows={10} autoFocus
-                className="w-full bg-transparent border-0 text-white text-sm outline-none resize-none font-mono p-0"
-                placeholder="Текст сообщения — используй {name} для имени"
-              />
-            )}
-          </div>
-          <div className="flex gap-1 flex-shrink-0">
-            <button
-              onClick={() => setEditingTemplate(v => !v)}
-              title={editingTemplate ? "Свернуть" : "Редактировать"}
-              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center"
-            >
-              <Icon name={editingTemplate ? "ChevronUp" : "Pencil"} size={14} className="text-white/60" />
-            </button>
-            <button
-              onClick={() => { if (confirm("Очистить текст шаблона?")) setTemplate(""); }}
-              title="Очистить"
-              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 flex items-center justify-center"
-            >
-              <Icon name="Trash2" size={14} className="text-white/50 hover:text-red-400" />
-            </button>
-          </div>
-        </div>
+          <Icon name={enabled ? "Power" : "PowerOff"} size={12} />
+          <span className="hidden sm:inline">{enabled ? "Вкл" : "Выкл"}</span>
+          <span className={`relative w-7 h-3.5 rounded-full transition ${enabled ? "bg-emerald-500" : "bg-white/20"}`}>
+            <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${enabled ? "left-4" : "left-0.5"}`} />
+          </span>
+        </button>
       </div>
 
-      <div className="mt-3 rounded-xl border border-white/10 bg-white/3 p-3">
-        <div className="flex items-center gap-3">
-          {photoUrl ? (
-            <img
-              src={photoUrl}
-              alt="превью"
-              className="w-20 h-20 rounded-lg object-cover border border-white/10 flex-shrink-0"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-lg border border-dashed border-white/15 bg-white/3 flex items-center justify-center flex-shrink-0">
-              <Icon name="Image" size={22} className="text-white/30" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="text-white/80 text-sm font-medium">Фото к сообщению</div>
-            <div className="text-white/40 text-xs mt-0.5">
-              {photoUrl ? "Будет отправлено вместе с текстом" : "Необязательно. JPG/PNG до ~5 МБ"}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <label
-                className={`px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/80 text-xs hover:bg-white/10 cursor-pointer inline-flex items-center gap-1.5 ${uploadingPhoto ? "opacity-50 pointer-events-none" : ""}`}
-              >
-                <Icon name={uploadingPhoto ? "Loader2" : "Upload"} size={12} className={uploadingPhoto ? "animate-spin" : ""} />
-                {uploadingPhoto ? "Загрузка..." : photoUrl ? "Заменить" : "Загрузить фото"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = ""; }}
-                />
-              </label>
-              {photoUrl && (
-                <button
-                  onClick={removePhoto}
-                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-red-300 text-xs hover:bg-red-500/15 inline-flex items-center gap-1.5"
-                >
-                  <Icon name="Trash2" size={12} />
-                  Убрать
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-xl border border-white/10 bg-white/3 p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <Icon name="MousePointerClick" size={14} className="text-white/60" />
-          <span className="text-white/80 text-sm font-medium">Кнопка под текстом</span>
-          {buttonText && buttonUrl && (
-            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">вкл</span>
-          )}
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <input
-            type="text"
-            value={buttonText}
-            onChange={e => setButtonText(e.target.value)}
-            placeholder="Текст кнопки (напр. «Оплатить подписку»)"
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
-          />
-          <input
-            type="url"
-            value={buttonUrl}
-            onChange={e => setButtonUrl(e.target.value)}
-            placeholder="https://t.me/VsyaRussiabot"
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono outline-none focus:border-amber-500/50"
-          />
-        </div>
-        <div className="text-white/40 text-[11px] mt-2">
-          Чтобы скрыть кнопку — очисти оба поля. Ссылка обязательно с https:// или http://, либо tg://
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <div className="flex items-center gap-2 mb-2 px-1">
-          <Icon name="Eye" size={13} className="text-white/50" />
-          <span className="text-white/60 text-xs font-medium">Предпросмотр — как увидит водитель</span>
-        </div>
-        <div className="rounded-2xl p-4 max-w-md" style={{ background: "#0e1621" }}>
-          <div className="flex items-start gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              Я
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="inline-block max-w-full rounded-2xl rounded-tl-md overflow-hidden" style={{ background: "#182533" }}>
-                {photoUrl && (
-                  <img
-                    src={photoUrl}
-                    alt="фото"
-                    className="block w-full max-w-[320px] object-cover"
-                    style={{ maxHeight: 320 }}
+      <div className="grid gap-2 lg:grid-cols-2">
+        <div className="space-y-2">
+          <div className="rounded-lg border border-white/10 bg-white/3 overflow-hidden">
+            <div className="flex items-start gap-1 px-2.5 py-2">
+              <div className="flex-1 min-w-0">
+                {!editingTemplate ? (
+                  <p className="text-white/80 text-xs whitespace-pre-wrap line-clamp-2">
+                    {template?.trim() ? template : <span className="text-white/30">Текст не задан</span>}
+                  </p>
+                ) : (
+                  <textarea
+                    value={template} onChange={e => setTemplate(e.target.value)}
+                    rows={6} autoFocus
+                    className="w-full bg-transparent border-0 text-white text-xs outline-none resize-none font-mono p-0"
+                    placeholder="Текст — {name} для имени"
                   />
                 )}
-                <div className="px-3 py-2">
-                  {template?.trim() ? (
-                    <p className="text-white text-[14px] leading-snug whitespace-pre-wrap break-words">
-                      {personalize(template, "Иван", "ivan")}
-                    </p>
-                  ) : (
-                    <p className="text-white/40 text-[14px] italic">Текст сообщения пуст</p>
-                  )}
-                  <div className="text-white/40 text-[10px] text-right mt-1">12:34</div>
+              </div>
+              <div className="flex gap-0.5 flex-shrink-0">
+                <button
+                  onClick={() => setEditingTemplate(v => !v)}
+                  title={editingTemplate ? "Свернуть" : "Редактировать"}
+                  className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center"
+                >
+                  <Icon name={editingTemplate ? "ChevronUp" : "Pencil"} size={11} className="text-white/60" />
+                </button>
+                <button
+                  onClick={() => { if (confirm("Очистить?")) setTemplate(""); }}
+                  title="Очистить"
+                  className="w-6 h-6 rounded bg-white/5 hover:bg-red-500/20 flex items-center justify-center"
+                >
+                  <Icon name="Trash2" size={11} className="text-white/50 hover:text-red-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-white/3 p-2">
+            <div className="flex items-center gap-2">
+              {photoUrl ? (
+                <img src={photoUrl} alt="ф" className="w-12 h-12 rounded object-cover border border-white/10 flex-shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded border border-dashed border-white/15 bg-white/3 flex items-center justify-center flex-shrink-0">
+                  <Icon name="Image" size={16} className="text-white/30" />
                 </div>
-                {buttonText.trim() && buttonUrl.trim() && (
-                  <a
-                    href={buttonUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-center px-3 py-2.5 text-[13px] font-medium border-t transition"
-                    style={{ background: "#243447", color: "#6ab3f3", borderColor: "rgba(255,255,255,0.05)" }}
-                  >
-                    {buttonText}
-                  </a>
+              )}
+              <div className="flex-1 min-w-0 flex items-center gap-1">
+                <label className={`px-2 py-1 rounded bg-white/5 border border-white/10 text-white/80 text-[11px] hover:bg-white/10 cursor-pointer inline-flex items-center gap-1 ${uploadingPhoto ? "opacity-50 pointer-events-none" : ""}`}>
+                  <Icon name={uploadingPhoto ? "Loader2" : "Upload"} size={10} className={uploadingPhoto ? "animate-spin" : ""} />
+                  {uploadingPhoto ? "..." : photoUrl ? "Заменить фото" : "Загрузить фото"}
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = ""; }} />
+                </label>
+                {photoUrl && (
+                  <button onClick={removePhoto} title="Убрать"
+                    className="w-6 h-6 rounded bg-white/5 hover:bg-red-500/15 text-red-300 inline-flex items-center justify-center">
+                    <Icon name="X" size={11} />
+                  </button>
                 )}
               </div>
-              <div className="text-white/30 text-[10px] mt-1">{"{name}"} → «Иван», {"{username}"} → «ivan»</div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-white/3 p-2">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Icon name="MousePointerClick" size={11} className="text-white/60" />
+              <span className="text-white/70 text-[11px] font-medium">Кнопка</span>
+              {buttonText && buttonUrl && (
+                <span className="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-300">вкл</span>
+              )}
+            </div>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              <input
+                type="text" value={buttonText} onChange={e => setButtonText(e.target.value)}
+                placeholder="Текст («Оплатить»)"
+                className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-amber-500/50"
+              />
+              <input
+                type="url" value={buttonUrl} onChange={e => setButtonUrl(e.target.value)}
+                placeholder="https://t.me/VsyaRussiabot"
+                className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-amber-500/50"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center gap-1.5 mb-1 px-0.5">
+            <Icon name="Eye" size={11} className="text-white/50" />
+            <span className="text-white/50 text-[10px] font-medium uppercase tracking-wider">Превью</span>
+          </div>
+          <div className="rounded-xl p-2.5" style={{ background: "#0e1621" }}>
+            <div className="flex items-start gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">Я</div>
+              <div className="flex-1 min-w-0">
+                <div className="inline-block max-w-full rounded-2xl rounded-tl-md overflow-hidden" style={{ background: "#182533" }}>
+                  {photoUrl && (
+                    <img src={photoUrl} alt="фото" className="block w-full object-cover" style={{ maxHeight: 200, maxWidth: 280 }} />
+                  )}
+                  <div className="px-2.5 py-1.5">
+                    {template?.trim() ? (
+                      <p className="text-white text-[12px] leading-snug whitespace-pre-wrap break-words">
+                        {personalize(template, "Иван", "ivan")}
+                      </p>
+                    ) : (
+                      <p className="text-white/40 text-[12px] italic">Текст пуст</p>
+                    )}
+                    <div className="text-white/40 text-[9px] text-right mt-0.5">12:34</div>
+                  </div>
+                  {buttonText.trim() && buttonUrl.trim() && (
+                    <a href={buttonUrl} target="_blank" rel="noopener noreferrer"
+                      className="block text-center px-2 py-1.5 text-[11px] font-medium border-t"
+                      style={{ background: "#243447", color: "#6ab3f3", borderColor: "rgba(255,255,255,0.05)" }}>
+                      {buttonText}
+                    </a>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <button
-        onClick={runFullSweep}
-        disabled={scanning || resending || !enabled}
-        title={!enabled ? "Сначала включи авто-сообщения" : "Сканировать admin-лог + обогатить + отправить всем"}
-        className="w-full mt-3 px-4 py-3 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white text-sm font-bold hover:opacity-90 disabled:opacity-40 inline-flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20"
-      >
-        <Icon name={scanning || resending ? "Loader2" : "Zap"} size={16} className={scanning || resending ? "animate-spin" : ""} />
-        {scanning || resending ? "Идёт рассылка…" : "Найти и отправить всем за сегодня"}
-      </button>
-
-      <div className="flex items-center gap-2 mt-3 flex-wrap">
+      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+        <button
+          onClick={runFullSweep}
+          disabled={scanning || resending || !enabled}
+          title={!enabled ? "Сначала включи авто-сообщения" : "Сканировать + отправить всем"}
+          className="flex-1 min-w-[180px] px-3 py-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white text-xs font-bold hover:opacity-90 disabled:opacity-40 inline-flex items-center justify-center gap-1.5"
+        >
+          <Icon name={scanning || resending ? "Loader2" : "Zap"} size={13} className={scanning || resending ? "animate-spin" : ""} />
+          {scanning || resending ? "Идёт рассылка…" : "Найти и отправить всем"}
+        </button>
         <button onClick={saveSettings} disabled={saving}
-          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-2">
-          <Icon name="Save" size={14} />
-          {saving ? "Сохранение..." : "Сохранить"}
+          className="px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
+          <Icon name="Save" size={12} />
+          {saving ? "..." : "Сохранить"}
         </button>
         <button onClick={reviveLoop} disabled={reviving || !enabled}
-          title={!enabled ? "Сначала включи авто-сообщения" : "Перезапустить фоновый цикл"}
-          className="px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2">
-          <Icon name="RefreshCw" size={14} className={reviving ? "animate-spin" : ""} />
-          {reviving ? "Перезапуск..." : "Перезапустить цикл"}
+          title={!enabled ? "Сначала включи" : "Перезапустить фоновый цикл"}
+          className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 disabled:opacity-40 inline-flex items-center justify-center">
+          <Icon name="RefreshCw" size={12} className={reviving ? "animate-spin" : ""} />
         </button>
         {(!resendQueue || resendQueue.queued === 0) ? (
           <button onClick={runScan} disabled={scanning}
-            title="Найти всех, кому не дошло сообщение"
-            className="px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 disabled:opacity-40 inline-flex items-center gap-2">
-            <Icon name="Search" size={14} className={scanning ? "animate-pulse" : ""} />
-            {scanning ? "Сканирую..." : "Сканировать"}
+            title="Найти всех, кому не дошло"
+            className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 disabled:opacity-40 inline-flex items-center justify-center">
+            <Icon name="Search" size={12} className={scanning ? "animate-pulse" : ""} />
           </button>
         ) : (
           <>
             <button onClick={runResend} disabled={resending}
-              className="px-3 py-2.5 rounded-xl bg-pink-500/15 border border-pink-500/30 text-pink-300 text-sm font-medium hover:bg-pink-500/25 disabled:opacity-40 inline-flex items-center gap-2">
-              <Icon name="Send" size={14} className={resending ? "animate-pulse" : ""} />
-              {resending ? "Отправляем..." : `Отправить · ${resendQueue.queued}`}
+              className="px-2.5 py-2 rounded-lg bg-pink-500/15 border border-pink-500/30 text-pink-300 text-xs font-medium hover:bg-pink-500/25 disabled:opacity-40 inline-flex items-center gap-1.5">
+              <Icon name="Send" size={12} className={resending ? "animate-pulse" : ""} />
+              {resending ? "..." : `Отправить · ${resendQueue.queued}`}
             </button>
-            <button onClick={runScan} disabled={scanning}
-              title="Пересканировать"
-              className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 inline-flex items-center justify-center">
-              <Icon name="RefreshCw" size={14} className={scanning ? "animate-spin" : ""} />
+            <button onClick={runScan} disabled={scanning} title="Пересканировать"
+              className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 inline-flex items-center justify-center">
+              <Icon name="RefreshCw" size={12} className={scanning ? "animate-spin" : ""} />
             </button>
           </>
         )}
-        {runResult && (
-          <span className="text-xs text-white/60 ml-auto">{runResult}</span>
-        )}
       </div>
+      {runResult && (
+        <div className="text-[10px] text-white/50 mt-1.5 px-0.5 line-clamp-2">{runResult}</div>
+      )}
 
       {resendList && resendList.length > 0 && (
         <div className="mt-3 rounded-xl border border-white/8 bg-white/3 overflow-hidden">
