@@ -93,18 +93,18 @@ def db():
 
 def get_settings() -> dict:
     conn = db(); cur = conn.cursor()
-    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat, EXTRACT(EPOCH FROM (NOW() - loop_heartbeat)) FROM {SCHEMA}.excluded_settings WHERE id=1")
+    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat, EXTRACT(EPOCH FROM (NOW() - loop_heartbeat)), COALESCE(photo_url, '') FROM {SCHEMA}.excluded_settings WHERE id=1")
     r = cur.fetchone()
     cur.close(); conn.close()
     if not r:
-        return {'enabled': False, 'message_template': '', 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None, 'loop_alive': False, 'loop_age_sec': None}
+        return {'enabled': False, 'message_template': '', 'photo_url': '', 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None, 'loop_alive': False, 'loop_age_sec': None}
     age = int(r[6] or 999999) if r[6] is not None else None
     # Цикл считается живым если heartbeat был не более 5 минут назад
     alive = bool(r[0]) and age is not None and age < 300
     return {
         'enabled': r[0], 'message_template': r[1], 'last_checked_msg_id': int(r[2] or 0),
         'last_run_at': r[3], 'loop_token': r[4], 'loop_heartbeat': r[5],
-        'loop_alive': alive, 'loop_age_sec': age,
+        'loop_alive': alive, 'loop_age_sec': age, 'photo_url': r[7] or '',
     }
 
 
@@ -166,12 +166,14 @@ def fire_self_loop(token: str, delay_sec: int = 0):
     threading.Thread(target=_go, daemon=True).start()
 
 
-def save_settings(enabled=None, template=None, last_msg_id=None):
+def save_settings(enabled=None, template=None, last_msg_id=None, photo_url=None):
     parts = []
     if enabled is not None:
         parts.append(f"enabled={'TRUE' if enabled else 'FALSE'}")
     if template is not None:
         parts.append(f"message_template='{esc(template)}'")
+    if photo_url is not None:
+        parts.append(f"photo_url='{esc(photo_url)}'")
     if last_msg_id is not None:
         parts.append(f"last_checked_msg_id={int(last_msg_id)}")
         parts.append(f"last_run_at=NOW()")
@@ -180,6 +182,14 @@ def save_settings(enabled=None, template=None, last_msg_id=None):
     conn = db(); cur = conn.cursor()
     cur.execute(f"UPDATE {SCHEMA}.excluded_settings SET {', '.join(parts)} WHERE id=1")
     conn.commit(); cur.close(); conn.close()
+
+
+async def send_personalized(client, target, text: str, photo_url: str = ''):
+    """Отправляет текст. Если photo_url задан — шлёт фото с подписью."""
+    if photo_url and photo_url.strip():
+        await client.send_file(target, photo_url.strip(), caption=text)
+    else:
+        await client.send_message(target, text)
 
 
 def get_session2() -> str:
@@ -234,6 +244,7 @@ async def run_scan() -> dict:
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
     template = settings['message_template'] or 'Здравствуйте!'
+    photo_url = settings.get('photo_url') or ''
     last_id = settings['last_checked_msg_id']
 
     sent_count = 0
@@ -338,7 +349,7 @@ async def run_scan() -> dict:
             personalized = personalize(template, first_name, username)
             ah = getattr(user, 'access_hash', None)
             try:
-                await client.send_message(author_id, personalized)
+                await send_personalized(client, author_id, personalized, photo_url)
                 log_send(author_id, username, first_name, ev.id, 'ok', access_hash=ah)
                 sent_count += 1
                 found.append({'user_id': author_id, 'username': username, 'first_name': first_name, 'event_id': ev.id})
@@ -360,7 +371,7 @@ async def run_scan() -> dict:
             pass
 
 
-async def process_deletion_message(client, msg, template: str) -> dict:
+async def process_deletion_message(client, msg, template: str, photo_url: str = '') -> dict:
     """Обрабатывает сообщение от бота-удалятора, шлёт ЛС автору удалённого сообщения."""
     text = (msg.text or msg.message or '')
     if not text:
@@ -397,7 +408,7 @@ async def process_deletion_message(client, msg, template: str) -> dict:
     personalized = personalize(template, first_name, username)
     ah = getattr(u, 'access_hash', None) if u else None
     try:
-        await client.send_message(user_id, personalized)
+        await send_personalized(client, user_id, personalized, photo_url)
         log_send(user_id, username, first_name, msg.id, 'ok', access_hash=ah)
         return {'ok': True, 'user_id': user_id, 'username': username}
     except FloodWaitError as fe:
