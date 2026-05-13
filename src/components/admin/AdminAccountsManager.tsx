@@ -165,6 +165,24 @@ export function AdminAccountsManager({ token }: { token: string }) {
     await call("mark_banned", { id });
   }
 
+  async function unban(id: number) {
+    await call("unban", { id });
+  }
+
+  async function resetDaily(id: number) {
+    await call("reset_daily", { id });
+  }
+
+  async function unbanAll() {
+    if (!confirm("Снять бан со ВСЕХ аккаунтов?")) return;
+    await call("unban", { id: 0 });
+  }
+
+  async function resetDailyAll() {
+    if (!confirm("Обнулить дневной счётчик у ВСЕХ аккаунтов?")) return;
+    await call("reset_daily", { id: 0 });
+  }
+
   async function rename(acc: TgAccount) {
     const next = prompt("Новое название:", acc.label);
     if (!next || next === acc.label) return;
@@ -225,7 +243,27 @@ export function AdminAccountsManager({ token }: { token: string }) {
         </div>
         <h3 className="text-sm font-semibold flex-1">Аккаунты <span className="text-muted-foreground font-normal">({accounts.length})</span></h3>
         {step === "idle" && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {accounts.some(a => a.is_banned) && (
+              <button
+                onClick={unbanAll}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] hover:bg-emerald-500/20 transition disabled:opacity-50"
+                title="Снять бан со всех аккаунтов"
+              >
+                <Icon name="ShieldCheck" size={12} />
+                Снять баны
+              </button>
+            )}
+            <button
+              onClick={resetDailyAll}
+              disabled={busy || accounts.length === 0}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] hover:bg-cyan-500/20 transition disabled:opacity-50"
+              title="Обнулить дневные счётчики у всех"
+            >
+              <Icon name="RotateCcw" size={12} />
+              Сброс счётчиков
+            </button>
             {accounts.filter(a => !a.is_banned).length > 0 && targetGroup && (
               <button
                 onClick={joinGroupAll}
@@ -313,8 +351,8 @@ export function AdminAccountsManager({ token }: { token: string }) {
                 {acc.needs_warmup ? "🔥" : "⚡"}
               </button>
 
-              <span className="text-[11px] text-muted-foreground font-mono shrink-0 w-12 text-right" title={`Сегодня: ${acc.daily_invites_used}`}>
-                {acc.daily_invites_used}/30
+              <span className="text-[11px] text-muted-foreground font-mono shrink-0 w-12 text-right" title={`Сегодня инвайтов: ${acc.daily_invites_used} (лимит снят)`}>
+                {acc.daily_invites_used}
               </span>
 
               {acc.is_banned && (
@@ -334,6 +372,10 @@ export function AdminAccountsManager({ token }: { token: string }) {
                     <Icon name="Power" size={13} />
                   </button>
                 )}
+                <button onClick={() => resetDaily(acc.id)} disabled={busy}
+                  className="p-1.5 rounded hover:bg-white/10 text-cyan-400 transition" title="Обнулить дневной счётчик">
+                  <Icon name="RotateCcw" size={13} />
+                </button>
                 <button onClick={() => rename(acc)} disabled={busy}
                   className="p-1.5 rounded hover:bg-white/10 text-muted-foreground transition" title="Переименовать">
                   <Icon name="Pencil" size={13} />
@@ -343,7 +385,12 @@ export function AdminAccountsManager({ token }: { token: string }) {
                     className="p-1.5 rounded hover:bg-white/10 text-amber-400 transition" title="Пометить забаненным">
                     <Icon name="Ban" size={13} />
                   </button>
-                ) : null}
+                ) : (
+                  <button onClick={() => unban(acc.id)} disabled={busy}
+                    className="p-1.5 rounded hover:bg-white/10 text-emerald-400 transition" title="Снять бан">
+                    <Icon name="ShieldCheck" size={13} />
+                  </button>
+                )}
                 <button onClick={() => remove(acc.id)} disabled={busy}
                   className="p-1.5 rounded hover:bg-white/10 text-red-400 transition" title="Удалить">
                   <Icon name="Trash2" size={13} />

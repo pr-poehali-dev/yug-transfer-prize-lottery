@@ -256,6 +256,26 @@ def update_label(account_id: int, label: str):
     conn.commit(); cur.close(); conn.close()
 
 
+def unban_account(account_id: int):
+    """Снимает бан. Если account_id=0 — снимает со всех."""
+    conn = db(); cur = conn.cursor()
+    where = "TRUE" if account_id == 0 else f"id={account_id}"
+    cur.execute(f"UPDATE {SCHEMA}.tg_user_accounts SET is_banned=FALSE WHERE {where}")
+    conn.commit(); cur.close(); conn.close()
+
+
+def reset_daily_invites(account_id: int):
+    """Обнуляет дневной счётчик. Если account_id=0 — сбрасывает у всех."""
+    conn = db(); cur = conn.cursor()
+    where = "TRUE" if account_id == 0 else f"id={account_id}"
+    cur.execute(f"""
+        UPDATE {SCHEMA}.tg_user_accounts
+        SET daily_invites_used=0, daily_reset_date=CURRENT_DATE
+        WHERE {where}
+    """)
+    conn.commit(); cur.close(); conn.close()
+
+
 def get_account_session(account_id: int) -> dict:
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
@@ -467,6 +487,12 @@ def handler(event: dict, context) -> dict:
         return resp(200, {'ok': True, 'accounts': list_accounts()})
     if action == 'mark_banned':
         mark_banned(int(body.get('id', 0)), body.get('note', ''))
+        return resp(200, {'ok': True, 'accounts': list_accounts()})
+    if action == 'unban':
+        unban_account(int(body.get('id', 0)))
+        return resp(200, {'ok': True, 'accounts': list_accounts()})
+    if action == 'reset_daily':
+        reset_daily_invites(int(body.get('id', 0)))
         return resp(200, {'ok': True, 'accounts': list_accounts()})
     if action == 'update_label':
         update_label(int(body.get('id', 0)), body.get('label', ''))
