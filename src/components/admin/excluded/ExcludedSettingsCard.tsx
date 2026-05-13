@@ -199,13 +199,16 @@ export function ExcludedSettingsCard({
                       <p className="text-white/40 text-[12px] italic">Текст пуст</p>
                     )}
                     {buttonText.trim() && buttonUrl.trim() && (
-                      <p className="text-[12px] leading-snug mt-1.5">
-                        <span className="text-white">👉 </span>
-                        <a href={buttonUrl} target="_blank" rel="noopener noreferrer"
-                          style={{ color: "#6ab3f3" }} className="underline break-all">
-                          {buttonText}
-                        </a>
-                      </p>
+                      <div className="mt-2 space-y-0.5">
+                        <div className="text-white/40 text-[10px] tracking-widest leading-none">━━━━━━━━━━━━━━━</div>
+                        <p className="text-center leading-tight">
+                          <a href={buttonUrl} target="_blank" rel="noopener noreferrer"
+                            style={{ color: "#6ab3f3" }} className="font-extrabold text-[15px] underline">
+                            👉 {buttonText.trim().toUpperCase()}
+                          </a>
+                        </p>
+                        <div className="text-white/40 text-[10px] tracking-widest leading-none">━━━━━━━━━━━━━━━</div>
+                      </div>
                     )}
                     <div className="text-white/40 text-[9px] text-right mt-0.5">12:34</div>
                   </div>

@@ -228,13 +228,18 @@ async def send_personalized(client, target, text: str, photo_url: str = '', butt
     обычные inline-кнопки не доступны, только у ботов)."""
     bt = (button_text or '').strip()
     bu = (button_url or '').strip()
-    # Кнопка → последняя строка как HTML-ссылка с эмодзи (выглядит как кнопка)
+    # Кнопка → последняя строка как HTML-ссылка во всю ширину, жирно, крупно
     final_text = text or ''
     if bt and bu:
-        # html.escape чтобы кавычки/амперсанды не ломали разметку
         import html as _html
-        safe_text = _html.escape(bt)
-        final_text = f"{final_text}\n\n👉 <a href=\"{bu}\">{safe_text}</a>"
+        safe_text = _html.escape(bt.strip().upper())
+        # ━ символы растягивают «кнопку» на всю ширину поста
+        bar = '━━━━━━━━━━━━━━━'
+        final_text = (
+            f"{final_text}\n\n{bar}\n"
+            f"👉 <a href=\"{bu}\"><b>{safe_text}</b></a>\n"
+            f"{bar}"
+        )
 
     purl = (photo_url or '').strip()
     if purl:
