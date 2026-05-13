@@ -935,6 +935,9 @@ def handler(event: dict, context) -> dict:
 
         settings_o = get_settings()
         template_o = settings_o['message_template'] or 'Здравствуйте!'
+        photo_url_o = settings_o.get('photo_url') or ''
+        button_text_o = settings_o.get('button_text') or ''
+        button_url_o = settings_o.get('button_url') or ''
 
         conn = db(); cur = conn.cursor()
         cur.execute(
@@ -969,7 +972,7 @@ def handler(event: dict, context) -> dict:
                             target = await client.get_input_entity(uname_o)
                         except Exception:
                             target = uid_o
-                await client.send_message(target, personalized_o)
+                await send_personalized(client, target, personalized_o, photo_url_o, button_text_o, button_url_o)
                 c2 = db(); cu2 = c2.cursor()
                 cu2.execute(
                     f"UPDATE {SCHEMA}.excluded_drivers "
