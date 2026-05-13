@@ -2,6 +2,8 @@ export interface Settings {
   enabled: boolean;
   message_template: string;
   photo_url?: string;
+  button_text?: string;
+  button_url?: string;
   last_checked_msg_id: number;
   last_run_at: string | null;
   loop_heartbeat: string | null;

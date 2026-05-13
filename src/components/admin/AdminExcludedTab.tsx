@@ -23,6 +23,8 @@ export function AdminExcludedTab({ token }: Props) {
   const [template, setTemplate] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [buttonText, setButtonText] = useState("");
+  const [buttonUrl, setButtonUrl] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [runResult, setRunResult] = useState<string>("");
@@ -51,6 +53,8 @@ export function AdminExcludedTab({ token }: Props) {
       setTemplate(d.message_template || "");
     }
     setPhotoUrl(d.photo_url || "");
+    setButtonText(d.button_text || "");
+    setButtonUrl(d.button_url || "");
     setEnabled(!!d.enabled);
     setLastUpdated(Date.now());
     // Если бэкенд автоматически возродил умерший цикл — показываем уведомление
@@ -104,7 +108,7 @@ export function AdminExcludedTab({ token }: Props) {
     try {
       await fetch(`${EXCLUDED_WATCHER_URL}?action=settings`, {
         method: "POST", headers,
-        body: JSON.stringify({ enabled, message_template: template, photo_url: photoUrl }),
+        body: JSON.stringify({ enabled, message_template: template, photo_url: photoUrl, button_text: buttonText, button_url: buttonUrl }),
       });
       await load();
     } finally { setSaving(false); }
@@ -118,7 +122,7 @@ export function AdminExcludedTab({ token }: Props) {
       setEnabled(on);
       await fetch(`${EXCLUDED_WATCHER_URL}?action=settings`, {
         method: "POST", headers,
-        body: JSON.stringify({ enabled: on, message_template: template, photo_url: photoUrl }),
+        body: JSON.stringify({ enabled: on, message_template: template, photo_url: photoUrl, button_text: buttonText, button_url: buttonUrl }),
       });
       await load();
     } finally { setSaving(false); }
@@ -379,6 +383,10 @@ export function AdminExcludedTab({ token }: Props) {
             uploadingPhoto={uploadingPhoto}
             uploadPhoto={uploadPhoto}
             removePhoto={removePhoto}
+            buttonText={buttonText}
+            setButtonText={setButtonText}
+            buttonUrl={buttonUrl}
+            setButtonUrl={setButtonUrl}
             editingTemplate={editingTemplate}
             setEditingTemplate={setEditingTemplate}
             togglePower={togglePower}

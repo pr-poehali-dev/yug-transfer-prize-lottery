@@ -93,11 +93,11 @@ def db():
 
 def get_settings() -> dict:
     conn = db(); cur = conn.cursor()
-    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat, EXTRACT(EPOCH FROM (NOW() - loop_heartbeat)), COALESCE(photo_url, '') FROM {SCHEMA}.excluded_settings WHERE id=1")
+    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat, EXTRACT(EPOCH FROM (NOW() - loop_heartbeat)), COALESCE(photo_url, ''), COALESCE(button_text, ''), COALESCE(button_url, '') FROM {SCHEMA}.excluded_settings WHERE id=1")
     r = cur.fetchone()
     cur.close(); conn.close()
     if not r:
-        return {'enabled': False, 'message_template': '', 'photo_url': '', 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None, 'loop_alive': False, 'loop_age_sec': None}
+        return {'enabled': False, 'message_template': '', 'photo_url': '', 'button_text': '', 'button_url': '', 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None, 'loop_alive': False, 'loop_age_sec': None}
     age = int(r[6] or 999999) if r[6] is not None else None
     # Цикл считается живым если heartbeat был не более 5 минут назад
     alive = bool(r[0]) and age is not None and age < 300
@@ -105,6 +105,7 @@ def get_settings() -> dict:
         'enabled': r[0], 'message_template': r[1], 'last_checked_msg_id': int(r[2] or 0),
         'last_run_at': r[3], 'loop_token': r[4], 'loop_heartbeat': r[5],
         'loop_alive': alive, 'loop_age_sec': age, 'photo_url': r[7] or '',
+        'button_text': r[8] or '', 'button_url': r[9] or '',
     }
 
 
@@ -166,7 +167,7 @@ def fire_self_loop(token: str, delay_sec: int = 0):
     threading.Thread(target=_go, daemon=True).start()
 
 
-def save_settings(enabled=None, template=None, last_msg_id=None, photo_url=None):
+def save_settings(enabled=None, template=None, last_msg_id=None, photo_url=None, button_text=None, button_url=None):
     parts = []
     if enabled is not None:
         parts.append(f"enabled={'TRUE' if enabled else 'FALSE'}")
@@ -174,6 +175,10 @@ def save_settings(enabled=None, template=None, last_msg_id=None, photo_url=None)
         parts.append(f"message_template='{esc(template)}'")
     if photo_url is not None:
         parts.append(f"photo_url='{esc(photo_url)}'")
+    if button_text is not None:
+        parts.append(f"button_text='{esc(button_text)}'")
+    if button_url is not None:
+        parts.append(f"button_url='{esc(button_url)}'")
     if last_msg_id is not None:
         parts.append(f"last_checked_msg_id={int(last_msg_id)}")
         parts.append(f"last_run_at=NOW()")
@@ -184,12 +189,18 @@ def save_settings(enabled=None, template=None, last_msg_id=None, photo_url=None)
     conn.commit(); cur.close(); conn.close()
 
 
-async def send_personalized(client, target, text: str, photo_url: str = ''):
-    """Отправляет текст. Если photo_url задан — шлёт фото с подписью."""
+async def send_personalized(client, target, text: str, photo_url: str = '', button_text: str = '', button_url: str = ''):
+    """Отправляет текст. Если photo_url — фото с подписью. Если button_text+button_url — добавляет inline-кнопку."""
+    from telethon.tl.custom import Button
+    buttons = None
+    bt = (button_text or '').strip()
+    bu = (button_url or '').strip()
+    if bt and bu:
+        buttons = [[Button.url(bt, bu)]]
     if photo_url and photo_url.strip():
-        await client.send_file(target, photo_url.strip(), caption=text)
+        await client.send_file(target, photo_url.strip(), caption=text, buttons=buttons)
     else:
-        await client.send_message(target, text)
+        await client.send_message(target, text, buttons=buttons)
 
 
 def get_session2() -> str:
@@ -245,6 +256,8 @@ async def run_scan() -> dict:
     api_hash = os.environ['TG_API_HASH']
     template = settings['message_template'] or 'Здравствуйте!'
     photo_url = settings.get('photo_url') or ''
+    button_text = settings.get('button_text') or ''
+    button_url = settings.get('button_url') or ''
     last_id = settings['last_checked_msg_id']
 
     sent_count = 0
@@ -349,7 +362,7 @@ async def run_scan() -> dict:
             personalized = personalize(template, first_name, username)
             ah = getattr(user, 'access_hash', None)
             try:
-                await send_personalized(client, author_id, personalized, photo_url)
+                await send_personalized(client, author_id, personalized, photo_url, button_text, button_url)
                 log_send(author_id, username, first_name, ev.id, 'ok', access_hash=ah)
                 sent_count += 1
                 found.append({'user_id': author_id, 'username': username, 'first_name': first_name, 'event_id': ev.id})
@@ -371,7 +384,7 @@ async def run_scan() -> dict:
             pass
 
 
-async def process_deletion_message(client, msg, template: str, photo_url: str = '') -> dict:
+async def process_deletion_message(client, msg, template: str, photo_url: str = '', button_text: str = '', button_url: str = '') -> dict:
     """Обрабатывает сообщение от бота-удалятора, шлёт ЛС автору удалённого сообщения."""
     text = (msg.text or msg.message or '')
     if not text:
@@ -408,7 +421,7 @@ async def process_deletion_message(client, msg, template: str, photo_url: str = 
     personalized = personalize(template, first_name, username)
     ah = getattr(u, 'access_hash', None) if u else None
     try:
-        await send_personalized(client, user_id, personalized, photo_url)
+        await send_personalized(client, user_id, personalized, photo_url, button_text, button_url)
         log_send(user_id, username, first_name, msg.id, 'ok', access_hash=ah)
         return {'ok': True, 'user_id': user_id, 'username': username}
     except FloodWaitError as fe:
@@ -434,6 +447,8 @@ async def run_listener(loop_token: str) -> dict:
     api_hash = os.environ['TG_API_HASH']
     template = settings['message_template'] or 'Здравствуйте!'
     photo_url = settings.get('photo_url') or ''
+    button_text = settings.get('button_text') or ''
+    button_url = settings.get('button_url') or ''
 
     try:
         target_entity = None
@@ -466,7 +481,7 @@ async def run_listener(loop_token: str) -> dict:
                 if not re.search(r'удалил|deleted', text, re.IGNORECASE):
                     return
                 print(f"[listener] DELETE-MSG from @{sender_username}: {text[:120]!r}")
-                res = await process_deletion_message(client, ev.message, template, photo_url)
+                res = await process_deletion_message(client, ev.message, template, photo_url, button_text, button_url)
                 if res.get('ok'):
                     sent_count[0] += 1
                     print(f"[listener] sent to user_id={res.get('user_id')} @{res.get('username')}")
@@ -552,7 +567,7 @@ async def run_listener(loop_token: str) -> dict:
                     first_name = getattr(user, 'first_name', '') or 'водитель'
                     personalized = personalize(template, first_name, username)
                     try:
-                        await send_personalized(client, author_id, personalized, photo_url)
+                        await send_personalized(client, author_id, personalized, photo_url, button_text, button_url)
                         log_send(author_id, username, first_name, ev.id, 'ok')
                         adminlog_sent += 1
                         print(f"[adminlog-poll] sent to @{username} (id={author_id})")
@@ -690,6 +705,8 @@ def handler(event: dict, context) -> dict:
         settings_r = get_settings()
         template_r = settings_r['message_template'] or 'Здравствуйте!'
         photo_url_r = settings_r.get('photo_url') or ''
+        button_text_r = settings_r.get('button_text') or ''
+        button_url_r = settings_r.get('button_url') or ''
 
         # Берём очередь + access_hash для прямого резолва тех, кто вышел из группы
         # Пропускаем удалённые из Telegram аккаунты (is_unreachable=TRUE)
@@ -765,7 +782,7 @@ def handler(event: dict, context) -> dict:
                         continue
 
                     try:
-                        await send_personalized(client, target, personalized, photo_url_r)
+                        await send_personalized(client, target, personalized, photo_url_r, button_text_r, button_url_r)
                         c2 = db(); cu2 = c2.cursor()
                         cu2.execute(
                             f"UPDATE {SCHEMA}.excluded_drivers "
@@ -1402,7 +1419,10 @@ def handler(event: dict, context) -> dict:
         enabled = body.get('enabled')
         template = body.get('message_template')
         photo_url = body.get('photo_url')
-        save_settings(enabled=enabled, template=template, photo_url=photo_url)
+        button_text = body.get('button_text')
+        button_url = body.get('button_url')
+        save_settings(enabled=enabled, template=template, photo_url=photo_url,
+                      button_text=button_text, button_url=button_url)
         # Запускаем/перезапускаем цикл если включено
         if enabled:
             import secrets

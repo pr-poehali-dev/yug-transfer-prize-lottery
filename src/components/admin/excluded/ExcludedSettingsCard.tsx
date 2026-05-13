@@ -11,6 +11,10 @@ interface Props {
   uploadingPhoto: boolean;
   uploadPhoto: (f: File) => void;
   removePhoto: () => void;
+  buttonText: string;
+  setButtonText: (v: string) => void;
+  buttonUrl: string;
+  setButtonUrl: (v: string) => void;
   editingTemplate: boolean;
   setEditingTemplate: (fn: (v: boolean) => boolean) => void;
   togglePower: (on: boolean) => void;
@@ -38,6 +42,10 @@ export function ExcludedSettingsCard({
   uploadingPhoto,
   uploadPhoto,
   removePhoto,
+  buttonText,
+  setButtonText,
+  buttonUrl,
+  setButtonUrl,
   editingTemplate,
   setEditingTemplate,
   togglePower,
@@ -165,6 +173,35 @@ export function ExcludedSettingsCard({
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-white/10 bg-white/3 p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <Icon name="MousePointerClick" size={14} className="text-white/60" />
+          <span className="text-white/80 text-sm font-medium">Кнопка под текстом</span>
+          {buttonText && buttonUrl && (
+            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">вкл</span>
+          )}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input
+            type="text"
+            value={buttonText}
+            onChange={e => setButtonText(e.target.value)}
+            placeholder="Текст кнопки (напр. «Оплатить подписку»)"
+            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+          />
+          <input
+            type="url"
+            value={buttonUrl}
+            onChange={e => setButtonUrl(e.target.value)}
+            placeholder="https://t.me/VsyaRussiabot"
+            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono outline-none focus:border-amber-500/50"
+          />
+        </div>
+        <div className="text-white/40 text-[11px] mt-2">
+          Чтобы скрыть кнопку — очисти оба поля. Ссылка обязательно с https:// или http://, либо tg://
         </div>
       </div>
 
