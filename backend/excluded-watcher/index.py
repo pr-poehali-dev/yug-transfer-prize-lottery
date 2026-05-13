@@ -93,11 +93,11 @@ def db():
 
 def get_settings() -> dict:
     conn = db(); cur = conn.cursor()
-    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat, EXTRACT(EPOCH FROM (NOW() - loop_heartbeat)), COALESCE(photo_url, ''), COALESCE(button_text, ''), COALESCE(button_url, '') FROM {SCHEMA}.excluded_settings WHERE id=1")
+    cur.execute(f"SELECT enabled, message_template, last_checked_msg_id, last_run_at, loop_token, loop_heartbeat, EXTRACT(EPOCH FROM (NOW() - loop_heartbeat)), COALESCE(photo_url, ''), COALESCE(button_text, ''), COALESCE(button_url, ''), COALESCE(source_chat, ''), COALESCE(source_msg_id, 0) FROM {SCHEMA}.excluded_settings WHERE id=1")
     r = cur.fetchone()
     cur.close(); conn.close()
     if not r:
-        return {'enabled': False, 'message_template': '', 'photo_url': '', 'button_text': '', 'button_url': '', 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None, 'loop_alive': False, 'loop_age_sec': None}
+        return {'enabled': False, 'message_template': '', 'photo_url': '', 'button_text': '', 'button_url': '', 'source_chat': '', 'source_msg_id': 0, 'last_checked_msg_id': 0, 'last_run_at': None, 'loop_token': None, 'loop_heartbeat': None, 'loop_alive': False, 'loop_age_sec': None}
     age = int(r[6] or 999999) if r[6] is not None else None
     # Цикл считается живым если heartbeat был не более 5 минут назад
     alive = bool(r[0]) and age is not None and age < 300
@@ -106,6 +106,7 @@ def get_settings() -> dict:
         'last_run_at': r[3], 'loop_token': r[4], 'loop_heartbeat': r[5],
         'loop_alive': alive, 'loop_age_sec': age, 'photo_url': r[7] or '',
         'button_text': r[8] or '', 'button_url': r[9] or '',
+        'source_chat': r[10] or '', 'source_msg_id': int(r[11] or 0),
     }
 
 
