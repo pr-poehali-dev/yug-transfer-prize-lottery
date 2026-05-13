@@ -1,9 +1,13 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { type HistoryItem, personalize } from "./excludedTypes";
 
 interface Props {
   history: HistoryItem[];
   template: string;
+  photoUrl?: string;
+  buttonText?: string;
+  buttonUrl?: string;
   editingId: number | null;
   editName: string;
   setEditName: (v: string) => void;
@@ -20,6 +24,9 @@ interface Props {
 export function ExcludedHistoryCard({
   history,
   template,
+  photoUrl = "",
+  buttonText = "",
+  buttonUrl = "",
   editingId,
   editName,
   setEditName,
@@ -32,6 +39,7 @@ export function ExcludedHistoryCard({
   deleteOne,
   sendingOneId,
 }: Props) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   return (
     <div className="rounded-2xl border border-white/8 p-5" style={{ background: "rgba(255,255,255,0.02)" }}>
       <div className="flex items-center gap-3 mb-4">
@@ -50,6 +58,9 @@ export function ExcludedHistoryCard({
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {history.map((h, i) => {
             const isEditing = editingId === h.id;
+            const isExpanded = expandedId === h.id;
+            const previewName = isEditing ? editName : (h.first_name || "");
+            const previewUname = isEditing ? editUsername : (h.username || "");
             return (
             <div key={h.id ?? `row-${i}`} className={`rounded-lg border ${isEditing ? "border-amber-500/30 bg-amber-500/5" : "bg-white/3 border-white/8"}`}>
               <div className="flex items-center gap-3 p-2.5">
@@ -115,21 +126,56 @@ export function ExcludedHistoryCard({
                         className="w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 flex items-center justify-center">
                         <Icon name="Trash2" size={14} className="text-white/50 hover:text-red-400" />
                       </button>
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : h.id)}
+                        title={isExpanded ? "Скрыть превью" : "Показать что отправилось"}
+                        className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center"
+                      >
+                        <Icon name={isExpanded ? "ChevronUp" : "ChevronDown"} size={14} className="text-white/50" />
+                      </button>
                     </>
                   )}
                 </div>
               </div>
 
-              {isEditing && (
+              {(isEditing || isExpanded) && (
                 <div className="px-3 pb-3 pt-1">
                   <p className="text-[10px] text-white/40 mb-1.5 inline-flex items-center gap-1">
                     <Icon name="MessageSquare" size={11} />
-                    Превью сообщения для {editName || "водителя"}:
+                    {isEditing ? `Превью для ${editName || "водителя"}:` : `Что отправилось ${previewName || "водителю"}:`}
                   </p>
-                  <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white/80 text-xs whitespace-pre-wrap max-h-40 overflow-y-auto">
-                    {template?.trim()
-                      ? personalize(template, editName, editUsername)
-                      : <span className="text-white/30">Текст шаблона не задан</span>}
+                  <div className="rounded-xl p-2.5" style={{ background: "#0e1621" }}>
+                    <div className="flex items-start gap-1.5">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">Я</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="inline-block max-w-full rounded-2xl rounded-tl-md overflow-hidden" style={{ background: "#182533" }}>
+                          {photoUrl && (
+                            <img src={photoUrl} alt="фото" className="block w-full object-cover" style={{ maxHeight: 200, maxWidth: 280 }} />
+                          )}
+                          <div className="px-2.5 py-1.5">
+                            {template?.trim() ? (
+                              <p className="text-white text-[12px] leading-snug whitespace-pre-wrap break-words">
+                                {personalize(template, previewName, previewUname)}
+                              </p>
+                            ) : (
+                              <p className="text-white/40 text-[12px] italic">Текст шаблона не задан</p>
+                            )}
+                            <div className="text-white/40 text-[9px] text-right mt-0.5">
+                              {h.message_sent_at
+                                ? new Date(h.message_sent_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+                                : "—"}
+                            </div>
+                          </div>
+                          {buttonText.trim() && buttonUrl.trim() && (
+                            <a href={buttonUrl} target="_blank" rel="noopener noreferrer"
+                              className="block text-center px-2 py-1.5 text-[11px] font-medium border-t"
+                              style={{ background: "#243447", color: "#6ab3f3", borderColor: "rgba(255,255,255,0.05)" }}>
+                              {buttonText}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

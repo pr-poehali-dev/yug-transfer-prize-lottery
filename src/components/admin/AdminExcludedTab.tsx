@@ -407,6 +407,9 @@ export function AdminExcludedTab({ token }: Props) {
           <ExcludedHistoryCard
             history={history}
             template={template}
+            photoUrl={photoUrl}
+            buttonText={buttonText}
+            buttonUrl={buttonUrl}
             editingId={editingId}
             editName={editName}
             setEditName={setEditName}
