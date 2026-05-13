@@ -234,7 +234,7 @@ async def send_personalized(client, target, text: str, photo_url: str = '', butt
         import html as _html
         safe_text = _html.escape(bt.strip().upper())
         # ━ символы растягивают «кнопку» на всю ширину поста
-        bar = '━━━━━━━━━━━━━━━'
+        bar = '▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰'
         final_text = (
             f"{final_text}\n\n{bar}\n"
             f"👉 <a href=\"{bu}\"><b>{safe_text}</b></a>\n"
