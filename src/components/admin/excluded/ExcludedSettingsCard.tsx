@@ -1,5 +1,6 @@
 import Icon from "@/components/ui/icon";
 import type { Settings, ResendItem, ResendQueueStatus } from "./excludedTypes";
+import { personalize } from "./excludedTypes";
 
 interface Props {
   settings: Settings | null;
@@ -202,6 +203,54 @@ export function ExcludedSettingsCard({
         </div>
         <div className="text-white/40 text-[11px] mt-2">
           Чтобы скрыть кнопку — очисти оба поля. Ссылка обязательно с https:// или http://, либо tg://
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <Icon name="Eye" size={13} className="text-white/50" />
+          <span className="text-white/60 text-xs font-medium">Предпросмотр — как увидит водитель</span>
+        </div>
+        <div className="rounded-2xl p-4 max-w-md" style={{ background: "#0e1621" }}>
+          <div className="flex items-start gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              Я
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="inline-block max-w-full rounded-2xl rounded-tl-md overflow-hidden" style={{ background: "#182533" }}>
+                {photoUrl && (
+                  <img
+                    src={photoUrl}
+                    alt="фото"
+                    className="block w-full max-w-[320px] object-cover"
+                    style={{ maxHeight: 320 }}
+                  />
+                )}
+                <div className="px-3 py-2">
+                  {template?.trim() ? (
+                    <p className="text-white text-[14px] leading-snug whitespace-pre-wrap break-words">
+                      {personalize(template, "Иван", "ivan")}
+                    </p>
+                  ) : (
+                    <p className="text-white/40 text-[14px] italic">Текст сообщения пуст</p>
+                  )}
+                  <div className="text-white/40 text-[10px] text-right mt-1">12:34</div>
+                </div>
+                {buttonText.trim() && buttonUrl.trim() && (
+                  <a
+                    href={buttonUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center px-3 py-2.5 text-[13px] font-medium border-t transition"
+                    style={{ background: "#243447", color: "#6ab3f3", borderColor: "rgba(255,255,255,0.05)" }}
+                  >
+                    {buttonText}
+                  </a>
+                )}
+              </div>
+              <div className="text-white/30 text-[10px] mt-1">{"{name}"} → «Иван», {"{username}"} → «ivan»</div>
+            </div>
+          </div>
         </div>
       </div>
 
