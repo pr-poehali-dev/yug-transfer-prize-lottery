@@ -445,13 +445,24 @@ async def run_batch(size: int) -> dict:
     client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
     await client.connect()
 
-    if not await client.is_user_authorized():
+    # Проверка авторизации с двумя попытками — чтобы не банить из-за сетевой икоты
+    authorized = False
+    for _ in range(2):
+        try:
+            if await client.is_user_authorized():
+                authorized = True
+                break
+        except Exception:
+            pass
+        await asyncio.sleep(1)
+    if not authorized:
         await client.disconnect()
-        mark_account_banned(acc['id'], 'Сессия невалидна (не авторизован)')
+        # НЕ помечаем баном автоматически — может быть временная проблема со связью.
+        # Просто переключимся на следующий аккаунт.
         nxt = pick_next_account_id()
         if nxt:
             switch_active(nxt)
-        return {'ok': False, 'error': f'Сессия аккаунта «{acc["label"]}» сдохла. Помечен как забаненный, переключились на следующий.'}
+        return {'ok': False, 'error': f'Сессия аккаунта «{acc["label"]}» не отвечает. Переключились на следующий, аккаунт оставлен активным — проверь вручную если повторится.'}
 
     added = 0; privacy = 0; failed = 0; attempted = 0
     ban_triggered = False
@@ -479,7 +490,9 @@ async def run_batch(size: int) -> dict:
                 continue
             except FloodWaitError as fw:
                 ban_note = f'FloodWait при resolve {uname}: {fw.seconds}s'
-                if fw.seconds > 600:
+                # резолв — НЕ инвайт. Сюда может прилететь FloodWait просто за частые
+                # get_entity. Это не бан — просто подождать. Помечаем только если ОЧЕНЬ долго.
+                if fw.seconds > 21600:  # 6 часов — почти наверняка реальная блокировка
                     ban_triggered = True
                 break
             except Exception as e:
@@ -536,7 +549,9 @@ async def run_batch(size: int) -> dict:
                 break
             except FloodWaitError as fw:
                 ban_note = f'FloodWait {fw.seconds}s на {uname}'
-                if fw.seconds > 3600:  # час и больше — считаем баном
+                # FloodWait — это «подожди X секунд», аккаунт ЖИВОЙ.
+                # Считаем баном только при очень долгом ожидании (сутки+).
+                if fw.seconds > 86400:
                     ban_triggered = True
                 results.append({'username': uname, 'status': 'flood_wait', 'reason': f'{fw.seconds}s'})
                 break
@@ -651,9 +666,17 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
     results = []
 
     try:
-        if not await client.is_user_authorized():
-            mark_account_banned(acc['id'], 'Сессия невалидна')
-            return {'ok': False, 'account': acc['label'], 'error': 'Сессия мертва, помечен бан'}
+        authorized = False
+        for _ in range(2):
+            try:
+                if await client.is_user_authorized():
+                    authorized = True; break
+            except Exception:
+                pass
+            await asyncio.sleep(1)
+        if not authorized:
+            # НЕ баним сразу — может быть сетевая проблема. Просто пропустим этот запуск.
+            return {'ok': False, 'account': acc['label'], 'error': 'Сессия не отвечает, пропустили (аккаунт остался активным)'}
         try:
             target_entity = await client.get_entity(target_group)
         except Exception as e:
@@ -670,8 +693,13 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
             elif r['status'] in ('peer_flood',):
                 ban = True; ban_note = f'PEER_FLOOD на {r["username"]}'
                 active_run_progress(message=ban_note); break
-            elif r['status'] == 'flood_wait' and r.get('fw_seconds', 0) > 3600:
+            elif r['status'] == 'flood_wait' and r.get('fw_seconds', 0) > 86400:
+                # FloodWait сутки+ — реальный признак проблемы. Меньше — просто пауза, аккаунт живой.
                 ban = True; ban_note = f'FloodWait {r.get("fw_seconds")}s'
+                active_run_progress(message=ban_note); break
+            elif r['status'] == 'flood_wait':
+                # Короткий FloodWait — НЕ бан. Просто стопаем батч, аккаунт остаётся активным.
+                ban_note = f'FloodWait {r.get("fw_seconds")}s — подождём, аккаунт живой'
                 active_run_progress(message=ban_note); break
             elif r['status'] == 'no_rights':
                 ban_note = f'Нет прав: {r["reason"]}'
