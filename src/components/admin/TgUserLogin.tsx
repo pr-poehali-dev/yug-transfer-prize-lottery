@@ -87,6 +87,27 @@ export function TgUserLogin({ token, authUrl, title, hint }: Props) {
 
   if (!status) return null;
 
+  // Компактный вариант если уже залогинен — кнопка во полширины экрана
+  if (status.logged_in) {
+    const userLabel = `${status.user?.first_name || ""}${status.user?.username ? " @" + status.user.username : ""}`.trim();
+    return (
+      <div
+        className="w-1/2 flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5"
+        title={TITLE}
+      >
+        <Icon name="UserCheck" size={16} className="text-emerald-400 flex-shrink-0" />
+        <span className="text-emerald-200/90 text-xs truncate flex-1">{userLabel || "Залогинен"}</span>
+        <button
+          type="button"
+          onClick={logout}
+          className="text-red-300 text-xs hover:text-red-200 px-2 py-1 rounded-md hover:bg-red-500/10 flex-shrink-0"
+        >
+          Выйти
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: "rgba(255,255,255,0.02)" }}>
       <button
@@ -95,27 +116,12 @@ export function TgUserLogin({ token, authUrl, title, hint }: Props) {
         className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left"
       >
         <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
-          <Icon name={status.logged_in ? "UserCheck" : "User"} size={20} className={status.logged_in ? "text-emerald-400" : "text-cyan-400"} />
+          <Icon name="User" size={20} className="text-cyan-400" />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-white font-medium text-lg">{TITLE}</h3>
-          <p className="text-white/40 text-xs truncate">
-            {status.logged_in
-              ? `Залогинен: ${status.user?.first_name || ""} ${status.user?.username ? "@" + status.user.username : ""}`
-              : HINT_DEFAULT}
-          </p>
+          <p className="text-white/40 text-xs truncate">{HINT_DEFAULT}</p>
         </div>
-        {status.logged_in && (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={e => { e.stopPropagation(); logout(); }}
-            onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); logout(); } }}
-            className="px-3 py-2 rounded-xl border border-red-500/30 text-red-300 text-xs hover:bg-red-500/10 cursor-pointer"
-          >
-            Выйти
-          </span>
-        )}
         <Icon
           name="ChevronDown"
           size={18}
