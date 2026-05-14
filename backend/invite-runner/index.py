@@ -169,21 +169,21 @@ def mark_warmup_done(account_id: int):
 
 
 def get_full_power_accounts(include_warmup: bool = True) -> list:
-    """Берёт аккаунты у которых остался дневной лимит.
-    include_warmup=True — берёт ВСЕ незабаненные аккаунты (упрощённая логика).
+    """Берёт ВСЕ незабаненные аккаунты с валидной сессией.
+    include_warmup=True (по умолчанию) — все незабаненные.
     include_warmup=False — только прогретые (needs_warmup=FALSE)."""
     conn = db(); cur = conn.cursor()
-    where = "is_banned=FALSE" if include_warmup else "is_banned=FALSE AND needs_warmup=FALSE"
+    where = "is_banned=FALSE AND session_string IS NOT NULL AND session_string <> ''"
+    if not include_warmup:
+        where += " AND needs_warmup=FALSE"
     cur.execute(f"""
         SELECT id, label, phone, session_string,
                COALESCE(daily_invites_used, 0), daily_reset_date
         FROM {SCHEMA}.tg_user_accounts
         WHERE {where}
-        ORDER BY is_active DESC, id ASC
+        ORDER BY id ASC
     """)
-    rows = cur.fetchall(); cur.close(); conn.close()
-    today = None
-    conn = db(); cur = conn.cursor()
+    rows = cur.fetchall()
     cur.execute("SELECT CURRENT_DATE")
     today = cur.fetchone()[0]
     cur.close(); conn.close()
@@ -194,11 +194,10 @@ def get_full_power_accounts(include_warmup: bool = True) -> list:
         if reset_date is None or reset_date < today:
             used = 0
         remaining = max(0, DAILY_INVITE_LIMIT - used)
-        if remaining > 0:
-            accounts.append({
-                'id': r[0], 'label': r[1], 'phone': r[2], 'session_string': r[3],
-                'daily_invites_used': used, 'daily_remaining': remaining,
-            })
+        accounts.append({
+            'id': r[0], 'label': r[1], 'phone': r[2], 'session_string': r[3],
+            'daily_invites_used': used, 'daily_remaining': remaining,
+        })
     return accounts
 
 
@@ -802,34 +801,46 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
 
 
 async def run_full_power_batch(batch_per_account: int = 5) -> dict:
-    """Запускает пачку инвайтов сразу со всех прогретых аккаунтов (needs_warmup=FALSE)."""
-    accounts = get_full_power_accounts()
+    """Запускает пачку инвайтов сразу со ВСЕХ незабаненных аккаунтов параллельно.
+    Очередь делится атомарно через FOR UPDATE SKIP LOCKED — каждый аккаунт берёт свой кусок."""
+    accounts = get_full_power_accounts(include_warmup=True)
     if not accounts:
-        return {'ok': False, 'error': 'Нет прогретых аккаунтов с остатком на сегодня'}
+        return {'ok': False, 'error': 'Нет доступных аккаунтов'}
 
     total = sum(min(batch_per_account, a['daily_remaining']) for a in accounts)
-    # Быстрый режим: ~1 сек на инвайт, все аккаунты параллельно
     estimated = max(5, batch_per_account * 2)
     active_run_start(
         mode='full_power',
-        title=f'Полная мощность ×{batch_per_account}: {total} человек одним залпом',
-        subtitle=f'{len(accounts)} аккаунтов параллельно, без задержек',
+        title=f'Залп ×{batch_per_account}: {total} человек',
+        subtitle=f'{len(accounts)} аккаунтов параллельно',
         total=total, estimated_sec=estimated,
     )
 
     all_results: list = []
     total_added = 0
+    accounts_used: list = []
     try:
         tasks = []
+        labels = []
         for acc in accounts:
             take = min(batch_per_account, acc['daily_remaining'])
             if take <= 0:
                 continue
+            accounts_used.append({'id': acc['id'], 'label': acc['label'], 'take': take})
+            labels.append(acc['label'])
             tasks.append(run_warmup_for_account(acc, take, fast=True))
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
-        for r in raw_results:
+        for i, r in enumerate(raw_results):
+            label = labels[i] if i < len(labels) else f'acc#{i}'
             if isinstance(r, Exception):
-                all_results.append({'ok': False, 'error': str(r)[:200]})
+                # КРИТИЧНО: логируем падение аккаунта в run_log чтобы было видно в UI
+                acc_id = accounts_used[i]['id'] if i < len(accounts_used) else 0
+                err_msg = f'CRASH: {type(r).__name__}: {str(r)[:200]}'
+                try:
+                    log_run(acc_id, 0, 0, 0, 0, False, err_msg)
+                except Exception:
+                    pass
+                all_results.append({'ok': False, 'account': label, 'account_id': acc_id, 'added': 0, 'error': err_msg})
                 continue
             all_results.append(r)
             total_added += r.get('added', 0)
@@ -841,6 +852,7 @@ async def run_full_power_batch(batch_per_account: int = 5) -> dict:
         'mode': 'full_power',
         'batch_per_account': batch_per_account,
         'accounts_processed': len(all_results),
+        'accounts_planned': accounts_used,
         'total_added': total_added,
         'results': all_results,
     }
