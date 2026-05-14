@@ -501,6 +501,14 @@ async def run_batch(size: int) -> dict:
                 results.append({'username': uname, 'status': 'failed', 'reason': str(e)[:120]})
                 continue
 
+            # Фильтр: если это канал/чат (а не пользователь) — пропускаем
+            from telethon.tl.types import User as _TLUser
+            if not isinstance(user_entity, _TLUser):
+                update_target(t['id'], 'failed', 'это канал/чат, а не пользователь', acc['id'])
+                failed += 1
+                results.append({'username': uname, 'status': 'failed', 'reason': 'не пользователь'})
+                continue
+
             try:
                 await client(InviteToChannelRequest(channel=target_entity, users=[user_entity]))
                 # ВАЖНО: Telegram может вернуть "успех" но НЕ добавить юзера
@@ -627,6 +635,12 @@ async def invite_one_user(client, target_entity, target: dict, account_id: int) 
     except Exception as e:
         update_target(target['id'], 'failed', f'resolve: {e}', account_id)
         return {'username': uname, 'status': 'failed', 'reason': str(e)[:120]}
+
+    # Фильтр: если это канал/чат, а не пользователь — пропускаем
+    from telethon.tl.types import User as _TLUser
+    if not isinstance(user_entity, _TLUser):
+        update_target(target['id'], 'failed', 'это канал/чат, а не пользователь', account_id)
+        return {'username': uname, 'status': 'failed', 'reason': 'не пользователь'}
 
     try:
         await client(InviteToChannelRequest(channel=target_entity, users=[user_entity]))
