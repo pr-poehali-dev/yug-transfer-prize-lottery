@@ -673,9 +673,25 @@ async def invite_one_user(client, target_entity, target: dict, account_id: int) 
 
     try:
         await client(InviteToChannelRequest(channel=target_entity, users=[user_entity]))
-        update_target(target['id'], 'added', '', account_id)
-        increment_account_usage(account_id)
-        return {'username': uname, 'status': 'added'}
+        # ВАЖНО: Telegram может вернуть «успех» БЕЗ исключения, но юзер не добавлен
+        # (тихий PEER_FLOOD/privacy/настройка группы «только взаимные контакты»).
+        # Проверяем реально ли юзер в группе.
+        really_in_group = False
+        try:
+            await client(GetParticipantRequest(channel=target_entity, participant=user_entity))
+            really_in_group = True
+        except UserNotParticipantError:
+            really_in_group = False
+        except Exception:
+            # Если проверка сломалась — считаем что добавили (чтобы не дублить попытки)
+            really_in_group = True
+        if really_in_group:
+            update_target(target['id'], 'added', '', account_id)
+            increment_account_usage(account_id)
+            return {'username': uname, 'status': 'added'}
+        else:
+            update_target(target['id'], 'failed', 'silent_drop: not in group after invite', account_id)
+            return {'username': uname, 'status': 'failed', 'reason': 'silent_drop'}
     except UserPrivacyRestrictedError:
         update_target(target['id'], 'privacy', 'USER_PRIVACY_RESTRICTED', account_id)
         return {'username': uname, 'status': 'privacy'}
