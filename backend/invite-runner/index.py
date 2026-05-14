@@ -543,8 +543,17 @@ async def run_batch(size: int) -> dict:
                 failed += 1
                 results.append({'username': uname, 'status': 'failed', 'reason': 'too_many_channels'})
             except (PeerFloodError,) as e:
-                ban_triggered = True
-                ban_note = f'PeerFloodError на {uname}'
+                # PEER_FLOOD на самом первом юзере без единого успешного инвайта =
+                # часто это «проблемный кандидат» (битый username / уже кикнут), а не бан аккаунта.
+                # Реальный бан = PEER_FLOOD после нескольких успешных добавлений.
+                if added >= 1:
+                    ban_triggered = True
+                    ban_note = f'PeerFloodError на {uname} (после {added} успешных)'
+                else:
+                    # Помечаем кандидата как проблемного и НЕ баним аккаунт
+                    update_target(t['id'], 'failed', 'PEER_FLOOD на первой попытке (битый кандидат)', acc['id'])
+                    failed += 1
+                    ban_note = f'PEER_FLOOD на {uname} (пропущен, аккаунт оставлен живым)'
                 results.append({'username': uname, 'status': 'flood', 'reason': 'PEER_FLOOD'})
                 break
             except FloodWaitError as fw:
@@ -691,7 +700,16 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
             elif r['status'] == 'privacy':
                 privacy += 1; inc_priv = 1
             elif r['status'] in ('peer_flood',):
-                ban = True; ban_note = f'PEER_FLOOD на {r["username"]}'
+                # Бан только если PEER_FLOOD пришёл ПОСЛЕ успешных инвайтов.
+                # Если упали на первом юзере — это битый кандидат, не бан аккаунта.
+                if added >= 1:
+                    ban = True; ban_note = f'PEER_FLOOD на {r["username"]} (после {added} успешных)'
+                else:
+                    # помечаем кандидата failed (он уже отмечен в update_target внутри invite_one_user),
+                    # дополнительно проставим причину
+                    update_target(t['id'], 'failed', 'PEER_FLOOD на первой попытке (битый кандидат)', acc['id'])
+                    failed += 1
+                    ban_note = f'PEER_FLOOD на {r["username"]} (пропущен, аккаунт оставлен живым)'
                 active_run_progress(message=ban_note); break
             elif r['status'] == 'flood_wait' and r.get('fw_seconds', 0) > 86400:
                 # FloodWait сутки+ — реальный признак проблемы. Меньше — просто пауза, аккаунт живой.
