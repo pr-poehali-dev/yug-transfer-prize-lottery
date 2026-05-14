@@ -359,15 +359,45 @@ def increment_account_usage(account_id: int):
 
 
 def get_pending_targets(limit: int) -> list:
+    """АТОМАРНО резервирует limit таргетов: переводит их из pending в in_progress
+    и возвращает. Гарантирует что два параллельных аккаунта НЕ возьмут одного юзера."""
     conn = db(); cur = conn.cursor()
+    # Сбрасываем «зависшие» in_progress старше 10 минут — это упавшие прошлые запуски.
+    # Живые параллельные запуски не пострадают (они работают быстрее 10 минут на батч).
     cur.execute(f"""
-        SELECT id, username, phone, first_name
-        FROM {SCHEMA}.invite_targets
-        WHERE status='pending' AND username IS NOT NULL AND username <> ''
-        ORDER BY id ASC
-        LIMIT {int(limit)}
+        UPDATE {SCHEMA}.invite_targets
+        SET status = 'pending'
+        WHERE status = 'in_progress'
+          AND id IN (
+            SELECT id FROM {SCHEMA}.invite_targets
+            WHERE status = 'in_progress'
+            ORDER BY id ASC LIMIT 200
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM {SCHEMA}.invite_run_log
+            WHERE created_at > NOW() - INTERVAL '10 minutes'
+              AND created_at < NOW()
+          )
     """)
-    rows = cur.fetchall(); cur.close(); conn.close()
+    conn.commit()
+    # UPDATE ... RETURNING с CTE — атомарная операция в postgres.
+    # SKIP LOCKED — на случай если другая транзакция уже захватила строку.
+    cur.execute(f"""
+        WITH picked AS (
+            SELECT id FROM {SCHEMA}.invite_targets
+            WHERE status='pending' AND username IS NOT NULL AND username <> ''
+            ORDER BY id ASC
+            LIMIT {int(limit)}
+            FOR UPDATE SKIP LOCKED
+        )
+        UPDATE {SCHEMA}.invite_targets t
+        SET status = 'in_progress'
+        FROM picked
+        WHERE t.id = picked.id
+        RETURNING t.id, t.username, t.phone, t.first_name
+    """)
+    rows = cur.fetchall()
+    conn.commit(); cur.close(); conn.close()
     return [{'id': r[0], 'username': r[1], 'phone': r[2], 'first_name': r[3]} for r in rows]
 
 
