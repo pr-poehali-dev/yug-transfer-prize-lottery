@@ -13,8 +13,9 @@ import psycopg2
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import InviteToChannelRequest, GetParticipantRequest
-from telethon.tl.functions.contacts import ResolveUsernameRequest
+from telethon.tl.functions.channels import InviteToChannelRequest, GetParticipantRequest, JoinChannelRequest
+from telethon.tl.functions.contacts import ResolveUsernameRequest, AddContactRequest
+from telethon.tl.types import InputPhoneContact
 from telethon.errors import UserNotParticipantError
 from telethon.errors import (
     FloodWaitError, UserPrivacyRestrictedError, UserNotMutualContactError,
@@ -958,6 +959,122 @@ def get_status() -> dict:
     }
 
 
+async def mutual_warmup_one_account(me: dict, others: list, send_hello: bool, join_channel: bool) -> dict:
+    """Один аккаунт сохраняет ВСЕХ остальных в контакты, пишет «Привет» и подписывается на канал."""
+    api_id = int(os.environ['TG_API_ID'])
+    api_hash = os.environ['TG_API_HASH']
+    target_group = get_target_group()
+
+    client = TelegramClient(StringSession(me['session_string']), api_id, api_hash)
+    await client.connect()
+    contacts_added = 0
+    messages_sent = 0
+    channel_joined = False
+    errors: list = []
+
+    try:
+        if not await client.is_user_authorized():
+            return {'ok': False, 'account': me['label'], 'error': 'сессия не отвечает'}
+
+        # 1) подписка на целевой канал/группу (на всякий случай — для «активности»)
+        if join_channel and target_group:
+            try:
+                entity = await client.get_entity(target_group)
+                await client(JoinChannelRequest(entity))
+                channel_joined = True
+            except Exception as e:
+                errors.append(f'join {target_group}: {type(e).__name__}')
+
+        # 2) проходим по всем «другим» аккаунтам
+        for o in others:
+            if o['id'] == me['id']:
+                continue
+            label = o['label']
+            phone = (o.get('phone') or '').replace('+', '').strip()
+            try:
+                # Резолвим юзера: сначала по телефону (если есть), иначе пропуск
+                user_entity = None
+                if phone:
+                    # AddContactRequest принимает user_id, который надо сначала получить.
+                    # Получим через ImportContacts (по телефону) — он же сразу добавит в книгу.
+                    from telethon.tl.functions.contacts import ImportContactsRequest
+                    contact = InputPhoneContact(client_id=0, phone=phone, first_name=label[:30] or 'Friend', last_name='')
+                    res = await client(ImportContactsRequest(contacts=[contact]))
+                    if res.users:
+                        user_entity = res.users[0]
+                        contacts_added += 1
+                    else:
+                        errors.append(f'{label}: не нашёлся по телефону')
+                        continue
+                else:
+                    errors.append(f'{label}: нет phone в БД')
+                    continue
+
+                # 3) «Привет» в личку
+                if send_hello and user_entity:
+                    try:
+                        await client.send_message(user_entity, 'Привет!')
+                        messages_sent += 1
+                    except Exception as e:
+                        errors.append(f'msg {label}: {type(e).__name__}')
+
+                await asyncio.sleep(random.uniform(1.5, 3.0))
+            except FloodWaitError as fw:
+                errors.append(f'FloodWait {fw.seconds}s — стоп')
+                break
+            except Exception as e:
+                errors.append(f'{label}: {type(e).__name__}: {str(e)[:80]}')
+    finally:
+        await client.disconnect()
+
+    return {
+        'ok': True,
+        'account': me['label'],
+        'account_id': me['id'],
+        'contacts_added': contacts_added,
+        'messages_sent': messages_sent,
+        'channel_joined': channel_joined,
+        'errors': errors[:10],
+    }
+
+
+async def run_mutual_warmup(send_hello: bool = True, join_channel: bool = True) -> dict:
+    """Все аккаунты добавляют друг друга в контакты параллельно. Это «прогрев своих»."""
+    accounts = get_full_power_accounts(include_warmup=True)
+    if len(accounts) < 2:
+        return {'ok': False, 'error': 'Нужно минимум 2 аккаунта'}
+
+    active_run_start(
+        mode='mutual_warmup',
+        title=f'Прогрев своих: {len(accounts)} аккаунтов',
+        subtitle='Дружим аккаунты между собой',
+        total=len(accounts) * (len(accounts) - 1),
+        estimated_sec=max(30, len(accounts) * 15),
+    )
+
+    try:
+        tasks = [mutual_warmup_one_account(a, accounts, send_hello, join_channel) for a in accounts]
+        raw = await asyncio.gather(*tasks, return_exceptions=True)
+        results = []
+        for i, r in enumerate(raw):
+            if isinstance(r, Exception):
+                results.append({'ok': False, 'account': accounts[i]['label'], 'error': f'{type(r).__name__}: {str(r)[:120]}'})
+            else:
+                results.append(r)
+    finally:
+        active_run_finish()
+
+    total_contacts = sum(r.get('contacts_added', 0) for r in results if r.get('ok'))
+    total_messages = sum(r.get('messages_sent', 0) for r in results if r.get('ok'))
+    return {
+        'ok': True,
+        'accounts': len(accounts),
+        'total_contacts_added': total_contacts,
+        'total_messages_sent': total_messages,
+        'results': results,
+    }
+
+
 def handler(event: dict, context) -> dict:
     """Прямой инвайт пачки кандидатов в @UG_DRIVER через активный user-аккаунт."""
     if event.get('httpMethod') == 'OPTIONS':
@@ -1037,6 +1154,17 @@ def handler(event: dict, context) -> dict:
     if action == 'cancel_run':
         active_run_finish()
         return resp(200, {'ok': True})
+
+    if action == 'mutual_warmup':
+        send_hello = bool(body.get('send_hello', True))
+        join_channel = bool(body.get('join_channel', True))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_mutual_warmup(send_hello, join_channel))
+            return resp(200, result)
+        finally:
+            loop.close()
 
     if action == 'set_warmup_flag':
         account_id = int(body.get('id', 0))
