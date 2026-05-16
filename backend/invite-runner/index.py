@@ -358,9 +358,12 @@ def increment_account_usage(account_id: int):
     conn.commit(); cur.close(); conn.close()
 
 
-def get_pending_targets(limit: int) -> list:
+def get_pending_targets(limit: int, account_id: int = -1) -> list:
     """АТОМАРНО резервирует limit таргетов: переводит их из pending в in_progress
-    и возвращает. Гарантирует что два параллельных аккаунта НЕ возьмут одного юзера."""
+    и возвращает. Гарантирует что два параллельных аккаунта НЕ возьмут одного юзера.
+    account_id>0 — только закреплённые за этим аккаунтом (assigned_account_id=acc_id)
+    account_id=0 — только НЕЗАКРЕПЛЁННЫЕ (assigned_account_id IS NULL)
+    account_id=-1 — без фильтра (старое поведение, любой pending)."""
     conn = db(); cur = conn.cursor()
     # Сбрасываем «зависшие» in_progress старше 10 минут — это упавшие прошлые запуски.
     # Живые параллельные запуски не пострадают (они работают быстрее 10 минут на батч).
@@ -382,10 +385,17 @@ def get_pending_targets(limit: int) -> list:
     conn.commit()
     # UPDATE ... RETURNING с CTE — атомарная операция в postgres.
     # SKIP LOCKED — на случай если другая транзакция уже захватила строку.
+    if account_id > 0:
+        assigned_filter = f"AND assigned_account_id = {int(account_id)}"
+    elif account_id == 0:
+        assigned_filter = "AND assigned_account_id IS NULL"
+    else:
+        assigned_filter = ""
     cur.execute(f"""
         WITH picked AS (
             SELECT id FROM {SCHEMA}.invite_targets
             WHERE status='pending' AND username IS NOT NULL AND username <> ''
+            {assigned_filter}
             ORDER BY id ASC
             LIMIT {int(limit)}
             FOR UPDATE SKIP LOCKED
@@ -399,6 +409,55 @@ def get_pending_targets(limit: int) -> list:
     rows = cur.fetchall()
     conn.commit(); cur.close(); conn.close()
     return [{'id': r[0], 'username': r[1], 'phone': r[2], 'first_name': r[3]} for r in rows]
+
+
+def distribute_pending_to_accounts(account_ids: list) -> dict:
+    """Равномерно распределяет всех pending-кандидатов между переданными аккаунтами (round-robin по id).
+    Перезаписывает assigned_account_id ТОЛЬКО для незакреплённых (NULL) или закреплённых за
+    аккаунтами вне текущего активного списка. Уже закреплённые за активным аккаунтом — не трогаем.
+    Возвращает {account_id: count}."""
+    if not account_ids:
+        return {}
+    ids_csv = ','.join(str(int(a)) for a in account_ids)
+    conn = db(); cur = conn.cursor()
+    # 1) Снимаем закрепления для аккаунтов, которых уже нет в активном списке (бан/отключение)
+    cur.execute(f"""
+        UPDATE {SCHEMA}.invite_targets
+        SET assigned_account_id = NULL
+        WHERE status = 'pending'
+          AND assigned_account_id IS NOT NULL
+          AND assigned_account_id NOT IN ({ids_csv})
+    """)
+    # 2) Round-robin раздача незакреплённых
+    cur.execute(f"""
+        WITH unassigned AS (
+            SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+            FROM {SCHEMA}.invite_targets
+            WHERE status = 'pending'
+              AND assigned_account_id IS NULL
+              AND username IS NOT NULL AND username <> ''
+        ),
+        accs AS (
+            SELECT acc_id, ROW_NUMBER() OVER (ORDER BY acc_id) AS rn
+            FROM (VALUES {','.join(f'({int(a)})' for a in account_ids)}) AS v(acc_id)
+        )
+        UPDATE {SCHEMA}.invite_targets t
+        SET assigned_account_id = a.acc_id
+        FROM unassigned u
+        JOIN accs a ON a.rn = ((u.rn - 1) % {len(account_ids)}) + 1
+        WHERE t.id = u.id
+    """)
+    conn.commit()
+    # 3) Считаем итог
+    cur.execute(f"""
+        SELECT assigned_account_id, COUNT(*)
+        FROM {SCHEMA}.invite_targets
+        WHERE status = 'pending' AND assigned_account_id IN ({ids_csv})
+        GROUP BY assigned_account_id
+    """)
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    return {int(r[0]): int(r[1]) for r in rows}
 
 
 def update_target(target_id: int, status: str, error: str = '', account_id: int = 0):
@@ -460,7 +519,10 @@ async def run_batch(size: int) -> dict:
         return {'ok': False, 'error': f'У всех аккаунтов исчерпан дневной лимит {DAILY_INVITE_LIMIT}/сутки. Жди до завтра или добавь ещё аккаунты.'}
 
     take = min(size, remaining, MAX_BATCH_SIZE)
-    targets = get_pending_targets(take)
+    # Сначала берём закреплённых за этим аккаунтом, потом — незакреплённых (NULL)
+    targets = get_pending_targets(take, account_id=acc['id'])
+    if not targets:
+        targets = get_pending_targets(take, account_id=0)
     if not targets:
         return {'ok': True, 'message': 'В очереди нет кандидатов со статусом pending.', 'attempted': 0}
 
@@ -725,9 +787,9 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
     api_hash = os.environ['TG_API_HASH']
     target_group = get_target_group()
 
-    targets = get_pending_targets(per_account)
+    targets = get_pending_targets(per_account, account_id=acc['id'])
     if not targets:
-        return {'ok': False, 'account': acc['label'], 'error': 'Нет pending кандидатов'}
+        return {'ok': False, 'account': acc['label'], 'error': 'Нет pending кандидатов закреплённых за этим аккаунтом'}
 
     client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
     await client.connect()
@@ -824,6 +886,9 @@ async def run_full_power_batch(batch_per_account: int = 5) -> dict:
     if not accounts:
         return {'ok': False, 'error': 'Нет доступных аккаунтов'}
 
+    # Равномерно закрепляем pending за каждым аккаунтом — чтобы разные аккаунты НЕ добавляли одного юзера
+    distribute_pending_to_accounts([a['id'] for a in accounts])
+
     total = sum(min(batch_per_account, a['daily_remaining']) for a in accounts)
     estimated = max(5, batch_per_account * 2)
     active_run_start(
@@ -895,6 +960,9 @@ async def run_warmup_day() -> dict:
             'message': f'День {state["day_num"]}: ни один аккаунт сегодня не доступен (либо все уже отработали, либо все в бане)',
             'results': [],
         }
+
+    # Равномерно закрепляем pending за каждым аккаунтом — один юзер = один аккаунт
+    distribute_pending_to_accounts([a['id'] for a in accounts])
 
     total = len(accounts) * per_acc
     estimated = total * 135 + max(0, len(accounts) - 1) * 60
@@ -1154,6 +1222,18 @@ def handler(event: dict, context) -> dict:
     if action == 'cancel_run':
         active_run_finish()
         return resp(200, {'ok': True})
+
+    if action == 'distribute_queue':
+        # Ручное равное распределение очереди по всем активным незабаненным аккаунтам
+        accounts = get_full_power_accounts(include_warmup=True)
+        if not accounts:
+            return resp(200, {'ok': False, 'error': 'Нет доступных аккаунтов'})
+        counts = distribute_pending_to_accounts([a['id'] for a in accounts])
+        return resp(200, {
+            'ok': True,
+            'accounts': [{'id': a['id'], 'label': a['label'], 'assigned': counts.get(a['id'], 0)} for a in accounts],
+            'total_assigned': sum(counts.values()),
+        })
 
     if action == 'mutual_warmup':
         send_hello = bool(body.get('send_hello', True))
