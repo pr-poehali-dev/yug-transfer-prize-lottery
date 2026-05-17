@@ -13,6 +13,79 @@ const DriverDemo = () => {
         loading="lazy"
       />
 
+      <style>{`
+        @keyframes drive-1 {
+          0%   { transform: translate(20vw, 30vh) rotate(45deg); }
+          25%  { transform: translate(40vw, 25vh) rotate(80deg); }
+          50%  { transform: translate(55vw, 45vh) rotate(135deg); }
+          75%  { transform: translate(35vw, 60vh) rotate(225deg); }
+          100% { transform: translate(20vw, 30vh) rotate(45deg); }
+        }
+        @keyframes drive-2 {
+          0%   { transform: translate(60vw, 20vh) rotate(180deg); }
+          33%  { transform: translate(45vw, 50vh) rotate(220deg); }
+          66%  { transform: translate(70vw, 65vh) rotate(330deg); }
+          100% { transform: translate(60vw, 20vh) rotate(180deg); }
+        }
+        @keyframes drive-3 {
+          0%   { transform: translate(75vw, 70vh) rotate(270deg); }
+          50%  { transform: translate(50vw, 35vh) rotate(90deg); }
+          100% { transform: translate(75vw, 70vh) rotate(270deg); }
+        }
+        @keyframes drive-4 {
+          0%   { transform: translate(30vw, 75vh) rotate(0deg); }
+          25%  { transform: translate(55vw, 70vh) rotate(60deg); }
+          50%  { transform: translate(65vw, 40vh) rotate(170deg); }
+          75%  { transform: translate(40vw, 30vh) rotate(280deg); }
+          100% { transform: translate(30vw, 75vh) rotate(0deg); }
+        }
+        @keyframes drive-5 {
+          0%   { transform: translate(85vw, 45vh) rotate(160deg); }
+          40%  { transform: translate(65vw, 25vh) rotate(70deg); }
+          80%  { transform: translate(80vw, 60vh) rotate(250deg); }
+          100% { transform: translate(85vw, 45vh) rotate(160deg); }
+        }
+        @keyframes pulse-ring {
+          0% { transform: scale(0.5); opacity: 0.8; }
+          100% { transform: scale(2.5); opacity: 0; }
+        }
+        .car-marker {
+          position: absolute;
+          top: 0; left: 0;
+          will-change: transform;
+        }
+      `}</style>
+
+      <div className="absolute inset-0 pointer-events-none z-[5]">
+        {[
+          { anim: "drive-1", duration: "28s", color: "bg-orange-500" },
+          { anim: "drive-2", duration: "35s", color: "bg-green-500" },
+          { anim: "drive-3", duration: "22s", color: "bg-blue-500" },
+          { anim: "drive-4", duration: "40s", color: "bg-orange-500" },
+          { anim: "drive-5", duration: "30s", color: "bg-purple-500" },
+        ].map((c, i) => (
+          <div
+            key={i}
+            className="car-marker"
+            style={{
+              animation: `${c.anim} ${c.duration} linear infinite`,
+            }}
+          >
+            <div className="relative -translate-x-1/2 -translate-y-1/2">
+              <div
+                className={`absolute inset-0 w-10 h-10 rounded-full ${c.color} opacity-30`}
+                style={{ animation: "pulse-ring 2s ease-out infinite" }}
+              />
+              <div
+                className={`relative w-10 h-10 rounded-full ${c.color} border-2 border-white shadow-lg flex items-center justify-center`}
+              >
+                <Icon name="Car" size={18} className="text-white" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <header className="absolute top-4 left-4 right-4 z-20">
         <div className="max-w-[1600px] mx-auto bg-zinc-900/90 backdrop-blur border border-zinc-800 rounded-full px-6 py-3 flex items-center justify-between shadow-2xl">
           <div className="flex items-center gap-3">
