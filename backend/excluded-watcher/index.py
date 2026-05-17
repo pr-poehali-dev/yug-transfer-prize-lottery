@@ -807,24 +807,25 @@ def handler(event: dict, context) -> dict:
                     personalized = personalize(template_r, fname, uname)
 
                     # Стратегия резолва, по приоритету:
-                    # 1) Сохранённый access_hash → InputPeerUser напрямую (работает даже после выхода из группы)
-                    # 2) Кэш Telethon (если водитель ещё в группе)
-                    # 3) @username (если есть)
+                    # 1) @username — работает с любого аккаунта (access_hash резолвится этим аккаунтом)
+                    # 2) get_input_entity(uid) — если водитель ещё в группе/кэше текущего аккаунта
+                    # 3) Сохранённый access_hash — пробуем последним, может быть от другого аккаунта (не сработает)
                     target = None
-                    if ah is not None:
+                    if uname:
+                        try:
+                            target = await client.get_input_entity(uname)
+                        except Exception:
+                            target = None
+                    if target is None and uid:
+                        try:
+                            target = await client.get_input_entity(uid)
+                        except Exception:
+                            target = None
+                    if target is None and ah is not None and uid:
                         try:
                             target = InputPeerUser(user_id=uid, access_hash=ah)
                         except Exception:
                             target = None
-                    if target is None:
-                        try:
-                            target = await client.get_input_entity(uid)
-                        except Exception:
-                            if uname:
-                                try:
-                                    target = await client.get_input_entity(uname)
-                                except Exception:
-                                    target = None
 
                     if target is None:
                         c2 = db(); cu2 = c2.cursor()
@@ -869,11 +870,26 @@ def handler(event: dict, context) -> dict:
                             'user was' in err_lower or
                             'user_deactivated' in err_lower or
                             'user_id_invalid' in err_lower or
-                            'peer_id_invalid' in err_lower or
                             'input user deactivated' in err_lower
+                        )
+                        # "Invalid Peer" / "peer_id_invalid" — старый access_hash от другого аккаунта.
+                        # Сбрасываем hash, оставляем в очереди — следующий запуск резолвит по @username.
+                        is_wrong_hash = (
+                            'invalid peer' in err_lower or
+                            'peer_id_invalid' in err_lower
                         )
                         is_soft_flood = 'too many requests' in err_lower or 'slowmode' in err_lower
                         c2 = db(); cu2 = c2.cursor()
+                        if is_wrong_hash:
+                            cu2.execute(
+                                f"UPDATE {SCHEMA}.excluded_drivers "
+                                f"SET access_hash=NULL, resend_status='wrong_hash: {err_text}', resend_at=NOW() "
+                                f"WHERE id={int(rec_id)}"
+                            )
+                            c2.commit(); cu2.close(); c2.close()
+                            errors_list.append({'id': rec_id, 'reason': 'wrong_hash, cleared'})
+                            # НЕ break — идём к следующему
+                            continue
                         if is_dead:
                             cu2.execute(
                                 f"UPDATE {SCHEMA}.excluded_drivers "
