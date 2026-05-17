@@ -245,10 +245,20 @@ async def send_personalized(client, target, text: str, photo_url: str = '', butt
     if purl:
         photo = _fetch_photo_bytes(purl)
         if photo is not None:
-            await client.send_file(target, photo, caption=final_text, parse_mode='html')
-            return
-        # если фото скачать не смогли — отправим хотя бы текст
-        print(f"[send] photo fetch failed, sending text only")
+            try:
+                await client.send_file(target, photo, caption=final_text, parse_mode='html')
+                return
+            except Exception as media_err:
+                # Если Telegram режет медиа-флудом ("Too many requests" / SLOWMODE / FloodWait на media)
+                # — пробуем тем же сообщением, но без фото. Текст всё равно дойдёт.
+                err_s = str(media_err).lower()
+                if 'too many requests' in err_s or 'slowmode' in err_s or 'flood' in err_s or 'media' in err_s:
+                    print(f"[send] media flood, retry as text-only: {media_err}")
+                else:
+                    # Любая другая ошибка медиа — тоже пробуем текстом как fallback
+                    print(f"[send] media error, retry as text-only: {media_err}")
+        else:
+            print(f"[send] photo fetch failed, sending text only")
     await client.send_message(target, final_text, parse_mode='html', link_preview=False)
 
 
@@ -830,30 +840,51 @@ def handler(event: dict, context) -> dict:
                         errors_list.append({'id': rec_id, 'reason': 'unreachable'})
                         continue
 
-                    try:
-                        await send_personalized(client, target, personalized, photo_url_r, button_text_r, button_url_r)
-                        c2 = db(); cu2 = c2.cursor()
-                        cu2.execute(
-                            f"UPDATE {SCHEMA}.excluded_drivers "
-                            f"SET resend_queued=FALSE, resend_status='ok', resend_at=NOW() "
-                            f"WHERE id={int(rec_id)}"
-                        )
-                        c2.commit(); cu2.close(); c2.close()
-                        sent_ok += 1
-                        await asyncio.sleep(2)
-                    except FloodWaitError as fe:
-                        c2 = db(); cu2 = c2.cursor()
-                        cu2.execute(
-                            f"UPDATE {SCHEMA}.excluded_drivers "
-                            f"SET resend_status='flood:{int(fe.seconds)}', resend_at=NOW() "
-                            f"WHERE id={int(rec_id)}"
-                        )
-                        c2.commit(); cu2.close(); c2.close()
-                        errors_list.append({'id': rec_id, 'reason': f'flood:{fe.seconds}'})
-                        break
-                    except Exception as e:
+                    # Ретрай-логика для "Too many requests" на медиа: до 3 попыток с паузой
+                    sent_this = False
+                    last_err = None
+                    for attempt in range(3):
+                        try:
+                            await send_personalized(client, target, personalized, photo_url_r, button_text_r, button_url_r)
+                            c2 = db(); cu2 = c2.cursor()
+                            cu2.execute(
+                                f"UPDATE {SCHEMA}.excluded_drivers "
+                                f"SET resend_queued=FALSE, resend_status='ok', resend_at=NOW(), message_sent=TRUE, message_sent_at=NOW() "
+                                f"WHERE id={int(rec_id)}"
+                            )
+                            c2.commit(); cu2.close(); c2.close()
+                            sent_ok += 1
+                            sent_this = True
+                            # Базовая пауза между успешными отправками — снижает риск медиа-флуда
+                            await asyncio.sleep(5)
+                            break
+                        except FloodWaitError as fe:
+                            last_err = fe
+                            # Реальный FloodWait — ждать не имеет смысла (могут быть сотни секунд), стоп.
+                            c2 = db(); cu2 = c2.cursor()
+                            cu2.execute(
+                                f"UPDATE {SCHEMA}.excluded_drivers "
+                                f"SET resend_status='flood:{int(fe.seconds)}', resend_at=NOW() "
+                                f"WHERE id={int(rec_id)}"
+                            )
+                            c2.commit(); cu2.close(); c2.close()
+                            errors_list.append({'id': rec_id, 'reason': f'flood:{fe.seconds}'})
+                            break
+                        except Exception as e:
+                            last_err = e
+                            err_lower = str(e).lower()
+                            # "Too many requests" — мягкий флуд от медиа. Ждём и пробуем снова.
+                            if 'too many requests' in err_lower or 'slowmode' in err_lower:
+                                wait = 8 * (attempt + 1)  # 8s, 16s, 24s
+                                print(f"[resend] media flood, sleep {wait}s and retry ({attempt+1}/3)")
+                                await asyncio.sleep(wait)
+                                continue
+                            # Любая другая ошибка — сразу финализируем
+                            break
+
+                    if not sent_this and last_err is not None and not isinstance(last_err, FloodWaitError):
+                        e = last_err
                         err_text = str(e)[:200].replace("'", "''")
-                        # Финальные ошибки Telegram — помечаем аккаунт как мёртвый навсегда
                         err_lower = str(e).lower()
                         is_dead = (
                             'user was' in err_lower or
