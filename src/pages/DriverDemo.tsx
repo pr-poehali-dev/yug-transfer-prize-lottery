@@ -50,84 +50,84 @@ const DriverDemo = () => {
         </div>
       </header>
 
-      <aside className="absolute top-20 left-4 z-10 w-[420px] max-h-[calc(100vh-6rem)] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-3.5 shadow-2xl">
-        <div className="mb-2">
-          <h1 className="text-base font-bold leading-tight">Закажите трансфер</h1>
-          <p className="text-[10px] text-zinc-400">
+      <aside className="absolute top-24 left-4 bottom-4 z-10 w-[460px] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-3xl p-6 shadow-2xl flex flex-col">
+        <div className="mb-5">
+          <h1 className="text-2xl font-bold leading-tight">Закажите трансфер</h1>
+          <p className="text-sm text-zinc-400 mt-1">
             Перезвоним в течение 5 минут
           </p>
         </div>
 
-        <div className="space-y-1.5">
-          <div className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 focus-within:border-orange-400 transition">
-            <Label className="text-[10px] text-zinc-400 block leading-none">Откуда?</Label>
+        <div className="space-y-3 flex-1 flex flex-col">
+          <div className="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 focus-within:border-orange-400 transition">
+            <Label className="text-xs text-zinc-400 block mb-0.5">Откуда?</Label>
             <Input
               defaultValue="Ялта, ул. Кирова, 12"
-              className="bg-transparent border-0 h-5 p-0 text-white text-xs focus-visible:ring-0"
+              className="bg-transparent border-0 h-7 p-0 text-white text-sm focus-visible:ring-0"
             />
           </div>
 
-          <div className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 focus-within:border-orange-400 transition">
-            <Label className="text-[10px] text-zinc-400 block leading-none">Куда?</Label>
+          <div className="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 focus-within:border-orange-400 transition">
+            <Label className="text-xs text-zinc-400 block mb-0.5">Куда?</Label>
             <Input
               placeholder="Введите адрес"
-              className="bg-transparent border-0 h-5 p-0 text-white text-xs focus-visible:ring-0 placeholder:text-zinc-600"
+              className="bg-transparent border-0 h-7 p-0 text-white text-sm focus-visible:ring-0 placeholder:text-zinc-600"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 focus-within:border-orange-400 transition">
-              <Label className="text-[10px] text-zinc-400 block leading-none">Имя</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 focus-within:border-orange-400 transition">
+              <Label className="text-xs text-zinc-400 block mb-0.5">Имя</Label>
               <Input
                 defaultValue="Владимир"
-                className="bg-transparent border-0 h-5 p-0 text-white text-xs focus-visible:ring-0"
+                className="bg-transparent border-0 h-7 p-0 text-white text-sm focus-visible:ring-0"
               />
             </div>
-            <div className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 focus-within:border-orange-400 transition">
-              <Label className="text-[10px] text-zinc-400 block leading-none">Телефон</Label>
+            <div className="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 focus-within:border-orange-400 transition">
+              <Label className="text-xs text-zinc-400 block mb-0.5">Телефон</Label>
               <Input
                 defaultValue="+7 (984) 334-87-24"
-                className="bg-transparent border-0 h-5 p-0 text-white text-xs focus-visible:ring-0"
+                className="bg-transparent border-0 h-7 p-0 text-white text-sm focus-visible:ring-0"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 focus-within:border-orange-400 transition">
-              <Label className="text-[10px] text-zinc-400 block leading-none">Дата</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 focus-within:border-orange-400 transition">
+              <Label className="text-xs text-zinc-400 block mb-0.5">Дата</Label>
               <Input
                 type="date"
                 defaultValue="2026-05-17"
-                className="bg-transparent border-0 h-5 p-0 text-white text-xs focus-visible:ring-0 [color-scheme:dark]"
+                className="bg-transparent border-0 h-7 p-0 text-white text-sm focus-visible:ring-0 [color-scheme:dark]"
               />
             </div>
-            <div className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 focus-within:border-orange-400 transition">
-              <Label className="text-[10px] text-zinc-400 block leading-none">Время</Label>
+            <div className="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 focus-within:border-orange-400 transition">
+              <Label className="text-xs text-zinc-400 block mb-0.5">Время</Label>
               <Input
                 type="time"
                 defaultValue="22:46"
-                className="bg-transparent border-0 h-5 p-0 text-white text-xs focus-visible:ring-0 [color-scheme:dark]"
+                className="bg-transparent border-0 h-7 p-0 text-white text-sm focus-visible:ring-0 [color-scheme:dark]"
               />
             </div>
           </div>
 
-          <div>
-            <Label className="text-[10px] text-zinc-400 mb-1 block px-0.5">
-              Тариф
+          <div className="flex-1 flex flex-col">
+            <Label className="text-xs text-zinc-400 mb-2 block px-0.5">
+              Выберите тариф
             </Label>
-            <div className="grid grid-cols-6 gap-1">
+            <div className="grid grid-cols-3 gap-2 flex-1">
               {[
-                { icon: "Zap", name: "Срочный", price: "2 500", active: true },
-                { icon: "Car", name: "Стандарт", price: "1 800" },
-                { icon: "CarFront", name: "Комфорт", price: "2 200" },
-                { icon: "Bus", name: "Минивэн", price: "3 500" },
-                { icon: "Crown", name: "Бизнес", price: "5 000" },
-                { icon: "Plus", name: "Доп.", price: "—" },
+                { icon: "Zap", name: "Срочный", price: "от 2 500 ₽", active: true },
+                { icon: "Car", name: "Стандарт", price: "от 1 800 ₽" },
+                { icon: "CarFront", name: "Комфорт", price: "от 2 200 ₽" },
+                { icon: "Bus", name: "Минивэн", price: "от 3 500 ₽" },
+                { icon: "Crown", name: "Бизнес", price: "от 5 000 ₽" },
+                { icon: "Plus", name: "Доп. услуги", price: "детское кресло" },
               ].map((t) => (
                 <button
                   key={t.name}
                   type="button"
-                  className={`rounded-lg p-1.5 text-center transition border ${
+                  className={`rounded-xl p-3 text-left transition border flex flex-col justify-center ${
                     t.active
                       ? "bg-orange-500/15 border-orange-400"
                       : "bg-zinc-950 border-zinc-700 hover:border-zinc-500"
@@ -135,30 +135,30 @@ const DriverDemo = () => {
                 >
                   <Icon
                     name={t.icon}
-                    size={14}
-                    className={`mx-auto mb-0.5 ${t.active ? "text-orange-400" : "text-zinc-400"}`}
+                    size={22}
+                    className={`mb-1.5 ${t.active ? "text-orange-400" : "text-zinc-400"}`}
                   />
-                  <div className="text-[9px] font-semibold leading-tight truncate">{t.name}</div>
-                  <div className="text-[8px] text-zinc-500 mt-0.5">{t.price}</div>
+                  <div className="text-sm font-semibold leading-tight">{t.name}</div>
+                  <div className="text-[11px] text-zinc-500 mt-1">{t.price}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 pt-1">
-            <button className="w-9 h-9 bg-zinc-950 border border-zinc-700 rounded-lg flex items-center justify-center hover:border-orange-400 transition">
-              <Icon name="Wallet" size={14} className="text-zinc-400" />
+          <div className="flex items-center gap-2 pt-2">
+            <button className="w-12 h-12 bg-zinc-950 border border-zinc-700 rounded-xl flex items-center justify-center hover:border-orange-400 transition">
+              <Icon name="Wallet" size={18} className="text-zinc-400" />
             </button>
-            <Button className="flex-1 h-9 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-xs">
-              <Icon name="Send" size={14} className="mr-1.5" />
+            <Button className="flex-1 h-12 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-base">
+              <Icon name="Send" size={18} className="mr-2" />
               Заказать трансфер
             </Button>
-            <button className="w-9 h-9 bg-zinc-950 border border-zinc-700 rounded-lg flex items-center justify-center hover:border-orange-400 transition">
-              <Icon name="SlidersHorizontal" size={14} className="text-zinc-400" />
+            <button className="w-12 h-12 bg-zinc-950 border border-zinc-700 rounded-xl flex items-center justify-center hover:border-orange-400 transition">
+              <Icon name="SlidersHorizontal" size={18} className="text-zinc-400" />
             </button>
           </div>
 
-          <p className="text-[9px] text-zinc-500 text-center">
+          <p className="text-[11px] text-zinc-500 text-center">
             Нажимая кнопку, вы соглашаетесь с обработкой данных
           </p>
         </div>
