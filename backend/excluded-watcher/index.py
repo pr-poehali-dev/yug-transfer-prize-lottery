@@ -791,17 +791,14 @@ def handler(event: dict, context) -> dict:
             sent_ok = 0
             errors_list = []
             try:
-                # Прогрев кэша: тянем участников @UG_DRIVER, чтобы Telethon знал access_hash
-                try:
-                    target_entity = await client.get_entity(TARGET_GROUP)
-                    cnt = 0
-                    async for _u in client.iter_participants(target_entity, limit=5000):
-                        cnt += 1
-                    print(f"[resend] participants warmed up: {cnt}")
-                except Exception as e:
-                    print(f"[resend] participants warmup err: {e}")
+                # Прогрев кэша участников группы — пропускаем (медленно, в большинстве случаев бесполезно).
+                # Telethon найдёт юзера сам по user_id + кэшу диалогов.
 
-                for row in queue:
+                # Лимит на 1 запуск чтобы влезть в таймаут функции (60 сек)
+                MAX_PER_RUN = 25
+                queue_run = queue[:MAX_PER_RUN]
+
+                for row in queue_run:
                     rec_id, uid, uname, fname, ah = row
                     uid = int(uid) if uid else 0
                     fname = fname or 'водитель'
@@ -840,50 +837,32 @@ def handler(event: dict, context) -> dict:
                         errors_list.append({'id': rec_id, 'reason': 'unreachable'})
                         continue
 
-                    # Ретрай-логика для "Too many requests" на медиа: до 3 попыток с паузой
-                    sent_this = False
-                    last_err = None
-                    for attempt in range(3):
-                        try:
-                            await send_personalized(client, target, personalized, photo_url_r, button_text_r, button_url_r)
-                            c2 = db(); cu2 = c2.cursor()
-                            cu2.execute(
-                                f"UPDATE {SCHEMA}.excluded_drivers "
-                                f"SET resend_queued=FALSE, resend_status='ok', resend_at=NOW(), message_sent=TRUE, message_sent_at=NOW() "
-                                f"WHERE id={int(rec_id)}"
-                            )
-                            c2.commit(); cu2.close(); c2.close()
-                            sent_ok += 1
-                            sent_this = True
-                            # Базовая пауза между успешными отправками — снижает риск медиа-флуда
-                            await asyncio.sleep(5)
-                            break
-                        except FloodWaitError as fe:
-                            last_err = fe
-                            # Реальный FloodWait — ждать не имеет смысла (могут быть сотни секунд), стоп.
-                            c2 = db(); cu2 = c2.cursor()
-                            cu2.execute(
-                                f"UPDATE {SCHEMA}.excluded_drivers "
-                                f"SET resend_status='flood:{int(fe.seconds)}', resend_at=NOW() "
-                                f"WHERE id={int(rec_id)}"
-                            )
-                            c2.commit(); cu2.close(); c2.close()
-                            errors_list.append({'id': rec_id, 'reason': f'flood:{fe.seconds}'})
-                            break
-                        except Exception as e:
-                            last_err = e
-                            err_lower = str(e).lower()
-                            # "Too many requests" — мягкий флуд от медиа. Ждём и пробуем снова.
-                            if 'too many requests' in err_lower or 'slowmode' in err_lower:
-                                wait = 8 * (attempt + 1)  # 8s, 16s, 24s
-                                print(f"[resend] media flood, sleep {wait}s and retry ({attempt+1}/3)")
-                                await asyncio.sleep(wait)
-                                continue
-                            # Любая другая ошибка — сразу финализируем
-                            break
-
-                    if not sent_this and last_err is not None and not isinstance(last_err, FloodWaitError):
-                        e = last_err
+                    # Одна попытка. При "Too many requests" — оставляем в очереди (не помечаем ошибкой).
+                    try:
+                        await send_personalized(client, target, personalized, photo_url_r, button_text_r, button_url_r)
+                        c2 = db(); cu2 = c2.cursor()
+                        cu2.execute(
+                            f"UPDATE {SCHEMA}.excluded_drivers "
+                            f"SET resend_queued=FALSE, resend_status='ok', resend_at=NOW(), message_sent=TRUE, message_sent_at=NOW() "
+                            f"WHERE id={int(rec_id)}"
+                        )
+                        c2.commit(); cu2.close(); c2.close()
+                        sent_ok += 1
+                        # Пауза 8 сек между отправками — снижает риск флуда от Telegram
+                        await asyncio.sleep(8)
+                    except FloodWaitError as fe:
+                        # Глобальный FloodWait от Telegram — стоп всего батча, юзер остаётся в очереди
+                        c2 = db(); cu2 = c2.cursor()
+                        cu2.execute(
+                            f"UPDATE {SCHEMA}.excluded_drivers "
+                            f"SET resend_status='flood:{int(fe.seconds)}', resend_at=NOW() "
+                            f"WHERE id={int(rec_id)}"
+                        )
+                        c2.commit(); cu2.close(); c2.close()
+                        errors_list.append({'id': rec_id, 'reason': f'flood:{fe.seconds}'})
+                        print(f"[resend] hard FloodWait {fe.seconds}s — stopping batch, queue preserved")
+                        break
+                    except Exception as e:
                         err_text = str(e)[:200].replace("'", "''")
                         err_lower = str(e).lower()
                         is_dead = (
@@ -893,6 +872,7 @@ def handler(event: dict, context) -> dict:
                             'peer_id_invalid' in err_lower or
                             'input user deactivated' in err_lower
                         )
+                        is_soft_flood = 'too many requests' in err_lower or 'slowmode' in err_lower
                         c2 = db(); cu2 = c2.cursor()
                         if is_dead:
                             cu2.execute(
@@ -901,14 +881,28 @@ def handler(event: dict, context) -> dict:
                                 f"resend_status='account_gone: {err_text}', resend_at=NOW() "
                                 f"WHERE id={int(rec_id)}"
                             )
+                            c2.commit(); cu2.close(); c2.close()
+                            errors_list.append({'id': rec_id, 'reason': str(e)[:200], 'dead': True})
+                        elif is_soft_flood:
+                            # Мягкий флуд — оставляем в очереди, статус пишем но resend_queued НЕ снимаем
+                            cu2.execute(
+                                f"UPDATE {SCHEMA}.excluded_drivers "
+                                f"SET resend_status='soft_flood: {err_text}', resend_at=NOW() "
+                                f"WHERE id={int(rec_id)}"
+                            )
+                            c2.commit(); cu2.close(); c2.close()
+                            errors_list.append({'id': rec_id, 'reason': 'soft_flood'})
+                            # Стопаем батч на 30 сек чтобы дать TG остыть, но не убиваем очередь
+                            print(f"[resend] soft flood — stopping batch, queue preserved")
+                            break
                         else:
                             cu2.execute(
                                 f"UPDATE {SCHEMA}.excluded_drivers "
                                 f"SET resend_queued=FALSE, resend_status='err:{err_text}', resend_at=NOW() "
                                 f"WHERE id={int(rec_id)}"
                             )
-                        c2.commit(); cu2.close(); c2.close()
-                        errors_list.append({'id': rec_id, 'reason': str(e)[:200], 'dead': is_dead})
+                            c2.commit(); cu2.close(); c2.close()
+                            errors_list.append({'id': rec_id, 'reason': str(e)[:200], 'dead': False})
             finally:
                 try:
                     await client.disconnect()
