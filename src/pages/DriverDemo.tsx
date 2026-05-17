@@ -1,90 +1,178 @@
+import { useEffect, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const ROUTES = [
+  {
+    color: "#f97316",
+    waypoints: [
+      [44.4951, 34.1664],
+      [44.5022, 34.1822],
+      [44.5085, 34.1671],
+      [44.4974, 34.1543],
+      [44.4951, 34.1664],
+    ],
+  },
+  {
+    color: "#22c55e",
+    waypoints: [
+      [44.5106, 34.1502],
+      [44.5198, 34.1738],
+      [44.5054, 34.1900],
+      [44.4960, 34.1721],
+      [44.5106, 34.1502],
+    ],
+  },
+  {
+    color: "#3b82f6",
+    waypoints: [
+      [44.4870, 34.1430],
+      [44.4912, 34.1685],
+      [44.4830, 34.1820],
+      [44.4750, 34.1612],
+      [44.4870, 34.1430],
+    ],
+  },
+  {
+    color: "#a855f7",
+    waypoints: [
+      [44.5240, 34.1980],
+      [44.5150, 34.2130],
+      [44.5012, 34.2060],
+      [44.5095, 34.1880],
+      [44.5240, 34.1980],
+    ],
+  },
+  {
+    color: "#f97316",
+    waypoints: [
+      [44.4690, 34.1290],
+      [44.4790, 34.1175],
+      [44.4865, 34.1340],
+      [44.4775, 34.1430],
+      [44.4690, 34.1290],
+    ],
+  },
+];
+
+const carIcon = (color: string) =>
+  L.divIcon({
+    className: "",
+    html: `
+      <div style="position:relative;width:36px;height:36px;transform:translate(-50%,-50%);">
+        <div style="position:absolute;inset:0;border-radius:50%;background:${color};opacity:.3;animation:pulse-ring 2s ease-out infinite;"></div>
+        <div style="position:relative;width:36px;height:36px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 4px 12px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+            <circle cx="7" cy="17" r="2"/>
+            <circle cx="17" cy="17" r="2"/>
+          </svg>
+        </div>
+      </div>
+    `,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+
+async function fetchOSRMRoute(points: number[][]): Promise<[number, number][]> {
+  const coords = points.map((p) => `${p[1]},${p[0]}`).join(";");
+  try {
+    const res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,
+    );
+    const data = await res.json();
+    if (data.routes?.[0]?.geometry?.coordinates) {
+      return data.routes[0].geometry.coordinates.map(
+        (c: [number, number]) => [c[1], c[0]] as [number, number],
+      );
+    }
+  } catch (e) {
+    console.error("OSRM error", e);
+  }
+  return points.map((p) => [p[0], p[1]] as [number, number]);
+}
+
 const DriverDemo = () => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) return;
+
+    const map = L.map(mapRef.current, {
+      center: [44.4951, 34.1664],
+      zoom: 14,
+      zoomControl: false,
+      attributionControl: false,
+    });
+    mapInstanceRef.current = map;
+
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      { maxZoom: 19, subdomains: "abcd" },
+    ).addTo(map);
+
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+
+    const animations: number[] = [];
+
+    ROUTES.forEach(async (route, idx) => {
+      const path = await fetchOSRMRoute(route.waypoints);
+      if (path.length < 2) return;
+
+      L.polyline(path, {
+        color: route.color,
+        weight: 3,
+        opacity: 0.35,
+        dashArray: "6, 8",
+      }).addTo(map);
+
+      const marker = L.marker(path[0], { icon: carIcon(route.color) }).addTo(map);
+
+      const speed = 0.00015 + idx * 0.00003;
+      let i = 0;
+      let progress = 0;
+
+      const step = () => {
+        if (i >= path.length - 1) i = 0;
+        const [lat1, lng1] = path[i];
+        const [lat2, lng2] = path[i + 1];
+        const lat = lat1 + (lat2 - lat1) * progress;
+        const lng = lng1 + (lng2 - lng1) * progress;
+        marker.setLatLng([lat, lng]);
+
+        progress += speed * 100;
+        if (progress >= 1) {
+          progress = 0;
+          i++;
+        }
+        animations.push(requestAnimationFrame(step));
+      };
+      step();
+    });
+
+    return () => {
+      animations.forEach((id) => cancelAnimationFrame(id));
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
   return (
     <div className="h-screen overflow-hidden bg-zinc-950 text-white relative">
-      <iframe
-        title="Карта маршрута"
-        src="https://yandex.ru/map-widget/v1/?ll=34.166306%2C44.499104&z=12&l=map"
-        className="absolute inset-0 w-full h-full"
-        loading="lazy"
-      />
-
       <style>{`
-        @keyframes drive-1 {
-          0%   { transform: translate(20vw, 30vh) rotate(45deg); }
-          25%  { transform: translate(40vw, 25vh) rotate(80deg); }
-          50%  { transform: translate(55vw, 45vh) rotate(135deg); }
-          75%  { transform: translate(35vw, 60vh) rotate(225deg); }
-          100% { transform: translate(20vw, 30vh) rotate(45deg); }
-        }
-        @keyframes drive-2 {
-          0%   { transform: translate(60vw, 20vh) rotate(180deg); }
-          33%  { transform: translate(45vw, 50vh) rotate(220deg); }
-          66%  { transform: translate(70vw, 65vh) rotate(330deg); }
-          100% { transform: translate(60vw, 20vh) rotate(180deg); }
-        }
-        @keyframes drive-3 {
-          0%   { transform: translate(75vw, 70vh) rotate(270deg); }
-          50%  { transform: translate(50vw, 35vh) rotate(90deg); }
-          100% { transform: translate(75vw, 70vh) rotate(270deg); }
-        }
-        @keyframes drive-4 {
-          0%   { transform: translate(30vw, 75vh) rotate(0deg); }
-          25%  { transform: translate(55vw, 70vh) rotate(60deg); }
-          50%  { transform: translate(65vw, 40vh) rotate(170deg); }
-          75%  { transform: translate(40vw, 30vh) rotate(280deg); }
-          100% { transform: translate(30vw, 75vh) rotate(0deg); }
-        }
-        @keyframes drive-5 {
-          0%   { transform: translate(85vw, 45vh) rotate(160deg); }
-          40%  { transform: translate(65vw, 25vh) rotate(70deg); }
-          80%  { transform: translate(80vw, 60vh) rotate(250deg); }
-          100% { transform: translate(85vw, 45vh) rotate(160deg); }
-        }
         @keyframes pulse-ring {
-          0% { transform: scale(0.5); opacity: 0.8; }
-          100% { transform: scale(2.5); opacity: 0; }
+          0% { transform: scale(0.6); opacity: 0.8; }
+          100% { transform: scale(2.4); opacity: 0; }
         }
-        .car-marker {
-          position: absolute;
-          top: 0; left: 0;
-          will-change: transform;
-        }
+        .leaflet-container { background: #1a1a1a; }
       `}</style>
 
-      <div className="absolute inset-0 pointer-events-none z-[5]">
-        {[
-          { anim: "drive-1", duration: "28s", color: "bg-orange-500" },
-          { anim: "drive-2", duration: "35s", color: "bg-green-500" },
-          { anim: "drive-3", duration: "22s", color: "bg-blue-500" },
-          { anim: "drive-4", duration: "40s", color: "bg-orange-500" },
-          { anim: "drive-5", duration: "30s", color: "bg-purple-500" },
-        ].map((c, i) => (
-          <div
-            key={i}
-            className="car-marker"
-            style={{
-              animation: `${c.anim} ${c.duration} linear infinite`,
-            }}
-          >
-            <div className="relative -translate-x-1/2 -translate-y-1/2">
-              <div
-                className={`absolute inset-0 w-10 h-10 rounded-full ${c.color} opacity-30`}
-                style={{ animation: "pulse-ring 2s ease-out infinite" }}
-              />
-              <div
-                className={`relative w-10 h-10 rounded-full ${c.color} border-2 border-white shadow-lg flex items-center justify-center`}
-              >
-                <Icon name="Car" size={18} className="text-white" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <div ref={mapRef} className="absolute inset-0 w-full h-full z-0" />
 
       <header className="absolute top-4 left-4 right-4 z-20">
         <div className="max-w-[1600px] mx-auto bg-zinc-900/90 backdrop-blur border border-zinc-800 rounded-full px-6 py-3 flex items-center justify-between shadow-2xl">
