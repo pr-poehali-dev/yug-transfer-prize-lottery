@@ -50,7 +50,7 @@ const DriverDemo = () => {
         </div>
       </header>
 
-      <aside className="absolute top-20 left-4 bottom-4 z-10 w-[440px] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-4 shadow-2xl flex flex-col">
+      <aside className="absolute top-[76px] left-4 bottom-4 z-10 w-[440px] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-4 shadow-2xl flex flex-col">
         <div className="mb-3">
           <h1 className="text-lg font-bold leading-tight">Закажите трансфер</h1>
           <p className="text-xs text-zinc-400 mt-0.5">
@@ -164,7 +164,7 @@ const DriverDemo = () => {
         </div>
       </aside>
 
-      <div className="absolute top-24 left-[460px] z-10 bg-zinc-900/90 backdrop-blur border border-zinc-800 rounded-xl px-3 py-2 flex items-center gap-2 text-xs shadow-lg">
+      <div className="absolute top-[76px] left-[460px] z-10 bg-zinc-900/90 backdrop-blur border border-zinc-800 rounded-xl px-3 py-2 flex items-center gap-2 text-xs shadow-lg">
         <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
         <span>
           Доступно <b>27 водителей</b> рядом
