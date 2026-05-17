@@ -212,11 +212,8 @@ const DriverDemo = () => {
       </header>
 
       <aside className="absolute top-[92px] left-4 bottom-4 z-10 w-[440px] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-4 shadow-2xl flex flex-col">
-        <div className="mb-3">
+        <div className="mb-3 text-center">
           <h1 className="text-lg font-bold leading-tight">Закажите трансфер</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Перезвоним в течение 5 минут
-          </p>
         </div>
 
         <div className="space-y-2 flex-1 flex flex-col min-h-0">
