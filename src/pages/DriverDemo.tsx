@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import Icon from "@/components/ui/icon";
@@ -95,6 +95,20 @@ async function fetchOSRMRoute(points: number[][]): Promise<[number, number][]> {
 const DriverDemo = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const [driversCount, setDriversCount] = useState(27);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDriversCount((prev) => {
+        const delta = Math.floor(Math.random() * 5) - 2;
+        const next = prev + delta;
+        if (next < 22) return 22;
+        if (next > 34) return 34;
+        return next;
+      });
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -321,7 +335,7 @@ const DriverDemo = () => {
       <div className="absolute top-[112px] right-4 z-10 bg-zinc-900/90 backdrop-blur border border-zinc-800 rounded-xl px-3 py-2 flex items-center gap-2 text-xs shadow-lg">
         <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
         <span>
-          Доступно <b>27 водителей</b> рядом
+          Доступно <b className="tabular-nums">{driversCount} водителей</b> рядом
         </span>
       </div>
 
