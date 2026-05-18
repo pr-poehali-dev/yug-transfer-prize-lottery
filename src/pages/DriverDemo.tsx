@@ -63,19 +63,15 @@ const carIcon = (color: string) =>
   L.divIcon({
     className: "",
     html: `
-      <div style="position:relative;width:36px;height:36px;transform:translate(-50%,-50%);">
+      <div style="position:relative;width:40px;height:40px;transform:translate(-50%,-50%);">
         <div style="position:absolute;inset:0;border-radius:50%;background:${color};opacity:.3;animation:pulse-ring 2s ease-out infinite;"></div>
-        <div style="position:relative;width:36px;height:36px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 4px 12px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
-            <circle cx="7" cy="17" r="2"/>
-            <circle cx="17" cy="17" r="2"/>
-          </svg>
+        <div style="position:relative;width:40px;height:40px;border-radius:50%;background:white;border:2px solid ${color};box-shadow:0 4px 12px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;">
+          🚕
         </div>
       </div>
     `,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
   });
 
 async function fetchOSRMRoute(points: number[][]): Promise<[number, number][]> {
@@ -211,7 +207,7 @@ const DriverDemo = () => {
         </div>
       </header>
 
-      <aside className="absolute top-[92px] left-4 bottom-4 z-10 w-[440px] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-4 shadow-2xl flex flex-col">
+      <aside className="absolute top-[112px] left-4 bottom-4 z-10 w-[440px] bg-zinc-900/95 backdrop-blur-md border border-zinc-800 rounded-2xl p-4 shadow-2xl flex flex-col">
         <div className="mb-3 text-center">
           <h1 className="text-lg font-bold leading-tight">Закажите трансфер</h1>
         </div>
