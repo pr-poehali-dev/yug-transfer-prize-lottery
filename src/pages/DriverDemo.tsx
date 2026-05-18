@@ -235,6 +235,14 @@ const DriverDemo = () => {
             />
           </div>
 
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-orange-400 transition px-1 py-0.5 self-start"
+          >
+            <Icon name="Plus" size={12} />
+            <span>Промежуточный адрес</span>
+          </button>
+
           <div className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5 focus-within:border-orange-400 transition">
             <Label className="text-[10px] text-zinc-400 block leading-tight">Куда?</Label>
             <Input
