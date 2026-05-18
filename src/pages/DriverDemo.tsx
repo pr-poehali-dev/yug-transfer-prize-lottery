@@ -290,7 +290,7 @@ const DriverDemo = () => {
                 { icon: "CarFront", name: "Комфорт", price: "от 2 200 ₽" },
                 { icon: "Bus", name: "Минивэн", price: "от 3 500 ₽" },
                 { icon: "Crown", name: "Бизнес", price: "от 5 000 ₽" },
-                { icon: "Plus", name: "Доп.", price: "кресло" },
+                { icon: "Package", name: "Доставка", price: "от 500 ₽" },
               ].map((t) => (
                 <button
                   key={t.name}
