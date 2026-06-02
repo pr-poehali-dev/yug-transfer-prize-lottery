@@ -5,10 +5,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 
+const Index = lazy(() => import("./pages/Index"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Offer = lazy(() => import("./pages/Offer"));
-const DriverDemo = lazy(() => import("./pages/DriverDemo"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 if ("serviceWorker" in navigator) {
@@ -22,11 +22,10 @@ const App = () => (
     <BrowserRouter>
       <Suspense fallback={null}>
         <Routes>
-          <Route path="/" element={<DriverDemo />} />
+          <Route path="/" element={<Index />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/offer" element={<Offer />} />
-          <Route path="/driver-demo" element={<DriverDemo />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
