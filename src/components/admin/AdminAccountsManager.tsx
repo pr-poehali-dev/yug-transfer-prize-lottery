@@ -229,7 +229,7 @@ export function AdminAccountsManager({ token }: { token: string }) {
         };
         try {
           const r = await fetch(`${INVITE_RUNNER_URL}?action=run_account`, {
-            method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 12 }),
+            method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 6 }),
           });
           j = await r.json();
         } catch {
