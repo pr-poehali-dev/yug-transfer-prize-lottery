@@ -220,12 +220,27 @@ export function AdminAccountsManager({ token }: { token: string }) {
     let totalAdded = 0, totalPrivacy = 0, totalFailed = 0;
     let banned = false;
     let emptyStreak = 0;
+    let errStreak = 0;
     try {
       while (!stopRunRef.current) {
-        const r = await fetch(`${INVITE_RUNNER_URL}?action=run_account`, {
-          method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 20 }),
-        });
-        const j = await r.json();
+        let j: {
+          ok?: boolean; error?: string;
+          added?: number; privacy?: number; failed?: number; ban_triggered?: boolean;
+        };
+        try {
+          const r = await fetch(`${INVITE_RUNNER_URL}?action=run_account`, {
+            method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 12 }),
+          });
+          j = await r.json();
+        } catch {
+          // Сетевой обрыв/таймаут одной пачки — не валим весь прогон, пробуем ещё раз
+          errStreak++;
+          if (errStreak >= 3) { alert("❌ Сеть недоступна, остановлено"); break; }
+          await load();
+          await new Promise((res) => setTimeout(res, 1500));
+          continue;
+        }
+        errStreak = 0;
         if (!j.ok) { alert(`❌ ${j.error || "Ошибка"}`); break; }
         totalAdded += j.added || 0;
         totalPrivacy += j.privacy || 0;
