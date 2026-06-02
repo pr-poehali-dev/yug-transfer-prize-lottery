@@ -1124,10 +1124,22 @@ async def verify_usernames(batch: int = 250) -> dict:
         active_run_finish()
 
     remaining = max(0, count_pending_with_username())
+    done = remaining == 0
+    redistributed = None
+    # Когда проверка завершена — автоматически раскидываем живых поровну по аккаунтам
+    if done:
+        try:
+            accs_all = get_full_power_accounts(include_warmup=True)
+            if accs_all:
+                counts = distribute_pending_to_accounts([a['id'] for a in accs_all], force=True)
+                redistributed = {'accounts': len(accs_all), 'total': sum(counts.values())}
+        except Exception as e:
+            redistributed = {'error': str(e)[:120]}
     return {
         'ok': True, 'account': acc['label'],
         'checked': checked, 'alive': alive, 'removed': removed,
-        'remaining': remaining, 'done': remaining == 0,
+        'remaining': remaining, 'done': done,
+        'redistributed': redistributed,
     }
 
 

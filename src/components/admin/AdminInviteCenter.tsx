@@ -75,10 +75,17 @@ export function AdminInviteCenter({ token }: { token: string }) {
         totalRemoved += j.removed || 0;
         setVerifyInfo({ checked: totalChecked, removed: totalRemoved, remaining: j.remaining || 0 });
         await load();
-        if (j.done || (j.checked || 0) === 0) break;
+        if (j.done || (j.checked || 0) === 0) {
+          const rd = j.redistributed;
+          const extra = rd && rd.accounts
+            ? `\n\nЖивые юзернеймы (${rd.total}) распределены поровну по ${rd.accounts} аккаунтам.`
+            : "";
+          alert(`Проверка завершена!\nПроверено: ${totalChecked}\nУдалено битых: ${totalRemoved}${extra}`);
+          return;
+        }
         await new Promise((res) => setTimeout(res, 800));
       }
-      alert(`Проверка ${stopVerifyRef.current ? "остановлена" : "завершена"}!\nПроверено: ${totalChecked}\nУдалено битых: ${totalRemoved}`);
+      alert(`Проверка остановлена.\nПроверено: ${totalChecked}\nУдалено битых: ${totalRemoved}`);
     } finally {
       setVerifying(false);
       stopVerifyRef.current = false;
