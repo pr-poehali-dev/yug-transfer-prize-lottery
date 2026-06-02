@@ -45,21 +45,9 @@ interface CenterStatus {
   full_power_total_remaining: number;
 }
 
-interface AccResult {
-  ok: boolean;
-  account: string;
-  added?: number;
-  privacy?: number;
-  failed?: number;
-  ban_triggered?: boolean;
-  ban_note?: string;
-  error?: string;
-}
-
 export function AdminInviteCenter({ token }: { token: string }) {
   const [status, setStatus] = useState<CenterStatus | null>(null);
-  const [busy, setBusy] = useState(false);
-  const { start: startProgress, stop: stopProgress, progress, refreshTrigger } = useInviteProgress();
+  const { progress, refreshTrigger } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -87,45 +75,10 @@ export function AdminInviteCenter({ token }: { token: string }) {
     if (refreshTrigger > 0) load();
   }, [refreshTrigger]);
 
-  async function runFullPower(size: number) {
-    const accs = status?.full_power_accounts?.length || 0;
-    if (!accs) {
-      alert("Нет живых аккаунтов с остатком на сегодня");
-      return;
-    }
-    const total = accs * size;
-    setBusy(true);
-    startProgress({
-      mode: "full_power",
-      title: `Залп ×${size}: ${total} человек`,
-      subtitle: `${accs} аккаунтов параллельно`,
-      estimatedSec: Math.max(5, size * 2),
-    });
-    try {
-      const r = await fetch(`${INVITE_RUNNER_URL}?action=run_full_power`, {
-        method: "POST", headers, body: JSON.stringify({ batch_per_account: size }),
-      });
-      const j = await r.json();
-      if (j.results) {
-        const summary = j.results.map((x: AccResult) =>
-          `${x.ok ? "✅" : "❌"} ${x.account}: +${x.added || 0}${x.ban_triggered ? " БАН!" : ""}${x.error ? ` — ${x.error}` : ""}`
-        ).join("\n");
-        alert(`Готово! Добавлено: ${j.total_added || 0}\n\n${summary}`);
-      } else if (j.error) {
-        alert(`Ошибка: ${j.error}`);
-      }
-      await load();
-    } finally {
-      setBusy(false);
-      stopProgress();
-    }
-  }
-
   if (!status) {
     return <div className="glass rounded-2xl p-5 border border-white/5"><div className="text-center text-xs text-muted-foreground py-6">Загрузка...</div></div>;
   }
 
-  const noQueue = status.queue.pending === 0;
   const fpAccs = status.full_power_accounts || [];
 
   return (
@@ -186,61 +139,9 @@ export function AdminInviteCenter({ token }: { token: string }) {
               <span className="font-bold text-purple-300 text-base">{status.full_power_total_remaining}</span>
             </div>
 
-            <div>
-              <label className="text-xs text-muted-foreground mb-1.5 block">Один клик — один залп со всех аккаунтов:</label>
-              <div className="grid grid-cols-4 gap-2">
-                {[1, 3, 5, 10].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => runFullPower(n)}
-                    disabled={busy || noQueue}
-                    className="relative py-3 rounded-lg text-sm font-bold transition border bg-gradient-to-br from-purple-600 to-pink-600 border-purple-400 text-white shadow-lg shadow-purple-500/20 hover:scale-[1.02] hover:shadow-purple-500/40 disabled:opacity-40 disabled:hover:scale-100"
-                  >
-                    {busy ? (
-                      <Icon name="Loader2" size={16} className="animate-spin mx-auto" />
-                    ) : (
-                      <>
-                        <div className="flex items-center justify-center gap-1">
-                          <Icon name="Zap" size={13} />
-                          <span>×{n}</span>
-                        </div>
-                        <div className="text-[10px] font-normal opacity-90 mt-0.5">
-                          ={fpAccs.length * n} чел
-                        </div>
-                      </>
-                    )}
-                    {n === 10 && !busy && (
-                      <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-black text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none">МАХ</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-2">
-                ⚡ Без задержек, все аккаунты параллельно. Дневная норма ({fpAccs.length * status.daily_limit} чел) выдаётся за {Math.ceil(status.daily_limit / 10)} нажатий ×10.
-              </p>
-            </div>
-
           </>
         )}
       </div>
-
-      {status.recent_runs.length > 0 && (
-        <details className="text-xs">
-          <summary className="cursor-pointer text-muted-foreground hover:text-white">История запусков ({status.recent_runs.length})</summary>
-          <div className="mt-2 space-y-1">
-            {status.recent_runs.map((log) => (
-              <div key={log.id} className="flex items-center gap-2 px-2 py-1.5 bg-white/[0.02] rounded">
-                <span className="text-muted-foreground text-[10px] w-32 shrink-0">{new Date(log.created_at).toLocaleString("ru-RU")}</span>
-                <span className="truncate flex-1 text-[11px]">{log.account_label || `#${log.id}`}</span>
-                <span className="text-green-300">+{log.added}</span>
-                <span className="text-orange-300">~{log.privacy}</span>
-                <span className="text-red-300">×{log.failed}</span>
-                {log.ban_triggered && <Icon name="Ban" size={11} className="text-red-400" />}
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
     </div>
   );
 }
