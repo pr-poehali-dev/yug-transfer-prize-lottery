@@ -121,41 +121,6 @@ export function AdminInviteCenter({ token }: { token: string }) {
     }
   }
 
-  async function runMutualWarmup() {
-    const accs = status?.full_power_accounts?.length || 0;
-    if (accs < 2) {
-      alert("Нужно минимум 2 живых аккаунта");
-      return;
-    }
-    if (!confirm(`Прогрев своих: каждый из ${accs} аккаунтов сохранит остальных в контакты, напишет «Привет» и подпишется на канал.\n\nЭто откроет «взаимные контакты» в Telegram и позволит холодным аккаунтам добавлять людей.\n\nПродолжить?`)) return;
-    setBusy(true);
-    startProgress({
-      mode: "mutual_warmup",
-      title: `Прогрев своих: ${accs} аккаунтов`,
-      subtitle: "Дружим аккаунты между собой",
-      estimatedSec: Math.max(30, accs * 15),
-    });
-    try {
-      const r = await fetch(`${INVITE_RUNNER_URL}?action=mutual_warmup`, {
-        method: "POST", headers, body: JSON.stringify({ send_hello: true, join_channel: true }),
-      });
-      const j = await r.json();
-      if (j.results) {
-        type WarmRes = { ok: boolean; account: string; contacts_added?: number; messages_sent?: number; channel_joined?: boolean; error?: string };
-        const summary = (j.results as WarmRes[]).map((x) =>
-          `${x.ok ? "✅" : "❌"} ${x.account}: контактов +${x.contacts_added || 0}, сообщений +${x.messages_sent || 0}${x.channel_joined ? ", в канале" : ""}${x.error ? ` — ${x.error}` : ""}`
-        ).join("\n");
-        alert(`Готово!\nКонтактов добавлено: ${j.total_contacts_added || 0}\nСообщений отправлено: ${j.total_messages_sent || 0}\n\n${summary}`);
-      } else if (j.error) {
-        alert(`Ошибка: ${j.error}`);
-      }
-      await load();
-    } finally {
-      setBusy(false);
-      stopProgress();
-    }
-  }
-
   if (!status) {
     return <div className="glass rounded-2xl p-5 border border-white/5"><div className="text-center text-xs text-muted-foreground py-6">Загрузка...</div></div>;
   }
@@ -255,26 +220,6 @@ export function AdminInviteCenter({ token }: { token: string }) {
               </p>
             </div>
 
-            <div className="mt-3 pt-3 border-t border-white/5">
-              <label className="text-xs text-muted-foreground mb-1.5 block">Прогрев аккаунтов (чтобы холодные тоже могли инвайтить):</label>
-              <button
-                onClick={runMutualWarmup}
-                disabled={busy}
-                className="w-full py-3 rounded-lg text-sm font-bold transition border bg-gradient-to-br from-orange-600 to-amber-500 border-orange-400 text-white shadow-lg shadow-orange-500/20 hover:scale-[1.01] hover:shadow-orange-500/40 disabled:opacity-40 disabled:hover:scale-100 flex items-center justify-center gap-2"
-              >
-                {busy ? (
-                  <Icon name="Loader2" size={16} className="animate-spin" />
-                ) : (
-                  <>
-                    <Icon name="HeartHandshake" size={16} />
-                    <span>Прогреть своих ({fpAccs.length} аккаунтов)</span>
-                  </>
-                )}
-              </button>
-              <p className="text-[11px] text-muted-foreground mt-2">
-                🔥 Каждый аккаунт сохранит остальных в контакты, напишет «Привет» и подпишется на канал. После этого Phung, Susan и другие холодные начнут добавлять людей.
-              </p>
-            </div>
           </>
         )}
       </div>
