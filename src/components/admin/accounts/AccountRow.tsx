@@ -4,7 +4,6 @@ import { TgAccount } from "../adminTypes";
 interface AccountRowProps {
   acc: TgAccount;
   busy: boolean;
-  onToggleWarmup: (acc: TgAccount) => void;
   onJoinGroupOne: (acc: TgAccount) => void;
   onActivate: (id: number) => void;
   onResetDaily: (id: number) => void;
@@ -18,7 +17,6 @@ interface AccountRowProps {
 export function AccountRow({
   acc,
   busy,
-  onToggleWarmup,
   onJoinGroupOne,
   onActivate,
   onResetDaily,
@@ -42,19 +40,6 @@ export function AccountRow({
       }`} />
 
       <span className="text-sm font-medium truncate min-w-0 flex-1">{acc.label}</span>
-
-      <button
-        onClick={() => onToggleWarmup(acc)}
-        disabled={busy}
-        title={acc.needs_warmup ? "🔥 прогрев — клик чтобы перевести на полную мощность" : "⚡ полная мощность — клик чтобы вернуть на прогрев"}
-        className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 transition hover:opacity-80 ${
-          acc.needs_warmup
-            ? "bg-orange-500/20 text-orange-300"
-            : "bg-purple-500/20 text-purple-300"
-        }`}
-      >
-        {acc.needs_warmup ? "🔥" : "⚡"}
-      </button>
 
       {!!acc.assigned_count && (
         <span

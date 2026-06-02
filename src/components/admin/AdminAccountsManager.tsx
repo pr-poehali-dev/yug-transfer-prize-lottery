@@ -148,15 +148,6 @@ export function AdminAccountsManager({ token }: { token: string }) {
     await call("activate", { id });
   }
 
-  async function toggleWarmup(acc: TgAccount) {
-    const next = !acc.needs_warmup;
-    const msg = next
-      ? `Включить ПРОГРЕВ для «${acc.label}»? Аккаунт будет работать по расписанию (1→2→3→4 инвайта в день).`
-      : `Перевести «${acc.label}» в ПОЛНУЮ МОЩНОСТЬ (30 инвайтов/сутки)? Делай это только если аккаунт прогретый/купленный.`;
-    if (!confirm(msg)) return;
-    await call("toggle_warmup", { id: acc.id, needs_warmup: next });
-  }
-
   async function remove(id: number) {
     if (!confirm("Удалить этот аккаунт из пула?")) return;
     await call("delete", { id });
@@ -318,7 +309,6 @@ export function AdminAccountsManager({ token }: { token: string }) {
               key={acc.id}
               acc={acc}
               busy={busy}
-              onToggleWarmup={toggleWarmup}
               onJoinGroupOne={joinGroupOne}
               onActivate={activate}
               onResetDaily={resetDaily}
