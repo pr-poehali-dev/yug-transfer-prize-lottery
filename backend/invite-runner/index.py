@@ -1066,12 +1066,15 @@ async def verify_usernames(batch: int = 250) -> dict:
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
 
-    acc = get_active_account()
-    if not acc or not acc.get('session_string'):
-        # берём любой живой аккаунт
-        accs = get_full_power_accounts(include_warmup=True)
-        acc = accs[0] if accs else None
-    if not acc:
+    # Собираем список кандидатов-аккаунтов: сначала активный, потом все остальные живые
+    candidates = []
+    active = get_active_account()
+    if active and active.get('session_string'):
+        candidates.append(active)
+    for a in get_full_power_accounts(include_warmup=True):
+        if a.get('session_string') and all(a['id'] != c['id'] for c in candidates):
+            candidates.append(a)
+    if not candidates:
         return {'ok': False, 'error': 'Нет живого аккаунта для проверки'}
 
     targets = get_unchecked_pending(batch)
@@ -1086,13 +1089,42 @@ async def verify_usernames(batch: int = 250) -> dict:
         total=len(targets), estimated_sec=max(5, len(targets) // 5),
     )
 
-    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
-    await client.connect()
+    # Перебираем аккаунты, пока какой-то не подключится и не авторизуется
+    client = None
+    acc = None
+    tried_labels = []
+    for cand in candidates:
+        tried_labels.append(cand['label'])
+        c = TelegramClient(StringSession(cand['session_string']), api_id, api_hash)
+        try:
+            await c.connect()
+            authorized = False
+            for _ in range(2):
+                try:
+                    if await c.is_user_authorized():
+                        authorized = True
+                        break
+                except Exception:
+                    pass
+                await asyncio.sleep(1)
+            if authorized:
+                client = c
+                acc = cand
+                break
+            else:
+                await c.disconnect()
+        except Exception:
+            try:
+                await c.disconnect()
+            except Exception:
+                pass
+    if client is None or acc is None:
+        active_run_finish()
+        return {'ok': False, 'error': f'Ни одна сессия не отвечает (пробовали: {", ".join(tried_labels)})'}
+
     checked = 0; alive = 0; removed = 0
     from telethon.tl.types import User as _TLUser
     try:
-        if not await client.is_user_authorized():
-            return {'ok': False, 'error': f'Сессия «{acc["label"]}» не отвечает'}
         for i, t in enumerate(targets):
             checked += 1
             uname = t['username']
