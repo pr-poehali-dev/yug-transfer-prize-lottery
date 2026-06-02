@@ -136,6 +136,48 @@ def import_list(items: list, source: str) -> dict:
     return {'ok': True, 'inserted': inserted, 'skipped_dup': skipped_dup, 'skipped_bad': skipped_bad}
 
 
+def redistribute_all_pending() -> dict:
+    """Равномерно раскидывает ВСЕХ pending-кандидатов по всем незабаненным аккаунтам (round-robin).
+    Вызывается автоматически после импорта новых юзернеймов."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT id FROM {SCHEMA}.tg_user_accounts
+        WHERE is_banned = FALSE
+          AND session_string IS NOT NULL AND session_string <> ''
+        ORDER BY id ASC
+    """)
+    account_ids = [int(r[0]) for r in cur.fetchall()]
+    if not account_ids:
+        cur.close(); conn.close()
+        return {'distributed': False, 'reason': 'нет аккаунтов'}
+    # Полный сброс закреплений и round-robin раздача заново — строго поровну
+    cur.execute(f"""
+        UPDATE {SCHEMA}.invite_targets
+        SET assigned_account_id = NULL
+        WHERE status = 'pending'
+    """)
+    values = ','.join(f'({a})' for a in account_ids)
+    cur.execute(f"""
+        WITH pend AS (
+            SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+            FROM {SCHEMA}.invite_targets
+            WHERE status = 'pending'
+              AND username IS NOT NULL AND username <> ''
+        ),
+        accs AS (
+            SELECT acc_id, ROW_NUMBER() OVER (ORDER BY acc_id) AS rn
+            FROM (VALUES {values}) AS v(acc_id)
+        )
+        UPDATE {SCHEMA}.invite_targets t
+        SET assigned_account_id = a.acc_id
+        FROM pend p
+        JOIN accs a ON a.rn = ((p.rn - 1) % {len(account_ids)}) + 1
+        WHERE t.id = p.id
+    """)
+    conn.commit(); cur.close(); conn.close()
+    return {'distributed': True, 'accounts': len(account_ids)}
+
+
 def clear_all() -> dict:
     conn = db(); cur = conn.cursor()
     cur.execute(f"DELETE FROM {SCHEMA}.invite_targets")
@@ -176,6 +218,12 @@ def handler(event: dict, context) -> dict:
         if not isinstance(items, list):
             return resp(400, {'error': 'items must be array'})
         result = import_list(items, source)
+        # Авто-перераспределение очереди по всем аккаунтам после загрузки новых юзернеймов
+        if result.get('inserted', 0) > 0:
+            try:
+                result['redistribute'] = redistribute_all_pending()
+            except Exception as e:
+                result['redistribute'] = {'distributed': False, 'reason': str(e)[:120]}
         result.update(get_stats())
         return resp(200, result)
 
