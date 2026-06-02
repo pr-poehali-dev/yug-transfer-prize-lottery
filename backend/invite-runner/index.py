@@ -439,23 +439,32 @@ def get_pending_targets(limit: int, account_id: int = -1) -> list:
     return [{'id': r[0], 'username': r[1], 'phone': r[2], 'first_name': r[3]} for r in rows]
 
 
-def distribute_pending_to_accounts(account_ids: list) -> dict:
+def distribute_pending_to_accounts(account_ids: list, force: bool = False) -> dict:
     """Равномерно распределяет всех pending-кандидатов между переданными аккаунтами (round-robin по id).
-    Перезаписывает assigned_account_id ТОЛЬКО для незакреплённых (NULL) или закреплённых за
-    аккаунтами вне текущего активного списка. Уже закреплённые за активным аккаунтом — не трогаем.
+    force=False — перезаписывает assigned_account_id только для незакреплённых (NULL) или закреплённых
+                  за аккаунтами вне активного списка. Уже закреплённые за активным аккаунтом — не трогаем.
+    force=True  — СБРАСЫВАЕТ все закрепления и раздаёт заново поровну (для кнопки «Разделить поровну»).
     Возвращает {account_id: count}."""
     if not account_ids:
         return {}
     ids_csv = ','.join(str(int(a)) for a in account_ids)
     conn = db(); cur = conn.cursor()
-    # 1) Снимаем закрепления для аккаунтов, которых уже нет в активном списке (бан/отключение)
-    cur.execute(f"""
-        UPDATE {SCHEMA}.invite_targets
-        SET assigned_account_id = NULL
-        WHERE status = 'pending'
-          AND assigned_account_id IS NOT NULL
-          AND assigned_account_id NOT IN ({ids_csv})
-    """)
+    if force:
+        # Полный сброс: снимаем все закрепления у всех pending, чтобы раздать строго поровну
+        cur.execute(f"""
+            UPDATE {SCHEMA}.invite_targets
+            SET assigned_account_id = NULL
+            WHERE status = 'pending'
+        """)
+    else:
+        # Снимаем закрепления только для аккаунтов вне активного списка (бан/отключение)
+        cur.execute(f"""
+            UPDATE {SCHEMA}.invite_targets
+            SET assigned_account_id = NULL
+            WHERE status = 'pending'
+              AND assigned_account_id IS NOT NULL
+              AND assigned_account_id NOT IN ({ids_csv})
+        """)
     # 2) Round-robin раздача незакреплённых
     cur.execute(f"""
         WITH unassigned AS (
@@ -815,9 +824,14 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
     api_hash = os.environ['TG_API_HASH']
     target_group = get_target_group()
 
+    # Сначала берём закреплённых за этим аккаунтом
     targets = get_pending_targets(per_account, account_id=acc['id'])
+    # Если своих не хватает — добираем НЕЗАКРЕПЛЁННЫХ (assigned IS NULL), не трогая чужих
+    if len(targets) < per_account:
+        extra = get_pending_targets(per_account - len(targets), account_id=0)
+        targets = targets + extra
     if not targets:
-        return {'ok': False, 'account': acc['label'], 'error': 'Нет pending кандидатов закреплённых за этим аккаунтом'}
+        return {'ok': False, 'account': acc['label'], 'error': 'Нет pending кандидатов для этого аккаунта'}
 
     client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
     await client.connect()
@@ -993,9 +1007,8 @@ async def run_single_account_batch(account_id: int, size: int = SINGLE_RUN_MAX) 
         total=take, estimated_sec=max(5, take * 2),
     )
     try:
-        # run_warmup_for_account сам берёт закреплённых за этим аккаунтом.
-        # Если у аккаунта нет закреплённых — добираем незакреплённых, закрепив за ним.
-        distribute_pending_to_accounts([acc['id']])
+        # run_warmup_for_account сам берёт закреплённых за этим аккаунтом,
+        # а если их не хватает — добирает незакреплённых (не трогая кандидатов других аккаунтов).
         result = await run_warmup_for_account(acc, take, fast=True)
     finally:
         active_run_finish()
@@ -1314,7 +1327,7 @@ def handler(event: dict, context) -> dict:
         accounts = get_full_power_accounts(include_warmup=True)
         if not accounts:
             return resp(200, {'ok': False, 'error': 'Нет доступных аккаунтов'})
-        counts = distribute_pending_to_accounts([a['id'] for a in accounts])
+        counts = distribute_pending_to_accounts([a['id'] for a in accounts], force=True)
         return resp(200, {
             'ok': True,
             'accounts': [{'id': a['id'], 'label': a['label'], 'assigned': counts.get(a['id'], 0)} for a in accounts],
