@@ -67,7 +67,7 @@ export function AdminInviteCenter({ token }: { token: string }) {
     try {
       while (!stopVerifyRef.current) {
         const r = await fetch(`${INVITE_RUNNER_URL}?action=verify_usernames`, {
-          method: "POST", headers, body: JSON.stringify({ batch: 250 }),
+          method: "POST", headers, body: JSON.stringify({ batch: 60 }),
         });
         const j = await r.json();
         if (!j.ok) { alert(j.error || "Ошибка проверки"); break; }
