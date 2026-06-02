@@ -12,6 +12,7 @@ interface AccountRowProps {
   onMarkBanned: (id: number) => void;
   onUnban: (id: number) => void;
   onRemove: (id: number) => void;
+  onRunAccount: (acc: TgAccount) => void;
 }
 
 export function AccountRow({
@@ -25,6 +26,7 @@ export function AccountRow({
   onMarkBanned,
   onUnban,
   onRemove,
+  onRunAccount,
 }: AccountRowProps) {
   return (
     <div
@@ -69,6 +71,18 @@ export function AccountRow({
 
       {acc.is_banned && (
         <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 shrink-0">бан</span>
+      )}
+
+      {!acc.is_banned && (
+        <button
+          onClick={() => onRunAccount(acc)}
+          disabled={busy}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[10px] font-semibold shrink-0 hover:opacity-90 transition disabled:opacity-50"
+          title="Залить никнеймы в группу с этого аккаунта (до 200 за раз)"
+        >
+          <Icon name="Send" size={11} />
+          Залить
+        </button>
       )}
 
       <div className="flex items-center gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition">

@@ -207,6 +207,33 @@ export function AdminAccountsManager({ token }: { token: string }) {
     }
   }
 
+  async function runAccount(acc: TgAccount) {
+    if (!targetGroup) { alert("Сначала укажи целевую группу выше"); return; }
+    if (!confirm(`Залить никнеймы в ${targetGroup} с аккаунта «${acc.label}» (до 200 человек)?\n\nАккаунт должен быть участником группы.`)) return;
+    setBusy(true);
+    startProgress({
+      mode: "single_account",
+      title: `Заливка с «${acc.label}» (до 200)`,
+      subtitle: targetGroup,
+      estimatedSec: 60,
+    });
+    try {
+      const r = await fetch(`${INVITE_RUNNER_URL}?action=run_account`, {
+        method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 200 }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        alert(`✅ «${acc.label}»\nДобавлено: ${j.added || 0}\nПриватность: ${j.privacy || 0}\nОшибок: ${j.failed || 0}${j.ban_triggered ? "\n\n⚠️ Аккаунт получил БАН!" : ""}`);
+        await load();
+      } else {
+        alert(`❌ ${j.error || "Ошибка"}`);
+      }
+    } finally {
+      setBusy(false);
+      stopProgress();
+    }
+  }
+
   async function rename(acc: TgAccount) {
     const next = prompt("Новое название:", acc.label);
     if (!next || next === acc.label) return;
@@ -299,6 +326,7 @@ export function AdminAccountsManager({ token }: { token: string }) {
               onMarkBanned={markBanned}
               onUnban={unban}
               onRemove={remove}
+              onRunAccount={runAccount}
             />
           ))}
         </div>
