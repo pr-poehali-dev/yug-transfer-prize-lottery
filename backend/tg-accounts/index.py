@@ -93,10 +93,18 @@ def db():
 def list_accounts() -> list:
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
-        SELECT id, label, phone, is_active, is_banned, daily_invites_used,
-               daily_reset_date, last_used_at, created_at, notes,
-               COALESCE(needs_warmup, TRUE)
-        FROM {SCHEMA}.tg_user_accounts ORDER BY id ASC
+        SELECT a.id, a.label, a.phone, a.is_active, a.is_banned, a.daily_invites_used,
+               a.daily_reset_date, a.last_used_at, a.created_at, a.notes,
+               COALESCE(a.needs_warmup, TRUE),
+               COALESCE(t.cnt, 0)
+        FROM {SCHEMA}.tg_user_accounts a
+        LEFT JOIN (
+            SELECT assigned_account_id, COUNT(*) AS cnt
+            FROM {SCHEMA}.invite_targets
+            WHERE status = 'pending' AND assigned_account_id IS NOT NULL
+            GROUP BY assigned_account_id
+        ) t ON t.assigned_account_id = a.id
+        ORDER BY a.id ASC
     """)
     rows = cur.fetchall()
     cur.close(); conn.close()
@@ -108,6 +116,7 @@ def list_accounts() -> list:
         'created_at': str(r[8]) if r[8] else None,
         'notes': r[9] or '',
         'needs_warmup': r[10],
+        'assigned_count': r[11],
     } for r in rows]
 
 

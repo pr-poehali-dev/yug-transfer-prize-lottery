@@ -48,6 +48,7 @@ export interface TgAccount {
   created_at: string | null;
   notes: string;
   needs_warmup: boolean;
+  assigned_count?: number;
 }
 
 export type AdminTab = "posts" | "bot" | "drivers" | "stories" | "invites";

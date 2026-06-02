@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
-import { TG_ACCOUNTS_URL, TgAccount } from "./adminTypes";
+import { TG_ACCOUNTS_URL, INVITE_RUNNER_URL, TgAccount } from "./adminTypes";
 import { useInviteProgress } from "./InviteProgressContext";
 
 type Step = "idle" | "phone" | "code" | "2fa";
@@ -183,6 +183,28 @@ export function AdminAccountsManager({ token }: { token: string }) {
     await call("reset_daily", { id: 0 });
   }
 
+  async function distributeQueue() {
+    if (!confirm("Разделить очередь кандидатов поровну между всеми рабочими аккаунтами?")) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${INVITE_RUNNER_URL}?action=distribute_queue`, {
+        method: "POST", headers, body: "{}",
+      });
+      const j = await r.json();
+      if (j.ok) {
+        const lines = (j.accounts || [])
+          .map((a: { label: string; assigned: number }) => `${a.label}: ${a.assigned}`)
+          .join("\n");
+        alert(`Распределено: ${j.total_assigned || 0}\n\n${lines}`);
+        await load();
+      } else {
+        alert(j.error || "Ошибка");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function rename(acc: TgAccount) {
     const next = prompt("Новое название:", acc.label);
     if (!next || next === acc.label) return;
@@ -264,6 +286,17 @@ export function AdminAccountsManager({ token }: { token: string }) {
               <Icon name="RotateCcw" size={12} />
               Сброс счётчиков
             </button>
+            {accounts.filter(a => !a.is_banned).length > 0 && (
+              <button
+                onClick={distributeQueue}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[11px] hover:bg-blue-500/20 transition disabled:opacity-50"
+                title="Разделить очередь кандидатов поровну между аккаунтами"
+              >
+                <Icon name="Split" size={12} />
+                Разделить поровну
+              </button>
+            )}
             {accounts.filter(a => !a.is_banned).length > 0 && targetGroup && (
               <button
                 onClick={joinGroupAll}
@@ -350,6 +383,15 @@ export function AdminAccountsManager({ token }: { token: string }) {
               >
                 {acc.needs_warmup ? "🔥" : "⚡"}
               </button>
+
+              {!!acc.assigned_count && (
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 shrink-0"
+                  title={`Назначено кандидатов в очереди: ${acc.assigned_count}`}
+                >
+                  📋 {acc.assigned_count}
+                </span>
+              )}
 
               <span className="text-[11px] text-muted-foreground font-mono shrink-0 w-12 text-right" title={`Сегодня инвайтов: ${acc.daily_invites_used} (лимит снят)`}>
                 {acc.daily_invites_used}
