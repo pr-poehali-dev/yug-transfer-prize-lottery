@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import Icon from "@/components/ui/icon";
 import { TG_ACCOUNTS_URL, INVITE_RUNNER_URL, TgAccount } from "./adminTypes";
 import { useInviteProgress } from "./InviteProgressContext";
+import { AccountsToolbar } from "./accounts/AccountsToolbar";
+import { AccountRow } from "./accounts/AccountRow";
+import { AccountLoginForm } from "./accounts/AccountLoginForm";
 
 type Step = "idle" | "phone" | "code" | "2fa";
 
@@ -259,93 +261,22 @@ export function AdminAccountsManager({ token }: { token: string }) {
 
   return (
     <div className="glass rounded-2xl p-4 border border-white/5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-          <Icon name="Users" size={14} />
-        </div>
-        <h3 className="text-sm font-semibold flex-1">Аккаунты <span className="text-muted-foreground font-normal">({accounts.length})</span></h3>
-        {step === "idle" && (
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {accounts.some(a => a.is_banned) && (
-              <button
-                onClick={unbanAll}
-                disabled={busy}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] hover:bg-emerald-500/20 transition disabled:opacity-50"
-                title="Снять бан со всех аккаунтов"
-              >
-                <Icon name="ShieldCheck" size={12} />
-                Снять баны
-              </button>
-            )}
-            <button
-              onClick={resetDailyAll}
-              disabled={busy || accounts.length === 0}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] hover:bg-cyan-500/20 transition disabled:opacity-50"
-              title="Обнулить дневные счётчики у всех"
-            >
-              <Icon name="RotateCcw" size={12} />
-              Сброс счётчиков
-            </button>
-            {accounts.filter(a => !a.is_banned).length > 0 && (
-              <button
-                onClick={distributeQueue}
-                disabled={busy}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[11px] hover:bg-blue-500/20 transition disabled:opacity-50"
-                title="Разделить очередь кандидатов поровну между аккаунтами"
-              >
-                <Icon name="Split" size={12} />
-                Разделить поровну
-              </button>
-            )}
-            {accounts.filter(a => !a.is_banned).length > 0 && targetGroup && (
-              <button
-                onClick={joinGroupAll}
-                disabled={busy}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] hover:bg-white/10 transition disabled:opacity-50"
-                title={`Все аккаунты вступят в ${targetGroup}`}
-              >
-                <Icon name="LogIn" size={12} />
-                Все в группу
-              </button>
-            )}
-            <button
-              onClick={() => setStep("phone")}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-[11px] hover:opacity-90 transition"
-            >
-              <Icon name="Plus" size={13} />
-              Подключить
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="mb-3 flex items-center gap-2">
-        <Icon name="Target" size={13} className="text-blue-400 shrink-0" />
-        <input
-          type="text"
-          value={targetEdit}
-          onChange={(e) => setTargetEdit(e.target.value)}
-          placeholder="@UG_DRIVER или https://t.me/+AbC..."
-          title="Целевая группа: @username, t.me/username, или invite-ссылку t.me/+..."
-          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500"
-        />
-        <button
-          onClick={checkTarget}
-          disabled={targetSaving}
-          className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition disabled:opacity-40"
-          title="Проверить группу"
-        >
-          <Icon name="Search" size={13} />
-        </button>
-        <button
-          onClick={saveTarget}
-          disabled={targetSaving || targetEdit.trim() === targetGroup}
-          className="px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-500 transition disabled:opacity-40"
-          title="Сохранить целевую группу"
-        >
-          {targetSaving ? "..." : "OK"}
-        </button>
-      </div>
+      <AccountsToolbar
+        accounts={accounts}
+        busy={busy}
+        targetGroup={targetGroup}
+        targetEdit={targetEdit}
+        targetSaving={targetSaving}
+        onTargetEdit={setTargetEdit}
+        onCheckTarget={checkTarget}
+        onSaveTarget={saveTarget}
+        onUnbanAll={unbanAll}
+        onResetDailyAll={resetDailyAll}
+        onDistributeQueue={distributeQueue}
+        onJoinGroupAll={joinGroupAll}
+        onAddAccount={() => setStep("phone")}
+        showActions={step === "idle"}
+      />
 
       {loading ? (
         <div className="text-center py-6 text-xs text-muted-foreground">Загрузка...</div>
@@ -356,162 +287,44 @@ export function AdminAccountsManager({ token }: { token: string }) {
       ) : (
         <div className="border border-white/10 rounded-xl overflow-hidden mb-3 divide-y divide-white/5">
           {accounts.map(acc => (
-            <div
+            <AccountRow
               key={acc.id}
-              className={`group flex items-center gap-2 px-3 py-2 transition hover:bg-white/[0.02] ${
-                acc.is_banned ? "bg-red-500/5" :
-                acc.is_active ? "bg-green-500/5" : ""
-              }`}
-            >
-              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                acc.is_banned ? "bg-red-500" :
-                acc.is_active ? "bg-green-500 shadow-sm shadow-green-500/50" :
-                "bg-muted-foreground/30"
-              }`} />
-
-              <span className="text-sm font-medium truncate min-w-0 flex-1">{acc.label}</span>
-
-              <button
-                onClick={() => toggleWarmup(acc)}
-                disabled={busy}
-                title={acc.needs_warmup ? "🔥 прогрев — клик чтобы перевести на полную мощность" : "⚡ полная мощность — клик чтобы вернуть на прогрев"}
-                className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 transition hover:opacity-80 ${
-                  acc.needs_warmup
-                    ? "bg-orange-500/20 text-orange-300"
-                    : "bg-purple-500/20 text-purple-300"
-                }`}
-              >
-                {acc.needs_warmup ? "🔥" : "⚡"}
-              </button>
-
-              {!!acc.assigned_count && (
-                <span
-                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 shrink-0"
-                  title={`Назначено кандидатов в очереди: ${acc.assigned_count}`}
-                >
-                  📋 {acc.assigned_count}
-                </span>
-              )}
-
-              <span className="text-[11px] text-muted-foreground font-mono shrink-0 w-12 text-right" title={`Сегодня инвайтов: ${acc.daily_invites_used} (лимит снят)`}>
-                {acc.daily_invites_used}
-              </span>
-
-              {acc.is_banned && (
-                <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 shrink-0">бан</span>
-              )}
-
-              <div className="flex items-center gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition">
-                {!acc.is_banned && (
-                  <button onClick={() => joinGroupOne(acc)} disabled={busy}
-                    className="p-1.5 rounded hover:bg-white/10 text-blue-400 transition" title="Вступить в группу">
-                    <Icon name="LogIn" size={13} />
-                  </button>
-                )}
-                {!acc.is_active && !acc.is_banned && (
-                  <button onClick={() => activate(acc.id)} disabled={busy}
-                    className="p-1.5 rounded hover:bg-white/10 text-green-400 transition" title="Сделать активным">
-                    <Icon name="Power" size={13} />
-                  </button>
-                )}
-                <button onClick={() => resetDaily(acc.id)} disabled={busy}
-                  className="p-1.5 rounded hover:bg-white/10 text-cyan-400 transition" title="Обнулить дневной счётчик">
-                  <Icon name="RotateCcw" size={13} />
-                </button>
-                <button onClick={() => rename(acc)} disabled={busy}
-                  className="p-1.5 rounded hover:bg-white/10 text-muted-foreground transition" title="Переименовать">
-                  <Icon name="Pencil" size={13} />
-                </button>
-                {!acc.is_banned ? (
-                  <button onClick={() => markBanned(acc.id)} disabled={busy}
-                    className="p-1.5 rounded hover:bg-white/10 text-amber-400 transition" title="Пометить забаненным">
-                    <Icon name="Ban" size={13} />
-                  </button>
-                ) : (
-                  <button onClick={() => unban(acc.id)} disabled={busy}
-                    className="p-1.5 rounded hover:bg-white/10 text-emerald-400 transition" title="Снять бан">
-                    <Icon name="ShieldCheck" size={13} />
-                  </button>
-                )}
-                <button onClick={() => remove(acc.id)} disabled={busy}
-                  className="p-1.5 rounded hover:bg-white/10 text-red-400 transition" title="Удалить">
-                  <Icon name="Trash2" size={13} />
-                </button>
-              </div>
-            </div>
+              acc={acc}
+              busy={busy}
+              onToggleWarmup={toggleWarmup}
+              onJoinGroupOne={joinGroupOne}
+              onActivate={activate}
+              onResetDaily={resetDaily}
+              onRename={rename}
+              onMarkBanned={markBanned}
+              onUnban={unban}
+              onRemove={remove}
+            />
           ))}
         </div>
       )}
 
       {step !== "idle" && (
-        <div className="border border-white/10 rounded-xl p-4 bg-white/[0.02] space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">
-              {step === "phone" && "Шаг 1: номер телефона"}
-              {step === "code" && "Шаг 2: код из Telegram"}
-              {step === "2fa" && "Шаг 3: пароль 2FA"}
-            </div>
-            <button onClick={resetForm} className="text-xs text-muted-foreground hover:text-white">
-              Отмена
-            </button>
-          </div>
-
-          {step === "phone" && (
-            <>
-              <input
-                type="tel" placeholder="+79991234567" value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              />
-              <input
-                type="text" placeholder="Название (например: Запасной 1) — опционально" value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              />
-              <button onClick={sendCode} disabled={busy}
-                className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm hover:opacity-90 transition disabled:opacity-50">
-                {busy ? "Отправка..." : "Отправить код"}
-              </button>
-            </>
-          )}
-
-          {step === "code" && (
-            <>
-              <div className="text-xs text-muted-foreground">Код отправлен на {phone}</div>
-              <input
-                type="text" inputMode="numeric" placeholder="12345" value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 tracking-widest text-center font-mono"
-              />
-              <button onClick={verifyCode} disabled={busy}
-                className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm hover:opacity-90 transition disabled:opacity-50">
-                {busy ? "Проверка..." : "Подтвердить"}
-              </button>
-            </>
-          )}
-
-          {step === "2fa" && (
-            <>
-              <div className="text-xs text-muted-foreground">Аккаунт защищён двухфакторной авторизацией</div>
-              <input
-                type="password" placeholder="Пароль 2FA" value={pwd}
-                onChange={(e) => setPwd(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              />
-              <button onClick={verify2fa} disabled={busy}
-                className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm hover:opacity-90 transition disabled:opacity-50">
-                {busy ? "Проверка..." : "Войти"}
-              </button>
-            </>
-          )}
-
-          {err && (
-            <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-2">
-              {err}
-            </div>
-          )}
-        </div>
+        <AccountLoginForm
+          step={step}
+          phone={phone}
+          code={code}
+          pwd={pwd}
+          label={label}
+          busy={busy}
+          err={err}
+          onPhone={setPhone}
+          onCode={setCode}
+          onPwd={setPwd}
+          onLabel={setLabel}
+          onSendCode={sendCode}
+          onVerifyCode={verifyCode}
+          onVerify2fa={verify2fa}
+          onCancel={resetForm}
+        />
       )}
     </div>
   );
 }
+
+export default AdminAccountsManager;
