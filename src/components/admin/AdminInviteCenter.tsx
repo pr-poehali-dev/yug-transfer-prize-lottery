@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { INVITE_RUNNER_URL } from "./adminTypes";
 import { useInviteProgress } from "./InviteProgressContext";
@@ -47,9 +47,43 @@ interface CenterStatus {
 
 export function AdminInviteCenter({ token }: { token: string }) {
   const [status, setStatus] = useState<CenterStatus | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyInfo, setVerifyInfo] = useState<{ checked: number; removed: number; remaining: number } | null>(null);
+  const stopVerifyRef = useRef(false);
   const { progress, refreshTrigger } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
+
+  async function verifyUsernames() {
+    if (verifying) {
+      stopVerifyRef.current = true;
+      return;
+    }
+    if (!confirm("Проверить все юзернеймы в очереди на существование? Несуществующие будут убраны. Идёт пачками, можно остановить в любой момент.")) return;
+    stopVerifyRef.current = false;
+    setVerifying(true);
+    let totalChecked = 0;
+    let totalRemoved = 0;
+    try {
+      while (!stopVerifyRef.current) {
+        const r = await fetch(`${INVITE_RUNNER_URL}?action=verify_usernames`, {
+          method: "POST", headers, body: JSON.stringify({ batch: 250 }),
+        });
+        const j = await r.json();
+        if (!j.ok) { alert(j.error || "Ошибка проверки"); break; }
+        totalChecked += j.checked || 0;
+        totalRemoved += j.removed || 0;
+        setVerifyInfo({ checked: totalChecked, removed: totalRemoved, remaining: j.remaining || 0 });
+        await load();
+        if (j.done || (j.checked || 0) === 0) break;
+        await new Promise((res) => setTimeout(res, 800));
+      }
+      alert(`Проверка ${stopVerifyRef.current ? "остановлена" : "завершена"}!\nПроверено: ${totalChecked}\nУдалено битых: ${totalRemoved}`);
+    } finally {
+      setVerifying(false);
+      stopVerifyRef.current = false;
+    }
+  }
 
   async function load() {
     try {
@@ -115,6 +149,36 @@ export function AdminInviteCenter({ token }: { token: string }) {
           <div className="text-[10px] text-muted-foreground uppercase">Ошибки</div>
           <div className="text-lg font-bold text-red-300">{status.queue.failed}</div>
         </div>
+      </div>
+
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/10 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs font-medium flex items-center gap-1.5">
+              <Icon name="ShieldCheck" size={13} className="text-cyan-400" />
+              Проверка юзернеймов
+            </div>
+            <div className="text-[11px] text-muted-foreground">Убирает несуществующие из очереди</div>
+          </div>
+          <button
+            onClick={verifyUsernames}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition shrink-0 ${
+              verifying
+                ? "bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30"
+                : "bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:opacity-90"
+            }`}
+          >
+            <Icon name={verifying ? "Square" : "ScanSearch"} size={13} />
+            {verifying ? "Остановить" : "Проверить все"}
+          </button>
+        </div>
+        {verifyInfo && (
+          <div className="text-[11px] text-muted-foreground flex gap-3">
+            <span>Проверено: <b className="text-white">{verifyInfo.checked}</b></span>
+            <span>Удалено: <b className="text-red-300">{verifyInfo.removed}</b></span>
+            <span>Осталось: <b className="text-amber-300">{verifyInfo.remaining}</b></span>
+          </div>
+        )}
       </div>
 
       <div className="space-y-3">

@@ -7,7 +7,7 @@ export interface InviteProgress {
   subtitle?: string;
   startedAt: number;
   estimatedSec?: number;
-  mode: "warmup" | "full_power" | "batch" | "join_group" | "single_account";
+  mode: "warmup" | "full_power" | "batch" | "join_group" | "single_account" | "verify";
   totalPlanned?: number;
   done?: number;
   added?: number;

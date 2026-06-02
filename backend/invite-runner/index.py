@@ -1026,6 +1026,111 @@ async def run_single_account_batch(account_id: int, size: int = SINGLE_RUN_MAX) 
     }
 
 
+def get_unchecked_pending(limit: int) -> list:
+    """Берёт pending-кандидатов с username для проверки на существование (по порядку id)."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT id, username FROM {SCHEMA}.invite_targets
+        WHERE status='pending' AND username IS NOT NULL AND username <> ''
+        ORDER BY id ASC
+        LIMIT {int(limit)}
+    """)
+    rows = cur.fetchall(); cur.close(); conn.close()
+    return [{'id': r[0], 'username': r[1]} for r in rows]
+
+
+def mark_bad_username(target_id: int, reason: str):
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        UPDATE {SCHEMA}.invite_targets
+        SET status='bad_username', error='{esc(reason[:200])}', assigned_account_id=NULL
+        WHERE id={int(target_id)}
+    """)
+    conn.commit(); cur.close(); conn.close()
+
+
+def count_pending_with_username() -> int:
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        SELECT COUNT(*) FROM {SCHEMA}.invite_targets
+        WHERE status='pending' AND username IS NOT NULL AND username <> ''
+    """)
+    n = cur.fetchone()[0]; cur.close(); conn.close()
+    return int(n)
+
+
+async def verify_usernames(batch: int = 250) -> dict:
+    """Проверяет пачку pending-юзернеймов: существует ли аккаунт в Telegram.
+    Несуществующие/битые помечает статусом 'bad_username' (убирает из очереди).
+    Возвращает сколько проверено / живых / удалено и сколько осталось проверить."""
+    api_id = int(os.environ['TG_API_ID'])
+    api_hash = os.environ['TG_API_HASH']
+
+    acc = get_active_account()
+    if not acc or not acc.get('session_string'):
+        # берём любой живой аккаунт
+        accs = get_full_power_accounts(include_warmup=True)
+        acc = accs[0] if accs else None
+    if not acc:
+        return {'ok': False, 'error': 'Нет живого аккаунта для проверки'}
+
+    targets = get_unchecked_pending(batch)
+    if not targets:
+        return {'ok': True, 'checked': 0, 'alive': 0, 'removed': 0, 'remaining': 0, 'done': True}
+
+    total_to_check = count_pending_with_username()
+    active_run_start(
+        mode='verify',
+        title=f'Проверка юзернеймов: пачка {len(targets)}',
+        subtitle=f'Осталось проверить: {total_to_check}',
+        total=len(targets), estimated_sec=max(5, len(targets) // 5),
+    )
+
+    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
+    await client.connect()
+    checked = 0; alive = 0; removed = 0
+    from telethon.tl.types import User as _TLUser
+    try:
+        if not await client.is_user_authorized():
+            return {'ok': False, 'error': f'Сессия «{acc["label"]}» не отвечает'}
+        for i, t in enumerate(targets):
+            checked += 1
+            uname = t['username']
+            try:
+                ent = await client.get_entity(uname)
+                if isinstance(ent, _TLUser):
+                    alive += 1
+                else:
+                    mark_bad_username(t['id'], 'не пользователь (канал/чат)')
+                    removed += 1
+            except (UsernameInvalidError, UsernameNotOccupiedError, ValueError):
+                mark_bad_username(t['id'], 'username не существует')
+                removed += 1
+            except FloodWaitError as fw:
+                # Telegram просит подождать — стопаем пачку, аккаунт живой
+                active_run_progress(message=f'FloodWait {fw.seconds}s — пауза, повтори позже')
+                break
+            except Exception:
+                # неизвестная ошибка резолва — оставляем как есть (alive не считаем, но и не удаляем)
+                pass
+            try:
+                active_run_progress(done=checked, message=f'@{uname}: {"жив" if alive else ""}')
+            except Exception:
+                pass
+            # лёгкая пауза, чтобы не словить flood
+            await asyncio.sleep(random.uniform(0.2, 0.5))
+    finally:
+        await client.disconnect()
+        active_run_finish()
+
+    remaining = max(0, count_pending_with_username())
+    return {
+        'ok': True, 'account': acc['label'],
+        'checked': checked, 'alive': alive, 'removed': removed,
+        'remaining': remaining, 'done': remaining == 0,
+    }
+
+
 async def run_warmup_day() -> dict:
     """Запускает дневную пачку прогрева согласно расписанию."""
     state = get_warmup_state()
@@ -1314,6 +1419,18 @@ def handler(event: dict, context) -> dict:
         asyncio.set_event_loop(loop)
         try:
             result = loop.run_until_complete(run_single_account_batch(account_id, size))
+            return resp(200, result)
+        finally:
+            loop.close()
+
+    if action == 'verify_usernames':
+        batch = int(body.get('batch', 250))
+        if batch < 1: batch = 1
+        if batch > 500: batch = 500
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(verify_usernames(batch))
             return resp(200, result)
         finally:
             loop.close()
