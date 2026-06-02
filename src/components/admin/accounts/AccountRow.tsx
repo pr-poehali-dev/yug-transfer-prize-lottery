@@ -4,6 +4,7 @@ import { TgAccount } from "../adminTypes";
 interface AccountRowProps {
   acc: TgAccount;
   busy: boolean;
+  running?: boolean;
   onJoinGroupOne: (acc: TgAccount) => void;
   onActivate: (id: number) => void;
   onResetDaily: (id: number) => void;
@@ -17,6 +18,7 @@ interface AccountRowProps {
 export function AccountRow({
   acc,
   busy,
+  running,
   onJoinGroupOne,
   onActivate,
   onResetDaily,
@@ -61,12 +63,16 @@ export function AccountRow({
       {!acc.is_banned && (
         <button
           onClick={() => onRunAccount(acc)}
-          disabled={busy}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[10px] font-semibold shrink-0 hover:opacity-90 transition disabled:opacity-50"
-          title="Залить никнеймы в группу с этого аккаунта (до 200 за раз)"
+          disabled={busy && !running}
+          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-white text-[10px] font-semibold shrink-0 hover:opacity-90 transition disabled:opacity-50 ${
+            running
+              ? "bg-red-500/80"
+              : "bg-gradient-to-r from-purple-600 to-pink-600"
+          }`}
+          title={running ? "Остановить заливку" : "Залить всех кандидатов этого аккаунта (пачками по 20)"}
         >
-          <Icon name="Send" size={11} />
-          Залить
+          <Icon name={running ? "Square" : "Send"} size={11} className={running ? "animate-pulse" : ""} />
+          {running ? "Стоп" : "Залить"}
         </button>
       )}
 

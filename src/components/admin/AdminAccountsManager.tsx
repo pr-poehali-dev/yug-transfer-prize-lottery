@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { TG_ACCOUNTS_URL, INVITE_RUNNER_URL, TgAccount } from "./adminTypes";
 import { useInviteProgress } from "./InviteProgressContext";
 import { AccountsToolbar } from "./accounts/AccountsToolbar";
@@ -20,6 +20,8 @@ export function AdminAccountsManager({ token }: { token: string }) {
   const [targetGroup, setTargetGroup] = useState("");
   const [targetEdit, setTargetEdit] = useState("");
   const [targetSaving, setTargetSaving] = useState(false);
+  const [runningAccountId, setRunningAccountId] = useState<number | null>(null);
+  const stopRunRef = useRef(false);
   const { start: startProgress, stop: stopProgress, progress, refreshTrigger } = useInviteProgress();
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
@@ -199,27 +201,47 @@ export function AdminAccountsManager({ token }: { token: string }) {
   }
 
   async function runAccount(acc: TgAccount) {
+    if (runningAccountId) {
+      // Если уже идёт заливка — кнопка работает как «Стоп»
+      stopRunRef.current = true;
+      return;
+    }
     if (!targetGroup) { alert("Сначала укажи целевую группу выше"); return; }
-    if (!confirm(`Залить никнеймы в ${targetGroup} с аккаунта «${acc.label}» (до 200 человек)?\n\nАккаунт должен быть участником группы.`)) return;
+    if (!confirm(`Залить ВСЕХ кандидатов в ${targetGroup} с аккаунта «${acc.label}»?\n\nИдёт пачками по 20, можно остановить в любой момент.\nАккаунт должен быть участником группы.`)) return;
+    stopRunRef.current = false;
+    setRunningAccountId(acc.id);
     setBusy(true);
     startProgress({
       mode: "single_account",
-      title: `Заливка с «${acc.label}» (до 200)`,
+      title: `Заливка всех с «${acc.label}»`,
       subtitle: targetGroup,
       estimatedSec: 60,
     });
+    let totalAdded = 0, totalPrivacy = 0, totalFailed = 0;
+    let banned = false;
+    let emptyStreak = 0;
     try {
-      const r = await fetch(`${INVITE_RUNNER_URL}?action=run_account`, {
-        method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 200 }),
-      });
-      const j = await r.json();
-      if (j.ok) {
-        alert(`✅ «${acc.label}»\nДобавлено: ${j.added || 0}\nПриватность: ${j.privacy || 0}\nОшибок: ${j.failed || 0}${j.ban_triggered ? "\n\n⚠️ Аккаунт получил БАН!" : ""}`);
+      while (!stopRunRef.current) {
+        const r = await fetch(`${INVITE_RUNNER_URL}?action=run_account`, {
+          method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 20 }),
+        });
+        const j = await r.json();
+        if (!j.ok) { alert(`❌ ${j.error || "Ошибка"}`); break; }
+        totalAdded += j.added || 0;
+        totalPrivacy += j.privacy || 0;
+        totalFailed += j.failed || 0;
         await load();
-      } else {
-        alert(`❌ ${j.error || "Ошибка"}`);
+        if (j.ban_triggered) { banned = true; break; }
+        const processed = (j.added || 0) + (j.privacy || 0) + (j.failed || 0);
+        // Если две пачки подряд пустые — кандидаты у аккаунта закончились
+        if (processed === 0) { emptyStreak++; if (emptyStreak >= 2) break; }
+        else emptyStreak = 0;
+        await new Promise((res) => setTimeout(res, 600));
       }
+      alert(`${banned ? "⚠️ Аккаунт получил БАН!\n\n" : stopRunRef.current ? "Остановлено.\n\n" : "✅ Готово!\n\n"}«${acc.label}»\nДобавлено: ${totalAdded}\nПриватность: ${totalPrivacy}\nОшибок: ${totalFailed}`);
     } finally {
+      setRunningAccountId(null);
+      stopRunRef.current = false;
       setBusy(false);
       stopProgress();
     }
@@ -308,7 +330,8 @@ export function AdminAccountsManager({ token }: { token: string }) {
             <AccountRow
               key={acc.id}
               acc={acc}
-              busy={busy}
+              busy={busy && runningAccountId !== acc.id}
+              running={runningAccountId === acc.id}
               onJoinGroupOne={joinGroupOne}
               onActivate={activate}
               onResetDaily={resetDaily}
