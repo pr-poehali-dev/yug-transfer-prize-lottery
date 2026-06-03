@@ -6,6 +6,7 @@ GET                          — статус (счётчики очереди +
 POST ?action=save_message    — сохранить текст + фото (фото base64 -> S3), {text, photo_base64?, photo_ext?}
 POST ?action=seed            — засеять очередь рассылки из invite_targets (распределяя по аккаунтам)
 POST ?action=clear           — очистить очередь рассылки
+POST ?action=redistribute    — перераспределить очередь поровну между рабочими аккаунтами
 POST ?action=run_account     — отправить пачку с одного аккаунта его получателям, {account_id, size}
 """
 import os
@@ -203,6 +204,47 @@ def clean_invalid() -> int:
     n = cur.rowcount
     conn.commit(); cur.close(); conn.close()
     return n
+
+
+def redistribute() -> dict:
+    """Перераспределяет всех ожидающих получателей поровну между рабочими аккаунтами.
+    Нужно, например, после добавления нового аккаунта — чтобы и ему достались юзеры."""
+    conn = db(); cur = conn.cursor()
+    # Рабочие аккаунты (не забанены, есть сессия)
+    cur.execute(f"""
+        SELECT id FROM {SCHEMA}.tg_user_accounts
+        WHERE is_banned = FALSE AND session_string IS NOT NULL AND session_string <> ''
+        ORDER BY id ASC
+    """)
+    acc_ids = [r[0] for r in cur.fetchall()]
+    if not acc_ids:
+        cur.close(); conn.close()
+        return {'accounts': 0, 'assigned': 0}
+
+    # Все ожидающие получатели
+    cur.execute(f"SELECT id FROM {SCHEMA}.dm_targets WHERE status='pending' ORDER BY id ASC")
+    target_ids = [r[0] for r in cur.fetchall()]
+
+    # Раскидываем по кругу
+    buckets = {a: [] for a in acc_ids}
+    for i, tid in enumerate(target_ids):
+        buckets[acc_ids[i % len(acc_ids)]].append(tid)
+
+    for acc_id, ids in buckets.items():
+        for chunk_start in range(0, len(ids), 1000):
+            chunk = ids[chunk_start:chunk_start + 1000]
+            if not chunk:
+                continue
+            cur.execute(
+                f"UPDATE {SCHEMA}.dm_targets SET assigned_account_id={int(acc_id)} "
+                f"WHERE id IN ({','.join(str(i) for i in chunk)})"
+            )
+    conn.commit(); cur.close(); conn.close()
+    return {
+        'accounts': len(acc_ids),
+        'assigned': len(target_ids),
+        'per_account': {str(a): len(b) for a, b in buckets.items()},
+    }
 
 
 def reserve_dm_targets(limit: int, account_id: int) -> list:
@@ -472,6 +514,10 @@ def handler(event: dict, context) -> dict:
     if action == 'clean_invalid':
         n = clean_invalid()
         return resp(200, {'ok': True, 'deleted': n, 'counts': get_counts()})
+
+    if action == 'redistribute':
+        res = redistribute()
+        return resp(200, {'ok': True, **res, 'counts': get_counts()})
 
     if action == 'run_account':
         account_id = int(body.get('account_id', 0))

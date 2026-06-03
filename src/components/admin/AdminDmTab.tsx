@@ -76,10 +76,20 @@ export function AdminDmTab({ token }: { token: string }) {
     else setLoginErr(j.error || "Не удалось отправить код");
   }
 
+  async function redistribute(silent = false) {
+    const r = await fetch(`${DM_SENDER_URL}?action=redistribute`, { method: "POST", headers, body: "{}" });
+    const j = await r.json();
+    await load();
+    if (!silent && j.ok) {
+      alert(`Очередь распределена между ${j.accounts} аккаунтами.\nВсего получателей: ${j.assigned}`);
+    }
+    return j;
+  }
+
   async function loginVerifyCode() {
     if (!loginCode.trim()) { setLoginErr("Введи код"); return; }
     const j = await loginCall("verify_code", { phone: loginPhone.trim(), code: loginCode.trim(), label: loginLabel.trim() });
-    if (j.ok) { resetLogin(); await load(); }
+    if (j.ok) { resetLogin(); await redistribute(true); }
     else if (j.need_2fa) setLoginStep("2fa");
     else setLoginErr(j.error || "Неверный код");
   }
@@ -87,7 +97,7 @@ export function AdminDmTab({ token }: { token: string }) {
   async function loginVerify2fa() {
     if (!loginPwd) { setLoginErr("Введи пароль 2FA"); return; }
     const j = await loginCall("verify_2fa", { phone: loginPhone.trim(), password: loginPwd, label: loginLabel.trim() });
-    if (j.ok) { resetLogin(); await load(); }
+    if (j.ok) { resetLogin(); await redistribute(true); }
     else setLoginErr(j.error || "Неверный пароль");
   }
 
@@ -423,6 +433,9 @@ export function AdminDmTab({ token }: { token: string }) {
             </Button>
             <Button size="sm" variant="outline" onClick={seed} disabled={busy} className="gap-1 text-xs">
               <Icon name="Download" size={13} />Заполнить из инвайтов
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => redistribute(false)} disabled={busy} className="gap-1 text-xs text-cyan-300">
+              <Icon name="Shuffle" size={13} />Распределить
             </Button>
             <Button size="sm" variant="outline" onClick={cleanInvalid} disabled={busy} className="gap-1 text-xs text-amber-300">
               <Icon name="Filter" size={13} />Убрать без юзернейма
