@@ -23,6 +23,8 @@ export function AdminDmTab({ token }: { token: string }) {
   const [counts, setCounts] = useState<DmCounts | null>(null);
   const [text, setText] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [buttonText, setButtonText] = useState("");
+  const [buttonUrl, setButtonUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,6 +48,8 @@ export function AdminDmTab({ token }: { token: string }) {
       if (j.message) {
         setText(j.message.text || "");
         setPhotoUrl(j.message.photo_url || "");
+        setButtonText(j.message.button_text || "");
+        setButtonUrl(j.message.button_url || "");
       }
     } catch { /* ignore */ }
   }
@@ -62,7 +66,7 @@ export function AdminDmTab({ token }: { token: string }) {
       const ext = file.name.split(".").pop()?.toLowerCase() === "png" ? "png" : "jpg";
       const r = await fetch(`${DM_SENDER_URL}?action=save_message`, {
         method: "POST", headers,
-        body: JSON.stringify({ text, photo_base64: b64, photo_ext: ext }),
+        body: JSON.stringify({ text, photo_base64: b64, photo_ext: ext, button_text: buttonText, button_url: buttonUrl }),
       });
       const j = await r.json();
       if (j.ok) setPhotoUrl(j.message.photo_url || "");
@@ -72,9 +76,14 @@ export function AdminDmTab({ token }: { token: string }) {
   }
 
   async function saveTemplate() {
+    if (buttonUrl && !/^https?:\/\//i.test(buttonUrl)) {
+      alert("Ссылка кнопки должна начинаться с http:// или https://");
+      return;
+    }
     setSaving(true);
     await fetch(`${DM_SENDER_URL}?action=save_message`, {
-      method: "POST", headers, body: JSON.stringify({ text, photo_url: photoUrl }),
+      method: "POST", headers,
+      body: JSON.stringify({ text, photo_url: photoUrl, button_text: buttonText, button_url: buttonUrl }),
     });
     setSaving(false);
     setSavedFlash(true);
@@ -84,7 +93,8 @@ export function AdminDmTab({ token }: { token: string }) {
   async function removePhoto() {
     setSaving(true);
     await fetch(`${DM_SENDER_URL}?action=save_message`, {
-      method: "POST", headers, body: JSON.stringify({ text, remove_photo: true }),
+      method: "POST", headers,
+      body: JSON.stringify({ text, remove_photo: true, button_text: buttonText, button_url: buttonUrl }),
     });
     setPhotoUrl("");
     setSaving(false);
@@ -299,6 +309,28 @@ export function AdminDmTab({ token }: { token: string }) {
           </Button>
         </div>
 
+        {/* Кнопка-ссылка под сообщением */}
+        <div className="border-t border-white/5 pt-3 space-y-2">
+          <div className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+            <Icon name="Link" size={12} /> Кнопка-ссылка (необязательно)
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              value={buttonText}
+              onChange={e => setButtonText(e.target.value)}
+              placeholder="Текст кнопки (напр. Подробнее)"
+              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400/50"
+            />
+            <input
+              value={buttonUrl}
+              onChange={e => setButtonUrl(e.target.value)}
+              placeholder="https://t.me/..."
+              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400/50"
+            />
+          </div>
+          <div className="text-[10px] text-muted-foreground">Ссылка добавится кликабельной строкой в конце сообщения.</div>
+        </div>
+
         {/* Предпросмотр — как увидит получатель */}
         <div>
           <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 flex items-center gap-1">
@@ -312,6 +344,9 @@ export function AdminDmTab({ token }: { token: string }) {
                   <div className="text-[13px] text-white/90 whitespace-pre-wrap break-words leading-snug">{text}</div>
                 ) : (
                   <div className="text-[13px] text-white/30 italic">Текст сообщения...</div>
+                )}
+                {buttonText && buttonUrl && (
+                  <div className="mt-1.5 text-[13px] font-medium text-[#62a8e8] underline break-words">{buttonText}</div>
                 )}
                 <div className="text-[10px] text-white/40 text-right mt-1">12:00</div>
               </div>

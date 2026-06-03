@@ -76,17 +76,18 @@ def db():
 
 def get_message() -> dict:
     conn = db(); cur = conn.cursor()
-    cur.execute(f"SELECT text, photo_url FROM {SCHEMA}.dm_message WHERE id=1")
+    cur.execute(f"SELECT text, photo_url, button_text, button_url FROM {SCHEMA}.dm_message WHERE id=1")
     r = cur.fetchone(); cur.close(); conn.close()
     if not r:
-        return {'text': '', 'photo_url': ''}
-    return {'text': r[0] or '', 'photo_url': r[1] or ''}
+        return {'text': '', 'photo_url': '', 'button_text': '', 'button_url': ''}
+    return {'text': r[0] or '', 'photo_url': r[1] or '', 'button_text': r[2] or '', 'button_url': r[3] or ''}
 
 
-def save_message(text: str, photo_url: str) -> None:
+def save_message(text: str, photo_url: str, button_text: str = '', button_url: str = '') -> None:
     conn = db(); cur = conn.cursor()
     cur.execute(
-        f"UPDATE {SCHEMA}.dm_message SET text='{esc(text)}', photo_url='{esc(photo_url)}', updated_at=NOW() WHERE id=1"
+        f"UPDATE {SCHEMA}.dm_message SET text='{esc(text)}', photo_url='{esc(photo_url)}', "
+        f"button_text='{esc(button_text)}', button_url='{esc(button_url)}', updated_at=NOW() WHERE id=1"
     )
     conn.commit(); cur.close(); conn.close()
 
@@ -300,6 +301,19 @@ async def run_account_dm(account_id: int, size: int) -> dict:
     photo_bytes = await download_photo(msg['photo_url'])
     photo_name = 'photo.png' if str(msg['photo_url']).lower().endswith('.png') else 'photo.jpg'
 
+    # Кнопка-ссылка: user-аккаунты не могут слать настоящие inline-кнопки,
+    # поэтому добавляем её как кликабельную ссылку в конце сообщения (HTML).
+    def html_escape(s: str) -> str:
+        return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    btn_text = (msg.get('button_text') or '').strip()
+    btn_url = (msg.get('button_url') or '').strip()
+    body_html = html_escape(msg['text'] or '')
+    if btn_text and btn_url:
+        link = f'<a href="{html_escape(btn_url)}">{html_escape(btn_text)}</a>'
+        body_html = (body_html + '\n\n' + link) if body_html else link
+    has_content = bool(body_html)
+
     client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
     sent = 0; privacy = 0; failed = 0; peer_flood = False
     try:
@@ -339,11 +353,12 @@ async def run_account_dm(account_id: int, size: int) -> dict:
                     bio.name = photo_name
                     await client.send_file(
                         entity, bio,
-                        caption=msg['text'] or None,
+                        caption=body_html or None,
+                        parse_mode='html',
                         force_document=False,
                     )
                 else:
-                    await client.send_message(entity, msg['text'])
+                    await client.send_message(entity, body_html, parse_mode='html')
                 update_dm_target(t['id'], 'sent', '', acc['id'])
                 sent += 1
             except (UsernameInvalidError, UsernameNotOccupiedError, ValueError):
@@ -423,13 +438,17 @@ def handler(event: dict, context) -> dict:
         body = {}
 
     if action == 'save_message':
+        current = get_message()
         text = body.get('text', '') or ''
-        photo_url = body.get('photo_url', '') or get_message()['photo_url']
+        photo_url = body.get('photo_url', '') or current['photo_url']
         if body.get('photo_base64'):
             photo_url = upload_photo(body['photo_base64'], body.get('photo_ext', 'jpg'))
         if body.get('remove_photo'):
             photo_url = ''
-        save_message(text, photo_url)
+        # Кнопка: если поля переданы — берём из запроса, иначе сохраняем прежние значения.
+        button_text = body['button_text'] if 'button_text' in body else current['button_text']
+        button_url = body['button_url'] if 'button_url' in body else current['button_url']
+        save_message(text, photo_url, button_text or '', button_url or '')
         return resp(200, {'ok': True, 'message': get_message()})
 
     if action == 'seed':
