@@ -14,6 +14,7 @@ export const EXCLUDED_WATCHER_URL = "https://functions.poehali.dev/2db8bbe3-c6b3
 export const TG_ACCOUNTS_URL = "https://functions.poehali.dev/c23d251a-47cc-43e5-bd98-f9e0ebee8f2a";
 export const INVITE_TARGETS_URL = "https://functions.poehali.dev/33399df3-3e82-49af-83a8-2b2fc4d06bfb";
 export const INVITE_RUNNER_URL = "https://functions.poehali.dev/970b102b-bcf2-4c27-a9df-31778fbaca04";
+export const DM_SENDER_URL = "https://functions.poehali.dev/ef67dd35-45cd-4367-86ea-09a002a76837";
 
 export interface InviteTarget {
   id: number;
@@ -51,7 +52,7 @@ export interface TgAccount {
   assigned_count?: number;
 }
 
-export type AdminTab = "posts" | "bot" | "drivers" | "stories" | "invites";
+export type AdminTab = "posts" | "bot" | "drivers" | "stories" | "invites" | "dm";
 
 export interface BotStory {
   id: number;

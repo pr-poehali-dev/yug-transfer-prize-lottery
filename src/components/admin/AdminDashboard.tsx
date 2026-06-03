@@ -7,6 +7,7 @@ import { AdminDriversTab } from "./AdminDriversTab";
 import { AdminStoriesTab } from "./AdminStoriesTab";
 import { AdminExcludedTab } from "./AdminExcludedTab";
 import { AdminInvitesTab } from "./AdminInvitesTab";
+import { AdminDmTab } from "./AdminDmTab";
 import { InviteProgressProvider } from "./InviteProgressContext";
 import { InviteProgressBanner } from "./InviteProgressBanner";
 
@@ -18,6 +19,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
     { id: "drivers", label: "Водители", icon: "Car" },
     { id: "invites", label: "Авто-приглашения", icon: "UserPlus" },
+    { id: "dm", label: "Рассылка в личку", icon: "Mail" },
   ];
 
   return (
@@ -78,6 +80,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
           )}
           {tab === "drivers" && <AdminDriversTab token={token} />}
           {tab === "invites" && <AdminInvitesTab token={token} />}
+          {tab === "dm" && <AdminDmTab token={token} />}
         </main>
       </div>
     </div>
