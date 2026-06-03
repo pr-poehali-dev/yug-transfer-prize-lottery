@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { DM_SENDER_URL } from "./adminTypes";
+import { DM_SENDER_URL, TG_ACCOUNTS_URL } from "./adminTypes";
+import { AccountLoginForm } from "./accounts/AccountLoginForm";
+
+type LoginStep = "idle" | "phone" | "code" | "2fa";
 
 interface DmAccount {
   id: number;
@@ -35,6 +38,58 @@ export function AdminDmTab({ token }: { token: string }) {
   const [runMax, setRunMax] = useState(7);
   const stopRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Добавление нового аккаунта (вход по номеру)
+  const [loginStep, setLoginStep] = useState<LoginStep>("idle");
+  const [loginPhone, setLoginPhone] = useState("");
+  const [loginCode, setLoginCode] = useState("");
+  const [loginPwd, setLoginPwd] = useState("");
+  const [loginLabel, setLoginLabel] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginErr, setLoginErr] = useState<string | null>(null);
+
+  async function loginCall(action: string, body: Record<string, unknown>) {
+    setLoginBusy(true);
+    setLoginErr(null);
+    try {
+      const r = await fetch(`${TG_ACCOUNTS_URL}?action=${action}`, {
+        method: "POST", headers, body: JSON.stringify(body),
+      });
+      return await r.json();
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    } finally {
+      setLoginBusy(false);
+    }
+  }
+
+  function resetLogin() {
+    setLoginStep("idle");
+    setLoginPhone(""); setLoginCode(""); setLoginPwd(""); setLoginLabel("");
+    setLoginErr(null);
+  }
+
+  async function loginSendCode() {
+    if (!loginPhone.trim()) { setLoginErr("Введи номер телефона"); return; }
+    const j = await loginCall("send_code", { phone: loginPhone.trim() });
+    if (j.ok) setLoginStep("code");
+    else setLoginErr(j.error || "Не удалось отправить код");
+  }
+
+  async function loginVerifyCode() {
+    if (!loginCode.trim()) { setLoginErr("Введи код"); return; }
+    const j = await loginCall("verify_code", { phone: loginPhone.trim(), code: loginCode.trim(), label: loginLabel.trim() });
+    if (j.ok) { resetLogin(); await load(); }
+    else if (j.need_2fa) setLoginStep("2fa");
+    else setLoginErr(j.error || "Неверный код");
+  }
+
+  async function loginVerify2fa() {
+    if (!loginPwd) { setLoginErr("Введи пароль 2FA"); return; }
+    const j = await loginCall("verify_2fa", { phone: loginPhone.trim(), password: loginPwd, label: loginLabel.trim() });
+    if (j.ok) { resetLogin(); await load(); }
+    else setLoginErr(j.error || "Неверный пароль");
+  }
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -360,7 +415,12 @@ export function AdminDmTab({ token }: { token: string }) {
       <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="text-xs font-semibold">Получатели: <span className="text-amber-300">{pendingTotal}</span> в очереди</div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant="outline"
+              onClick={() => { if (loginStep === "idle") setLoginStep("phone"); else resetLogin(); }}
+              className="gap-1 text-xs text-emerald-300">
+              <Icon name="UserPlus" size={13} />Добавить аккаунт
+            </Button>
             <Button size="sm" variant="outline" onClick={seed} disabled={busy} className="gap-1 text-xs">
               <Icon name="Download" size={13} />Заполнить из инвайтов
             </Button>
@@ -372,6 +432,27 @@ export function AdminDmTab({ token }: { token: string }) {
             </Button>
           </div>
         </div>
+
+        {/* Вход нового аккаунта по номеру */}
+        {loginStep !== "idle" && (
+          <AccountLoginForm
+            step={loginStep}
+            phone={loginPhone}
+            code={loginCode}
+            pwd={loginPwd}
+            label={loginLabel}
+            busy={loginBusy}
+            err={loginErr}
+            onPhone={setLoginPhone}
+            onCode={setLoginCode}
+            onPwd={setLoginPwd}
+            onLabel={setLoginLabel}
+            onSendCode={loginSendCode}
+            onVerifyCode={loginVerifyCode}
+            onVerify2fa={loginVerify2fa}
+            onCancel={resetLogin}
+          />
+        )}
 
         {/* Выбрать все */}
         {liveAccounts.length > 0 && (
