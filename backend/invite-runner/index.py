@@ -857,10 +857,12 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
         # Подключение к Telegram бывает «холодным» и поднимается не сразу —
         # даём несколько попыток connect + проверки авторизации (до ~8 сек).
         authorized = False
+        ever_connected = False
         for attempt in range(5):
             try:
                 if not client.is_connected():
                     await client.connect()
+                ever_connected = True
                 if await client.is_user_authorized():
                     authorized = True
                     break
@@ -871,9 +873,15 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
                     pass
             await asyncio.sleep(1.5)
         if not authorized:
-            # НЕ баним сразу — может быть сетевая проблема. Просто пропустим этот запуск.
             release_targets([t['id'] for t in targets])
-            return {'ok': False, 'account': acc['label'], 'error': 'Сессия не отвечает (Telegram не поднял соединение), пропустили — аккаунт остался активным, попробуй ещё раз'}
+            if ever_connected:
+                # Соединение поднялось, но аккаунт НЕ авторизован — сессия слетела (разлогинена).
+                # Это не сетевой сбой: повторы не помогут, нужно переподключить аккаунт заново.
+                return {'ok': False, 'account': acc['label'], 'session_dead': True,
+                        'error': f'Сессия аккаунта «{acc["label"]}» слетела (разлогинен в Telegram). Переподключи аккаунт заново — кнопка «Подключить».'}
+            # Соединение вообще не поднялось — временный сетевой сбой, можно повторить.
+            return {'ok': False, 'account': acc['label'],
+                    'error': 'Telegram не поднял соединение (временный сбой сети), попробуй ещё раз'}
         try:
             target_entity = await client.get_entity(target_group)
         except Exception as e:
@@ -1051,6 +1059,7 @@ async def run_single_account_batch(account_id: int, size: int = SINGLE_RUN_MAX) 
             'mode': 'single_account',
             'account': {'id': acc['id'], 'label': acc['label']},
             'error': result.get('error', 'Не удалось выполнить заливку'),
+            'session_dead': result.get('session_dead', False),
         }
 
     return {

@@ -225,7 +225,7 @@ export function AdminAccountsManager({ token }: { token: string }) {
     try {
       while (!stopRunRef.current) {
         let j: {
-          ok?: boolean; error?: string;
+          ok?: boolean; error?: string; session_dead?: boolean;
           added?: number; privacy?: number; failed?: number;
           ban_triggered?: boolean; peer_flood?: boolean;
         };
@@ -244,9 +244,14 @@ export function AdminAccountsManager({ token }: { token: string }) {
         }
         errStreak = 0;
         if (!j.ok) {
-          // «Сессия не отвечает» — временный сбой подключения к Telegram,
-          // не валим весь прогон, даём несколько повторов.
-          if ((j.error || "").includes("Сессия не отвечает")) {
+          // Сессия слетела — повторы бессмысленны, аккаунт нужно переподключить.
+          if (j.session_dead) {
+            await load();
+            alert(`🔌 ${j.error || "Сессия аккаунта слетела"}`);
+            break;
+          }
+          // Временный сетевой сбой подключения — даём несколько повторов.
+          if ((j.error || "").includes("не поднял соединение")) {
             sessionRetry++;
             if (sessionRetry >= 4) { alert(`❌ ${j.error}`); break; }
             await new Promise((res) => setTimeout(res, 2000));
