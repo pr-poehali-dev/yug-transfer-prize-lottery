@@ -894,16 +894,11 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
             elif r['status'] == 'privacy':
                 privacy += 1; inc_priv = 1
             elif r['status'] in ('peer_flood',):
-                # Бан только если PEER_FLOOD пришёл ПОСЛЕ успешных инвайтов.
-                # Если упали на первом юзере — это битый кандидат, не бан аккаунта.
-                if added >= 1:
-                    ban = True; ban_note = f'PEER_FLOOD на {r["username"]} (после {added} успешных)'
-                else:
-                    # помечаем кандидата failed (он уже отмечен в update_target внутри invite_one_user),
-                    # дополнительно проставим причину
-                    update_target(t['id'], 'failed', 'PEER_FLOOD на первой попытке (битый кандидат)', acc['id'])
-                    failed += 1
-                    ban_note = f'PEER_FLOOD на {r["username"]} (пропущен, аккаунт оставлен живым)'
+                # PEER_FLOOD — это НЕ бан, а временный лимит Telegram на приглашения.
+                # Аккаунт живой: просто останавливаем пачку и даём ему отдохнуть.
+                # Кандидата возвращаем в очередь (он не виноват), не помечаем failed.
+                update_target(t['id'], 'pending', 'PEER_FLOOD — вернули в очередь, аккаунт отдыхает', acc['id'])
+                ban_note = f'PEER_FLOOD на {r["username"]}: аккаунт упёрся в лимит приглашений, остановились (аккаунт живой)'
                 active_run_progress(message=ban_note); break
             elif r['status'] == 'flood_wait' and r.get('fw_seconds', 0) > 86400:
                 # FloodWait сутки+ — реальный признак проблемы. Меньше — просто пауза, аккаунт живой.
@@ -947,10 +942,12 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
         # Помечаем что аккаунт сегодня уже отработал в режиме прогрева
         mark_warmup_done(acc['id'])
 
+    peer_flood = any(r.get('status') == 'peer_flood' for r in results)
     return {
         'ok': True, 'account': acc['label'], 'account_id': acc['id'],
         'added': added, 'privacy': privacy, 'failed': failed,
         'ban_triggered': ban, 'ban_note': ban_note, 'results': results,
+        'peer_flood': peer_flood,
     }
 
 
@@ -1065,6 +1062,7 @@ async def run_single_account_batch(account_id: int, size: int = SINGLE_RUN_MAX) 
         'privacy': result.get('privacy', 0),
         'failed': result.get('failed', 0),
         'ban_triggered': result.get('ban_triggered', False) or result.get('ban', False),
+        'peer_flood': result.get('peer_flood', False),
         'result': result,
     }
 

@@ -226,7 +226,8 @@ export function AdminAccountsManager({ token }: { token: string }) {
       while (!stopRunRef.current) {
         let j: {
           ok?: boolean; error?: string;
-          added?: number; privacy?: number; failed?: number; ban_triggered?: boolean;
+          added?: number; privacy?: number; failed?: number;
+          ban_triggered?: boolean; peer_flood?: boolean;
         };
         try {
           const r = await fetch(`${INVITE_RUNNER_URL}?action=run_account`, {
@@ -259,6 +260,11 @@ export function AdminAccountsManager({ token }: { token: string }) {
         totalFailed += j.failed || 0;
         await load();
         if (j.ban_triggered) { banned = true; break; }
+        if (j.peer_flood) {
+          // Telegram временно ограничил приглашения у аккаунта — даём отдохнуть, не баним.
+          alert(`⏸️ «${acc.label}» упёрся в лимит приглашений Telegram.\n\nЭто НЕ бан — аккаунту нужно отдохнуть (час-два).\n\nДобавлено за прогон: ${totalAdded}\nЗапусти другой аккаунт или вернись к этому позже.`);
+          break;
+        }
         const processed = (j.added || 0) + (j.privacy || 0) + (j.failed || 0);
         // Если две пачки подряд пустые — кандидаты у аккаунта закончились
         if (processed === 0) { emptyStreak++; if (emptyStreak >= 2) break; }
