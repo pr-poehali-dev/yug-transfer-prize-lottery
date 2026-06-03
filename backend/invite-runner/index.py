@@ -440,6 +440,20 @@ def get_pending_targets(limit: int, account_id: int = -1) -> list:
     return [{'id': r[0], 'username': r[1], 'phone': r[2], 'first_name': r[3]} for r in rows]
 
 
+def release_targets(target_ids: list) -> None:
+    """Возвращает зарезервированные (in_progress) таргеты обратно в pending,
+    если их не успели обработать (ранний выход: нет сессии/группы/ошибка). Без этого они зависают."""
+    ids = [int(i) for i in target_ids if i]
+    if not ids:
+        return
+    conn = db(); cur = conn.cursor()
+    cur.execute(
+        f"UPDATE {SCHEMA}.invite_targets SET status='pending' "
+        f"WHERE status='in_progress' AND id IN ({','.join(str(i) for i in ids)})"
+    )
+    conn.commit(); cur.close(); conn.close()
+
+
 def distribute_pending_to_accounts(account_ids: list, force: bool = False) -> dict:
     """Равномерно распределяет всех pending-кандидатов между переданными аккаунтами (round-robin по id).
     force=False — перезаписывает assigned_account_id только для незакреплённых (NULL) или закреплённых
@@ -851,11 +865,13 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
             await asyncio.sleep(1)
         if not authorized:
             # НЕ баним сразу — может быть сетевая проблема. Просто пропустим этот запуск.
+            release_targets([t['id'] for t in targets])
             return {'ok': False, 'account': acc['label'], 'error': 'Сессия не отвечает, пропустили (аккаунт остался активным)'}
         try:
             target_entity = await client.get_entity(target_group)
         except Exception as e:
-            return {'ok': False, 'account': acc['label'], 'error': f'Группа {target_group}: {e}'}
+            release_targets([t['id'] for t in targets])
+            return {'ok': False, 'account': acc['label'], 'error': f'Группа {target_group}: {e}. Аккаунт «{acc["label"]}» должен быть участником группы.'}
 
         for i, t in enumerate(targets):
             # Защита от таймаута функции: если бюджет времени исчерпан — мягко останавливаемся
@@ -912,6 +928,9 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
                 else:
                     await asyncio.sleep(random.randint(PAUSE_MIN_SEC, PAUSE_MAX_SEC))
     finally:
+        # Возвращаем в очередь все таргеты, которые зарезервировали, но не успели обработать
+        # (остановка по таймеру/флуду/прерыванию) — иначе они зависнут в in_progress.
+        release_targets([t['id'] for t in targets])
         await client.disconnect()
 
     log_run(acc['id'], len(results), added, privacy, failed, ban, ban_note)
@@ -1019,6 +1038,16 @@ async def run_single_account_batch(account_id: int, size: int = SINGLE_RUN_MAX) 
         result = await run_warmup_for_account(acc, take, fast=True)
     finally:
         active_run_finish()
+
+    # Если внутри была причина не обработать никого (нет прав/группа/сессия) — показываем её,
+    # а не молчаливые «0 добавлено».
+    if result.get('ok') is False:
+        return {
+            'ok': False,
+            'mode': 'single_account',
+            'account': {'id': acc['id'], 'label': acc['label']},
+            'error': result.get('error', 'Не удалось выполнить заливку'),
+        }
 
     return {
         'ok': True,
