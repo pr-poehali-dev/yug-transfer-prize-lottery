@@ -45,8 +45,9 @@ CORS = {
 }
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
 
-DM_RUN_MAX = 6            # макс сообщений за один HTTP-запуск с одного аккаунта (таймаут 30с)
-TIME_BUDGET_SEC = 18      # бюджет времени на пачку
+DM_RUN_MAX = 7            # макс сообщений за один HTTP-запуск с одного аккаунта (таймаут 30с)
+TIME_BUDGET_SEC = 22      # бюджет времени на пачку
+DM_CLICK_TOTAL = 20       # сколько сообщений уходит за одно нажатие «Отправить» (несколько HTTP-пачек)
 
 
 def verify_token(token: str) -> bool:
@@ -362,6 +363,8 @@ def get_status() -> dict:
         'counts': get_counts(),
         'accounts': get_accounts(),
         'message': get_message(),
+        'click_total': DM_CLICK_TOTAL,
+        'run_max': DM_RUN_MAX,
     }
 
 
