@@ -27,7 +27,7 @@ export function AdminDmTab({ token }: { token: string }) {
   const [photoUrl, setPhotoUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [running, setRunning] = useState(false);
+  const [runningId, setRunningId] = useState<number | null>(null);
   const [runLog, setRunLog] = useState<string>("");
   const stopRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -103,55 +103,53 @@ export function AdminDmTab({ token }: { token: string }) {
     await load();
   }
 
-  async function runAll() {
-    if (running) { stopRef.current = true; return; }
+  async function runAccount(acc: DmAccount) {
+    if (runningId === acc.id) { stopRef.current = true; return; }
+    if (runningId) { alert("Дождись окончания рассылки с другого аккаунта или останови её"); return; }
     if (!text && !photoUrl) { alert("Сначала заполни текст или фото рассылки"); return; }
-    const pendingTotal = accounts.reduce((s, a) => s + a.pending, 0);
-    if (pendingTotal === 0) { alert("Список получателей пуст. Нажми «Заполнить из инвайтов»."); return; }
-    if (!confirm(`Запустить рассылку в личку со всех аккаунтов?\nПолучателей в очереди: ${pendingTotal}\n\nИдёт пачками, можно остановить.`)) return;
+    if (acc.is_banned) { alert("Этот аккаунт помечен забаненным"); return; }
+    if (acc.pending === 0) { alert(`У «${acc.label}» нет получателей в очереди`); return; }
+    if (!confirm(`Запустить рассылку в личку с аккаунта «${acc.label}»?\nЕму назначено получателей: ${acc.pending}\n\nИдёт пачками, можно остановить.`)) return;
 
     stopRef.current = false;
-    setRunning(true);
+    setRunningId(acc.id);
     setBusy(true);
     let totalSent = 0, totalPrivacy = 0, totalFailed = 0;
-    const live = accounts.filter(a => !a.is_banned);
+    let emptyStreak = 0;
 
     try {
-      // По кругу обходим аккаунты, пока есть кого слать и не нажали «Стоп»
-      let anyWork = true;
-      while (anyWork && !stopRef.current) {
-        anyWork = false;
-        for (const acc of live) {
-          if (stopRef.current) break;
-          setRunLog(`Отправляю с «${acc.label}»...`);
-          let j: RunResult;
-          try {
-            const r = await fetch(`${DM_SENDER_URL}?action=run_account`, {
-              method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 6 }),
-            });
-            j = await r.json();
-          } catch {
-            await new Promise(res => setTimeout(res, 1500));
-            continue;
-          }
-          if (!j.ok) {
-            if (j.session_dead) { setRunLog(`🔌 ${j.error}`); continue; }
-            setRunLog(`⚠️ «${acc.label}»: ${j.error || "ошибка"}`);
-            continue;
-          }
-          totalSent += j.sent || 0;
-          totalPrivacy += j.privacy || 0;
-          totalFailed += j.failed || 0;
-          await load();
-          if (j.peer_flood) { setRunLog(`⏸️ «${acc.label}» упёрся в лимит Telegram — отдыхает`); continue; }
-          const processed = (j.sent || 0) + (j.privacy || 0) + (j.failed || 0);
-          if (processed > 0) anyWork = true;
-          await new Promise(res => setTimeout(res, 500));
+      while (!stopRef.current) {
+        setRunLog(`Отправляю с «${acc.label}»...`);
+        let j: RunResult;
+        try {
+          const r = await fetch(`${DM_SENDER_URL}?action=run_account`, {
+            method: "POST", headers, body: JSON.stringify({ account_id: acc.id, size: 6 }),
+          });
+          j = await r.json();
+        } catch {
+          await new Promise(res => setTimeout(res, 1500));
+          continue;
         }
+        if (!j.ok) {
+          if (j.session_dead) { alert(`🔌 ${j.error}`); break; }
+          alert(`⚠️ «${acc.label}»: ${j.error || "ошибка"}`); break;
+        }
+        totalSent += j.sent || 0;
+        totalPrivacy += j.privacy || 0;
+        totalFailed += j.failed || 0;
+        await load();
+        if (j.peer_flood) {
+          alert(`⏸️ «${acc.label}» упёрся в лимит Telegram.\n\nЭто не бан — аккаунту нужно отдохнуть.\nОтправлено за прогон: ${totalSent}`);
+          break;
+        }
+        const processed = (j.sent || 0) + (j.privacy || 0) + (j.failed || 0);
+        if (processed === 0) { emptyStreak++; if (emptyStreak >= 2) break; }
+        else emptyStreak = 0;
+        await new Promise(res => setTimeout(res, 500));
       }
-      alert(`${stopRef.current ? "Остановлено.\n\n" : "✅ Рассылка завершена!\n\n"}Отправлено: ${totalSent}\nНельзя писать (приватность): ${totalPrivacy}\nОшибок: ${totalFailed}`);
+      alert(`${stopRef.current ? "Остановлено.\n\n" : "✅ Готово!\n\n"}«${acc.label}»\nОтправлено: ${totalSent}\nНельзя писать (приватность): ${totalPrivacy}\nОшибок: ${totalFailed}`);
     } finally {
-      setRunning(false);
+      setRunningId(null);
       setBusy(false);
       stopRef.current = false;
       setRunLog("");
@@ -241,25 +239,33 @@ export function AdminDmTab({ token }: { token: string }) {
         <div className="border border-white/10 rounded-xl overflow-hidden divide-y divide-white/5">
           {accounts.length === 0 ? (
             <div className="text-center py-6 text-xs text-muted-foreground">Нет подключённых аккаунтов</div>
-          ) : accounts.map(a => (
-            <div key={a.id} className={`flex items-center gap-2 px-3 py-2 text-sm ${a.is_banned ? "bg-red-500/5" : ""}`}>
-              <span className={`w-2 h-2 rounded-full shrink-0 ${a.is_banned ? "bg-red-500" : a.is_active ? "bg-green-500" : "bg-white/30"}`} />
-              <span className="flex-1 truncate">{a.label}</span>
-              {a.is_banned && <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-300">бан</span>}
-              <span className="text-xs text-muted-foreground shrink-0">{a.pending} получат.</span>
-            </div>
-          ))}
+          ) : accounts.map(a => {
+            const isRunning = runningId === a.id;
+            return (
+              <div key={a.id} className={`flex items-center gap-2 px-3 py-2 text-sm ${a.is_banned ? "bg-red-500/5" : isRunning ? "bg-blue-500/10" : ""}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${a.is_banned ? "bg-red-500" : a.is_active ? "bg-green-500" : "bg-white/30"}`} />
+                <span className="flex-1 truncate">{a.label}</span>
+                {a.is_banned && <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-300">бан</span>}
+                <span className="text-xs text-muted-foreground shrink-0 mr-1">{a.pending} получат.</span>
+                {!a.is_banned && (
+                  <button
+                    onClick={() => runAccount(a)}
+                    disabled={busy && !isRunning}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-[11px] font-semibold shrink-0 transition hover:opacity-90 disabled:opacity-40 ${isRunning ? "bg-red-500/80" : "bg-gradient-to-r from-blue-600 to-cyan-600"}`}
+                    title={isRunning ? "Остановить" : "Отправить с этого аккаунта"}
+                  >
+                    <Icon name={isRunning ? "Square" : "Send"} size={12} className={isRunning ? "animate-pulse" : ""} />
+                    {isRunning ? "Стоп" : "Отправить"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {running && runLog && (
+        {runningId && runLog && (
           <div className="text-[11px] text-blue-300 animate-pulse">{runLog}</div>
         )}
-
-        <Button onClick={runAll} disabled={busy && !running}
-          className={`w-full gap-2 ${running ? "bg-red-500/80 hover:bg-red-500" : "grad-btn"}`}>
-          <Icon name={running ? "Square" : "Send"} size={16} />
-          {running ? "Остановить рассылку" : "Запустить рассылку со всех аккаунтов"}
-        </Button>
       </div>
     </div>
   );
