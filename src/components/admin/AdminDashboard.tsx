@@ -3,7 +3,6 @@ import Icon from "@/components/ui/icon";
 import { AdminTab } from "./adminTypes";
 import { AdminPostsTab } from "./AdminPostsTab";
 import { AdminBotTab } from "./AdminBotTab";
-import { AdminDriversTab } from "./AdminDriversTab";
 import { AdminStoriesTab } from "./AdminStoriesTab";
 import { AdminExcludedTab } from "./AdminExcludedTab";
 import { AdminInvitesTab } from "./AdminInvitesTab";
@@ -17,7 +16,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
-    { id: "drivers", label: "Водители", icon: "Car" },
     { id: "invites", label: "Авто-приглашения", icon: "UserPlus" },
     { id: "dm", label: "Рассылка в личку", icon: "Mail" },
   ];
@@ -78,7 +76,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               <AdminExcludedTab token={token} />
             </div>
           )}
-          {tab === "drivers" && <AdminDriversTab token={token} />}
           {tab === "invites" && <AdminInvitesTab token={token} />}
           {tab === "dm" && <AdminDmTab token={token} />}
         </main>
