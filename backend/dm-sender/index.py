@@ -265,6 +265,13 @@ def release_dm_targets(ids: list) -> None:
     conn.commit(); cur.close(); conn.close()
 
 
+def delete_dm_target(target_id: int) -> None:
+    """Удаляет получателя из очереди (например, если юзернейм не существует)."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"DELETE FROM {SCHEMA}.dm_targets WHERE id={int(target_id)}")
+    conn.commit(); cur.close(); conn.close()
+
+
 # ---------- sending ----------
 
 async def download_photo(photo_url: str) -> bytes:
@@ -315,7 +322,7 @@ async def run_account_dm(account_id: int, size: int) -> dict:
     has_content = bool(body_html)
 
     client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
-    sent = 0; privacy = 0; failed = 0; peer_flood = False
+    sent = 0; privacy = 0; failed = 0; removed = 0; peer_flood = False
     try:
         authorized = False
         ever_connected = False
@@ -362,8 +369,9 @@ async def run_account_dm(account_id: int, size: int) -> dict:
                 update_dm_target(t['id'], 'sent', '', acc['id'])
                 sent += 1
             except (UsernameInvalidError, UsernameNotOccupiedError, ValueError):
-                update_dm_target(t['id'], 'failed', 'username не существует', acc['id'])
-                failed += 1
+                # Юзернейм не существует — сразу убираем из очереди, чтобы не копился мусор.
+                delete_dm_target(t['id'])
+                removed += 1
             except UserPrivacyRestrictedError:
                 update_dm_target(t['id'], 'privacy', 'нельзя писать (приватность)', acc['id'])
                 privacy += 1
@@ -371,8 +379,9 @@ async def run_account_dm(account_id: int, size: int) -> dict:
                 update_dm_target(t['id'], 'failed', 'пользователь заблокировал', acc['id'])
                 failed += 1
             except (InputUserDeactivatedError, UserDeactivatedError):
-                update_dm_target(t['id'], 'failed', 'аккаунт удалён', acc['id'])
-                failed += 1
+                # Аккаунт удалён — тоже убираем из очереди.
+                delete_dm_target(t['id'])
+                removed += 1
             except PeerFloodError:
                 # Лимит Telegram на сообщения — НЕ бан. Останавливаем пачку, кандидата вернём.
                 update_dm_target(t['id'], 'pending', 'PEER_FLOOD — вернули в очередь', acc['id'])
@@ -397,7 +406,8 @@ async def run_account_dm(account_id: int, size: int) -> dict:
 
     return {
         'ok': True, 'account': acc['label'], 'account_id': acc['id'],
-        'sent': sent, 'privacy': privacy, 'failed': failed, 'peer_flood': peer_flood,
+        'sent': sent, 'privacy': privacy, 'failed': failed, 'removed': removed,
+        'peer_flood': peer_flood,
     }
 
 

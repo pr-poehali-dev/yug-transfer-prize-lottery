@@ -15,7 +15,7 @@ interface DmCounts {
 }
 interface RunResult {
   ok?: boolean; error?: string; session_dead?: boolean;
-  sent?: number; privacy?: number; failed?: number; peer_flood?: boolean; empty?: boolean;
+  sent?: number; privacy?: number; failed?: number; removed?: number; peer_flood?: boolean; empty?: boolean;
 }
 
 export function AdminDmTab({ token }: { token: string }) {
@@ -143,12 +143,12 @@ export function AdminDmTab({ token }: { token: string }) {
 
   // Один прогон по аккаунту: ровно clickTotal сообщений, мини-пачками по runMax.
   // Возвращает true если можно продолжать (не стоп/не критическая ошибка).
-  async function sendOnce(acc: DmAccount): Promise<{ sent: number; privacy: number; failed: number; stopped: boolean }> {
-    let totalSent = 0, totalPrivacy = 0, totalFailed = 0, emptyStreak = 0, stopped = false;
+  async function sendOnce(acc: DmAccount): Promise<{ sent: number; privacy: number; failed: number; removed: number; stopped: boolean }> {
+    let totalSent = 0, totalPrivacy = 0, totalFailed = 0, totalRemoved = 0, emptyStreak = 0, stopped = false;
     while (!stopRef.current) {
-      const done = totalSent + totalPrivacy + totalFailed;
+      const done = totalSent + totalPrivacy + totalFailed + totalRemoved;
       if (done >= clickTotal) break;
-      setRunLog(`«${acc.label}»: ${done} из ${clickTotal}...`);
+      setRunLog(`«${acc.label}»: ${totalSent} отправлено из ${clickTotal}...`);
       let j: RunResult;
       try {
         const r = await fetch(`${DM_SENDER_URL}?action=run_account`, {
@@ -168,16 +168,17 @@ export function AdminDmTab({ token }: { token: string }) {
       totalSent += j.sent || 0;
       totalPrivacy += j.privacy || 0;
       totalFailed += j.failed || 0;
+      totalRemoved += j.removed || 0;
       await load();
       if (j.peer_flood) {
         alert(`⏸️ «${acc.label}» упёрся в лимит Telegram — аккаунту нужно отдохнуть.\nОтправлено: ${totalSent}`);
         stopped = true; break;
       }
-      const processed = (j.sent || 0) + (j.privacy || 0) + (j.failed || 0);
+      const processed = (j.sent || 0) + (j.privacy || 0) + (j.failed || 0) + (j.removed || 0);
       if (processed === 0) { emptyStreak++; if (emptyStreak >= 2) break; } else emptyStreak = 0;
       await new Promise(res => setTimeout(res, 500));
     }
-    return { sent: totalSent, privacy: totalPrivacy, failed: totalFailed, stopped };
+    return { sent: totalSent, privacy: totalPrivacy, failed: totalFailed, removed: totalRemoved, stopped };
   }
 
   async function runAccount(acc: DmAccount) {
@@ -193,7 +194,7 @@ export function AdminDmTab({ token }: { token: string }) {
     setBusy(true);
     try {
       const res = await sendOnce(acc);
-      alert(`${res.stopped ? "" : "✅ Готово!\n\n"}«${acc.label}»\nОтправлено: ${res.sent}\nПриватность: ${res.privacy}\nОшибок: ${res.failed}`);
+      alert(`${res.stopped ? "" : "✅ Готово!\n\n"}«${acc.label}»\nОтправлено: ${res.sent}\nПриватность: ${res.privacy}\nОшибок: ${res.failed}\nУдалено несуществующих: ${res.removed}`);
     } finally {
       setRunningId(null);
       setBusy(false);
@@ -212,17 +213,17 @@ export function AdminDmTab({ token }: { token: string }) {
 
     stopRef.current = false;
     setBusy(true);
-    let gs = 0, gp = 0, gf = 0;
+    let gs = 0, gp = 0, gf = 0, gr = 0;
     try {
       for (const acc of chosen) {
         if (stopRef.current) break;
         setRunningId(acc.id);
         const res = await sendOnce(acc);
-        gs += res.sent; gp += res.privacy; gf += res.failed;
+        gs += res.sent; gp += res.privacy; gf += res.failed; gr += res.removed;
         if (res.stopped && stopRef.current) break;
         await new Promise(res => setTimeout(res, 600));
       }
-      alert(`${stopRef.current ? "Остановлено.\n\n" : "✅ Рассылка по выбранным завершена!\n\n"}Отправлено: ${gs}\nПриватность: ${gp}\nОшибок: ${gf}`);
+      alert(`${stopRef.current ? "Остановлено.\n\n" : "✅ Рассылка по выбранным завершена!\n\n"}Отправлено: ${gs}\nПриватность: ${gp}\nОшибок: ${gf}\nУдалено несуществующих: ${gr}`);
     } finally {
       setRunningId(null);
       setBusy(false);
