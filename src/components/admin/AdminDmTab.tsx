@@ -1,25 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import Icon from "@/components/ui/icon";
-import { Button } from "@/components/ui/button";
 import { DM_SENDER_URL, TG_ACCOUNTS_URL } from "./adminTypes";
-import { AccountLoginForm } from "./accounts/AccountLoginForm";
-
-type LoginStep = "idle" | "phone" | "code" | "2fa";
-
-interface DmAccount {
-  id: number;
-  label: string;
-  is_banned: boolean;
-  is_active: boolean;
-  pending: number;
-}
-interface DmCounts {
-  pending: number; sent: number; privacy: number; failed: number; in_progress: number; total: number;
-}
-interface RunResult {
-  ok?: boolean; error?: string; session_dead?: boolean;
-  sent?: number; privacy?: number; failed?: number; removed?: number; peer_flood?: boolean; empty?: boolean;
-}
+import { DmAccount, DmCounts, RunResult, LoginStep } from "./dm/dmTypes";
+import { DmHeader } from "./dm/DmHeader";
+import { DmMessageForm } from "./dm/DmMessageForm";
+import { DmQueuePanel } from "./dm/DmQueuePanel";
 
 export function AdminDmTab({ token }: { token: string }) {
   const [accounts, setAccounts] = useState<DmAccount[]>([]);
@@ -304,226 +288,64 @@ export function AdminDmTab({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="glass rounded-xl p-3 border border-white/5 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shrink-0">
-          <Icon name="Mail" size={16} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold">Рассылка в личку</h2>
-          <p className="text-[11px] text-muted-foreground">Текст + фото · по {clickTotal} сообщений за нажатие — чтобы не получить бан</p>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[10px] text-muted-foreground mr-1 hidden sm:inline">За нажатие:</span>
-          {[10, 20, 30].map(n => (
-            <button key={n} onClick={() => setClickTotal(n)} disabled={!!runningId}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition disabled:opacity-40 ${clickTotal === n ? "bg-blue-600 text-white" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}>
-              {n}
-            </button>
-          ))}
-        </div>
-      </div>
+      <DmHeader
+        clickTotal={clickTotal}
+        setClickTotal={setClickTotal}
+        runningId={runningId}
+        counts={counts}
+      />
 
-      {counts && (
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: "Ожидают", val: counts.pending, color: "text-amber-300" },
-            { label: "Отправлено", val: counts.sent, color: "text-green-400" },
-            { label: "Приватность", val: counts.privacy, color: "text-blue-300" },
-            { label: "Ошибки", val: counts.failed, color: "text-red-400" },
-          ].map(c => (
-            <div key={c.label} className="glass rounded-xl p-3 border border-white/5 text-center">
-              <div className={`text-lg font-bold ${c.color}`}>{c.val}</div>
-              <div className="text-[10px] text-muted-foreground">{c.label}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <DmMessageForm
+        text={text}
+        setText={setText}
+        photoUrl={photoUrl}
+        buttonText={buttonText}
+        setButtonText={setButtonText}
+        buttonUrl={buttonUrl}
+        setButtonUrl={setButtonUrl}
+        saving={saving}
+        savedFlash={savedFlash}
+        fileRef={fileRef}
+        onPickPhoto={onPickPhoto}
+        saveTemplate={saveTemplate}
+        removePhoto={removePhoto}
+      />
 
-      {/* Форма сообщения */}
-      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
-        <div className="text-xs font-semibold text-muted-foreground">Текст сообщения (общий для всех)</div>
-        <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
-          rows={5}
-          placeholder="Напиши текст рассылки..."
-          className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm resize-y outline-none focus:border-blue-400/50"
-        />
-
-        <div className="flex items-center gap-3">
-          {photoUrl ? (
-            <div className="relative">
-              <img src={photoUrl} alt="" className="w-20 h-20 object-cover rounded-lg border border-white/10" />
-              <button onClick={removePhoto}
-                className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center">
-                <Icon name="X" size={12} />
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => fileRef.current?.click()} disabled={saving}
-              className="w-20 h-20 rounded-lg border border-dashed border-white/20 flex flex-col items-center justify-center text-muted-foreground hover:border-blue-400/50 transition disabled:opacity-50">
-              <Icon name="ImagePlus" size={20} />
-              <span className="text-[9px] mt-1">Фото</span>
-            </button>
-          )}
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickPhoto} />
-          <div className="text-[11px] text-muted-foreground flex-1">Одно фото с подписью.</div>
-          <Button onClick={saveTemplate} disabled={saving} size="sm"
-            className={`gap-1 shrink-0 ${savedFlash ? "bg-green-600 hover:bg-green-600" : "grad-btn"}`}>
-            <Icon name={savedFlash ? "Check" : "Save"} size={14} />
-            {saving ? "Сохраняю..." : savedFlash ? "Сохранено" : "Сохранить шаблон"}
-          </Button>
-        </div>
-
-        {/* Кнопка-ссылка под сообщением */}
-        <div className="border-t border-white/5 pt-3 space-y-2">
-          <div className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-            <Icon name="Link" size={12} /> Кнопка-ссылка (необязательно)
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input
-              value={buttonText}
-              onChange={e => setButtonText(e.target.value)}
-              placeholder="Текст кнопки (напр. Подробнее)"
-              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400/50"
-            />
-            <input
-              value={buttonUrl}
-              onChange={e => setButtonUrl(e.target.value)}
-              placeholder="https://t.me/..."
-              className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400/50"
-            />
-          </div>
-          <div className="text-[10px] text-muted-foreground">Ссылка добавится кликабельной строкой в конце сообщения.</div>
-        </div>
-
-        {/* Предпросмотр — как увидит получатель */}
-        <div>
-          <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 flex items-center gap-1">
-            <Icon name="Eye" size={12} /> Предпросмотр
-          </div>
-          <div className="bg-[#0e1621] rounded-xl p-3 flex justify-start">
-            <div className="max-w-[280px] bg-[#182533] rounded-2xl rounded-bl-md overflow-hidden shadow-lg">
-              {photoUrl && <img src={photoUrl} alt="" className="w-full max-h-52 object-cover" />}
-              <div className="px-3 py-2">
-                {text ? (
-                  <div className="text-[13px] text-white/90 whitespace-pre-wrap break-words leading-snug">{text}</div>
-                ) : (
-                  <div className="text-[13px] text-white/30 italic">Текст сообщения...</div>
-                )}
-                {buttonText && buttonUrl && (
-                  <div className="mt-1.5 text-[13px] font-medium text-[#62a8e8] underline break-words">{buttonText}</div>
-                )}
-                <div className="text-[10px] text-white/40 text-right mt-1">12:00</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Управление очередью + выбор аккаунтов */}
-      <div className="glass rounded-xl p-4 border border-white/5 space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="text-xs font-semibold">Получатели: <span className="text-amber-300">{pendingTotal}</span> в очереди</div>
-          <div className="flex gap-2 flex-wrap">
-            <Button size="sm" variant="outline"
-              onClick={() => { if (loginStep === "idle") setLoginStep("phone"); else resetLogin(); }}
-              className="gap-1 text-xs text-emerald-300">
-              <Icon name="UserPlus" size={13} />Добавить аккаунт
-            </Button>
-            <Button size="sm" variant="outline" onClick={seed} disabled={busy} className="gap-1 text-xs">
-              <Icon name="Download" size={13} />Заполнить из инвайтов
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => redistribute(false)} disabled={busy} className="gap-1 text-xs text-cyan-300">
-              <Icon name="Shuffle" size={13} />Распределить
-            </Button>
-            <Button size="sm" variant="outline" onClick={cleanInvalid} disabled={busy} className="gap-1 text-xs text-amber-300">
-              <Icon name="Filter" size={13} />Убрать без юзернейма
-            </Button>
-            <Button size="sm" variant="outline" onClick={clearQueue} disabled={busy} className="gap-1 text-xs text-red-300">
-              <Icon name="Trash2" size={13} />Очистить
-            </Button>
-          </div>
-        </div>
-
-        {/* Вход нового аккаунта по номеру */}
-        {loginStep !== "idle" && (
-          <AccountLoginForm
-            step={loginStep}
-            phone={loginPhone}
-            code={loginCode}
-            pwd={loginPwd}
-            label={loginLabel}
-            busy={loginBusy}
-            err={loginErr}
-            onPhone={setLoginPhone}
-            onCode={setLoginCode}
-            onPwd={setLoginPwd}
-            onLabel={setLoginLabel}
-            onSendCode={loginSendCode}
-            onVerifyCode={loginVerifyCode}
-            onVerify2fa={loginVerify2fa}
-            onCancel={resetLogin}
-          />
-        )}
-
-        {/* Выбрать все */}
-        {liveAccounts.length > 0 && (
-          <button onClick={toggleSelectAll}
-            className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-white transition">
-            <span className={`w-4 h-4 rounded border flex items-center justify-center ${allSelected ? "bg-blue-600 border-blue-600" : "border-white/30"}`}>
-              {allSelected && <Icon name="Check" size={11} />}
-            </span>
-            Выбрать все аккаунты
-          </button>
-        )}
-
-        <div className="border border-white/10 rounded-xl overflow-hidden divide-y divide-white/5">
-          {accounts.length === 0 ? (
-            <div className="text-center py-6 text-xs text-muted-foreground">Нет подключённых аккаунтов</div>
-          ) : accounts.map(a => {
-            const isRunning = runningId === a.id;
-            const isChecked = selected.has(a.id);
-            return (
-              <div key={a.id} className={`flex items-center gap-2 px-3 py-2 text-sm ${a.is_banned ? "bg-red-500/5" : isRunning ? "bg-blue-500/10" : ""}`}>
-                {!a.is_banned && (
-                  <button onClick={() => toggleSelect(a.id)}
-                    className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isChecked ? "bg-blue-600 border-blue-600" : "border-white/30 hover:border-blue-400"}`}>
-                    {isChecked && <Icon name="Check" size={11} />}
-                  </button>
-                )}
-                <span className={`w-2 h-2 rounded-full shrink-0 ${a.is_banned ? "bg-red-500" : a.is_active ? "bg-green-500" : "bg-white/30"}`} />
-                <span className="flex-1 truncate">{a.label}</span>
-                {a.is_banned && <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-300">бан</span>}
-                <span className="text-xs text-muted-foreground shrink-0 mr-1">{a.pending} получат.</span>
-                {!a.is_banned && (
-                  <button
-                    onClick={() => runAccount(a)}
-                    disabled={busy && !isRunning}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-[11px] font-semibold shrink-0 transition hover:opacity-90 disabled:opacity-40 ${isRunning ? "bg-red-500/80" : "bg-gradient-to-r from-blue-600 to-cyan-600"}`}
-                    title={isRunning ? "Остановить" : `Отправить ${clickTotal} сообщений с этого аккаунта`}
-                  >
-                    <Icon name={isRunning ? "Square" : "Send"} size={12} className={isRunning ? "animate-pulse" : ""} />
-                    {isRunning ? "Стоп" : "Отправить"}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {runningId && runLog && (
-          <div className="text-[11px] text-blue-300 animate-pulse">{runLog}</div>
-        )}
-
-        {selected.size > 0 && (
-          <Button onClick={runSelected} disabled={busy && !runningId}
-            className={`w-full gap-2 ${runningId ? "bg-red-500/80 hover:bg-red-500" : "grad-btn"}`}>
-            <Icon name={runningId ? "Square" : "Send"} size={16} />
-            {runningId ? "Остановить рассылку" : `Отправить с выбранных (${selected.size})`}
-          </Button>
-        )}
-      </div>
+      <DmQueuePanel
+        pendingTotal={pendingTotal}
+        busy={busy}
+        accounts={accounts}
+        liveAccounts={liveAccounts}
+        allSelected={allSelected}
+        selected={selected}
+        runningId={runningId}
+        runLog={runLog}
+        clickTotal={clickTotal}
+        loginStep={loginStep}
+        setLoginStep={setLoginStep}
+        resetLogin={resetLogin}
+        seed={seed}
+        redistribute={redistribute}
+        cleanInvalid={cleanInvalid}
+        clearQueue={clearQueue}
+        loginPhone={loginPhone}
+        loginCode={loginCode}
+        loginPwd={loginPwd}
+        loginLabel={loginLabel}
+        loginBusy={loginBusy}
+        loginErr={loginErr}
+        setLoginPhone={setLoginPhone}
+        setLoginCode={setLoginCode}
+        setLoginPwd={setLoginPwd}
+        setLoginLabel={setLoginLabel}
+        loginSendCode={loginSendCode}
+        loginVerifyCode={loginVerifyCode}
+        loginVerify2fa={loginVerify2fa}
+        toggleSelect={toggleSelect}
+        toggleSelectAll={toggleSelectAll}
+        runAccount={runAccount}
+        runSelected={runSelected}
+      />
     </div>
   );
 }
