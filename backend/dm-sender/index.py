@@ -165,6 +165,8 @@ def seed_from_invites() -> dict:
         SELECT DISTINCT ON (lower(t.username)) t.username, t.assigned_account_id, 'pending'
         FROM {SCHEMA}.invite_targets t
         WHERE t.username IS NOT NULL AND t.username <> ''
+          AND length(t.username) >= 5
+          AND t.username ~ '^[A-Za-z][A-Za-z0-9_]{{4,31}}$'
         ORDER BY lower(t.username), t.id ASC
         ON CONFLICT (lower(username)) DO NOTHING
     """)
@@ -176,6 +178,26 @@ def seed_from_invites() -> dict:
 def clear_queue() -> int:
     conn = db(); cur = conn.cursor()
     cur.execute(f"DELETE FROM {SCHEMA}.dm_targets")
+    n = cur.rowcount
+    conn.commit(); cur.close(); conn.close()
+    return n
+
+
+# Регулярка валидного Telegram-юзернейма: 5-32 символа, начинается с буквы,
+# дальше латиница/цифры/подчёркивание.
+VALID_USERNAME_RE = "^[A-Za-z][A-Za-z0-9_]{4,31}$"
+
+
+def clean_invalid() -> int:
+    """Удаляет из очереди записи без корректного юзернейма (короткие/мусорные/пустые)."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        DELETE FROM {SCHEMA}.dm_targets
+        WHERE username IS NULL
+           OR username = ''
+           OR length(username) < 5
+           OR username !~ '{VALID_USERNAME_RE}'
+    """)
     n = cur.rowcount
     conn.commit(); cur.close(); conn.close()
     return n
@@ -407,6 +429,10 @@ def handler(event: dict, context) -> dict:
 
     if action == 'clear':
         n = clear_queue()
+        return resp(200, {'ok': True, 'deleted': n, 'counts': get_counts()})
+
+    if action == 'clean_invalid':
+        n = clean_invalid()
         return resp(200, {'ok': True, 'deleted': n, 'counts': get_counts()})
 
     if action == 'run_account':

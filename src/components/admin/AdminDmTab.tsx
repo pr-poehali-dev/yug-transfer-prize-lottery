@@ -108,6 +108,16 @@ export function AdminDmTab({ token }: { token: string }) {
     await load();
   }
 
+  async function cleanInvalid() {
+    if (!confirm("Убрать из очереди получателей без корректного юзернейма?")) return;
+    setBusy(true);
+    const r = await fetch(`${DM_SENDER_URL}?action=clean_invalid`, { method: "POST", headers });
+    const j = await r.json();
+    setBusy(false);
+    await load();
+    alert(`Убрано без юзернейма: ${j.deleted || 0}`);
+  }
+
   function toggleSelect(id: number) {
     setSelected(prev => {
       const next = new Set(prev);
@@ -317,6 +327,9 @@ export function AdminDmTab({ token }: { token: string }) {
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={seed} disabled={busy} className="gap-1 text-xs">
               <Icon name="Download" size={13} />Заполнить из инвайтов
+            </Button>
+            <Button size="sm" variant="outline" onClick={cleanInvalid} disabled={busy} className="gap-1 text-xs text-amber-300">
+              <Icon name="Filter" size={13} />Убрать без юзернейма
             </Button>
             <Button size="sm" variant="outline" onClick={clearQueue} disabled={busy} className="gap-1 text-xs text-red-300">
               <Icon name="Trash2" size={13} />Очистить
