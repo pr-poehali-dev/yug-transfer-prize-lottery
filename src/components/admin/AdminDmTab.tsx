@@ -192,8 +192,8 @@ export function AdminDmTab({ token }: { token: string }) {
 
   // Один прогон по аккаунту: ровно clickTotal сообщений, мини-пачками по runMax.
   // Возвращает true если можно продолжать (не стоп/не критическая ошибка).
-  async function sendOnce(acc: DmAccount): Promise<{ sent: number; privacy: number; failed: number; removed: number; stopped: boolean }> {
-    let totalSent = 0, totalPrivacy = 0, totalFailed = 0, totalRemoved = 0, emptyStreak = 0, stopped = false;
+  async function sendOnce(acc: DmAccount): Promise<{ sent: number; privacy: number; failed: number; removed: number; stopped: boolean; flooded: boolean }> {
+    let totalSent = 0, totalPrivacy = 0, totalFailed = 0, totalRemoved = 0, emptyStreak = 0, stopped = false, flooded = false;
     while (!stopRef.current) {
       const done = totalSent + totalPrivacy + totalFailed + totalRemoved;
       if (done >= clickTotal) break;
@@ -222,13 +222,14 @@ export function AdminDmTab({ token }: { token: string }) {
       if (j.peer_flood) {
         // Лимит Telegram — без попапа и без остановки всей рассылки:
         // просто завершаем этот аккаунт и переходим к следующему.
+        flooded = true;
         break;
       }
       const processed = (j.sent || 0) + (j.privacy || 0) + (j.failed || 0) + (j.removed || 0);
       if (processed === 0) { emptyStreak++; if (emptyStreak >= 2) break; } else emptyStreak = 0;
       await new Promise(res => setTimeout(res, 500));
     }
-    return { sent: totalSent, privacy: totalPrivacy, failed: totalFailed, removed: totalRemoved, stopped };
+    return { sent: totalSent, privacy: totalPrivacy, failed: totalFailed, removed: totalRemoved, stopped, flooded };
   }
 
   async function runAccount(acc: DmAccount) {
@@ -244,7 +245,10 @@ export function AdminDmTab({ token }: { token: string }) {
     setBusy(true);
     try {
       const res = await sendOnce(acc);
-      alert(`${res.stopped ? "" : "✅ Готово!\n\n"}«${acc.label}»\nОтправлено: ${res.sent}\nПриватность: ${res.privacy}\nОшибок: ${res.failed}\nУдалено несуществующих: ${res.removed}`);
+      const floodNote = res.flooded && res.sent === 0
+        ? "\n\n⏸️ Аккаунт упёрся в лимит Telegram — ему нужен прогрев/отдых."
+        : res.flooded ? "\n\n⏸️ Под конец упёрся в лимит Telegram." : "";
+      alert(`${res.stopped ? "" : "✅ Готово!\n\n"}«${acc.label}»\nОтправлено: ${res.sent}\nПриватность: ${res.privacy}\nОшибок: ${res.failed}\nУдалено несуществующих: ${res.removed}${floodNote}`);
     } finally {
       setRunningId(null);
       setBusy(false);
@@ -264,16 +268,21 @@ export function AdminDmTab({ token }: { token: string }) {
     stopRef.current = false;
     setBusy(true);
     let gs = 0, gp = 0, gf = 0, gr = 0;
+    const floodedAccounts: string[] = [];
     try {
       for (const acc of chosen) {
         if (stopRef.current) break;
         setRunningId(acc.id);
         const res = await sendOnce(acc);
         gs += res.sent; gp += res.privacy; gf += res.failed; gr += res.removed;
+        if (res.flooded) floodedAccounts.push(acc.label);
         if (res.stopped && stopRef.current) break;
         await new Promise(res => setTimeout(res, 600));
       }
-      alert(`${stopRef.current ? "Остановлено.\n\n" : "✅ Рассылка по выбранным завершена!\n\n"}Отправлено: ${gs}\nПриватность: ${gp}\nОшибок: ${gf}\nУдалено несуществующих: ${gr}`);
+      const floodNote = floodedAccounts.length
+        ? `\n\n⏸️ Упёрлись в лимит Telegram (нужен прогрев/отдых): ${floodedAccounts.join(", ")}`
+        : "";
+      alert(`${stopRef.current ? "Остановлено.\n\n" : "✅ Рассылка по выбранным завершена!\n\n"}Отправлено: ${gs}\nПриватность: ${gp}\nОшибок: ${gf}\nУдалено несуществующих: ${gr}${floodNote}`);
     } finally {
       setRunningId(null);
       setBusy(false);
