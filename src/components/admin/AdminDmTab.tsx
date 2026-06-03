@@ -42,7 +42,6 @@ export function AdminDmTab({ token }: { token: string }) {
       const j = await r.json();
       setAccounts(j.accounts || []);
       setCounts(j.counts || null);
-      if (j.click_total) setClickTotal(j.click_total);
       if (j.run_max) setRunMax(j.run_max);
       if (j.message) {
         setText(j.message.text || "");
@@ -226,6 +225,15 @@ export function AdminDmTab({ token }: { token: string }) {
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold">Рассылка в личку</h2>
           <p className="text-[11px] text-muted-foreground">Текст + фото · по {clickTotal} сообщений за нажатие — чтобы не получить бан</p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[10px] text-muted-foreground mr-1 hidden sm:inline">За нажатие:</span>
+          {[10, 20, 30].map(n => (
+            <button key={n} onClick={() => setClickTotal(n)} disabled={!!runningId}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition disabled:opacity-40 ${clickTotal === n ? "bg-blue-600 text-white" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}>
+              {n}
+            </button>
+          ))}
         </div>
       </div>
 
