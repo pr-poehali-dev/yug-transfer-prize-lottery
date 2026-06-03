@@ -220,8 +220,9 @@ export function AdminDmTab({ token }: { token: string }) {
       totalRemoved += j.removed || 0;
       await load();
       if (j.peer_flood) {
-        alert(`⏸️ «${acc.label}» упёрся в лимит Telegram — аккаунту нужно отдохнуть.\nОтправлено: ${totalSent}`);
-        stopped = true; break;
+        // Лимит Telegram — без попапа и без остановки всей рассылки:
+        // просто завершаем этот аккаунт и переходим к следующему.
+        break;
       }
       const processed = (j.sent || 0) + (j.privacy || 0) + (j.failed || 0) + (j.removed || 0);
       if (processed === 0) { emptyStreak++; if (emptyStreak >= 2) break; } else emptyStreak = 0;
