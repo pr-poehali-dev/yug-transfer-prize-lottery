@@ -850,23 +850,30 @@ async def run_warmup_for_account(acc: dict, per_account: int, fast: bool = False
         return {'ok': False, 'account': acc['label'], 'error': 'Нет pending кандидатов для этого аккаунта'}
 
     client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
-    await client.connect()
     added = 0; privacy = 0; failed = 0; ban = False; ban_note = ''
     results = []
 
     try:
+        # Подключение к Telegram бывает «холодным» и поднимается не сразу —
+        # даём несколько попыток connect + проверки авторизации (до ~8 сек).
         authorized = False
-        for _ in range(2):
+        for attempt in range(5):
             try:
+                if not client.is_connected():
+                    await client.connect()
                 if await client.is_user_authorized():
-                    authorized = True; break
+                    authorized = True
+                    break
             except Exception:
-                pass
-            await asyncio.sleep(1)
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+            await asyncio.sleep(1.5)
         if not authorized:
             # НЕ баним сразу — может быть сетевая проблема. Просто пропустим этот запуск.
             release_targets([t['id'] for t in targets])
-            return {'ok': False, 'account': acc['label'], 'error': 'Сессия не отвечает, пропустили (аккаунт остался активным)'}
+            return {'ok': False, 'account': acc['label'], 'error': 'Сессия не отвечает (Telegram не поднял соединение), пропустили — аккаунт остался активным, попробуй ещё раз'}
         try:
             target_entity = await client.get_entity(target_group)
         except Exception as e:

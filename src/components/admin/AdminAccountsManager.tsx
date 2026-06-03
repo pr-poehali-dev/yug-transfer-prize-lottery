@@ -221,6 +221,7 @@ export function AdminAccountsManager({ token }: { token: string }) {
     let banned = false;
     let emptyStreak = 0;
     let errStreak = 0;
+    let sessionRetry = 0;
     try {
       while (!stopRunRef.current) {
         let j: {
@@ -241,7 +242,18 @@ export function AdminAccountsManager({ token }: { token: string }) {
           continue;
         }
         errStreak = 0;
-        if (!j.ok) { alert(`❌ ${j.error || "Ошибка"}`); break; }
+        if (!j.ok) {
+          // «Сессия не отвечает» — временный сбой подключения к Telegram,
+          // не валим весь прогон, даём несколько повторов.
+          if ((j.error || "").includes("Сессия не отвечает")) {
+            sessionRetry++;
+            if (sessionRetry >= 4) { alert(`❌ ${j.error}`); break; }
+            await new Promise((res) => setTimeout(res, 2000));
+            continue;
+          }
+          alert(`❌ ${j.error || "Ошибка"}`); break;
+        }
+        sessionRetry = 0;
         totalAdded += j.added || 0;
         totalPrivacy += j.privacy || 0;
         totalFailed += j.failed || 0;
