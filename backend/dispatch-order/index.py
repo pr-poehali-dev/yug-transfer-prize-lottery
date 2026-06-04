@@ -230,6 +230,56 @@ def archive_list() -> dict:
     return {'ok': True, 'orders': [row_to_order(dict(r)) for r in rows]}
 
 
+def cleanup_unpaid() -> dict:
+    """Убирает из очередей всех, кто не купил: статусы expired и просроченные paying.
+       Пересчитывает позиции и обновляет сообщения заказов в группе."""
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    # Заказы, где есть кого чистить.
+    cur.execute(
+        f"SELECT DISTINCT q.order_id FROM {SCHEMA}.order_queue q "
+        f"JOIN {SCHEMA}.dispatch_orders d ON d.id=q.order_id "
+        f"WHERE q.status IN ('expired') "
+        f"OR (q.status='paying' AND d.current_deadline IS NOT NULL AND d.current_deadline < NOW())"
+    )
+    order_ids = [r['order_id'] for r in cur.fetchall()]
+    removed = 0
+    for oid in order_ids:
+        cur.execute(
+            f"DELETE FROM {SCHEMA}.order_queue q USING {SCHEMA}.dispatch_orders d "
+            f"WHERE q.order_id=%s AND q.order_id=d.id AND ("
+            f"q.status='expired' OR "
+            f"(q.status='paying' AND d.current_deadline IS NOT NULL AND d.current_deadline < NOW()))",
+            (oid,),
+        )
+        removed += cur.rowcount
+        # Сбрасываем плательщика, если он был удалён.
+        cur.execute(
+            f"UPDATE {SCHEMA}.dispatch_orders SET current_user_id=NULL, current_deadline=NULL "
+            f"WHERE id=%s AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.order_queue WHERE order_id=%s AND status='paying')",
+            (oid, oid),
+        )
+        conn.commit()
+        # Пересчитываем позиции оставшихся.
+        cur.execute(
+            f"SELECT id FROM {SCHEMA}.order_queue WHERE order_id=%s ORDER BY position ASC", (oid,)
+        )
+        for i, r in enumerate(cur.fetchall(), start=1):
+            cur.execute(f"UPDATE {SCHEMA}.order_queue SET position=%s WHERE id=%s", (i, r['id']))
+        conn.commit()
+        # Обновляем сообщение заказа в группе.
+        cur.execute(
+            f"SELECT tg_message_id, tg_message_text FROM {SCHEMA}.dispatch_orders WHERE id=%s", (oid,)
+        )
+        row = cur.fetchone()
+        if row and row['tg_message_id']:
+            base = row['tg_message_text'] or '🚖 <b>ЗАКАЗ</b>'
+            tg_edit_order(row['tg_message_id'], base + render_queue_block(oid), oid)
+    cur.close()
+    conn.close()
+    return {'ok': True, 'removed': removed, 'orders': len(order_ids)}
+
+
 def archive_delete(order_id: int) -> dict:
     conn = db()
     cur = conn.cursor()
@@ -426,6 +476,9 @@ def handler(event: dict, context) -> dict:
 
     if action == 'archive_list':
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(archive_list())}
+
+    if action == 'cleanup_unpaid':
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps(cleanup_unpaid())}
 
     if event.get('httpMethod') != 'POST':
         return {'statusCode': 405, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'method not allowed'})}
