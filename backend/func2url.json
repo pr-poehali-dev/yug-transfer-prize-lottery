@@ -1,4 +1,5 @@
 {
+  "dispatch-order": "https://functions.poehali.dev/645f8ead-4009-4674-b51c-7394bc7dad47",
   "dm-sender": "https://functions.poehali.dev/ef67dd35-45cd-4367-86ea-09a002a76837",
   "invite-runner": "https://functions.poehali.dev/970b102b-bcf2-4c27-a9df-31778fbaca04",
   "invite-targets": "https://functions.poehali.dev/33399df3-3e82-49af-83a8-2b2fc4d06bfb",
