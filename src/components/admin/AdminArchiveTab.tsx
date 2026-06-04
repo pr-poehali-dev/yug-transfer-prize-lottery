@@ -13,6 +13,23 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [filter, setFilter] = useState<"all" | "selling" | "done" | "cancelled">("all");
+
+  const matchesFilter = (o: ArchivedOrder) => {
+    const sale = o.sale_status || "archived";
+    if (filter === "all") return true;
+    if (filter === "selling") return sale === "selling";
+    if (filter === "done") return sale === "sold";
+    if (filter === "cancelled") return sale === "no_cars" || sale === "cancelled";
+    return true;
+  };
+
+  const FILTERS: { id: typeof filter; label: string }[] = [
+    { id: "all", label: "Все" },
+    { id: "selling", label: "На продаже" },
+    { id: "done", label: "Завершён" },
+    { id: "cancelled", label: "Отменён" },
+  ];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,6 +131,26 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
         </button>
       </div>
 
+      <div className="flex flex-wrap gap-1.5">
+        {FILTERS.map((f) => {
+          const count = f.id === "all" ? orders.length : orders.filter((o) => {
+            const sale = o.sale_status || "archived";
+            if (f.id === "selling") return sale === "selling";
+            if (f.id === "done") return sale === "sold";
+            if (f.id === "cancelled") return sale === "no_cars" || sale === "cancelled";
+            return false;
+          }).length;
+          return (
+            <button key={f.id} onClick={() => setFilter(f.id)}
+              className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                filter === f.id ? "grad-btn shadow" : "border border-white/10 text-muted-foreground hover:text-white"
+              }`}>
+              {f.label} <span className="opacity-70">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
       {msg && (
         <div className={`text-[13px] rounded-lg px-3 py-2 ${msg.ok ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
           {msg.text}
@@ -122,13 +159,13 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
 
       {loading ? (
         <div className="text-sm text-muted-foreground py-8 text-center">Загрузка...</div>
-      ) : orders.length === 0 ? (
+      ) : orders.filter(matchesFilter).length === 0 ? (
         <div className="glass rounded-2xl border border-white/5 p-8 text-center text-sm text-muted-foreground">
-          В архиве пока нет заказов
+          Нет заказов в этой категории
         </div>
       ) : (
         <div className="space-y-2">
-          {orders.map((o) => (
+          {orders.filter(matchesFilter).map((o) => (
             <div key={o.id} className="glass rounded-xl border border-white/5 p-3 flex flex-col md:flex-row md:items-center gap-3">
               <div className="flex-1 min-w-0">
                 {(() => {
