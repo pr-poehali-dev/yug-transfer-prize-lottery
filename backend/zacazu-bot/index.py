@@ -10,6 +10,7 @@ from lib import (
     yk_create_payment, get_order, queue_list, render_queue_text, render_queue_block,
     client_contacts_text, contacts_block, order_brief, order_public_text, mention, deadline_dt,
     has_active_sub, sub_active_until, commission_for, extend_sub, SUB_PLANS,
+    edit_second_message,
 )
 
 BOT_USERNAME = os.environ.get('ZACAZU_BOT_USERNAME', 'zacazubot')
@@ -219,6 +220,7 @@ def award_order(cur, conn, order_id: int, winner: dict):
             'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
             'reply_markup': {'inline_keyboard': []},
         })
+        edit_second_message(dict(o), text)  # та же отметка во второй группе
 
 
 def update_queue_message(cur, conn, order_id: int):
@@ -231,11 +233,13 @@ def update_queue_message(cur, conn, order_id: int):
     text = base + render_queue_block(queue)
     btn = {'text': '✅ Принять заказ',
            'url': f'https://t.me/{BOT_USERNAME}?start=accept_{order_id}'}
+    kb = {'inline_keyboard': [[btn]]}
     tg_call('editMessageText', {
         'chat_id': o['tg_chat_id'], 'message_id': o['tg_message_id'],
         'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
-        'reply_markup': {'inline_keyboard': [[btn]]},
+        'reply_markup': kb,
     })
+    edit_second_message(dict(o), text, kb)  # та же очередь во второй группе
 
 
 def _notify(callback_id, user_id, text: str, alert: bool = False):

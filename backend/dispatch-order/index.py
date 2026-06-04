@@ -18,11 +18,12 @@ BOT_USERNAME = 'zacazubot'
 ACCEPT_BUTTON_TEXT = '✅ Принять заказ'
 
 
-def tg_send(text: str, order_id: int) -> dict:
+def tg_send(text: str, order_id: int, chat_id: str = None) -> dict:
     token = (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
              or os.environ.get('ZACAZU_BOT_TOKEN', '')
              or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
-    chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
+    if chat_id is None:
+        chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
     if not token:
         return {'ok': False, 'error': 'ZACAZU_BOT_TOKEN не задан'}
     if not chat_id:
@@ -360,12 +361,13 @@ def get_published_state(order_id: int):
     return (row[0], row[1])
 
 
-def tg_edit_order(message_id, text: str, order_id: int) -> dict:
+def tg_edit_order(message_id, text: str, order_id: int, chat_id: str = None) -> dict:
     """Редактирует уже опубликованное сообщение заказа (сохраняя кнопку «Принять заказ»)."""
     token = (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
              or os.environ.get('ZACAZU_BOT_TOKEN', '')
              or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
-    chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
+    if chat_id is None:
+        chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
     if not token or not chat_id or not message_id:
         return {'ok': False, 'error': 'no creds/message'}
     payload = json.dumps({
@@ -409,6 +411,47 @@ def set_order_message(order_id: int, message_id, text: str = ''):
     conn.commit()
     cur.close()
     conn.close()
+
+
+def set_order_message2(order_id: int, chat_id2: str, message_id2):
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE {SCHEMA}.dispatch_orders SET tg_chat_id2=%s, tg_message_id2=%s WHERE id=%s",
+        (chat_id2, message_id2, order_id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_second_msg(order_id: int):
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT tg_chat_id2, tg_message_id2 FROM {SCHEMA}.dispatch_orders WHERE id=%s", (order_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return (row[0], row[1]) if row else (None, None)
+
+
+def publish_to_second(order_id: int, text: str):
+    """Дублирует заказ во вторую группу (@UG_DRIVER) с той же кнопкой «Принять»."""
+    chat2 = os.environ.get('DISPATCH_CHAT_ID_2', '')
+    if not chat2:
+        return
+    res = tg_send(text, order_id, chat_id=chat2)
+    if res.get('ok'):
+        mid = (res.get('result') or {}).get('message_id')
+        if mid:
+            set_order_message2(order_id, chat2, mid)
+
+
+def edit_second(order_id: int, text: str):
+    """Обновляет сообщение заказа во второй группе, если оно есть."""
+    chat2, mid2 = get_second_msg(order_id)
+    if chat2 and mid2:
+        tg_edit_order(mid2, text, order_id, chat_id=str(chat2))
 
 
 def tg_edit(chat_id, message_id, text: str):
@@ -456,6 +499,10 @@ def cancel_order(order_id: int) -> dict:
         base = row[2] or '🚖 <b>ЗАКАЗ</b>'
         text = base + "\n\n━━━━━━━━━━━━━━━\n🚫 <b>Отменён диспетчером</b>"
         tg_edit(row[0], row[1], text)
+        # Та же отметка во второй группе.
+        chat2, mid2 = get_second_msg(order_id)
+        if chat2 and mid2:
+            tg_edit(chat2, mid2, text)
     return {'ok': True}
 
 
@@ -526,6 +573,7 @@ def handler(event: dict, context) -> dict:
             set_order_message(order_id, msg_id, text)
             full = text + render_queue_block(order_id)
             edited = tg_edit_order(msg_id, full, order_id)
+            edit_second(order_id, full)  # обновляем копию во 2-й группе
             if edited.get('ok'):
                 return {'statusCode': 200, 'headers': cors,
                         'body': json.dumps({'ok': True, 'order_id': order_id, 'edited': True})}
@@ -539,6 +587,7 @@ def handler(event: dict, context) -> dict:
         msg_id = (result.get('result') or {}).get('message_id')
         if msg_id:
             set_order_message(order_id, msg_id, text)
+        publish_to_second(order_id, text)  # дублируем заказ во 2-ю группу
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'order_id': order_id})}
     return {'statusCode': 200, 'headers': cors,
             'body': json.dumps({'ok': False, 'error': result.get('error', 'fail')})}

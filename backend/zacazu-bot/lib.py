@@ -185,10 +185,22 @@ def get_order(cur, order_id: int):
         f"SELECT id, from_city, to_city, from_address, to_address, order_date, order_time, "
         f"price, tariff, client_phone, people, luggage, comment, commission_rub, "
         f"tg_chat_id, tg_message_id, tg_message_text, sale_status, current_user_id, winner_user_id, "
-        f"trip_status, winner_chat_id, winner_message_id "
+        f"trip_status, winner_chat_id, winner_message_id, tg_chat_id2, tg_message_id2 "
         f"FROM {SCHEMA}.dispatch_orders WHERE id=%s", (order_id,)
     )
     return cur.fetchone()
+
+
+def edit_second_message(o: dict, text: str, keyboard: dict = None):
+    """Обновляет копию заказа во второй группе (@UG_DRIVER), если она есть."""
+    if not o.get('tg_chat_id2') or not o.get('tg_message_id2'):
+        return
+    payload = {
+        'chat_id': o['tg_chat_id2'], 'message_id': o['tg_message_id2'],
+        'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+        'reply_markup': keyboard if keyboard is not None else {'inline_keyboard': []},
+    }
+    tg_call('editMessageText', payload)
 
 
 def order_brief(o: dict) -> str:
