@@ -77,7 +77,14 @@ def esc(v) -> str:
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
+def fmt_pct(v) -> str:
+    """Возвращает процент без задвоения знака %."""
+    s = str(v or '').strip()
+    return s if s.endswith('%') else f"{s}%"
+
+
 def build_message(d: dict) -> str:
+    """Публичное сообщение в группу — БЕЗ точных адресов и контактов клиента."""
     lines = ['🚖 <b>НОВЫЙ ЗАКАЗ</b>', '']
 
     route = []
@@ -85,14 +92,6 @@ def build_message(d: dict) -> str:
         route.append(f"📍 <b>Откуда:</b> {esc(d['from_city'])}")
     if d.get('to_city'):
         route.append(f"🏁 <b>Куда:</b> {esc(d['to_city'])}")
-    if d.get('from_address'):
-        route.append(f"➡️ <b>Откуда забрать:</b> {esc(d['from_address'])}")
-    if d.get('to_address'):
-        route.append(f"⬅️ <b>Куда довести:</b> {esc(d['to_address'])}")
-    stops = d.get('stops') or []
-    for i, s in enumerate(stops, 1):
-        if s:
-            route.append(f"🔸 <b>Промежуточный {i}:</b> {esc(s)}")
     if route:
         lines += route + ['']
 
@@ -106,32 +105,12 @@ def build_message(d: dict) -> str:
     if d.get('tariff'):
         order.append(f"🎫 <b>Тариф:</b> {esc(d['tariff'])}")
     if d.get('commission'):
-        order.append(f"📊 <b>Комиссия:</b> {esc(d['commission'])}%")
+        order.append(f"📊 <b>Комиссия:</b> {esc(fmt_pct(d['commission']))}")
     if order:
-        lines += order + ['']
+        lines += order
 
-    client = []
-    if d.get('client_phone'):
-        client.append(f"📞 <b>Клиент:</b> {esc(d['client_phone'])}")
-    if d.get('people'):
-        client.append(f"👥 <b>Человек:</b> {esc(d['people'])}")
-    if d.get('luggage'):
-        client.append(f"🧳 <b>Багаж:</b> {esc(d['luggage'])}")
-    opts = []
-    if d.get('booster'):
-        opts.append('Бустер')
-    if d.get('child_seat'):
-        opts.append('Детское кресло')
-    if d.get('animal'):
-        opts.append('Животное')
-    if opts:
-        client.append(f"➕ <b>Опции:</b> {esc(', '.join(opts))}")
-    if client:
-        lines += client
-
-    if d.get('comment'):
-        lines += ['', f"💬 <b>Комментарий:</b> {esc(d['comment'])}"]
-
+    # Адреса и данные клиента в группу НЕ отправляем —
+    # они приходят победителю в личку после оплаты.
     return '\n'.join(lines)
 
 
