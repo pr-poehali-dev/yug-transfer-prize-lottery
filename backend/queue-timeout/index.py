@@ -3,6 +3,7 @@ import os
 import json
 import psycopg2
 import psycopg2.extras
+from datetime import datetime
 
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_call, yk_create_payment,
@@ -109,6 +110,7 @@ def handler(event: dict, context) -> dict:
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     moved = 0
+    reminded = 0
     try:
         cur.execute(
             f"SELECT id, current_user_id, tg_chat_id FROM {SCHEMA}.dispatch_orders "
@@ -135,8 +137,39 @@ def handler(event: dict, context) -> dict:
                         "Если заказ ещё открыт, можешь снова нажать «Принять заказ».")
             offer_to_first(cur, conn, order_id)
             moved += 1
+
+        reminded = send_sub_reminders(cur, conn)
     finally:
         cur.close()
         conn.close()
 
-    return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'moved': moved})}
+    return {'statusCode': 200, 'headers': cors,
+            'body': json.dumps({'ok': True, 'moved': moved, 'reminded': reminded})}
+
+
+def send_sub_reminders(cur, conn) -> int:
+    """Напоминание о продлении подписки за 3 дня до окончания (один раз за период)."""
+    cur.execute(
+        f"SELECT tg_user_id, active_until FROM {SCHEMA}.driver_subs "
+        f"WHERE active_until IS NOT NULL "
+        f"AND active_until > NOW() "
+        f"AND active_until <= NOW() + INTERVAL '3 days' "
+        f"AND (reminder_sent_for IS NULL OR reminder_sent_for <> active_until)"
+    )
+    rows = cur.fetchall()
+    sent = 0
+    for r in rows:
+        uid = r['tg_user_id']
+        until = r['active_until']
+        days = max(1, (until - datetime.utcnow()).days)
+        tg_send(uid,
+                f"⏳ <b>Подписка скоро закончится</b>\n"
+                f"Действует до <b>{until.strftime('%d.%m.%Y')}</b> (осталось ~{days} дн.)\n\n"
+                f"Продлите подписку кнопками внизу, чтобы и дальше платить комиссию <b>10%</b>.")
+        cur.execute(
+            f"UPDATE {SCHEMA}.driver_subs SET reminder_sent_for=%s WHERE tg_user_id=%s",
+            (until, uid),
+        )
+        conn.commit()
+        sent += 1
+    return sent
