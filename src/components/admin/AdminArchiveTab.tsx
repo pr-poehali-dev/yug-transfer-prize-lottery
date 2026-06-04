@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { DISPATCH_ORDER_URL } from "./adminTypes";
 import { ArchivedOrder, OrderForm, orderStatusBadge } from "./dispatch/dispatchTypes";
+import { useExpirySweep } from "./useExpirySweep";
 
 interface ArchiveTabProps {
   token: string;
@@ -14,6 +15,9 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "selling" | "done" | "cancelled">("all");
+
+  // Пока открыта вкладка — проверяем просрочки оплаты и передаём заказ следующему.
+  useExpirySweep(true);
 
   const matchesFilter = (o: ArchivedOrder) => {
     const sale = o.sale_status || "archived";

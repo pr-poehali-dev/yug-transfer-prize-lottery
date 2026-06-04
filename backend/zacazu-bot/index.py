@@ -22,10 +22,12 @@ def db():
 def sweep_expired(cur, conn):
     """Проверяет просроченные оплаты (>5 мин) и передаёт заказ следующему.
        Вызывается при каждом обращении к боту — заменяет внешний cron."""
+    now_utc = datetime.utcnow()
     cur.execute(
         f"SELECT id, current_user_id FROM {SCHEMA}.dispatch_orders "
         f"WHERE sale_status='selling' AND current_deadline IS NOT NULL "
-        f"AND current_deadline < (NOW() AT TIME ZONE 'utc')"
+        f"AND current_deadline < %s",
+        (now_utc,),
     )
     expired = cur.fetchall()
     for o in expired:
@@ -589,6 +591,22 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors, 'body': ''}
 
     qs0 = event.get('queryStringParameters') or {}
+    # Авто-проверка просрочек из админки: ?sweep=1 — передаёт заказы следующим,
+    # возвращает, есть ли ещё заказы на продаже (чтобы фронт знал, продолжать ли).
+    if qs0.get('sweep'):
+        conn = db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            sweep_expired(cur, conn)
+            cur.execute(
+                f"SELECT COUNT(*) AS c FROM {SCHEMA}.dispatch_orders WHERE sale_status='selling'"
+            )
+            active = int(cur.fetchone()['c'])
+        finally:
+            cur.close()
+            conn.close()
+        return {'statusCode': 200, 'headers': cors,
+                'body': json.dumps({'ok': True, 'active_orders': active})}
     # Диагностика webhook: GET ?info=1
     if qs0.get('info'):
         res = tg_call('getWebhookInfo', {})

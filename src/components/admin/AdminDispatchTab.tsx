@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { DISPATCH_ORDER_URL } from "./adminTypes";
 import { OrderForm, EMPTY_ORDER, TARIFFS, COMMISSIONS } from "./dispatch/dispatchTypes";
+import { useExpirySweep } from "./useExpirySweep";
 
 const fieldCls =
   "w-full px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[13px] text-white placeholder:text-muted-foreground/60 focus:outline-none focus:border-purple-400/50 transition-colors";
@@ -19,6 +20,9 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Пока открыта вкладка — проверяем просрочки оплаты и передаём заказ следующему.
+  useExpirySweep(true);
 
   const set = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));

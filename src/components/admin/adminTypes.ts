@@ -16,6 +16,7 @@ export const INVITE_TARGETS_URL = "https://functions.poehali.dev/33399df3-3e82-4
 export const INVITE_RUNNER_URL = "https://functions.poehali.dev/970b102b-bcf2-4c27-a9df-31778fbaca04";
 export const DM_SENDER_URL = "https://functions.poehali.dev/ef67dd35-45cd-4367-86ea-09a002a76837";
 export const DISPATCH_ORDER_URL = "https://functions.poehali.dev/645f8ead-4009-4674-b51c-7394bc7dad47";
+export const ZACAZU_BOT_URL = "https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98";
 
 export interface InviteTarget {
   id: number;
