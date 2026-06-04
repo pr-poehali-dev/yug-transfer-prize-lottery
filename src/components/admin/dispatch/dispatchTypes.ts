@@ -42,7 +42,7 @@ export function orderStatusBadge(o: { sale_status?: string; trip_status?: string
   return { label: "В архиве", cls: "bg-white/10 text-muted-foreground" };
 }
 
-export const TARIFFS = ["Срочный", "Эконом", "Комфорт", "Бизнес", "Минивэн"];
+export const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Бизнес", "Минивэн"];
 export const COMMISSIONS = ["10%", "15%", "20%", "25%"];
 
 export const EMPTY_ORDER: OrderForm = {
