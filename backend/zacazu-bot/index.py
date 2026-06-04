@@ -431,7 +431,8 @@ def handle_sub_status(cur, chat_id, uid):
         tg_send(chat_id,
                 f"✅ <b>Подписка активна</b>\n"
                 f"Комиссия по заказам: <b>10%</b>\n"
-                f"Действует до: <b>{until.strftime('%d.%m.%Y')}</b> (осталось ~{days} дн.)")
+                f"Действует до: <b>{until.strftime('%d.%m.%Y')}</b> (осталось ~{days} дн.)",
+                sub_reply_keyboard())
     else:
         tg_send(chat_id,
                 "❌ <b>Подписка не активна</b>\n"
@@ -535,10 +536,13 @@ def handle_telegram(update: dict):
                         user = msg.get('from', {})
                         handle_accept(cur, conn, order_id, user, None)
                         return
-                # Обычный /start — приветствие шлём только при ПЕРВОМ заходе.
+                # Обычный /start: при первом заходе — полное приветствие,
+                # при повторном — тихо возвращаем нижнюю клавиатуру (чтобы кнопки не пропадали).
                 u = msg.get('from', {})
                 if not start_already_seen(cur, conn, u.get('id'), u):
                     send_start_menu(chat['id'])
+                else:
+                    tg_send(chat['id'], "Кнопки подписки — внизу 👇", sub_reply_keyboard())
             elif text.startswith('/status') or text.startswith('/подписка') or text.startswith('/sub'):
                 uid = msg.get('from', {}).get('id')
                 handle_sub_status(cur, chat['id'], uid)
