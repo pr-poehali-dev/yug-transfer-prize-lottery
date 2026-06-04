@@ -14,10 +14,10 @@ def db():
 
 
 BOT_USERNAME = 'zacazubot'
-BUY_BUTTON_TEXT = '🛒 Купить заказ'
+ACCEPT_BUTTON_TEXT = '✅ Принять заказ'
 
 
-def tg_send(text: str) -> dict:
+def tg_send(text: str, order_id: int) -> dict:
     token = os.environ.get('ZACAZU_BOT_TOKEN', '') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
     chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
     if not token:
@@ -32,7 +32,7 @@ def tg_send(text: str) -> dict:
         'disable_web_page_preview': True,
         'reply_markup': {
             'inline_keyboard': [[
-                {'text': BUY_BUTTON_TEXT, 'url': f'https://t.me/{BOT_USERNAME}'}
+                {'text': ACCEPT_BUTTON_TEXT, 'callback_data': f'accept:{order_id}'}
             ]]
         },
     }).encode()
@@ -48,6 +48,21 @@ def tg_send(text: str) -> dict:
             return {'ok': False, 'error': f"HTTP {e.code}"}
     except Exception as e:
         return {'ok': False, 'error': f"{type(e).__name__}: {str(e)[:200]}"}
+
+
+def parse_num(v) -> float:
+    s = str(v or '').replace(',', '.')
+    digits = ''.join(ch for ch in s if (ch.isdigit() or ch == '.'))
+    try:
+        return float(digits) if digits else 0.0
+    except Exception:
+        return 0.0
+
+
+def calc_commission_rub(price, commission_pct) -> float:
+    price_num = parse_num(price)
+    pct = parse_num(commission_pct)
+    return round(price_num * pct / 100.0, 2)
 
 
 def esc(v) -> str:
@@ -190,6 +205,67 @@ def archive_delete(order_id: int) -> dict:
     return {'ok': True}
 
 
+def prepare_order_for_sale(d: dict) -> int:
+    """Сохраняет/обновляет заказ как «продаётся», возвращает его id."""
+    commission_rub = calc_commission_rub(d.get('price'), d.get('commission'))
+    chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
+    conn = db()
+    cur = conn.cursor()
+    if d.get('id'):
+        oid = int(d['id'])
+        cur.execute(
+            f"UPDATE {SCHEMA}.dispatch_orders SET "
+            f"from_city=%s, to_city=%s, from_address=%s, to_address=%s, stops=%s, order_date=%s, order_time=%s, "
+            f"price=%s, tariff=%s, commission=%s, client_phone=%s, people=%s, luggage=%s, "
+            f"booster=%s, child_seat=%s, animal=%s, comment=%s, commission_rub=%s, "
+            f"sale_status='selling', tg_chat_id=%s, current_user_id=NULL, current_deadline=NULL, winner_user_id=NULL "
+            f"WHERE id=%s",
+            (
+                d.get('from_city', ''), d.get('to_city', ''), d.get('from_address', ''), d.get('to_address', ''),
+                json.dumps([s for s in (d.get('stops') or []) if s]), d.get('date', ''), d.get('time', ''),
+                str(d.get('price', '')), d.get('tariff', ''), d.get('commission', ''),
+                d.get('client_phone', ''), str(d.get('people', '')), str(d.get('luggage', '')),
+                bool(d.get('booster')), bool(d.get('child_seat')), bool(d.get('animal')), d.get('comment', ''),
+                commission_rub, chat_id, oid,
+            ),
+        )
+    else:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.dispatch_orders "
+            f"(from_city, to_city, from_address, to_address, stops, order_date, order_time, "
+            f"price, tariff, commission, client_phone, people, luggage, booster, child_seat, animal, comment, "
+            f"commission_rub, sale_status, tg_chat_id) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'selling',%s) RETURNING id",
+            (
+                d.get('from_city', ''), d.get('to_city', ''), d.get('from_address', ''), d.get('to_address', ''),
+                json.dumps([s for s in (d.get('stops') or []) if s]), d.get('date', ''), d.get('time', ''),
+                str(d.get('price', '')), d.get('tariff', ''), d.get('commission', ''),
+                d.get('client_phone', ''), str(d.get('people', '')), str(d.get('luggage', '')),
+                bool(d.get('booster')), bool(d.get('child_seat')), bool(d.get('animal')), d.get('comment', ''),
+                commission_rub, chat_id,
+            ),
+        )
+        oid = cur.fetchone()[0]
+    # Очищаем старую очередь при повторной публикации
+    cur.execute(f"DELETE FROM {SCHEMA}.order_queue WHERE order_id=%s", (oid,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return oid
+
+
+def set_order_message(order_id: int, message_id):
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE {SCHEMA}.dispatch_orders SET tg_message_id=%s WHERE id=%s",
+        (message_id, order_id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def handler(event: dict, context) -> dict:
     """Диспетчерская: action=send (в Telegram), archive_save, archive_list, archive_delete."""
     cors = {
@@ -229,15 +305,19 @@ def handler(event: dict, context) -> dict:
     if action == 'archive_save':
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(archive_save(data))}
 
-    # action == 'send' — отправка в Telegram, при необходимости удалить из архива.
+    # action == 'send' — публикация заказа на продажу с кнопкой «Принять заказ».
+    commission_rub = calc_commission_rub(data.get('price'), data.get('commission'))
     text = build_message(data)
-    result = tg_send(text)
+    if commission_rub > 0:
+        text += f"\n\n💳 <b>Комиссия за заказ:</b> {commission_rub:.0f} ₽"
+    text += "\n\n👉 Нажми «Принять заказ» и оплати комиссию в течение 5 минут."
+
+    order_id = prepare_order_for_sale(data)
+    result = tg_send(text, order_id)
     if result.get('ok'):
-        if data.get('id'):
-            try:
-                archive_delete(int(data['id']))
-            except Exception:
-                pass
-        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True})}
+        msg_id = (result.get('result') or {}).get('message_id')
+        if msg_id:
+            set_order_message(order_id, msg_id)
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'order_id': order_id})}
     return {'statusCode': 200, 'headers': cors,
             'body': json.dumps({'ok': False, 'error': result.get('error', 'fail')})}

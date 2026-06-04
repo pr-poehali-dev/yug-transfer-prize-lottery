@@ -1,4 +1,6 @@
 {
+  "zacazu-bot": "https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98",
+  "queue-timeout": "https://functions.poehali.dev/50a40cbf-ab82-41f6-b352-bed85050df19",
   "dispatch-order": "https://functions.poehali.dev/645f8ead-4009-4674-b51c-7394bc7dad47",
   "dm-sender": "https://functions.poehali.dev/ef67dd35-45cd-4367-86ea-09a002a76837",
   "invite-runner": "https://functions.poehali.dev/970b102b-bcf2-4c27-a9df-31778fbaca04",

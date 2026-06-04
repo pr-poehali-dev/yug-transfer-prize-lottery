@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "name": "Empty update ok",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 200
+    },
+    {
+      "name": "Non-post ok",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "Cron auth required",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 403
+    }
+  ]
+}
