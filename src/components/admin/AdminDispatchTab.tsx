@@ -56,7 +56,7 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
       });
       const j = await r.json();
       if (j.ok) {
-        setMsg({ ok: true, text: "Заказ отправлен на продажу в Telegram!" });
+        setMsg({ ok: true, text: j.edited ? "Заказ обновлён в Telegram!" : "Заказ отправлен на продажу в Telegram!" });
         setForm({ ...EMPTY_ORDER });
         onSent?.();
       } else {

@@ -121,6 +121,41 @@ def has_content(d: dict) -> bool:
     return bool(d.get('from_city') or d.get('to_city') or d.get('client_phone'))
 
 
+def mention(uid, username, first_name) -> str:
+    if username:
+        return f'@{esc(username)}'
+    name = esc(first_name or 'Водитель')
+    return f'<a href="tg://user?id={uid}">{name}</a>'
+
+
+def render_queue_block(order_id: int) -> str:
+    """Блок «Откликнувшиеся водители» — для сохранения списка при редактировании."""
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        f"SELECT tg_user_id, username, first_name, position, status FROM {SCHEMA}.order_queue "
+        f"WHERE order_id=%s ORDER BY position ASC", (order_id,)
+    )
+    queue = cur.fetchall()
+    cur.close()
+    conn.close()
+    if not queue:
+        return ''
+    lines = ['', '━━━━━━━━━━━━━━━', '👥 <b>Откликнувшиеся водители:</b>']
+    for q in queue:
+        m = mention(q['tg_user_id'], q['username'], q['first_name'])
+        if q['status'] == 'paying':
+            tail = '— оплачивает 💳'
+        elif q['status'] == 'paid':
+            tail = '— оплатил ✅'
+        elif q['status'] == 'expired':
+            tail = '— не успел ⌛'
+        else:
+            tail = '— на рассмотрении'
+        lines.append(f"{q['position']}. {m} {tail}")
+    return '\n'.join(lines)
+
+
 def row_to_order(r: dict) -> dict:
     stops = r.get('stops')
     if isinstance(stops, str):
@@ -196,7 +231,7 @@ def archive_delete(order_id: int) -> dict:
     return {'ok': True}
 
 
-def prepare_order_for_sale(d: dict) -> int:
+def prepare_order_for_sale(d: dict, clear_queue: bool = True) -> int:
     """Сохраняет/обновляет заказ как «продаётся», возвращает его id."""
     commission_rub = calc_commission_rub(d.get('price'), d.get('commission'))
     chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
@@ -204,12 +239,16 @@ def prepare_order_for_sale(d: dict) -> int:
     cur = conn.cursor()
     if d.get('id'):
         oid = int(d['id'])
+        # При редактировании уже опубликованного заказа (clear_queue=False)
+        # НЕ сбрасываем очередь/победителя — только обновляем данные заказа.
+        reset_sql = ("", " sale_status='selling', current_user_id=NULL, "
+                     "current_deadline=NULL, winner_user_id=NULL,")[clear_queue]
         cur.execute(
             f"UPDATE {SCHEMA}.dispatch_orders SET "
             f"from_city=%s, to_city=%s, from_address=%s, to_address=%s, stops=%s, order_date=%s, order_time=%s, "
             f"price=%s, tariff=%s, commission=%s, client_phone=%s, people=%s, luggage=%s, "
-            f"booster=%s, child_seat=%s, animal=%s, comment=%s, commission_rub=%s, "
-            f"sale_status='selling', tg_chat_id=%s, current_user_id=NULL, current_deadline=NULL, winner_user_id=NULL "
+            f"booster=%s, child_seat=%s, animal=%s, comment=%s, commission_rub=%s,{reset_sql} "
+            f"tg_chat_id=%s "
             f"WHERE id=%s",
             (
                 d.get('from_city', ''), d.get('to_city', ''), d.get('from_address', ''), d.get('to_address', ''),
@@ -237,12 +276,64 @@ def prepare_order_for_sale(d: dict) -> int:
             ),
         )
         oid = cur.fetchone()[0]
-    # Очищаем старую очередь при повторной публикации
-    cur.execute(f"DELETE FROM {SCHEMA}.order_queue WHERE order_id=%s", (oid,))
+    # Очищаем старую очередь только при свежей публикации (не при редактировании).
+    if clear_queue:
+        cur.execute(f"DELETE FROM {SCHEMA}.order_queue WHERE order_id=%s", (oid,))
     conn.commit()
     cur.close()
     conn.close()
     return oid
+
+
+def get_published_state(order_id: int):
+    """Возвращает (tg_message_id, sale_status) опубликованного заказа или (None, None)."""
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT tg_message_id, sale_status FROM {SCHEMA}.dispatch_orders WHERE id=%s",
+        (order_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return (None, None)
+    return (row[0], row[1])
+
+
+def tg_edit_order(message_id, text: str, order_id: int) -> dict:
+    """Редактирует уже опубликованное сообщение заказа (сохраняя кнопку «Принять заказ»)."""
+    token = (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
+             or os.environ.get('ZACAZU_BOT_TOKEN', '')
+             or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
+    chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
+    if not token or not chat_id or not message_id:
+        return {'ok': False, 'error': 'no creds/message'}
+    payload = json.dumps({
+        'chat_id': chat_id, 'message_id': message_id, 'text': text,
+        'parse_mode': 'HTML', 'disable_web_page_preview': True,
+        'reply_markup': {'inline_keyboard': [[
+            {'text': ACCEPT_BUTTON_TEXT,
+             'url': f'https://t.me/{BOT_USERNAME}?start=accept_{order_id}'}
+        ]]},
+    }).encode()
+    url = f"https://api.telegram.org/bot{token}/editMessageText"
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=payload,
+                                         headers={'Content-Type': 'application/json'}, method='POST')
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.loads(e.read())
+                return {'ok': False, 'error': f"HTTP {e.code}: {body.get('description', '')[:200]}"}
+            except Exception:
+                return {'ok': False, 'error': f"HTTP {e.code}"}
+        except Exception:
+            if attempt < 2:
+                time.sleep(2)
+    return {'ok': False, 'error': 'fail'}
 
 
 def set_order_message(order_id: int, message_id, text: str = ''):
@@ -356,6 +447,20 @@ def handler(event: dict, context) -> dict:
     if commission_rub > 0:
         text += f"\n\n💳 <b>Комиссия за заказ:</b> {commission_rub:.0f} ₽"
     text += "\n\n👉 Нажми «Принять заказ» и оплати комиссию в течение 5 минут."
+
+    # Уже опубликован и ещё продаётся → РЕДАКТИРУЕМ существующее сообщение в группе.
+    if data.get('id'):
+        msg_id, sale_status = get_published_state(int(data['id']))
+        if msg_id and sale_status == 'selling':
+            order_id = prepare_order_for_sale(data, clear_queue=False)
+            set_order_message(order_id, msg_id, text)
+            full = text + render_queue_block(order_id)
+            edited = tg_edit_order(msg_id, full, order_id)
+            if edited.get('ok'):
+                return {'statusCode': 200, 'headers': cors,
+                        'body': json.dumps({'ok': True, 'order_id': order_id, 'edited': True})}
+            return {'statusCode': 200, 'headers': cors,
+                    'body': json.dumps({'ok': False, 'error': edited.get('error', 'fail')})}
 
     order_id = prepare_order_for_sale(data)
     result = tg_send(text, order_id)
