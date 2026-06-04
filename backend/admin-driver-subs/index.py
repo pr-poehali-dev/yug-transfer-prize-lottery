@@ -1,14 +1,16 @@
 """
-Business: Возвращает админу список подписок водителей со статусами и суммой выручки.
+Business: Возвращает админу список подписок водителей со статусами и сроком действия.
 Args: event с httpMethod, headers (X-Admin-Token)
-Returns: {ok, subs: [...], total_active, total_revenue}
+Returns: {ok, subs: [...], total_active}
 """
 import json
 import os
 import psycopg2
+import psycopg2.extras
 
 DB_URL = os.environ.get('DATABASE_URL', '')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
+SCHEMA = os.environ.get('MAIN_DB_SCHEMA') or 't_p67171637_yug_transfer_prize_l'
 
 
 def handler(event: dict, context) -> dict:
@@ -28,36 +30,31 @@ def handler(event: dict, context) -> dict:
 
     conn = psycopg2.connect(DB_URL)
     try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT id, telegram_id, username, first_name, plan, amount_rub,
-                   started_at, expires_at, status
-            FROM driver_subscriptions
-            ORDER BY expires_at DESC
-            LIMIT 500
-        """)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(
+            f"SELECT tg_user_id, username, first_name, active_until, updated_at, "
+            f"(active_until IS NOT NULL AND active_until > NOW()) AS is_active "
+            f"FROM {SCHEMA}.driver_subs "
+            f"ORDER BY (active_until IS NOT NULL AND active_until > NOW()) DESC, active_until DESC NULLS LAST "
+            f"LIMIT 500"
+        )
         subs = []
         active = 0
-        revenue = 0
-        for row in cur.fetchall():
+        for r in cur.fetchall():
             sub = {
-                'id': row[0],
-                'telegram_id': row[1],
-                'username': row[2] or '',
-                'first_name': row[3] or '',
-                'plan': row[4],
-                'amount_rub': row[5],
-                'started_at': row[6].isoformat() if row[6] else None,
-                'expires_at': row[7].isoformat() if row[7] else None,
-                'status': row[8],
+                'tg_user_id': r['tg_user_id'],
+                'username': r['username'] or '',
+                'first_name': r['first_name'] or '',
+                'active_until': r['active_until'].isoformat() if r['active_until'] else None,
+                'updated_at': r['updated_at'].isoformat() if r['updated_at'] else None,
+                'is_active': bool(r['is_active']),
             }
             subs.append(sub)
-            if sub['status'] == 'active':
+            if sub['is_active']:
                 active += 1
-            revenue += sub['amount_rub']
 
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
-            'ok': True, 'subs': subs, 'total_active': active, 'total_revenue': revenue,
+            'ok': True, 'subs': subs, 'total_active': active,
         })}
     finally:
         conn.close()

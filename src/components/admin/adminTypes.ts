@@ -66,15 +66,12 @@ export interface BotStory {
 }
 
 export interface DriverSub {
-  id: number;
-  telegram_id: number;
+  tg_user_id: number;
   username: string;
   first_name: string;
-  plan: string;
-  amount_rub: number;
-  started_at: string | null;
-  expires_at: string | null;
-  status: string;
+  active_until: string | null;
+  updated_at: string | null;
+  is_active: boolean;
 }
 
 export interface Post {

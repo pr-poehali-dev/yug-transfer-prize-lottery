@@ -9,6 +9,7 @@ import { AdminInvitesTab } from "./AdminInvitesTab";
 import { AdminDmTab } from "./AdminDmTab";
 import { AdminDispatchTab } from "./AdminDispatchTab";
 import { AdminArchiveTab } from "./AdminArchiveTab";
+import { AdminDriversTab } from "./AdminDriversTab";
 import type { OrderForm } from "./dispatch/dispatchTypes";
 import { InviteProgressProvider } from "./InviteProgressContext";
 import { InviteProgressBanner } from "./InviteProgressBanner";
@@ -25,6 +26,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     { id: "dm", label: "Рассылка в личку", icon: "Mail" },
     { id: "dispatch", label: "Диспетчерская", icon: "Headset" },
     { id: "archive", label: "Архив", icon: "Archive" },
+    { id: "drivers", label: "Подписки", icon: "BadgeCheck" },
   ];
 
   const handleEditFromArchive = (order: OrderForm, id: number) => {
@@ -106,6 +108,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
             />
           )}
           {tab === "archive" && <AdminArchiveTab token={token} onEdit={handleEditFromArchive} />}
+          {tab === "drivers" && <AdminDriversTab token={token} />}
         </main>
       </div>
     </div>
