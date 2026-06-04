@@ -55,13 +55,14 @@ def offer_to_first(cur, conn, order_id: int):
             (nxt['tg_user_id'], deadline_dt(), order_id),
         )
         conn.commit()
-        tg_send(
+        res = tg_send(
             nxt['tg_user_id'],
             order_public_text(dict(o)) + '\n\n'
             f"🧪 Тестовый режим (ЮKassa ещё не подключена). Комиссия была бы <b>{amount:.0f} ₽</b>.\n"
             f"Нажми кнопку ниже, чтобы сымитировать оплату ({DEADLINE_MINUTES} мин).",
             {'inline_keyboard': [[{'text': f'✅ Я оплатил (тест)', 'callback_data': f'paid:{order_id}'}]]},
         )
+        _save_pay_msg(cur, conn, nxt['id'], nxt['tg_user_id'], res)
         update_queue_message(cur, conn, order_id)
         return
 
@@ -83,19 +84,31 @@ def offer_to_first(cur, conn, order_id: int):
     )
     conn.commit()
 
-    send_payment_message(nxt['tg_user_id'], dict(o), amount, pay['url'])
+    res = send_payment_message(nxt['tg_user_id'], dict(o), amount, pay['url'])
+    _save_pay_msg(cur, conn, nxt['id'], nxt['tg_user_id'], res)
     update_queue_message(cur, conn, order_id)
 
 
-def send_payment_message(user_id, order: dict, amount: float, pay_url: str):
+def send_payment_message(user_id, order: dict, amount: float, pay_url: str) -> dict:
     """Отправляет водителю инфо о заказе и кнопку оплаты комиссии."""
-    tg_send(
+    return tg_send(
         user_id,
         order_public_text(order) + '\n\n'
         f"💳 Оплати комиссию <b>{amount:.0f} ₽</b> в течение {DEADLINE_MINUTES} минут.\n"
         f"После оплаты пришлю контакты клиента.",
         {'inline_keyboard': [[{'text': f'💳 Оплатить {amount:.0f} ₽', 'url': pay_url}]]},
     )
+
+
+def _save_pay_msg(cur, conn, queue_id: int, chat_id, res: dict):
+    """Запоминает message_id сообщения с кнопкой оплаты, чтобы потом его отредактировать."""
+    msg_id = (res.get('result') or {}).get('message_id') if isinstance(res, dict) else None
+    if msg_id:
+        cur.execute(
+            f"UPDATE {SCHEMA}.order_queue SET pay_msg_id=%s, pay_chat_id=%s WHERE id=%s",
+            (msg_id, chat_id, queue_id),
+        )
+        conn.commit()
 
 
 def award_order(cur, conn, order_id: int, winner: dict):
@@ -113,16 +126,35 @@ def award_order(cur, conn, order_id: int, winner: dict):
     conn.commit()
 
     # Контакты победителю + первая кнопка статуса «Клиент в машине».
-    res = tg_send(
-        winner['tg_user_id'],
-        client_contacts_text(dict(o)),
-        {'inline_keyboard': [[{'text': '🚗 Клиент в машине', 'callback_data': f'trip_pickup:{order_id}'}]]},
-    )
-    win_msg_id = (res.get('result') or {}).get('message_id')
+    contacts = client_contacts_text(dict(o))
+    keyboard = {'inline_keyboard': [[{'text': '🚗 Клиент в машине', 'callback_data': f'trip_pickup:{order_id}'}]]}
+
+    # Если у победителя есть сообщение с кнопкой «Оплатить» — редактируем ЕГО,
+    # чтобы текст и кнопки заменились в одном сообщении (без нового сообщения).
+    pay_chat = winner.get('pay_chat_id') or winner['tg_user_id']
+    pay_msg = winner.get('pay_msg_id')
+    win_msg_id = None
+    win_chat = None
+    if pay_msg:
+        edited = tg_call('editMessageText', {
+            'chat_id': pay_chat, 'message_id': pay_msg,
+            'text': contacts, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+            'reply_markup': keyboard,
+        })
+        if edited.get('ok'):
+            win_msg_id = pay_msg
+            win_chat = pay_chat
+
+    # Если отредактировать не удалось (нет id / сообщение слишком старое) — шлём новое.
+    if not win_msg_id:
+        res = tg_send(winner['tg_user_id'], contacts, keyboard)
+        win_msg_id = (res.get('result') or {}).get('message_id')
+        win_chat = winner['tg_user_id']
+
     cur.execute(
         f"UPDATE {SCHEMA}.dispatch_orders SET trip_status='waiting_pickup', "
         f"winner_chat_id=%s, winner_message_id=%s WHERE id=%s",
-        (winner['tg_user_id'], win_msg_id, order_id),
+        (win_chat, win_msg_id, order_id),
     )
     conn.commit()
 
