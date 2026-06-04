@@ -72,8 +72,8 @@ def offer_to_first(cur, conn, order_id: int) -> bool:
         return False
 
     cur.execute(
-        f"UPDATE {SCHEMA}.order_queue SET status='paying', payment_id=%s WHERE id=%s",
-        (pay['payment_id'], nxt['id']),
+        f"UPDATE {SCHEMA}.order_queue SET status='paying', payment_id=%s, payment_url=%s WHERE id=%s",
+        (pay['payment_id'], pay['url'], nxt['id']),
     )
     cur.execute(
         f"UPDATE {SCHEMA}.dispatch_orders SET current_user_id=%s, current_deadline=%s WHERE id=%s",

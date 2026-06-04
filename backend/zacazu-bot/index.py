@@ -75,8 +75,8 @@ def offer_to_first(cur, conn, order_id: int):
         return
 
     cur.execute(
-        f"UPDATE {SCHEMA}.order_queue SET status='paying', payment_id=%s WHERE id=%s",
-        (pay['payment_id'], nxt['id']),
+        f"UPDATE {SCHEMA}.order_queue SET status='paying', payment_id=%s, payment_url=%s WHERE id=%s",
+        (pay['payment_id'], pay['url'], nxt['id']),
     )
     cur.execute(
         f"UPDATE {SCHEMA}.dispatch_orders SET current_user_id=%s, current_deadline=%s WHERE id=%s",
@@ -84,16 +84,21 @@ def offer_to_first(cur, conn, order_id: int):
     )
     conn.commit()
 
+    send_payment_message(nxt['tg_user_id'], dict(o), amount, pay['url'])
+    update_queue_message(cur, conn, order_id)
+
+
+def send_payment_message(user_id, order: dict, amount: float, pay_url: str):
+    """Отправляет водителю инфо о заказе и кнопку оплаты комиссии."""
     tg_send(
-        nxt['tg_user_id'],
-        order_public_text(dict(o)) + '\n\n'
+        user_id,
+        order_public_text(order) + '\n\n'
         f"✅ <b>Ты первый в очереди!</b>\n"
         f"💳 Оплати комиссию <b>{amount:.0f} ₽</b> в течение {DEADLINE_MINUTES} минут, "
         f"иначе заказ перейдёт следующему.\n"
         f"После оплаты пришлю контакты клиента.",
-        {'inline_keyboard': [[{'text': f'💳 Оплатить {amount:.0f} ₽', 'url': pay['url']}]]},
+        {'inline_keyboard': [[{'text': f'💳 Оплатить {amount:.0f} ₽', 'url': pay_url}]]},
     )
-    update_queue_message(cur, conn, order_id)
 
 
 def award_order(cur, conn, order_id: int, winner: dict):
@@ -178,8 +183,17 @@ def handle_accept(cur, conn, order_id: int, user: dict, callback_id: str):
     existing = cur.fetchone()
     if existing:
         _notify(callback_id, uid, 'Ты уже в очереди на этот заказ', False)
-        # Если он первый и оплата уже назначена — повторно показать оплату.
-        offer_to_first(cur, conn, order_id)
+        # Если этот водитель сейчас оплачивает — повторно отправляем ему кнопку оплаты.
+        cur.execute(
+            f"SELECT payment_url FROM {SCHEMA}.order_queue "
+            f"WHERE order_id=%s AND tg_user_id=%s AND status='paying'", (order_id, uid),
+        )
+        row = cur.fetchone()
+        if row and row.get('payment_url'):
+            amount = float(o['commission_rub'] or 0)
+            send_payment_message(uid, dict(o), amount, row['payment_url'])
+        else:
+            offer_to_first(cur, conn, order_id)
         return
 
     cur.execute(
