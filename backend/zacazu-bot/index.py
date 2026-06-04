@@ -330,14 +330,23 @@ def handle_trip_status(cur, conn, order_id: int, user: dict, callback_id: str, s
         })
 
 
-def sub_menu_keyboard():
-    return {'inline_keyboard': [
-        [{'text': '💳 Подписка', 'callback_data': 'sub_menu'},
-         {'text': '📊 Мой статус', 'callback_data': 'sub_status'}],
-        [{'text': '1 месяц 1 500 ₽', 'callback_data': 'sub_1'}],
-        [{'text': '6 мес 6 000 ₽', 'callback_data': 'sub_6'}],
-        [{'text': '12 мес 10 000 ₽', 'callback_data': 'sub_12'}],
-    ]}
+# Нижняя клавиатура (reply keyboard) — не мешает приёму заказов, всегда под рукой.
+SUB_BTN_SUB = '💳 Подписка'
+SUB_BTN_STATUS = '📊 Мой статус'
+SUB_BTN_1 = '1 месяц 1 500 ₽'
+SUB_BTN_6 = '6 мес 6 000 ₽'
+SUB_BTN_12 = '12 мес 10 000 ₽'
+
+
+def sub_reply_keyboard():
+    return {
+        'keyboard': [
+            [{'text': SUB_BTN_SUB}, {'text': SUB_BTN_STATUS}],
+            [{'text': SUB_BTN_1}, {'text': SUB_BTN_6}, {'text': SUB_BTN_12}],
+        ],
+        'resize_keyboard': True,
+        'is_persistent': True,
+    }
 
 
 def send_start_menu(chat_id):
@@ -345,8 +354,8 @@ def send_start_menu(chat_id):
         chat_id,
         "👋 <b>Добро пожаловать!</b>\n\n"
         "С подпиской ваша комиссия снижается до <b>10%</b> по любому заказу.\n"
-        "Выберите тариф или проверьте статус:",
-        sub_menu_keyboard(),
+        "Кнопки подписки — внизу экрана.",
+        sub_reply_keyboard(),
     )
 
 
@@ -362,8 +371,8 @@ def handle_sub_status(cur, chat_id, uid):
         tg_send(chat_id,
                 "❌ <b>Подписка не активна</b>\n"
                 "Без подписки комиссия — как указано в заказе.\n"
-                "Оформите подписку, чтобы платить всего 10%:",
-                sub_menu_keyboard())
+                "Оформите подписку кнопками внизу, чтобы платить всего 10%.",
+                sub_reply_keyboard())
 
 
 def handle_sub_buy(cur, chat_id, user, plan_key: str):
@@ -461,6 +470,17 @@ def handle_telegram(update: dict):
             elif text.startswith('/status') or text.startswith('/подписка') or text.startswith('/sub'):
                 uid = msg.get('from', {}).get('id')
                 handle_sub_status(cur, chat['id'], uid)
+            # Нажатия кнопок нижней клавиатуры (приходят как текст) — только в личке.
+            elif chat_type == 'private' and text == SUB_BTN_SUB:
+                send_start_menu(chat['id'])
+            elif chat_type == 'private' and text == SUB_BTN_STATUS:
+                handle_sub_status(cur, chat['id'], msg.get('from', {}).get('id'))
+            elif chat_type == 'private' and text == SUB_BTN_1:
+                handle_sub_buy(cur, chat['id'], msg.get('from', {}), 'sub_1')
+            elif chat_type == 'private' and text == SUB_BTN_6:
+                handle_sub_buy(cur, chat['id'], msg.get('from', {}), 'sub_6')
+            elif chat_type == 'private' and text == SUB_BTN_12:
+                handle_sub_buy(cur, chat['id'], msg.get('from', {}), 'sub_12')
     finally:
         cur.close()
         conn.close()
