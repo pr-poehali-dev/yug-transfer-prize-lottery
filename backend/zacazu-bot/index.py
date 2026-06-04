@@ -124,17 +124,16 @@ def award_order(cur, conn, order_id: int, winner: dict):
     )
     conn.commit()
 
-    # Обновляем сообщение в группе: заказ куплен, убираем кнопку
-    if o['tg_chat_id'] and o.get('current_user_id') is not None or o['tg_chat_id']:
-        cur.execute(f"SELECT tg_message_id FROM {SCHEMA}.dispatch_orders WHERE id=%s", (order_id,))
-        row = cur.fetchone()
-        msg_id = row['tg_message_id'] if row else None
+    # Обновляем сообщение заказа в группе: оставляем только победителя, убираем кнопку и очередь.
+    if o['tg_chat_id'] and o.get('tg_message_id'):
         m = mention(winner['tg_user_id'], winner['username'], winner['first_name'])
-        if msg_id:
-            tg_call('editMessageReplyMarkup', {
-                'chat_id': o['tg_chat_id'], 'message_id': msg_id, 'reply_markup': {'inline_keyboard': []},
-            })
-        tg_send(o['tg_chat_id'], f"✅ Заказ куплен: {m}\n{order_brief(dict(o))}")
+        base = o.get('tg_message_text') or order_public_text(dict(o))
+        text = base + f"\n\n━━━━━━━━━━━━━━━\n✅ <b>Заказ отдан:</b> {m}"
+        tg_call('editMessageText', {
+            'chat_id': o['tg_chat_id'], 'message_id': o['tg_message_id'],
+            'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+            'reply_markup': {'inline_keyboard': []},
+        })
 
 
 def update_queue_message(cur, conn, order_id: int):
