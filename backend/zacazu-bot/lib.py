@@ -205,7 +205,8 @@ def order_brief(o: dict) -> str:
 
 def order_public_text(o: dict) -> str:
     """Инфо о заказе ДО оплаты — без контактов клиента и точных адресов."""
-    lines = ['🚖 <b>ИНФОРМАЦИЯ О ЗАКАЗЕ</b>', '']
+    head = f"🔖 <b>Заказ #{o['id']}</b> — ИНФОРМАЦИЯ" if o.get('id') else '🚖 <b>ИНФОРМАЦИЯ О ЗАКАЗЕ</b>'
+    lines = [head, '']
     if o.get('from_city'):
         lines.append(f"📍 <b>Откуда:</b> {esc(o['from_city'])}")
     if o.get('to_city'):

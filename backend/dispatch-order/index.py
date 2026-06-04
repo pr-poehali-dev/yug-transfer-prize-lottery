@@ -509,16 +509,20 @@ def handler(event: dict, context) -> dict:
 
     # action == 'send' — публикация заказа на продажу с кнопкой «Принять заказ».
     commission_rub = calc_commission_rub(data.get('price'), data.get('commission'))
-    text = build_message(data)
-    if commission_rub > 0:
-        text += f"\n\n💳 <b>Комиссия за заказ:</b> {commission_rub:.0f} ₽"
-    text += "\n\n👉 Нажми «Принять заказ» и оплати комиссию в течение 5 минут."
+
+    def build_text(order_id: int) -> str:
+        t = f"🔖 <b>Заказ #{order_id}</b>\n\n" + build_message(data)
+        if commission_rub > 0:
+            t += f"\n\n💳 <b>Комиссия за заказ:</b> {commission_rub:.0f} ₽"
+        t += f"\n\n👉 Нажми «Принять заказ» и оплати комиссию в течение 5 минут.\n#заказ_{order_id}"
+        return t
 
     # Уже опубликован и ещё продаётся → РЕДАКТИРУЕМ существующее сообщение в группе.
     if data.get('id'):
         msg_id, sale_status = get_published_state(int(data['id']))
         if msg_id and sale_status == 'selling':
             order_id = prepare_order_for_sale(data, clear_queue=False)
+            text = build_text(order_id)
             set_order_message(order_id, msg_id, text)
             full = text + render_queue_block(order_id)
             edited = tg_edit_order(msg_id, full, order_id)
@@ -529,6 +533,7 @@ def handler(event: dict, context) -> dict:
                     'body': json.dumps({'ok': False, 'error': edited.get('error', 'fail')})}
 
     order_id = prepare_order_for_sale(data)
+    text = build_text(order_id)
     result = tg_send(text, order_id)
     if result.get('ok'):
         msg_id = (result.get('result') or {}).get('message_id')
