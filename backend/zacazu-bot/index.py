@@ -378,6 +378,14 @@ def handler(event: dict, context) -> dict:
     if qs0.get('info'):
         res = tg_call('getWebhookInfo', {})
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
+    # Какому боту принадлежит токен: ?me=1
+    if qs0.get('me'):
+        res = tg_call('getMe', {})
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
+    # Удалить webhook и сбросить накопленные апдейты: ?reset=1
+    if qs0.get('reset'):
+        res = tg_call('deleteWebhook', {'drop_pending_updates': True})
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
 
     if event.get('httpMethod') != 'POST':
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True})}
