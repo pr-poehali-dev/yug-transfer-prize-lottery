@@ -33,7 +33,8 @@ def tg_send(text: str, order_id: int) -> dict:
         'disable_web_page_preview': True,
         'reply_markup': {
             'inline_keyboard': [[
-                {'text': ACCEPT_BUTTON_TEXT, 'callback_data': f'accept:{order_id}'}
+                {'text': ACCEPT_BUTTON_TEXT,
+                 'url': f'https://t.me/{BOT_USERNAME}?start=accept_{order_id}'}
             ]]
         },
     }).encode()

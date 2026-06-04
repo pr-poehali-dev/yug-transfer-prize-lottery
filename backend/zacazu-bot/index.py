@@ -7,7 +7,7 @@ import psycopg2.extras
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_answer_callback, tg_call,
     yk_create_payment, get_order, queue_list, render_queue_text,
-    client_contacts_text, order_brief, mention, deadline_dt,
+    client_contacts_text, order_brief, order_public_text, mention, deadline_dt,
 )
 
 
@@ -55,10 +55,10 @@ def offer_to_first(cur, conn, order_id: int):
         conn.commit()
         tg_send(
             nxt['tg_user_id'],
-            f"🚖 <b>Твоя очередь!</b>\nЗаказ: {order_brief(o)}\n\n"
-            f"🧪 <b>Тестовый режим</b> (ЮKassa ещё не подключена).\n"
-            f"Комиссия была бы <b>{amount:.0f} ₽</b>. Нажми кнопку, чтобы сымитировать оплату "
-            f"({DEADLINE_MINUTES} мин на оплату).",
+            order_public_text(dict(o)) + '\n\n'
+            f"✅ <b>Ты первый в очереди!</b>\n"
+            f"🧪 Тестовый режим (ЮKassa ещё не подключена). Комиссия была бы <b>{amount:.0f} ₽</b>.\n"
+            f"Нажми кнопку ниже, чтобы сымитировать оплату ({DEADLINE_MINUTES} мин).",
             {'inline_keyboard': [[{'text': f'✅ Я оплатил (тест)', 'callback_data': f'paid:{order_id}'}]]},
         )
         update_queue_message(cur, conn, order_id)
@@ -84,9 +84,11 @@ def offer_to_first(cur, conn, order_id: int):
 
     tg_send(
         nxt['tg_user_id'],
-        f"🚖 <b>Твоя очередь!</b>\nЗаказ: {order_brief(o)}\n\n"
+        order_public_text(dict(o)) + '\n\n'
+        f"✅ <b>Ты первый в очереди!</b>\n"
         f"💳 Оплати комиссию <b>{amount:.0f} ₽</b> в течение {DEADLINE_MINUTES} минут, "
-        f"иначе заказ перейдёт следующему.",
+        f"иначе заказ перейдёт следующему.\n"
+        f"После оплаты пришлю контакты клиента.",
         {'inline_keyboard': [[{'text': f'💳 Оплатить {amount:.0f} ₽', 'url': pay['url']}]]},
     )
     update_queue_message(cur, conn, order_id)
@@ -142,22 +144,33 @@ def update_queue_message(cur, conn, order_id: int):
     tg_send(o['tg_chat_id'], render_queue_text(dict(o), [dict(q) for q in queue]))
 
 
+def _notify(callback_id, user_id, text: str, alert: bool = False):
+    """Отвечает на callback (если есть) либо пишет в личку (диплинк)."""
+    if callback_id:
+        tg_answer_callback(callback_id, text, alert)
+    elif user_id:
+        tg_send(user_id, text)
+
+
 def handle_accept(cur, conn, order_id: int, user: dict, callback_id: str):
+    uid = user.get('id')
     o = get_order(cur, order_id)
     if not o:
-        tg_answer_callback(callback_id, 'Заказ не найден', True)
+        _notify(callback_id, uid, 'Заказ не найден', True)
         return
     if o['sale_status'] != 'selling':
-        tg_answer_callback(callback_id, 'Заказ уже куплен или закрыт', True)
+        _notify(callback_id, uid, 'Заказ уже куплен или закрыт', True)
         return
 
     cur.execute(
         f"SELECT id, status FROM {SCHEMA}.order_queue WHERE order_id=%s AND tg_user_id=%s",
-        (order_id, user['id']),
+        (order_id, uid),
     )
     existing = cur.fetchone()
     if existing:
-        tg_answer_callback(callback_id, 'Ты уже в очереди', False)
+        _notify(callback_id, uid, 'Ты уже в очереди на этот заказ', False)
+        # Если он первый и оплата уже назначена — повторно показать оплату.
+        offer_to_first(cur, conn, order_id)
         return
 
     cur.execute(
@@ -168,10 +181,14 @@ def handle_accept(cur, conn, order_id: int, user: dict, callback_id: str):
     cur.execute(
         f"INSERT INTO {SCHEMA}.order_queue (order_id, tg_user_id, username, first_name, position, status) "
         f"VALUES (%s,%s,%s,%s,%s,'waiting')",
-        (order_id, user['id'], user.get('username', '') or '', user.get('first_name', '') or '', pos),
+        (order_id, uid, user.get('username', '') or '', user.get('first_name', '') or '', pos),
     )
     conn.commit()
-    tg_answer_callback(callback_id, f'Ты в очереди, место {pos}', False)
+    _notify(callback_id, uid, f'Ты в очереди, место {pos}', False)
+    # Если не первый — сообщим, что ждёт очереди.
+    if pos > 1:
+        tg_send(uid, f"⏳ Ты в очереди на заказ, место <b>{pos}</b>.\n"
+                     f"Если впереди стоящие не оплатят за {DEADLINE_MINUTES} мин — очередь дойдёт до тебя.")
     update_queue_message(cur, conn, order_id)
     offer_to_first(cur, conn, order_id)
 
@@ -293,6 +310,18 @@ def handle_telegram(update: dict):
             if chat_type in ('group', 'supergroup') and text.startswith('/id'):
                 tg_send(chat['id'], f"🆔 ID этой группы: <code>{chat['id']}</code>")
             elif text.startswith('/start'):
+                # Диплинк из группы: /start accept_<order_id> — сразу в очередь.
+                parts = text.split(maxsplit=1)
+                arg = parts[1].strip() if len(parts) > 1 else ''
+                if arg.startswith('accept_'):
+                    try:
+                        order_id = int(arg.split('accept_', 1)[1])
+                    except Exception:
+                        order_id = 0
+                    if order_id:
+                        user = msg.get('from', {})
+                        handle_accept(cur, conn, order_id, user, None)
+                        return
                 tg_send(chat['id'],
                         "👋 Это бот заказов. Принимай заказы в группе кнопкой «✅ Принять заказ» "
                         "и оплачивай комиссию здесь.")

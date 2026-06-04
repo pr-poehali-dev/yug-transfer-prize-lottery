@@ -135,6 +135,24 @@ def order_brief(o: dict) -> str:
     return route + (f" ({', '.join(extra)})" if extra else '')
 
 
+def order_public_text(o: dict) -> str:
+    """Инфо о заказе ДО оплаты — без контактов клиента и точных адресов."""
+    lines = ['🚖 <b>ИНФОРМАЦИЯ О ЗАКАЗЕ</b>', '']
+    if o.get('from_city'):
+        lines.append(f"📍 <b>Откуда:</b> {esc(o['from_city'])}")
+    if o.get('to_city'):
+        lines.append(f"🏁 <b>Куда:</b> {esc(o['to_city'])}")
+    if o.get('order_date'):
+        lines.append(f"📅 <b>Дата:</b> {esc(o['order_date'])} {esc(o.get('order_time') or '')}".strip())
+    if o.get('price'):
+        lines.append(f"💰 <b>Стоимость:</b> {esc(o['price'])} ₽")
+    if o.get('tariff'):
+        lines.append(f"🎫 <b>Тариф:</b> {esc(o['tariff'])}")
+    if o.get('commission_rub'):
+        lines.append(f"💳 <b>Комиссия:</b> {float(o['commission_rub']):.0f} ₽")
+    return '\n'.join(lines)
+
+
 def queue_list(cur, order_id: int):
     cur.execute(
         f"SELECT tg_user_id, username, first_name, position, status FROM {SCHEMA}.order_queue "
