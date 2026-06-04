@@ -5,14 +5,10 @@ import { AdminPostsTab } from "./AdminPostsTab";
 import { AdminBotTab } from "./AdminBotTab";
 import { AdminStoriesTab } from "./AdminStoriesTab";
 import { AdminExcludedTab } from "./AdminExcludedTab";
-import { AdminInvitesTab } from "./AdminInvitesTab";
-import { AdminDmTab } from "./AdminDmTab";
 import { AdminDispatchTab } from "./AdminDispatchTab";
 import { AdminArchiveTab } from "./AdminArchiveTab";
 import { AdminDriversTab } from "./AdminDriversTab";
 import type { OrderForm } from "./dispatch/dispatchTypes";
-import { InviteProgressProvider } from "./InviteProgressContext";
-import { InviteProgressBanner } from "./InviteProgressBanner";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("posts");
@@ -22,8 +18,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
-    { id: "invites", label: "Авто-приглашения", icon: "UserPlus" },
-    { id: "dm", label: "Рассылка в личку", icon: "Mail" },
     { id: "dispatch", label: "Диспетчерская", icon: "Headset" },
     { id: "archive", label: "Архив", icon: "Archive" },
     { id: "drivers", label: "Подписки", icon: "BadgeCheck" },
@@ -41,7 +35,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   };
 
   return (
-    <InviteProgressProvider token={token}>
     <div className="min-h-screen mesh-bg">
       <header className="glass border-b border-white/5 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between h-16">
@@ -55,7 +48,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
             </button>
           </div>
         </div>
-        <InviteProgressBanner />
       </header>
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 flex gap-6">
@@ -96,8 +88,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               <AdminExcludedTab token={token} />
             </div>
           )}
-          {tab === "invites" && <AdminInvitesTab token={token} />}
-          {tab === "dm" && <AdminDmTab token={token} />}
           {tab === "dispatch" && (
             <AdminDispatchTab
               key={dispatchKey}
@@ -112,6 +102,5 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
         </main>
       </div>
     </div>
-    </InviteProgressProvider>
   );
 }

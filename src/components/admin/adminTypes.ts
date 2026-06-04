@@ -12,32 +12,8 @@ export const TG_USER_STORY_URL = "https://functions.poehali.dev/e47b662c-3d9d-42
 export const TG_USER_AUTH2_URL = "https://functions.poehali.dev/731984b0-8855-47a8-a7b1-6c6a4ec6d87f";
 export const EXCLUDED_WATCHER_URL = "https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520";
 export const TG_ACCOUNTS_URL = "https://functions.poehali.dev/c23d251a-47cc-43e5-bd98-f9e0ebee8f2a";
-export const INVITE_TARGETS_URL = "https://functions.poehali.dev/33399df3-3e82-49af-83a8-2b2fc4d06bfb";
-export const INVITE_RUNNER_URL = "https://functions.poehali.dev/970b102b-bcf2-4c27-a9df-31778fbaca04";
-export const DM_SENDER_URL = "https://functions.poehali.dev/ef67dd35-45cd-4367-86ea-09a002a76837";
 export const DISPATCH_ORDER_URL = "https://functions.poehali.dev/645f8ead-4009-4674-b51c-7394bc7dad47";
 export const ZACAZU_BOT_URL = "https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98";
-
-export interface InviteTarget {
-  id: number;
-  username: string | null;
-  phone: string | null;
-  first_name: string | null;
-  status: string;
-  added_at: string | null;
-  error: string | null;
-  source: string | null;
-  created_at: string | null;
-}
-
-export interface InviteStats {
-  total: number;
-  pending: number;
-  added: number;
-  privacy: number;
-  invited_link: number;
-  failed: number;
-}
 
 export interface TgAccount {
   id: number;
@@ -54,7 +30,7 @@ export interface TgAccount {
   assigned_count?: number;
 }
 
-export type AdminTab = "posts" | "bot" | "drivers" | "stories" | "invites" | "dm" | "dispatch" | "archive";
+export type AdminTab = "posts" | "bot" | "drivers" | "stories" | "dispatch" | "archive";
 
 export interface BotStory {
   id: number;
