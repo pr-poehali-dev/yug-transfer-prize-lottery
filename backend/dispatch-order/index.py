@@ -13,11 +13,15 @@ def db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
 
+BOT_USERNAME = 'zacazubot'
+BUY_BUTTON_TEXT = '🛒 Купить заказ'
+
+
 def tg_send(text: str) -> dict:
-    token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    token = os.environ.get('ZACAZU_BOT_TOKEN', '') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
     chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
     if not token:
-        return {'ok': False, 'error': 'TELEGRAM_BOT_TOKEN не задан'}
+        return {'ok': False, 'error': 'ZACAZU_BOT_TOKEN не задан'}
     if not chat_id:
         return {'ok': False, 'error': 'DISPATCH_CHAT_ID не задан'}
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -26,6 +30,11 @@ def tg_send(text: str) -> dict:
         'text': text,
         'parse_mode': 'HTML',
         'disable_web_page_preview': True,
+        'reply_markup': {
+            'inline_keyboard': [[
+                {'text': BUY_BUTTON_TEXT, 'url': f'https://t.me/{BOT_USERNAME}'}
+            ]]
+        },
     }).encode()
     req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
     try:
