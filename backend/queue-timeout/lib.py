@@ -165,6 +165,23 @@ def render_queue_text(o: dict, queue: list) -> str:
     return '\n'.join(lines)
 
 
+def render_queue_block(queue: list) -> str:
+    """Блок «Откликнувшиеся водители» для дописывания в сообщение заказа."""
+    if not queue:
+        return ''
+    lines = ['', '━━━━━━━━━━━━━━━', '👥 <b>Откликнувшиеся водители:</b>']
+    for q in queue:
+        m = mention(q['tg_user_id'], q['username'], q['first_name'])
+        if q['status'] == 'paying':
+            tail = '— оплачивает 💳'
+        elif q['status'] == 'paid':
+            tail = '— оплатил ✅'
+        else:
+            tail = '— на рассмотрении'
+        lines.append(f"{q['position']}. {m} {tail}")
+    return '\n'.join(lines)
+
+
 def queue_list(cur, order_id: int):
     cur.execute(
         f"SELECT tg_user_id, username, first_name, position, status FROM {SCHEMA}.order_queue "

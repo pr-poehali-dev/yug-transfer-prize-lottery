@@ -7,11 +7,12 @@ from datetime import datetime
 
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_call, yk_create_payment,
-    get_order, queue_list, render_queue_text, order_brief, mention, deadline_dt,
-    mark_order_message,
+    get_order, queue_list, render_queue_text, render_queue_block, order_public_text,
+    order_brief, mention, deadline_dt, mark_order_message,
 )
 
 ZACAZU_BOT_FUNCTION_URL = 'https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98'
+BOT_USERNAME = os.environ.get('ZACAZU_BOT_USERNAME', 'zacazubot')
 
 
 def db():
@@ -34,11 +35,20 @@ def ensure_webhook():
 
 
 def update_queue_message(cur, order_id: int):
+    """Редактирует исходное сообщение заказа в группе: обновляет список откликнувшихся."""
     o = get_order(cur, order_id)
-    if not o or not o['tg_chat_id']:
+    if not o or not o['tg_chat_id'] or not o.get('tg_message_id'):
         return
-    queue = queue_list(cur, order_id)
-    tg_send(o['tg_chat_id'], render_queue_text(dict(o), [dict(q) for q in queue]))
+    queue = [dict(q) for q in queue_list(cur, order_id)]
+    base = o.get('tg_message_text') or order_public_text(dict(o))
+    text = base + render_queue_block(queue)
+    btn = {'text': '✅ Принять заказ',
+           'url': f'https://t.me/{BOT_USERNAME}?start=accept_{order_id}'}
+    tg_call('editMessageText', {
+        'chat_id': o['tg_chat_id'], 'message_id': o['tg_message_id'],
+        'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+        'reply_markup': {'inline_keyboard': [[btn]]},
+    })
 
 
 def offer_to_first(cur, conn, order_id: int) -> bool:
@@ -135,6 +145,8 @@ def handler(event: dict, context) -> dict:
                 tg_send(o['current_user_id'],
                         "⌛ Время на оплату вышло — заказ передан следующему.\n"
                         "Если заказ ещё открыт, можешь снова нажать «Принять заказ».")
+            # Сразу убираем неоплатившего из списка в сообщении заказа.
+            update_queue_message(cur, order_id)
             offer_to_first(cur, conn, order_id)
             moved += 1
 
