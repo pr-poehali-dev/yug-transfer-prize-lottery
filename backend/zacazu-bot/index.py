@@ -50,6 +50,17 @@ def sweep_expired(cur, conn):
                     "Если заказ ещё открыт, можешь снова нажать «Принять заказ».")
         offer_to_first(cur, conn, order_id)
 
+    # «Замершие» заказы: есть очередь (waiting), но никому не предложена оплата —
+    # предлагаем первому в очереди.
+    cur.execute(
+        f"SELECT d.id FROM {SCHEMA}.dispatch_orders d "
+        f"WHERE d.sale_status='selling' AND d.current_deadline IS NULL "
+        f"AND EXISTS (SELECT 1 FROM {SCHEMA}.order_queue q WHERE q.order_id=d.id AND q.status='waiting') "
+        f"AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.order_queue q WHERE q.order_id=d.id AND q.status='paying')"
+    )
+    for r in cur.fetchall():
+        offer_to_first(cur, conn, r['id'])
+
 
 def offer_to_first(cur, conn, order_id: int):
     """Назначает оплату первому в очереди (status waiting->paying) и шлёт ему ссылку."""
