@@ -256,6 +256,7 @@ def handle_telegram(update: dict):
         if cb:
             data = cb.get('data', '')
             user = cb.get('from', {})
+            print(f"callback received: data={data} user={user.get('id')}")
             if data.startswith('accept:'):
                 try:
                     order_id = int(data.split(':', 1)[1])
@@ -332,6 +333,12 @@ def handler(event: dict, context) -> dict:
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors, 'body': ''}
+
+    qs0 = event.get('queryStringParameters') or {}
+    # Диагностика webhook: GET ?info=1
+    if qs0.get('info'):
+        res = tg_call('getWebhookInfo', {})
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
 
     if event.get('httpMethod') != 'POST':
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True})}
