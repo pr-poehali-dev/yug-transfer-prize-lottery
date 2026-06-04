@@ -1,6 +1,7 @@
 """Диспетчерская: отправка заказов в Telegram и архив предварительных заказов."""
 import os
 import json
+import time
 import urllib.request
 import urllib.error
 import psycopg2
@@ -36,18 +37,24 @@ def tg_send(text: str, order_id: int) -> dict:
             ]]
         },
     }).encode()
-    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
+    last_err = 'fail'
+    # До 3 попыток: единичные сетевые таймауты Telegram не должны срывать отправку.
+    for attempt in range(3):
+        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
         try:
-            body = json.loads(e.read())
-            return {'ok': False, 'error': f"HTTP {e.code}: {body.get('description', '')[:200]}"}
-        except Exception:
-            return {'ok': False, 'error': f"HTTP {e.code}"}
-    except Exception as e:
-        return {'ok': False, 'error': f"{type(e).__name__}: {str(e)[:200]}"}
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.loads(e.read())
+                return {'ok': False, 'error': f"HTTP {e.code}: {body.get('description', '')[:200]}"}
+            except Exception:
+                return {'ok': False, 'error': f"HTTP {e.code}"}
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {str(e)[:200]}"
+            if attempt < 2:
+                time.sleep(2)
+    return {'ok': False, 'error': last_err}
 
 
 def parse_num(v) -> float:
