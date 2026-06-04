@@ -118,9 +118,9 @@ def handler(event: dict, context) -> dict:
         expired = cur.fetchall()
         for o in expired:
             order_id = o['id']
-            # Помечаем текущего как expired
+            # Не успел оплатить — УБИРАЕМ из очереди, чтобы мог встать заново.
             cur.execute(
-                f"UPDATE {SCHEMA}.order_queue SET status='expired' "
+                f"DELETE FROM {SCHEMA}.order_queue "
                 f"WHERE order_id=%s AND tg_user_id=%s AND status='paying'",
                 (order_id, o['current_user_id']),
             )
@@ -130,7 +130,9 @@ def handler(event: dict, context) -> dict:
             )
             conn.commit()
             if o['current_user_id']:
-                tg_send(o['current_user_id'], "⌛ Время на оплату вышло — заказ передан следующему.")
+                tg_send(o['current_user_id'],
+                        "⌛ Время на оплату вышло — заказ передан следующему.\n"
+                        "Если заказ ещё открыт, можешь снова нажать «Принять заказ».")
             offer_to_first(cur, conn, order_id)
             moved += 1
     finally:
