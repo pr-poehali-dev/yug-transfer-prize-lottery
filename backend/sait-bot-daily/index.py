@@ -2,6 +2,7 @@
 import os
 import json
 import re
+import time
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -49,18 +50,26 @@ def tg_api(method, payload):
         return {'ok': False, 'description': 'TELEGRAM_BOT_TOKEN_2 пустой'}
     url = f"https://api.telegram.org/bot{token}/{method}"
     data = json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
+    last_err = 'fail'
+    # До 3 попыток: единичные сетевые таймауты Telegram не должны срывать пост.
+    for attempt in range(3):
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
         try:
-            body = json.loads(e.read())
-            return {'ok': False, 'description': f"HTTP {e.code}: {body.get('description', str(body))[:300]}"}
-        except Exception:
-            return {'ok': False, 'description': f"HTTP {e.code}"}
-    except Exception as e:
-        return {'ok': False, 'description': f"{type(e).__name__}: {str(e)[:300]}"}
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            # Ошибка от самого Telegram (403, 400 и т.п.) — повтор не поможет.
+            try:
+                body = json.loads(e.read())
+                return {'ok': False, 'description': f"HTTP {e.code}: {body.get('description', str(body))[:300]}"}
+            except Exception:
+                return {'ok': False, 'description': f"HTTP {e.code}"}
+        except Exception as e:
+            # Сетевой сбой/таймаут — пробуем ещё раз.
+            last_err = f"{type(e).__name__}: {str(e)[:300]}"
+            if attempt < 2:
+                time.sleep(3)
+    return {'ok': False, 'description': last_err}
 
 
 def strip_html(html_text: str) -> str:
