@@ -44,12 +44,12 @@ export function orderStatusBadge(o: { sale_status?: string; trip_status?: string
   return { label: "В архиве", cls: "bg-white/10 text-muted-foreground" };
 }
 
-export const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Бизнес", "Минивэн"];
+export const TARIFFS = ["Стандарт", "Срочный", "Комфорт", "Бизнес", "Минивэн"];
 export const COMMISSIONS = ["10%", "15%", "20%", "25%"];
 
 export const EMPTY_ORDER: OrderForm = {
   from_city: "", to_city: "", from_address: "", to_address: "", stops: [],
-  date: "", time: "", price: "", tariff: "Срочный", commission: "15%",
+  date: "", time: "", price: "", tariff: "Стандарт", commission: "15%",
   client_phone: "", people: "1", luggage: "1",
   booster: false, child_seat: false, animal: false, comment: "",
 };
