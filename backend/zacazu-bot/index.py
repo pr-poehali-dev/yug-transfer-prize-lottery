@@ -622,6 +622,10 @@ def handler(event: dict, context) -> dict:
             conn.close()
         return {'statusCode': 200, 'headers': cors,
                 'body': json.dumps({'ok': True, 'active_orders': active})}
+    # Узнать ID чата по @username: ?getchat=@UG_DRIVER
+    if qs0.get('getchat'):
+        res = tg_call('getChat', {'chat_id': qs0.get('getchat')})
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
     # Диагностика webhook: GET ?info=1
     if qs0.get('info'):
         res = tg_call('getWebhookInfo', {})
