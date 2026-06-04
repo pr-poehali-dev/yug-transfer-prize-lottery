@@ -447,15 +447,12 @@ def send_sub_button(chat_id):
 
 
 def send_start_menu(chat_id, force: bool = True):
-    # Сначала показываем нижнюю клавиатуру (reply keyboard).
     tg_send(
         chat_id,
         "👋 <b>Добро пожаловать!</b>\n\n"
         "С подпиской ваша комиссия снижается до <b>10%</b> по любому заказу.",
         sub_reply_keyboard(),
     )
-    # Затем — синяя inline-кнопка «Подписка».
-    send_sub_button(chat_id)
 
 
 def start_already_seen(cur, conn, uid, user=None) -> bool:
@@ -604,11 +601,8 @@ def handle_telegram(update: dict):
                 # Обычный /start: при первом заходе — полное приветствие,
                 # при повторном — тихо возвращаем нижнюю клавиатуру (чтобы кнопки не пропадали).
                 u = msg.get('from', {})
-                if not start_already_seen(cur, conn, u.get('id'), u):
-                    send_start_menu(chat['id'])
-                else:
-                    tg_send(chat['id'], "Кнопки подписки — внизу 👇", sub_reply_keyboard())
-                    send_sub_button(chat['id'])
+                start_already_seen(cur, conn, u.get('id'), u)
+                send_start_menu(chat['id'])
             elif text.startswith('/podpiska') or text.startswith('/подписка') or text.startswith('/sub'):
                 send_start_menu(chat['id'])
             elif text.startswith('/status'):
