@@ -4,8 +4,8 @@ import { DISPATCH_ORDER_URL } from "./adminTypes";
 import { OrderForm, EMPTY_ORDER, TARIFFS, COMMISSIONS } from "./dispatch/dispatchTypes";
 
 const fieldCls =
-  "w-full px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-muted-foreground/60 focus:outline-none focus:border-purple-400/50 transition-colors";
-const labelCls = "text-[11px] font-medium text-muted-foreground mb-0.5 block";
+  "w-full px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[13px] text-white placeholder:text-muted-foreground/60 focus:outline-none focus:border-purple-400/50 transition-colors";
+const labelCls = "text-[10px] font-medium text-muted-foreground mb-0.5 block";
 
 interface DispatchTabProps {
   token: string;
@@ -28,6 +28,12 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
     set("stops", form.stops.map((s, idx) => (idx === i ? v : s)));
   const removeStop = (i: number) =>
     set("stops", form.stops.filter((_, idx) => idx !== i));
+
+  // Номер всегда начинается с +7, дальше только цифры (до 10).
+  const setPhone = (raw: string) => {
+    const digits = raw.replace(/\D/g, "").replace(/^7/, "").slice(0, 10);
+    set("client_phone", "+7" + digits);
+  };
 
   function validate(): boolean {
     if (!form.from_city && !form.to_city && !form.client_phone) {
@@ -96,22 +102,22 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
   }
 
   return (
-    <div className="glass rounded-2xl border border-white/5 p-4 space-y-4 max-w-4xl">
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg grad-btn flex items-center justify-center">
-          <Icon name="Headset" size={16} />
+    <div className="glass rounded-2xl border border-white/5 p-3 space-y-2.5 max-w-4xl">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg grad-btn flex items-center justify-center">
+          <Icon name="Headset" size={15} />
         </div>
         <div>
-          <h2 className="text-base font-semibold text-white leading-tight">
+          <h2 className="text-sm font-semibold text-white leading-tight">
             {editId ? "Редактировать заказ" : "Создать заказ"}
           </h2>
-          <p className="text-[11px] text-muted-foreground">На продажу — в Telegram, в архив — предзаказ</p>
+          <p className="text-[10px] text-muted-foreground">На продажу — в Telegram, в архив — предзаказ</p>
         </div>
       </div>
 
       {/* Маршрут */}
-      <div className="space-y-2.5">
-        <div className="grid md:grid-cols-2 gap-x-4 gap-y-2.5">
+      <div className="space-y-2">
+        <div className="grid md:grid-cols-2 gap-x-4 gap-y-2">
           <div>
             <label className={labelCls}>Откуда (город)</label>
             <input className={fieldCls} placeholder="Откуда" value={form.from_city}
@@ -153,13 +159,13 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
         </button>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-x-6 gap-y-3">
+      <div className="grid md:grid-cols-2 gap-x-6 gap-y-2.5">
         {/* Информация о заказе */}
-        <div className="space-y-2.5">
-          <h3 className="text-[13px] font-semibold text-purple-300 flex items-center gap-1.5">
+        <div className="space-y-2">
+          <h3 className="text-[12px] font-semibold text-purple-300 flex items-center gap-1.5">
             <Icon name="ClipboardList" size={15} />Информация о заказе
           </h3>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-x-2.5 gap-y-2">
             <div>
               <label className={labelCls}>Дата поездки *</label>
               <input type="date" className={fieldCls} value={form.date}
@@ -193,15 +199,17 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
         </div>
 
         {/* Информация о клиенте */}
-        <div className="space-y-2.5">
-          <h3 className="text-[13px] font-semibold text-purple-300 flex items-center gap-1.5">
+        <div className="space-y-2">
+          <h3 className="text-[12px] font-semibold text-purple-300 flex items-center gap-1.5">
             <Icon name="User" size={15} />Информация о клиенте
           </h3>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-x-2.5 gap-y-2">
             <div className="col-span-2">
               <label className={labelCls}>Номер клиента *</label>
-              <input className={fieldCls} placeholder="+7 ..." value={form.client_phone}
-                onChange={(e) => set("client_phone", e.target.value)} />
+              <input className={fieldCls} type="tel" inputMode="tel" placeholder="+7 ..."
+                value={form.client_phone || "+7"}
+                onFocus={(e) => { if (!form.client_phone) set("client_phone", "+7"); }}
+                onChange={(e) => setPhone(e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>Количество человек *</label>
@@ -233,7 +241,7 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
 
       <div>
         <label className={labelCls}>Комментарий</label>
-        <textarea className={`${fieldCls} resize-none`} rows={2} placeholder="Дополнительно..."
+        <textarea className={`${fieldCls} resize-none`} rows={1} placeholder="Дополнительно..."
           value={form.comment} onChange={(e) => set("comment", e.target.value)} />
       </div>
 
@@ -243,15 +251,15 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-2.5">
+      <div className="flex flex-col sm:flex-row gap-2">
         <button onClick={submit} disabled={sending || archiving}
-          className="grad-btn px-6 py-2.5 rounded-lg font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
-          <Icon name={sending ? "Loader" : "Send"} size={16} className={sending ? "animate-spin" : ""} />
+          className="grad-btn px-5 py-2 rounded-lg text-sm font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+          <Icon name={sending ? "Loader" : "Send"} size={15} className={sending ? "animate-spin" : ""} />
           {sending ? "Отправка..." : "Отправить на продажу"}
         </button>
         <button onClick={toArchive} disabled={sending || archiving}
-          className="px-6 py-2.5 rounded-lg font-semibold border border-white/15 text-white hover:bg-white/5 disabled:opacity-60 flex items-center justify-center gap-2 transition-colors">
-          <Icon name={archiving ? "Loader" : "Archive"} size={16} className={archiving ? "animate-spin" : ""} />
+          className="px-5 py-2 rounded-lg text-sm font-semibold border border-white/15 text-white hover:bg-white/5 disabled:opacity-60 flex items-center justify-center gap-2 transition-colors">
+          <Icon name={archiving ? "Loader" : "Archive"} size={15} className={archiving ? "animate-spin" : ""} />
           {archiving ? "Сохранение..." : "Отправить в архив"}
         </button>
       </div>
