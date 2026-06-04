@@ -437,6 +437,15 @@ def sub_reply_keyboard():
     }
 
 
+def send_sub_button(chat_id):
+    """Яркая синяя inline-кнопка «Подписка» прямо над строкой ввода."""
+    tg_send(
+        chat_id,
+        "👇 Оформить подписку:",
+        {'inline_keyboard': [[{'text': '💳 Подписка', 'callback_data': 'sub_buy_menu'}]]},
+    )
+
+
 def send_start_menu(chat_id, force: bool = True):
     # Сначала показываем нижнюю клавиатуру (reply keyboard).
     tg_send(
@@ -445,12 +454,8 @@ def send_start_menu(chat_id, force: bool = True):
         "С подпиской ваша комиссия снижается до <b>10%</b> по любому заказу.",
         sub_reply_keyboard(),
     )
-    # Затем — яркая синяя inline-кнопка «Подписка» прямо над строкой ввода.
-    tg_send(
-        chat_id,
-        "👇 Оформить подписку:",
-        {'inline_keyboard': [[{'text': '💳 Подписка', 'callback_data': 'sub_menu'}]]},
-    )
+    # Затем — синяя inline-кнопка «Подписка».
+    send_sub_button(chat_id)
 
 
 def start_already_seen(cur, conn, uid, user=None) -> bool:
@@ -552,6 +557,19 @@ def handle_telegram(update: dict):
             elif data == 'sub_menu':
                 tg_answer_callback(cb['id'])
                 send_start_menu(user.get('id'))
+            elif data == 'sub_buy_menu':
+                tg_answer_callback(cb['id'])
+                tg_send(
+                    user.get('id'),
+                    "💳 <b>Оформление подписки</b>\n\n"
+                    "С подпиской комиссия по любому заказу — всего <b>10%</b>.\n"
+                    "Выбери срок:",
+                    {'inline_keyboard': [
+                        [{'text': SUB_BTN_1, 'callback_data': 'sub_1'}],
+                        [{'text': SUB_BTN_6, 'callback_data': 'sub_6'}],
+                        [{'text': SUB_BTN_12, 'callback_data': 'sub_12'}],
+                    ]},
+                )
             elif data == 'sub_status':
                 tg_answer_callback(cb['id'])
                 handle_sub_status(cur, user.get('id'), user.get('id'))
@@ -590,6 +608,7 @@ def handle_telegram(update: dict):
                     send_start_menu(chat['id'])
                 else:
                     tg_send(chat['id'], "Кнопки подписки — внизу 👇", sub_reply_keyboard())
+                    send_sub_button(chat['id'])
             elif text.startswith('/status') or text.startswith('/подписка') or text.startswith('/sub'):
                 uid = msg.get('from', {}).get('id')
                 handle_sub_status(cur, chat['id'], uid)
