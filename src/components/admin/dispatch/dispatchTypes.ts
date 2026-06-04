@@ -39,6 +39,8 @@ export function orderStatusBadge(o: { sale_status?: string; trip_status?: string
   const sale = o.sale_status || "archived";
   if (sale === "sold") return { label: "Куплен", cls: "bg-emerald-500/15 text-emerald-400" };
   if (sale === "selling") return { label: "🟢 На продаже", cls: "bg-purple-500/15 text-purple-300" };
+  if (sale === "no_cars") return { label: "❌ Нет машин — отменён", cls: "bg-red-500/15 text-red-400" };
+  if (sale === "cancelled") return { label: "🚫 Отменён диспетчером", cls: "bg-red-500/15 text-red-400" };
   return { label: "В архиве", cls: "bg-white/10 text-muted-foreground" };
 }
 

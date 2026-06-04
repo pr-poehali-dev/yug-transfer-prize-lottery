@@ -257,6 +257,54 @@ def set_order_message(order_id: int, message_id, text: str = ''):
     conn.close()
 
 
+def tg_edit(chat_id, message_id, text: str):
+    token = (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
+             or os.environ.get('ZACAZU_BOT_TOKEN', '')
+             or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
+    if not token or not chat_id or not message_id:
+        return
+    payload = json.dumps({
+        'chat_id': chat_id, 'message_id': message_id, 'text': text,
+        'parse_mode': 'HTML', 'disable_web_page_preview': True,
+        'reply_markup': {'inline_keyboard': []},
+    }).encode()
+    url = f"https://api.telegram.org/bot{token}/editMessageText"
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=payload,
+                                         headers={'Content-Type': 'application/json'}, method='POST')
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                return json.loads(resp.read())
+        except Exception:
+            if attempt < 2:
+                time.sleep(2)
+
+
+def cancel_order(order_id: int) -> dict:
+    """Отмена заказа диспетчером: статус cancelled, пометка в группе (не удаляя)."""
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT tg_chat_id, tg_message_id, tg_message_text, from_city, to_city, "
+        f"order_date, order_time, price, commission_rub FROM {SCHEMA}.dispatch_orders WHERE id=%s",
+        (order_id,),
+    )
+    row = cur.fetchone()
+    cur.execute(
+        f"UPDATE {SCHEMA}.dispatch_orders SET sale_status='cancelled', "
+        f"current_user_id=NULL, current_deadline=NULL WHERE id=%s",
+        (order_id,),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    if row and row[0] and row[1]:
+        base = row[2] or '🚖 <b>ЗАКАЗ</b>'
+        text = base + "\n\n━━━━━━━━━━━━━━━\n🚫 <b>Отменён диспетчером</b>"
+        tg_edit(row[0], row[1], text)
+    return {'ok': True}
+
+
 def handler(event: dict, context) -> dict:
     """Диспетчерская: action=send (в Telegram), archive_save, archive_list, archive_delete."""
     cors = {
@@ -288,6 +336,12 @@ def handler(event: dict, context) -> dict:
         if not oid:
             return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no id'})}
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(archive_delete(int(oid)))}
+
+    if action == 'cancel':
+        oid = data.get('id')
+        if not oid:
+            return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no id'})}
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps(cancel_order(int(oid)))}
 
     if not has_content(data):
         return {'statusCode': 400, 'headers': cors,

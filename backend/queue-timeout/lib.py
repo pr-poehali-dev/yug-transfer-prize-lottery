@@ -104,10 +104,38 @@ def yk_create_payment(amount_rub: float, description: str, metadata: dict) -> di
 def get_order(cur, order_id: int):
     cur.execute(
         f"SELECT id, from_city, to_city, from_address, to_address, order_date, order_time, "
-        f"price, commission_rub, tg_chat_id, tg_message_id, sale_status, current_user_id "
+        f"price, commission_rub, tg_chat_id, tg_message_id, tg_message_text, sale_status, current_user_id "
         f"FROM {SCHEMA}.dispatch_orders WHERE id=%s", (order_id,)
     )
     return cur.fetchone()
+
+
+def order_public_text(o: dict) -> str:
+    lines = ['🚖 <b>ИНФОРМАЦИЯ О ЗАКАЗЕ</b>', '']
+    if o.get('from_city'):
+        lines.append(f"📍 <b>Откуда:</b> {esc(o['from_city'])}")
+    if o.get('to_city'):
+        lines.append(f"🏁 <b>Куда:</b> {esc(o['to_city'])}")
+    if o.get('order_date'):
+        lines.append(f"📅 <b>Дата:</b> {esc(o['order_date'])} {esc(o.get('order_time') or '')}".strip())
+    if o.get('price'):
+        lines.append(f"💰 <b>Стоимость:</b> {esc(o['price'])} ₽")
+    if o.get('commission_rub'):
+        lines.append(f"💳 <b>Комиссия:</b> {float(o['commission_rub']):.0f} ₽")
+    return '\n'.join(lines)
+
+
+def mark_order_message(o: dict, status_line: str):
+    """Редактирует сообщение заказа в группе: дописывает статус, убирает кнопку."""
+    if not o.get('tg_chat_id') or not o.get('tg_message_id'):
+        return
+    base = o.get('tg_message_text') or order_public_text(o)
+    text = base + f"\n\n━━━━━━━━━━━━━━━\n{status_line}"
+    tg_call('editMessageText', {
+        'chat_id': o['tg_chat_id'], 'message_id': o['tg_message_id'],
+        'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+        'reply_markup': {'inline_keyboard': []},
+    })
 
 
 def order_brief(o: dict) -> str:

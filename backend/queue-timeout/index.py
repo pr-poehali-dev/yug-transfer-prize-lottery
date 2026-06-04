@@ -7,6 +7,7 @@ import psycopg2.extras
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_call, yk_create_payment,
     get_order, queue_list, render_queue_text, order_brief, mention, deadline_dt,
+    mark_order_message,
 )
 
 ZACAZU_BOT_FUNCTION_URL = 'https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98'
@@ -52,14 +53,14 @@ def offer_to_first(cur, conn, order_id: int) -> bool:
     )
     nxt = cur.fetchone()
     if not nxt:
-        # Очередь закончилась — закрываем продажу
+        # Очередь закончилась, никто не оплатил → статус «Нет машин / Отмена».
         cur.execute(
-            f"UPDATE {SCHEMA}.dispatch_orders SET current_user_id=NULL, current_deadline=NULL WHERE id=%s",
+            f"UPDATE {SCHEMA}.dispatch_orders SET sale_status='no_cars', "
+            f"current_user_id=NULL, current_deadline=NULL WHERE id=%s",
             (order_id,),
         )
         conn.commit()
-        if o['tg_chat_id']:
-            tg_send(o['tg_chat_id'], f"⌛ Очередь по заказу закончилась, никто не оплатил: {order_brief(dict(o))}")
+        mark_order_message(dict(o), '❌ <b>Нет машин — заказ отменён</b>')
         return False
 
     amount = float(o['commission_rub'] or 0)

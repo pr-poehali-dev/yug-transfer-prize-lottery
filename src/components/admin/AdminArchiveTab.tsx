@@ -68,6 +68,28 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
     }
   }
 
+  async function cancel(o: ArchivedOrder) {
+    if (!confirm("Отменить заказ? В группе он будет помечен «Отменён диспетчером».")) return;
+    setBusyId(o.id);
+    setMsg(null);
+    try {
+      const r = await fetch(`${DISPATCH_ORDER_URL}?action=cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ id: o.id }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setMsg({ ok: true, text: "Заказ отменён" });
+        setOrders((prev) => prev.map((x) => x.id === o.id ? { ...x, sale_status: "cancelled" } : x));
+      } else {
+        setMsg({ ok: false, text: j.error || "Не удалось отменить" });
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function routeText(o: ArchivedOrder) {
     const a = o.from_city || o.from_address;
     const b = o.to_city || o.to_address;
@@ -134,6 +156,12 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
                   className="px-2.5 py-1.5 rounded-lg border border-white/10 text-muted-foreground hover:text-white text-[13px] flex items-center gap-1.5 transition-colors">
                   <Icon name="Pencil" size={13} />
                 </button>
+                {o.sale_status === "selling" && (
+                  <button onClick={() => cancel(o)} disabled={busyId === o.id}
+                    className="px-2.5 py-1.5 rounded-lg border border-white/10 text-muted-foreground hover:text-amber-400 hover:border-amber-400/40 text-[13px] flex items-center gap-1.5 transition-colors">
+                    <Icon name="Ban" size={13} />Отменить
+                  </button>
+                )}
                 <button onClick={() => remove(o)} disabled={busyId === o.id}
                   className="px-2.5 py-1.5 rounded-lg border border-white/10 text-muted-foreground hover:text-red-400 hover:border-red-400/40 text-[13px] transition-colors">
                   <Icon name="Trash2" size={13} />
