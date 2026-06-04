@@ -403,8 +403,28 @@ def handler(event: dict, context) -> dict:
         if not self_url:
             return {'statusCode': 400, 'headers': cors,
                     'body': json.dumps({'ok': False, 'error': 'Передай url функции в body'})}
-        res = tg_call('setWebhook', {'url': self_url, 'allowed_updates': ['message', 'callback_query']})
-        return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
+        import urllib.request as _u
+        from lib import bot_token as _bt
+        token = _bt()
+        payload = json.dumps({
+            'url': self_url, 'allowed_updates': ['message', 'callback_query'],
+        }).encode()
+        set_res = {}
+        for _ in range(4):
+            try:
+                req = _u.Request(
+                    f'https://api.telegram.org/bot{token}/setWebhook',
+                    data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+                with _u.urlopen(req, timeout=25) as resp:
+                    set_res = json.loads(resp.read())
+                if set_res.get('ok'):
+                    break
+            except Exception as e:
+                set_res = {'ok': False, 'error': f'{type(e).__name__}'}
+        ok = bool(set_res.get('ok'))
+        desc = set_res.get('description') or set_res.get('error') or ''
+        return {'statusCode': 200, 'headers': cors,
+                'body': json.dumps({'setOk': ok, 'desc': desc})}
 
     try:
         if qs.get('yookassa'):

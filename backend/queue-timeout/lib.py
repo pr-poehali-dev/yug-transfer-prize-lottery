@@ -13,7 +13,9 @@ DEADLINE_MINUTES = 5
 
 
 def bot_token() -> str:
-    return os.environ.get('ZACAZU_BOT_TOKEN', '') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    return (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
+            or os.environ.get('ZACAZU_BOT_TOKEN', '')
+            or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
 
 
 def tg_call(method: str, payload: dict) -> dict:

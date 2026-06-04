@@ -19,7 +19,9 @@ ACCEPT_BUTTON_TEXT = '✅ Принять заказ'
 
 
 def tg_send(text: str, order_id: int) -> dict:
-    token = os.environ.get('ZACAZU_BOT_TOKEN', '') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    token = (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
+             or os.environ.get('ZACAZU_BOT_TOKEN', '')
+             or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
     chat_id = os.environ.get('DISPATCH_CHAT_ID', '')
     if not token:
         return {'ok': False, 'error': 'ZACAZU_BOT_TOKEN не задан'}

@@ -5,13 +5,30 @@ import psycopg2
 import psycopg2.extras
 
 from lib import (
-    SCHEMA, DEADLINE_MINUTES, tg_send, yk_create_payment,
+    SCHEMA, DEADLINE_MINUTES, tg_send, tg_call, yk_create_payment,
     get_order, queue_list, render_queue_text, order_brief, mention, deadline_dt,
 )
+
+ZACAZU_BOT_FUNCTION_URL = 'https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98'
 
 
 def db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
+
+
+def ensure_webhook():
+    """Самовосстановление: если webhook бота не на нашу функцию — переставить."""
+    try:
+        info = tg_call('getWebhookInfo', {})
+        cur_url = (info.get('result') or {}).get('url', '')
+        if cur_url == ZACAZU_BOT_FUNCTION_URL:
+            return
+        tg_call('setWebhook', {
+            'url': ZACAZU_BOT_FUNCTION_URL,
+            'allowed_updates': ['message', 'callback_query'],
+        })
+    except Exception:
+        pass
 
 
 def update_queue_message(cur, order_id: int):
@@ -84,6 +101,9 @@ def handler(event: dict, context) -> dict:
     got = headers.get('X-Cron-Secret') or headers.get('x-cron-secret') or ''
     if secret and got != secret:
         return {'statusCode': 403, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'forbidden'})}
+
+    # Самовосстановление webhook бота на каждом запуске cron.
+    ensure_webhook()
 
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
