@@ -243,12 +243,12 @@ def prepare_order_for_sale(d: dict) -> int:
     return oid
 
 
-def set_order_message(order_id: int, message_id):
+def set_order_message(order_id: int, message_id, text: str = ''):
     conn = db()
     cur = conn.cursor()
     cur.execute(
-        f"UPDATE {SCHEMA}.dispatch_orders SET tg_message_id=%s WHERE id=%s",
-        (message_id, order_id),
+        f"UPDATE {SCHEMA}.dispatch_orders SET tg_message_id=%s, tg_message_text=%s WHERE id=%s",
+        (message_id, text, order_id),
     )
     conn.commit()
     cur.close()
@@ -306,7 +306,7 @@ def handler(event: dict, context) -> dict:
     if result.get('ok'):
         msg_id = (result.get('result') or {}).get('message_id')
         if msg_id:
-            set_order_message(order_id, msg_id)
+            set_order_message(order_id, msg_id, text)
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'order_id': order_id})}
     return {'statusCode': 200, 'headers': cors,
             'body': json.dumps({'ok': False, 'error': result.get('error', 'fail')})}

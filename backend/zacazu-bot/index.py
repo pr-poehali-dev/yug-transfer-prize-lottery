@@ -6,9 +6,11 @@ import psycopg2.extras
 
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_answer_callback, tg_call,
-    yk_create_payment, get_order, queue_list, render_queue_text,
+    yk_create_payment, get_order, queue_list, render_queue_text, render_queue_block,
     client_contacts_text, order_brief, order_public_text, mention, deadline_dt,
 )
+
+BOT_USERNAME = os.environ.get('ZACAZU_BOT_USERNAME', 'zacazubot')
 
 
 def db():
@@ -136,12 +138,20 @@ def award_order(cur, conn, order_id: int, winner: dict):
 
 
 def update_queue_message(cur, conn, order_id: int):
-    """Шлёт в группу отдельное сообщение с текущей очередью."""
+    """Редактирует сообщение заказа в группе: дописывает список очереди под заказом."""
     o = get_order(cur, order_id)
-    if not o or not o['tg_chat_id']:
+    if not o or not o['tg_chat_id'] or not o.get('tg_message_id'):
         return
-    queue = queue_list(cur, order_id)
-    tg_send(o['tg_chat_id'], render_queue_text(dict(o), [dict(q) for q in queue]))
+    queue = [dict(q) for q in queue_list(cur, order_id)]
+    base = o.get('tg_message_text') or order_public_text(dict(o))
+    text = base + render_queue_block(queue)
+    btn = {'text': '✅ Принять заказ',
+           'url': f'https://t.me/{BOT_USERNAME}?start=accept_{order_id}'}
+    tg_call('editMessageText', {
+        'chat_id': o['tg_chat_id'], 'message_id': o['tg_message_id'],
+        'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+        'reply_markup': {'inline_keyboard': [[btn]]},
+    })
 
 
 def _notify(callback_id, user_id, text: str, alert: bool = False):

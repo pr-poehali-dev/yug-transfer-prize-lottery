@@ -116,7 +116,7 @@ def get_order(cur, order_id: int):
     cur.execute(
         f"SELECT id, from_city, to_city, from_address, to_address, order_date, order_time, "
         f"price, tariff, client_phone, people, luggage, comment, commission_rub, "
-        f"tg_chat_id, tg_message_id, sale_status, current_user_id, winner_user_id, "
+        f"tg_chat_id, tg_message_id, tg_message_text, sale_status, current_user_id, winner_user_id, "
         f"trip_status, winner_chat_id, winner_message_id "
         f"FROM {SCHEMA}.dispatch_orders WHERE id=%s", (order_id,)
     )
@@ -173,6 +173,25 @@ def render_queue_text(o: dict, queue: list) -> str:
             lines.append(f"✅ {q['position']}. {m} — оплатил")
         else:
             lines.append(f"🔹 {q['position']}. {m}")
+    return '\n'.join(lines)
+
+
+def render_queue_block(queue: list) -> str:
+    """Блок «Откликнувшиеся водители» для дописывания в сообщение заказа."""
+    if not queue:
+        return ''
+    lines = ['', '━━━━━━━━━━━━━━━', '👥 <b>Откликнувшиеся водители:</b>']
+    for q in queue:
+        m = mention(q['tg_user_id'], q['username'], q['first_name'])
+        if q['status'] == 'paying':
+            tail = '— оплачивает 💳'
+        elif q['status'] == 'paid':
+            tail = '— оплатил ✅'
+        elif q['status'] == 'expired':
+            tail = '— не успел ⌛'
+        else:
+            tail = '— на рассмотрении'
+        lines.append(f"{q['position']}. {m} {tail}")
     return '\n'.join(lines)
 
 
