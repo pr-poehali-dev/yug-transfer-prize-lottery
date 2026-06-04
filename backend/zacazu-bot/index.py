@@ -3,11 +3,13 @@ import os
 import json
 import psycopg2
 import psycopg2.extras
+from datetime import datetime
 
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_answer_callback, tg_call,
     yk_create_payment, get_order, queue_list, render_queue_text, render_queue_block,
     client_contacts_text, contacts_block, order_brief, order_public_text, mention, deadline_dt,
+    has_active_sub, sub_active_until, commission_for, extend_sub, SUB_PLANS,
 )
 
 BOT_USERNAME = os.environ.get('ZACAZU_BOT_USERNAME', 'zacazubot')
@@ -36,7 +38,8 @@ def offer_to_first(cur, conn, order_id: int):
     if not nxt:
         return
 
-    amount = float(o['commission_rub'] or 0)
+    # Подписчику комиссия по любому заказу = 10% от цены, остальным — как в заказе.
+    amount = commission_for(cur, dict(o), nxt['tg_user_id'])
     if amount <= 0:
         # Нет комиссии — сразу отдаём заказ
         award_order(cur, conn, order_id, nxt)
@@ -84,17 +87,22 @@ def offer_to_first(cur, conn, order_id: int):
     )
     conn.commit()
 
-    res = send_payment_message(nxt['tg_user_id'], dict(o), amount, pay['url'])
+    is_sub = has_active_sub(cur, nxt['tg_user_id'])
+    res = send_payment_message(nxt['tg_user_id'], dict(o), amount, pay['url'], is_sub)
     _save_pay_msg(cur, conn, nxt['id'], nxt['tg_user_id'], res)
     update_queue_message(cur, conn, order_id)
 
 
-def send_payment_message(user_id, order: dict, amount: float, pay_url: str) -> dict:
+def send_payment_message(user_id, order: dict, amount: float, pay_url: str, is_sub: bool = False) -> dict:
     """Отправляет водителю инфо о заказе и кнопку оплаты комиссии."""
+    # Показываем фактическую сумму к оплате (для подписчика — 10%).
+    o = dict(order)
+    o['commission_rub'] = amount
+    note = " ✅ скидка по подписке (10%)" if is_sub else ""
     return tg_send(
         user_id,
-        order_public_text(order) + '\n\n'
-        f"💳 Оплати комиссию <b>{amount:.0f} ₽</b> в течение {DEADLINE_MINUTES} минут.\n"
+        order_public_text(o) + '\n\n'
+        f"💳 Оплати комиссию <b>{amount:.0f} ₽</b>{note} в течение {DEADLINE_MINUTES} минут.\n"
         f"После оплаты пришлю контакты клиента.",
         {'inline_keyboard': [[{'text': f'💳 Оплатить {amount:.0f} ₽', 'url': pay_url}]]},
     )
@@ -322,6 +330,66 @@ def handle_trip_status(cur, conn, order_id: int, user: dict, callback_id: str, s
         })
 
 
+def sub_menu_keyboard():
+    return {'inline_keyboard': [
+        [{'text': '💳 Подписка', 'callback_data': 'sub_menu'},
+         {'text': '📊 Мой статус', 'callback_data': 'sub_status'}],
+        [{'text': '1 месяц 1 500 ₽', 'callback_data': 'sub_1'}],
+        [{'text': '6 мес 6 000 ₽', 'callback_data': 'sub_6'}],
+        [{'text': '12 мес 10 000 ₽', 'callback_data': 'sub_12'}],
+    ]}
+
+
+def send_start_menu(chat_id):
+    tg_send(
+        chat_id,
+        "👋 <b>Добро пожаловать!</b>\n\n"
+        "С подпиской ваша комиссия снижается до <b>10%</b> по любому заказу.\n"
+        "Выберите тариф или проверьте статус:",
+        sub_menu_keyboard(),
+    )
+
+
+def handle_sub_status(cur, chat_id, uid):
+    until = sub_active_until(cur, uid)
+    if until and until > datetime.utcnow():
+        days = (until - datetime.utcnow()).days
+        tg_send(chat_id,
+                f"✅ <b>Подписка активна</b>\n"
+                f"Комиссия по заказам: <b>10%</b>\n"
+                f"Действует до: <b>{until.strftime('%d.%m.%Y')}</b> (осталось ~{days} дн.)")
+    else:
+        tg_send(chat_id,
+                "❌ <b>Подписка не активна</b>\n"
+                "Без подписки комиссия — как указано в заказе.\n"
+                "Оформите подписку, чтобы платить всего 10%:",
+                sub_menu_keyboard())
+
+
+def handle_sub_buy(cur, chat_id, user, plan_key: str):
+    plan = SUB_PLANS.get(plan_key)
+    if not plan:
+        return
+    months, price, label = plan
+    uid = user.get('id')
+    yk_ready = bool(os.environ.get('YOOKASSA_SHOP_ID') and os.environ.get('YOOKASSA_SECRET_KEY'))
+    if not yk_ready:
+        tg_send(chat_id, "⚠️ Оплата подписки временно недоступна. Попробуйте позже.")
+        return
+    pay = yk_create_payment(
+        float(price), f'Подписка водителя {label}',
+        {'kind': 'sub', 'tg_user_id': str(uid), 'months': str(months),
+         'username': user.get('username', '') or '', 'first_name': user.get('first_name', '') or ''},
+    )
+    if not pay.get('ok') or not pay.get('url'):
+        tg_send(chat_id, f"⚠️ Не удалось создать оплату: {pay.get('error', 'ошибка')}.")
+        return
+    tg_send(chat_id,
+            f"💳 <b>Подписка {label}</b> — {price} ₽\n"
+            f"После оплаты комиссия по заказам станет <b>10%</b>.",
+            {'inline_keyboard': [[{'text': f'💳 Оплатить {price} ₽', 'url': pay['url']}]]})
+
+
 def handle_telegram(update: dict):
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -354,6 +422,15 @@ def handle_telegram(update: dict):
                     return
                 handle_trip_status(cur, conn, order_id, user, cb['id'],
                                    'pickup' if data.startswith('trip_pickup:') else 'done')
+            elif data == 'sub_menu':
+                tg_answer_callback(cb['id'])
+                send_start_menu(user.get('id'))
+            elif data == 'sub_status':
+                tg_answer_callback(cb['id'])
+                handle_sub_status(cur, user.get('id'), user.get('id'))
+            elif data in ('sub_1', 'sub_6', 'sub_12'):
+                tg_answer_callback(cb['id'])
+                handle_sub_buy(cur, user.get('id'), user, data)
             else:
                 tg_answer_callback(cb['id'])
             return
@@ -379,24 +456,40 @@ def handle_telegram(update: dict):
                         user = msg.get('from', {})
                         handle_accept(cur, conn, order_id, user, None)
                         return
-                tg_send(chat['id'],
-                        "👋 Это бот заказов. Принимай заказы в группе кнопкой «✅ Принять заказ» "
-                        "и оплачивай комиссию здесь.")
+                # Обычный /start — приветствие с меню подписки.
+                send_start_menu(chat['id'])
+            elif text.startswith('/status') or text.startswith('/подписка') or text.startswith('/sub'):
+                uid = msg.get('from', {}).get('id')
+                handle_sub_status(cur, chat['id'], uid)
     finally:
         cur.close()
         conn.close()
 
 
 def handle_yookassa(body: dict):
-    """Webhook ЮKassa: при успешной оплате отдаём контакты победителю."""
+    """Webhook ЮKassa: оплата заказа (контакты победителю) или подписки (активация)."""
     event = body.get('event', '')
     obj = body.get('object', {})
     payment_id = obj.get('id', '')
     if event != 'payment.succeeded' or not payment_id:
         return
+    meta = obj.get('metadata') or {}
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
+        # Оплата ПОДПИСКИ.
+        if meta.get('kind') == 'sub':
+            uid = meta.get('tg_user_id')
+            months = int(meta.get('months') or 1)
+            if uid:
+                until = extend_sub(cur, conn, int(uid), months,
+                                   meta.get('username', ''), meta.get('first_name', ''), payment_id)
+                tg_send(int(uid),
+                        f"✅ <b>Подписка активирована!</b>\n"
+                        f"Теперь комиссия по заказам — <b>10%</b>.\n"
+                        f"Действует до: <b>{until.strftime('%d.%m.%Y')}</b>")
+            return
+        # Оплата КОМИССИИ за заказ.
         cur.execute(
             f"SELECT * FROM {SCHEMA}.order_queue WHERE payment_id=%s AND status='paying' LIMIT 1",
             (payment_id,),

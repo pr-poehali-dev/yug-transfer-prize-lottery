@@ -112,6 +112,72 @@ def yk_create_payment(amount_rub: float, description: str, metadata: dict) -> di
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
+# ─────────────────────── Подписка водителя ───────────────────────
+
+SUB_PLANS = {
+    'sub_1': (1, 1500, '1 месяц'),
+    'sub_6': (6, 6000, '6 месяцев'),
+    'sub_12': (12, 10000, '12 месяцев'),
+}
+SUB_COMMISSION_PCT = 10  # комиссия подписчика по любому заказу
+
+
+def has_active_sub(cur, tg_user_id) -> bool:
+    cur.execute(
+        f"SELECT active_until FROM {SCHEMA}.driver_subs WHERE tg_user_id=%s",
+        (tg_user_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return False
+    au = row['active_until'] if isinstance(row, dict) else row[0]
+    return bool(au and au > datetime.utcnow())
+
+
+def sub_active_until(cur, tg_user_id):
+    cur.execute(
+        f"SELECT active_until FROM {SCHEMA}.driver_subs WHERE tg_user_id=%s",
+        (tg_user_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return row['active_until'] if isinstance(row, dict) else row[0]
+
+
+def parse_price(v) -> float:
+    s = str(v or '').replace(',', '.')
+    digits = ''.join(ch for ch in s if (ch.isdigit() or ch == '.'))
+    try:
+        return float(digits) if digits else 0.0
+    except Exception:
+        return 0.0
+
+
+def commission_for(cur, o: dict, tg_user_id) -> float:
+    """Комиссия за заказ: подписчику — 10% от цены, остальным — как в заказе."""
+    if has_active_sub(cur, tg_user_id):
+        return round(parse_price(o.get('price')) * SUB_COMMISSION_PCT / 100.0, 2)
+    return float(o.get('commission_rub') or 0)
+
+
+def extend_sub(cur, conn, tg_user_id, months: int, username='', first_name='', payment_id=''):
+    """Продлевает подписку: от текущей даты окончания (если активна) или от сегодня."""
+    base = sub_active_until(cur, tg_user_id)
+    start = base if (base and base > datetime.utcnow()) else datetime.utcnow()
+    new_until = start + timedelta(days=30 * months)
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.driver_subs (tg_user_id, username, first_name, active_until, last_payment_id, updated_at) "
+        f"VALUES (%s,%s,%s,%s,%s,NOW()) "
+        f"ON CONFLICT (tg_user_id) DO UPDATE SET "
+        f"active_until=EXCLUDED.active_until, username=EXCLUDED.username, "
+        f"first_name=EXCLUDED.first_name, last_payment_id=EXCLUDED.last_payment_id, updated_at=NOW()",
+        (tg_user_id, username or '', first_name or '', new_until, payment_id or ''),
+    )
+    conn.commit()
+    return new_until
+
+
 # ─────────────────────── Очередь ───────────────────────
 
 def get_order(cur, order_id: int):
