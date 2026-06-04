@@ -109,7 +109,8 @@ def get_order(cur, order_id: int):
     cur.execute(
         f"SELECT id, from_city, to_city, from_address, to_address, order_date, order_time, "
         f"price, tariff, client_phone, people, luggage, comment, commission_rub, "
-        f"tg_chat_id, sale_status, current_user_id, winner_user_id "
+        f"tg_chat_id, tg_message_id, sale_status, current_user_id, winner_user_id, "
+        f"trip_status, winner_chat_id, winner_message_id "
         f"FROM {SCHEMA}.dispatch_orders WHERE id=%s", (order_id,)
     )
     return cur.fetchone()
@@ -150,9 +151,11 @@ def render_queue_text(o: dict, queue: list) -> str:
     return '\n'.join(lines)
 
 
-def client_contacts_text(o: dict) -> str:
-    lines = ['🎉 <b>Заказ ваш! Контакты клиента:</b>', '']
-    lines.append(f"📞 <b>Телефон:</b> {esc(o.get('client_phone') or '—')}")
+def client_contacts_text(o: dict, with_phone: bool = True, done: bool = False) -> str:
+    head = '✅ <b>Заказ завершён</b>' if done else '🎉 <b>Заказ ваш! Контакты клиента:</b>'
+    lines = [head, '']
+    if with_phone:
+        lines.append(f"📞 <b>Телефон:</b> {esc(o.get('client_phone') or '—')}")
     a = o.get('from_address') or o.get('from_city')
     b = o.get('to_address') or o.get('to_city')
     if a:

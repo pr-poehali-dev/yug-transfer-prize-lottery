@@ -106,7 +106,19 @@ def award_order(cur, conn, order_id: int, winner: dict):
     )
     conn.commit()
 
-    tg_send(winner['tg_user_id'], client_contacts_text(dict(o)))
+    # Контакты победителю + первая кнопка статуса «Клиент в машине».
+    res = tg_send(
+        winner['tg_user_id'],
+        client_contacts_text(dict(o)),
+        {'inline_keyboard': [[{'text': '🚗 Клиент в машине', 'callback_data': f'trip_pickup:{order_id}'}]]},
+    )
+    win_msg_id = (res.get('result') or {}).get('message_id')
+    cur.execute(
+        f"UPDATE {SCHEMA}.dispatch_orders SET trip_status='waiting_pickup', "
+        f"winner_chat_id=%s, winner_message_id=%s WHERE id=%s",
+        (winner['tg_user_id'], win_msg_id, order_id),
+    )
+    conn.commit()
 
     # Обновляем сообщение в группе: заказ куплен, убираем кнопку
     if o['tg_chat_id'] and o.get('current_user_id') is not None or o['tg_chat_id']:
@@ -182,6 +194,60 @@ def handle_test_paid(cur, conn, order_id: int, user: dict, callback_id: str):
     award_order(cur, conn, order_id, dict(q))
 
 
+def handle_trip_status(cur, conn, order_id: int, user: dict, callback_id: str, step: str):
+    """Кнопки статуса поездки у победителя: pickup → done."""
+    o = get_order(cur, order_id)
+    if not o:
+        tg_answer_callback(callback_id, 'Заказ не найден', True)
+        return
+    # Только победитель может менять статус.
+    if o['winner_user_id'] != user['id']:
+        tg_answer_callback(callback_id, 'Это не твой заказ', True)
+        return
+
+    win_chat = o['winner_chat_id']
+    win_msg = o['winner_message_id']
+
+    if step == 'pickup':
+        if o['trip_status'] != 'waiting_pickup':
+            tg_answer_callback(callback_id, 'Статус уже изменён', False)
+            return
+        cur.execute(
+            f"UPDATE {SCHEMA}.dispatch_orders SET trip_status='in_progress' WHERE id=%s", (order_id,)
+        )
+        conn.commit()
+        tg_answer_callback(callback_id, 'Клиент в машине', False)
+        # Показываем вторую кнопку «Завершил заказ» (номер ещё виден).
+        if win_chat and win_msg:
+            tg_call('editMessageText', {
+                'chat_id': win_chat, 'message_id': win_msg,
+                'text': client_contacts_text(dict(o), with_phone=True) + '\n\n🚗 <b>Клиент в машине</b>',
+                'parse_mode': 'HTML', 'disable_web_page_preview': True,
+                'reply_markup': {'inline_keyboard': [[
+                    {'text': '✅ Завершил заказ', 'callback_data': f'trip_done:{order_id}'}
+                ]]},
+            })
+        return
+
+    # step == 'done'
+    if o['trip_status'] == 'done':
+        tg_answer_callback(callback_id, 'Заказ уже завершён', False)
+        return
+    cur.execute(
+        f"UPDATE {SCHEMA}.dispatch_orders SET trip_status='done' WHERE id=%s", (order_id,)
+    )
+    conn.commit()
+    tg_answer_callback(callback_id, 'Заказ завершён', False)
+    # Завершён — убираем номер клиента и кнопки.
+    if win_chat and win_msg:
+        tg_call('editMessageText', {
+            'chat_id': win_chat, 'message_id': win_msg,
+            'text': client_contacts_text(dict(o), with_phone=False, done=True),
+            'parse_mode': 'HTML', 'disable_web_page_preview': True,
+            'reply_markup': {'inline_keyboard': []},
+        })
+
+
 def handle_telegram(update: dict):
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -205,6 +271,14 @@ def handle_telegram(update: dict):
                     tg_answer_callback(cb['id'], 'Ошибка', True)
                     return
                 handle_test_paid(cur, conn, order_id, user, cb['id'])
+            elif data.startswith('trip_pickup:') or data.startswith('trip_done:'):
+                try:
+                    order_id = int(data.split(':', 1)[1])
+                except Exception:
+                    tg_answer_callback(cb['id'], 'Ошибка', True)
+                    return
+                handle_trip_status(cur, conn, order_id, user, cb['id'],
+                                   'pickup' if data.startswith('trip_pickup:') else 'done')
             else:
                 tg_answer_callback(cb['id'])
             return

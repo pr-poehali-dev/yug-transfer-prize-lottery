@@ -145,6 +145,8 @@ def row_to_order(r: dict) -> dict:
         'animal': bool(r['animal']),
         'comment': r['comment'] or '',
         'created_at': r['created_at'].isoformat() if r.get('created_at') else None,
+        'sale_status': r.get('sale_status') or 'archived',
+        'trip_status': r.get('trip_status') or '',
     }
 
 

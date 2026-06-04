@@ -21,6 +21,25 @@ export interface OrderForm {
 export interface ArchivedOrder extends OrderForm {
   id: number;
   created_at: string | null;
+  sale_status?: string;
+  trip_status?: string;
+}
+
+export interface StatusBadge {
+  label: string;
+  cls: string;
+}
+
+export function orderStatusBadge(o: { sale_status?: string; trip_status?: string }): StatusBadge {
+  const trip = o.trip_status || "";
+  if (trip === "done") return { label: "Заказ завершён", cls: "bg-zinc-500/15 text-zinc-300" };
+  if (trip === "in_progress") return { label: "🚗 Клиент в машине", cls: "bg-blue-500/15 text-blue-400" };
+  if (trip === "waiting_pickup") return { label: "Оплачен, ждёт подачи", cls: "bg-emerald-500/15 text-emerald-400" };
+
+  const sale = o.sale_status || "archived";
+  if (sale === "sold") return { label: "Куплен", cls: "bg-emerald-500/15 text-emerald-400" };
+  if (sale === "selling") return { label: "🟢 На продаже", cls: "bg-purple-500/15 text-purple-300" };
+  return { label: "В архиве", cls: "bg-white/10 text-muted-foreground" };
 }
 
 export const TARIFFS = ["Срочный", "Эконом", "Комфорт", "Бизнес", "Минивэн"];

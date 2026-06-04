@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { DISPATCH_ORDER_URL } from "./adminTypes";
-import { ArchivedOrder, OrderForm } from "./dispatch/dispatchTypes";
+import { ArchivedOrder, OrderForm, orderStatusBadge } from "./dispatch/dispatchTypes";
 
 interface ArchiveTabProps {
   token: string;
@@ -109,6 +109,14 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
           {orders.map((o) => (
             <div key={o.id} className="glass rounded-xl border border-white/5 p-3 flex flex-col md:flex-row md:items-center gap-3">
               <div className="flex-1 min-w-0">
+                {(() => {
+                  const b = orderStatusBadge(o);
+                  return (
+                    <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-md mb-1 ${b.cls}`}>
+                      {b.label}
+                    </span>
+                  );
+                })()}
                 <div className="text-sm font-semibold text-white truncate">{routeText(o)}</div>
                 <div className="text-[12px] text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                   {o.date && <span>📅 {o.date}{o.time ? ` ${o.time}` : ""}</span>}
