@@ -58,7 +58,6 @@ def offer_to_first(cur, conn, order_id: int):
         tg_send(
             nxt['tg_user_id'],
             order_public_text(dict(o)) + '\n\n'
-            f"✅ <b>Ты первый в очереди!</b>\n"
             f"🧪 Тестовый режим (ЮKassa ещё не подключена). Комиссия была бы <b>{amount:.0f} ₽</b>.\n"
             f"Нажми кнопку ниже, чтобы сымитировать оплату ({DEADLINE_MINUTES} мин).",
             {'inline_keyboard': [[{'text': f'✅ Я оплатил (тест)', 'callback_data': f'paid:{order_id}'}]]},
@@ -93,9 +92,7 @@ def send_payment_message(user_id, order: dict, amount: float, pay_url: str):
     tg_send(
         user_id,
         order_public_text(order) + '\n\n'
-        f"✅ <b>Ты первый в очереди!</b>\n"
-        f"💳 Оплати комиссию <b>{amount:.0f} ₽</b> в течение {DEADLINE_MINUTES} минут, "
-        f"иначе заказ перейдёт следующему.\n"
+        f"💳 Оплати комиссию <b>{amount:.0f} ₽</b> в течение {DEADLINE_MINUTES} минут.\n"
         f"После оплаты пришлю контакты клиента.",
         {'inline_keyboard': [[{'text': f'💳 Оплатить {amount:.0f} ₽', 'url': pay_url}]]},
     )
@@ -177,23 +174,24 @@ def handle_accept(cur, conn, order_id: int, user: dict, callback_id: str):
         return
 
     cur.execute(
-        f"SELECT id, status FROM {SCHEMA}.order_queue WHERE order_id=%s AND tg_user_id=%s",
+        f"SELECT id, status, payment_url FROM {SCHEMA}.order_queue WHERE order_id=%s AND tg_user_id=%s",
         (order_id, uid),
     )
     existing = cur.fetchone()
     if existing:
-        _notify(callback_id, uid, 'Ты уже в очереди на этот заказ', False)
-        # Если этот водитель сейчас оплачивает — повторно отправляем ему кнопку оплаты.
-        cur.execute(
-            f"SELECT payment_url FROM {SCHEMA}.order_queue "
-            f"WHERE order_id=%s AND tg_user_id=%s AND status='paying'", (order_id, uid),
-        )
-        row = cur.fetchone()
-        if row and row.get('payment_url'):
+        # Водитель уже в очереди (повторный переход в бота).
+        if existing['status'] == 'paying':
+            # Он оплачивает сейчас — заново показываем кнопку оплаты (без лишних слов).
+            url = existing.get('payment_url')
             amount = float(o['commission_rub'] or 0)
-            send_payment_message(uid, dict(o), amount, row['payment_url'])
+            if url:
+                send_payment_message(uid, dict(o), amount, url)
+            else:
+                offer_to_first(cur, conn, order_id)
         else:
-            offer_to_first(cur, conn, order_id)
+            # Ждёт своей очереди — на callback тихо подсказываем, в личку НЕ спамим.
+            if callback_id:
+                tg_answer_callback(callback_id, 'Ты уже в очереди', False)
         return
 
     cur.execute(
@@ -207,8 +205,9 @@ def handle_accept(cur, conn, order_id: int, user: dict, callback_id: str):
         (order_id, uid, user.get('username', '') or '', user.get('first_name', '') or '', pos),
     )
     conn.commit()
-    _notify(callback_id, uid, f'Ты в очереди, место {pos}', False)
-    # Если не первый — сообщим, что ждёт очереди.
+    if callback_id:
+        tg_answer_callback(callback_id, f'Ты в очереди, место {pos}', False)
+    # Только не-первому шлём короткое уведомление о месте (первому сразу придёт оплата).
     if pos > 1:
         tg_send(uid, f"⏳ Ты в очереди на заказ, место <b>{pos}</b>.\n"
                      f"Если впереди стоящие не оплатят за {DEADLINE_MINUTES} мин — очередь дойдёт до тебя.")
