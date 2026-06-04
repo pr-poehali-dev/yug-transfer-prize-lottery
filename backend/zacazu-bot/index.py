@@ -386,6 +386,34 @@ def handler(event: dict, context) -> dict:
     if qs0.get('reset'):
         res = tg_call('deleteWebhook', {'drop_pending_updates': True})
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
+    # Привязать webhook к самому себе по GET из браузера: ?bind=1
+    if qs0.get('bind'):
+        import urllib.request as _u
+        import urllib.parse as _up
+        from lib import bot_token as _bt
+        self_url = 'https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98'
+        q = _up.urlencode({
+            'url': self_url,
+            'allowed_updates': json.dumps(['message', 'callback_query']),
+            'drop_pending_updates': 'true',
+        })
+        api = f'https://api.telegram.org/bot{_bt()}/setWebhook?{q}'
+        last = ''
+        ok = False
+        for _ in range(8):
+            try:
+                with _u.urlopen(api, timeout=8) as resp:
+                    j = json.loads(resp.read())
+                last = j.get('description', '')
+                if j.get('ok'):
+                    ok = True
+                    break
+            except Exception as e:
+                last = f'{type(e).__name__}'
+        msg = '✅ Webhook привязан! Бот готов к работе.' if ok else f'❌ Не удалось: {last}'
+        html = f"<html><body style='font-family:sans-serif;font-size:20px;padding:40px'>{msg}</body></html>"
+        return {'statusCode': 200, 'headers': {'Content-Type': 'text/html; charset=utf-8',
+                'Access-Control-Allow-Origin': '*'}, 'body': html}
 
     if event.get('httpMethod') != 'POST':
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True})}
