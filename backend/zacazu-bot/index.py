@@ -302,6 +302,47 @@ def handle_accept(cur, conn, order_id: int, user: dict, callback_id: str):
     offer_to_first(cur, conn, order_id)
 
 
+def handle_decline(cur, conn, order_id: int, user: dict, callback_id: str):
+    """Водитель отказался от заказа: убираем из очереди и передаём следующему."""
+    uid = user.get('id')
+    o = get_order(cur, order_id)
+    if not o:
+        tg_answer_callback(callback_id, 'Заказ не найден', True)
+        return
+    cur.execute(
+        f"SELECT id, status, pay_chat_id, pay_msg_id FROM {SCHEMA}.order_queue "
+        f"WHERE order_id=%s AND tg_user_id=%s LIMIT 1",
+        (order_id, uid),
+    )
+    q = cur.fetchone()
+    if not q:
+        tg_answer_callback(callback_id, 'Тебя нет в очереди по этому заказу', True)
+        return
+    # Удаляем водителя из очереди; если он был плательщиком — освобождаем заказ.
+    cur.execute(f"DELETE FROM {SCHEMA}.order_queue WHERE id=%s", (q['id'],))
+    if q['status'] == 'paying':
+        cur.execute(
+            f"UPDATE {SCHEMA}.dispatch_orders SET current_user_id=NULL, current_deadline=NULL WHERE id=%s",
+            (order_id,),
+        )
+    conn.commit()
+    tg_answer_callback(callback_id, 'Ты отказался от заказа', False)
+    # Сообщение с кнопкой оплаты заменяем на отметку об отказе.
+    pay_chat = q.get('pay_chat_id') or uid
+    pay_msg = q.get('pay_msg_id')
+    if pay_msg:
+        tg_call('editMessageText', {
+            'chat_id': pay_chat, 'message_id': pay_msg,
+            'text': order_public_text(dict(o)) + '\n\n❌ <b>Ты отказался от заказа</b>',
+            'parse_mode': 'HTML', 'disable_web_page_preview': True,
+            'reply_markup': {'inline_keyboard': []},
+        })
+    # Обновляем очередь в группе и передаём заказ следующему.
+    update_queue_message(cur, conn, order_id)
+    if o['sale_status'] == 'selling':
+        offer_to_first(cur, conn, order_id)
+
+
 def handle_test_paid(cur, conn, order_id: int, user: dict, callback_id: str):
     """Тестовая имитация оплаты: только текущий плательщик может нажать."""
     o = get_order(cur, order_id)
