@@ -23,6 +23,9 @@ export interface ArchivedOrder extends OrderForm {
   created_at: string | null;
   sale_status?: string;
   trip_status?: string;
+  winner_user_id?: number | null;
+  winner_username?: string;
+  winner_first_name?: string;
 }
 
 export interface StatusBadge {

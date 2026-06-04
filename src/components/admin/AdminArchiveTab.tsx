@@ -183,6 +183,18 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
                   {o.tariff && <span>🎫 {o.tariff}</span>}
                   {o.client_phone && <span>📞 {o.client_phone}</span>}
                 </div>
+                {o.winner_user_id && (
+                  <div className="text-[12px] text-emerald-400 mt-1 flex items-center gap-1.5">
+                    <Icon name="UserCheck" size={13} />
+                    Купил:{" "}
+                    {o.winner_username ? (
+                      <a href={`https://t.me/${o.winner_username}`} target="_blank" rel="noreferrer"
+                        className="font-medium hover:underline">@{o.winner_username}</a>
+                    ) : (
+                      <span className="font-medium">{o.winner_first_name || `ID ${o.winner_user_id}`}</span>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button onClick={() => sendToSale(o)} disabled={busyId === o.id}

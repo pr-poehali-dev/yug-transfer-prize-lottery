@@ -185,6 +185,9 @@ def row_to_order(r: dict) -> dict:
         'created_at': r['created_at'].isoformat() if r.get('created_at') else None,
         'sale_status': r.get('sale_status') or 'archived',
         'trip_status': r.get('trip_status') or '',
+        'winner_user_id': r.get('winner_user_id'),
+        'winner_username': r.get('winner_username') or '',
+        'winner_first_name': r.get('winner_first_name') or '',
     }
 
 
@@ -214,7 +217,13 @@ def archive_save(d: dict) -> dict:
 def archive_list() -> dict:
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute(f"SELECT * FROM {SCHEMA}.dispatch_orders ORDER BY created_at DESC LIMIT 200")
+    cur.execute(
+        f"SELECT d.*, q.username AS winner_username, q.first_name AS winner_first_name "
+        f"FROM {SCHEMA}.dispatch_orders d "
+        f"LEFT JOIN {SCHEMA}.order_queue q "
+        f"ON q.order_id = d.id AND q.tg_user_id = d.winner_user_id AND q.status='paid' "
+        f"ORDER BY d.created_at DESC LIMIT 200"
+    )
     rows = cur.fetchall()
     cur.close()
     conn.close()
