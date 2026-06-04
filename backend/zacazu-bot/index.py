@@ -19,6 +19,36 @@ def db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
 
+def sweep_expired(cur, conn):
+    """Проверяет просроченные оплаты (>5 мин) и передаёт заказ следующему.
+       Вызывается при каждом обращении к боту — заменяет внешний cron."""
+    cur.execute(
+        f"SELECT id, current_user_id FROM {SCHEMA}.dispatch_orders "
+        f"WHERE sale_status='selling' AND current_deadline IS NOT NULL "
+        f"AND current_deadline < (NOW() AT TIME ZONE 'utc')"
+    )
+    expired = cur.fetchall()
+    for o in expired:
+        order_id = o['id']
+        uid = o['current_user_id']
+        # Не успел оплатить — убираем из очереди, чтобы мог встать заново.
+        cur.execute(
+            f"DELETE FROM {SCHEMA}.order_queue "
+            f"WHERE order_id=%s AND tg_user_id=%s AND status='paying'",
+            (order_id, uid),
+        )
+        cur.execute(
+            f"UPDATE {SCHEMA}.dispatch_orders SET current_user_id=NULL, current_deadline=NULL WHERE id=%s",
+            (order_id,),
+        )
+        conn.commit()
+        if uid:
+            tg_send(uid,
+                    "⌛ Время на оплату вышло — заказ передан следующему.\n"
+                    "Если заказ ещё открыт, можешь снова нажать «Принять заказ».")
+        offer_to_first(cur, conn, order_id)
+
+
 def offer_to_first(cur, conn, order_id: int):
     """Назначает оплату первому в очереди (status waiting->paying) и шлёт ему ссылку."""
     o = get_order(cur, order_id)
@@ -421,6 +451,11 @@ def handle_telegram(update: dict):
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
+        # На каждом действии проверяем просроченные оплаты и передаём дальше.
+        try:
+            sweep_expired(cur, conn)
+        except Exception as e:
+            print(f"sweep_expired error: {e}")
         cb = update.get('callback_query')
         if cb:
             data = cb.get('data', '')
