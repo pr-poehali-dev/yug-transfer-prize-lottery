@@ -327,7 +327,11 @@ def tg_edit_order(message_id, text: str, order_id: int) -> dict:
         except urllib.error.HTTPError as e:
             try:
                 body = json.loads(e.read())
-                return {'ok': False, 'error': f"HTTP {e.code}: {body.get('description', '')[:200]}"}
+                desc = body.get('description', '')
+                # «message is not modified» — значит правок не было, считаем успехом.
+                if 'message is not modified' in desc:
+                    return {'ok': True, 'unchanged': True}
+                return {'ok': False, 'error': f"HTTP {e.code}: {desc[:200]}"}
             except Exception:
                 return {'ok': False, 'error': f"HTTP {e.code}"}
         except Exception:
