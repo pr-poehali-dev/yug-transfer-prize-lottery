@@ -609,7 +609,9 @@ def handle_telegram(update: dict):
                 else:
                     tg_send(chat['id'], "Кнопки подписки — внизу 👇", sub_reply_keyboard())
                     send_sub_button(chat['id'])
-            elif text.startswith('/status') or text.startswith('/подписка') or text.startswith('/sub'):
+            elif text.startswith('/podpiska') or text.startswith('/подписка') or text.startswith('/sub'):
+                send_start_menu(chat['id'])
+            elif text.startswith('/status'):
                 uid = msg.get('from', {}).get('id')
                 handle_sub_status(cur, chat['id'], uid)
             # Нажатия кнопок нижней клавиатуры (приходят как текст) — только в личке.
@@ -704,6 +706,18 @@ def handler(event: dict, context) -> dict:
     if qs0.get('me'):
         res = tg_call('getMe', {})
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
+    # Настроить кнопку «Меню» возле строки ввода и команды бота: ?setupmenu=1
+    if qs0.get('setupmenu'):
+        cmds = tg_call('setMyCommands', {'commands': [
+            {'command': 'start', 'description': '🏠 Главное меню'},
+            {'command': 'podpiska', 'description': '💳 Подписка'},
+            {'command': 'status', 'description': '📊 Мой статус'},
+        ]})
+        menu = tg_call('setChatMenuButton', {
+            'menu_button': {'type': 'commands'}
+        })
+        return {'statusCode': 200, 'headers': cors,
+                'body': json.dumps({'commands': cmds, 'menu': menu})}
     # Удалить webhook и сбросить накопленные апдейты: ?reset=1
     if qs0.get('reset'):
         res = tg_call('deleteWebhook', {'drop_pending_updates': True})
