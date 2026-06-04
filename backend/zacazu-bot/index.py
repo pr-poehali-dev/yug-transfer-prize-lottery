@@ -404,18 +404,20 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 400, 'headers': cors,
                     'body': json.dumps({'ok': False, 'error': 'Передай url функции в body'})}
         import urllib.request as _u
+        import urllib.parse as _up
         from lib import bot_token as _bt
         token = _bt()
-        payload = json.dumps({
-            'url': self_url, 'allowed_updates': ['message', 'callback_query'],
-        }).encode()
+        # GET-запрос с параметрами в URL — самый лёгкий способ, реже таймаутит.
+        q = _up.urlencode({
+            'url': self_url,
+            'allowed_updates': json.dumps(['message', 'callback_query']),
+            'drop_pending_updates': 'true',
+        })
+        api = f'https://api.telegram.org/bot{token}/setWebhook?{q}'
         set_res = {}
-        for _ in range(4):
+        for _ in range(6):
             try:
-                req = _u.Request(
-                    f'https://api.telegram.org/bot{token}/setWebhook',
-                    data=payload, headers={'Content-Type': 'application/json'}, method='POST')
-                with _u.urlopen(req, timeout=25) as resp:
+                with _u.urlopen(api, timeout=8) as resp:
                     set_res = json.loads(resp.read())
                 if set_res.get('ok'):
                     break
