@@ -197,6 +197,22 @@ def render_queue_block(queue: list) -> str:
     return '\n'.join(lines)
 
 
+def contacts_block(o: dict, with_phone: bool = True) -> str:
+    """Блок с контактами клиента, который ДОПИСЫВАЕТСЯ к тексту заказа (не заменяет его)."""
+    lines = ['━━━━━━━━━━━━━━━', '🎉 <b>Заказ ваш! Контакты клиента:</b>', '']
+    if with_phone:
+        lines.append(f"📞 <b>Телефон:</b> {esc(o.get('client_phone') or '—')}")
+    a = o.get('from_address')
+    b = o.get('to_address')
+    if a:
+        lines.append(f"➡️ <b>Точный адрес подачи:</b> {esc(a)}")
+    if b:
+        lines.append(f"⬅️ <b>Точный адрес назначения:</b> {esc(b)}")
+    if o.get('comment'):
+        lines.append(f"💬 {esc(o['comment'])}")
+    return '\n'.join(lines)
+
+
 def client_contacts_text(o: dict, with_phone: bool = True, done: bool = False) -> str:
     head = '✅ <b>Заказ завершён</b>' if done else '🎉 <b>Заказ ваш! Контакты клиента:</b>'
     lines = [head, '']

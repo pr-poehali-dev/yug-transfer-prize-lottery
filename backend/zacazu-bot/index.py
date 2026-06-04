@@ -7,7 +7,7 @@ import psycopg2.extras
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_answer_callback, tg_call,
     yk_create_payment, get_order, queue_list, render_queue_text, render_queue_block,
-    client_contacts_text, order_brief, order_public_text, mention, deadline_dt,
+    client_contacts_text, contacts_block, order_brief, order_public_text, mention, deadline_dt,
 )
 
 BOT_USERNAME = os.environ.get('ZACAZU_BOT_USERNAME', 'zacazubot')
@@ -125,8 +125,8 @@ def award_order(cur, conn, order_id: int, winner: dict):
     )
     conn.commit()
 
-    # Контакты победителю + первая кнопка статуса «Клиент в машине».
-    contacts = client_contacts_text(dict(o))
+    # Не заменяем текст заказа, а ДОПИСЫВАЕМ блок контактов к информации о заказе.
+    contacts = order_public_text(dict(o)) + '\n\n' + contacts_block(dict(o))
     keyboard = {'inline_keyboard': [[{'text': '🚗 Клиент в машине', 'callback_data': f'trip_pickup:{order_id}'}]]}
 
     # Если у победителя есть сообщение с кнопкой «Оплатить» — редактируем ЕГО,
@@ -290,9 +290,11 @@ def handle_trip_status(cur, conn, order_id: int, user: dict, callback_id: str, s
         tg_answer_callback(callback_id, 'Клиент в машине', False)
         # Показываем вторую кнопку «Завершил заказ» (номер ещё виден).
         if win_chat and win_msg:
+            text = (order_public_text(dict(o)) + '\n\n' + contacts_block(dict(o), with_phone=True)
+                    + '\n\n🚗 <b>Клиент в машине</b>')
             tg_call('editMessageText', {
                 'chat_id': win_chat, 'message_id': win_msg,
-                'text': client_contacts_text(dict(o), with_phone=True) + '\n\n🚗 <b>Клиент в машине</b>',
+                'text': text,
                 'parse_mode': 'HTML', 'disable_web_page_preview': True,
                 'reply_markup': {'inline_keyboard': [[
                     {'text': '✅ Завершил заказ', 'callback_data': f'trip_done:{order_id}'}
@@ -309,11 +311,12 @@ def handle_trip_status(cur, conn, order_id: int, user: dict, callback_id: str, s
     )
     conn.commit()
     tg_answer_callback(callback_id, 'Заказ завершён', False)
-    # Завершён — убираем номер клиента и кнопки.
+    # Завершён — оставляем инфо о заказе, дописываем статус, убираем кнопки.
     if win_chat and win_msg:
+        text = order_public_text(dict(o)) + '\n\n━━━━━━━━━━━━━━━\n✅ <b>Заказ завершён</b>'
         tg_call('editMessageText', {
             'chat_id': win_chat, 'message_id': win_msg,
-            'text': client_contacts_text(dict(o), with_phone=False, done=True),
+            'text': text,
             'parse_mode': 'HTML', 'disable_web_page_preview': True,
             'reply_markup': {'inline_keyboard': []},
         })
