@@ -349,7 +349,7 @@ def sub_reply_keyboard():
     }
 
 
-def send_start_menu(chat_id):
+def send_start_menu(chat_id, force: bool = True):
     tg_send(
         chat_id,
         "👋 <b>Добро пожаловать!</b>\n\n"
@@ -357,6 +357,24 @@ def send_start_menu(chat_id):
         "Кнопки подписки — внизу экрана.",
         sub_reply_keyboard(),
     )
+
+
+def start_already_seen(cur, conn, uid, user=None) -> bool:
+    """True, если пользователь уже получал приветствие. Иначе помечает и возвращает False."""
+    cur.execute(f"SELECT seen_start FROM {SCHEMA}.driver_subs WHERE tg_user_id=%s", (uid,))
+    row = cur.fetchone()
+    seen = bool(row and (row['seen_start'] if isinstance(row, dict) else row[0]))
+    if seen:
+        return True
+    u = user or {}
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.driver_subs (tg_user_id, username, first_name, seen_start, updated_at) "
+        f"VALUES (%s,%s,%s,TRUE,NOW()) "
+        f"ON CONFLICT (tg_user_id) DO UPDATE SET seen_start=TRUE, updated_at=NOW()",
+        (uid, u.get('username', '') or '', u.get('first_name', '') or ''),
+    )
+    conn.commit()
+    return False
 
 
 def handle_sub_status(cur, chat_id, uid):
@@ -465,8 +483,10 @@ def handle_telegram(update: dict):
                         user = msg.get('from', {})
                         handle_accept(cur, conn, order_id, user, None)
                         return
-                # Обычный /start — приветствие с меню подписки.
-                send_start_menu(chat['id'])
+                # Обычный /start — приветствие шлём только при ПЕРВОМ заходе.
+                u = msg.get('from', {})
+                if not start_already_seen(cur, conn, u.get('id'), u):
+                    send_start_menu(chat['id'])
             elif text.startswith('/status') or text.startswith('/подписка') or text.startswith('/sub'):
                 uid = msg.get('from', {}).get('id')
                 handle_sub_status(cur, chat['id'], uid)
