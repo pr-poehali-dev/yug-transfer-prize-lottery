@@ -1,44 +1,23 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { DISPATCH_ORDER_URL } from "./adminTypes";
-
-interface OrderForm {
-  from_city: string;
-  to_city: string;
-  from_address: string;
-  to_address: string;
-  stops: string[];
-  date: string;
-  time: string;
-  price: string;
-  tariff: string;
-  commission: string;
-  client_phone: string;
-  people: string;
-  luggage: string;
-  booster: boolean;
-  child_seat: boolean;
-  animal: boolean;
-  comment: string;
-}
-
-const TARIFFS = ["Срочный", "Эконом", "Комфорт", "Бизнес", "Минивэн"];
-const COMMISSIONS = ["10%", "15%", "20%", "25%"];
-
-const EMPTY: OrderForm = {
-  from_city: "", to_city: "", from_address: "", to_address: "", stops: [],
-  date: "", time: "", price: "", tariff: "Срочный", commission: "15%",
-  client_phone: "", people: "1", luggage: "1",
-  booster: false, child_seat: false, animal: false, comment: "",
-};
+import { OrderForm, EMPTY_ORDER, TARIFFS, COMMISSIONS } from "./dispatch/dispatchTypes";
 
 const fieldCls =
   "w-full px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-muted-foreground/60 focus:outline-none focus:border-purple-400/50 transition-colors";
 const labelCls = "text-[11px] font-medium text-muted-foreground mb-0.5 block";
 
-export function AdminDispatchTab({ token }: { token: string }) {
-  const [form, setForm] = useState<OrderForm>({ ...EMPTY });
+interface DispatchTabProps {
+  token: string;
+  initialOrder?: OrderForm | null;
+  editId?: number | null;
+  onSent?: () => void;
+}
+
+export function AdminDispatchTab({ token, initialOrder, editId, onSent }: DispatchTabProps) {
+  const [form, setForm] = useState<OrderForm>(initialOrder ? { ...initialOrder } : { ...EMPTY_ORDER });
   const [sending, setSending] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const set = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) =>
@@ -50,23 +29,36 @@ export function AdminDispatchTab({ token }: { token: string }) {
   const removeStop = (i: number) =>
     set("stops", form.stops.filter((_, idx) => idx !== i));
 
-  async function submit() {
+  function validate(): boolean {
     if (!form.from_city && !form.to_city && !form.client_phone) {
       setMsg({ ok: false, text: "Заполни маршрут или номер клиента" });
-      return;
+      return false;
     }
+    return true;
+  }
+
+  function payload(action: string) {
+    const body: Record<string, unknown> = { ...form, stops: form.stops.filter(Boolean) };
+    if (editId) body.id = editId;
+    return { action, body };
+  }
+
+  async function submit() {
+    if (!validate()) return;
     setSending(true);
     setMsg(null);
     try {
-      const r = await fetch(DISPATCH_ORDER_URL, {
+      const { body } = payload("send");
+      const r = await fetch(`${DISPATCH_ORDER_URL}?action=send`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ ...form, stops: form.stops.filter(Boolean) }),
+        body: JSON.stringify(body),
       });
       const j = await r.json();
       if (j.ok) {
-        setMsg({ ok: true, text: "Заказ отправлен в Telegram!" });
-        setForm({ ...EMPTY });
+        setMsg({ ok: true, text: "Заказ отправлен на продажу в Telegram!" });
+        setForm({ ...EMPTY_ORDER });
+        onSent?.();
       } else {
         setMsg({ ok: false, text: j.error || "Не удалось отправить" });
       }
@@ -77,6 +69,32 @@ export function AdminDispatchTab({ token }: { token: string }) {
     }
   }
 
+  async function toArchive() {
+    if (!validate()) return;
+    setArchiving(true);
+    setMsg(null);
+    try {
+      const { body } = payload("archive_save");
+      const r = await fetch(`${DISPATCH_ORDER_URL}?action=archive_save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setMsg({ ok: true, text: "Заказ сохранён в архив" });
+        setForm({ ...EMPTY_ORDER });
+        onSent?.();
+      } else {
+        setMsg({ ok: false, text: j.error || "Не удалось сохранить" });
+      }
+    } catch {
+      setMsg({ ok: false, text: "Ошибка сети" });
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   return (
     <div className="glass rounded-2xl border border-white/5 p-4 space-y-4 max-w-4xl">
       <div className="flex items-center gap-2.5">
@@ -84,8 +102,10 @@ export function AdminDispatchTab({ token }: { token: string }) {
           <Icon name="Headset" size={16} />
         </div>
         <div>
-          <h2 className="text-base font-semibold text-white leading-tight">Создать заказ</h2>
-          <p className="text-[11px] text-muted-foreground">Заявка уйдёт в Telegram</p>
+          <h2 className="text-base font-semibold text-white leading-tight">
+            {editId ? "Редактировать заказ" : "Создать заказ"}
+          </h2>
+          <p className="text-[11px] text-muted-foreground">На продажу — в Telegram, в архив — предзаказ</p>
         </div>
       </div>
 
@@ -223,11 +243,18 @@ export function AdminDispatchTab({ token }: { token: string }) {
         </div>
       )}
 
-      <button onClick={submit} disabled={sending}
-        className="grad-btn w-full md:w-auto px-8 py-2.5 rounded-lg font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
-        <Icon name={sending ? "Loader" : "Send"} size={16} className={sending ? "animate-spin" : ""} />
-        {sending ? "Отправка..." : "Отправить заказ"}
-      </button>
+      <div className="flex flex-col sm:flex-row gap-2.5">
+        <button onClick={submit} disabled={sending || archiving}
+          className="grad-btn px-6 py-2.5 rounded-lg font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+          <Icon name={sending ? "Loader" : "Send"} size={16} className={sending ? "animate-spin" : ""} />
+          {sending ? "Отправка..." : "Отправить на продажу"}
+        </button>
+        <button onClick={toArchive} disabled={sending || archiving}
+          className="px-6 py-2.5 rounded-lg font-semibold border border-white/15 text-white hover:bg-white/5 disabled:opacity-60 flex items-center justify-center gap-2 transition-colors">
+          <Icon name={archiving ? "Loader" : "Archive"} size={16} className={archiving ? "animate-spin" : ""} />
+          {archiving ? "Сохранение..." : "Отправить в архив"}
+        </button>
+      </div>
     </div>
   );
 }

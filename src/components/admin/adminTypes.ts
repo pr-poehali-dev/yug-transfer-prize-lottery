@@ -53,7 +53,7 @@ export interface TgAccount {
   assigned_count?: number;
 }
 
-export type AdminTab = "posts" | "bot" | "drivers" | "stories" | "invites" | "dm" | "dispatch";
+export type AdminTab = "posts" | "bot" | "drivers" | "stories" | "invites" | "dm" | "dispatch" | "archive";
 
 export interface BotStory {
   id: number;

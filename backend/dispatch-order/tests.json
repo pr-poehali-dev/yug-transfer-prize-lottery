@@ -12,6 +12,12 @@
       "path": "/",
       "body": {},
       "expectedStatus": 400
+    },
+    {
+      "name": "Archive list",
+      "method": "GET",
+      "path": "/?action=archive_list",
+      "expectedStatus": 200
     }
   ]
 }

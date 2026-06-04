@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS t_p67171637_yug_transfer_prize_l.dispatch_orders (
+  id SERIAL PRIMARY KEY,
+  from_city TEXT DEFAULT '',
+  to_city TEXT DEFAULT '',
+  from_address TEXT DEFAULT '',
+  to_address TEXT DEFAULT '',
+  stops JSONB DEFAULT '[]'::jsonb,
+  order_date TEXT DEFAULT '',
+  order_time TEXT DEFAULT '',
+  price TEXT DEFAULT '',
+  tariff TEXT DEFAULT '',
+  commission TEXT DEFAULT '',
+  client_phone TEXT DEFAULT '',
+  people TEXT DEFAULT '',
+  luggage TEXT DEFAULT '',
+  booster BOOLEAN DEFAULT FALSE,
+  child_seat BOOLEAN DEFAULT FALSE,
+  animal BOOLEAN DEFAULT FALSE,
+  comment TEXT DEFAULT '',
+  created_at TIMESTAMP DEFAULT NOW()
+);

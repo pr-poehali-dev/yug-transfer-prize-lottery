@@ -8,19 +8,35 @@ import { AdminExcludedTab } from "./AdminExcludedTab";
 import { AdminInvitesTab } from "./AdminInvitesTab";
 import { AdminDmTab } from "./AdminDmTab";
 import { AdminDispatchTab } from "./AdminDispatchTab";
+import { AdminArchiveTab } from "./AdminArchiveTab";
+import type { OrderForm } from "./dispatch/dispatchTypes";
 import { InviteProgressProvider } from "./InviteProgressContext";
 import { InviteProgressBanner } from "./InviteProgressBanner";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("posts");
   const [postsTotal, setPostsTotal] = useState<number | null>(null);
+  const [editOrder, setEditOrder] = useState<{ order: OrderForm; id: number } | null>(null);
+  const [dispatchKey, setDispatchKey] = useState(0);
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
     { id: "invites", label: "Авто-приглашения", icon: "UserPlus" },
     { id: "dm", label: "Рассылка в личку", icon: "Mail" },
     { id: "dispatch", label: "Диспетчерская", icon: "Headset" },
+    { id: "archive", label: "Архив", icon: "Archive" },
   ];
+
+  const handleEditFromArchive = (order: OrderForm, id: number) => {
+    setEditOrder({ order, id });
+    setDispatchKey((k) => k + 1);
+    setTab("dispatch");
+  };
+
+  const openCreate = (id: AdminTab) => {
+    if (id === "dispatch") { setEditOrder(null); setDispatchKey((k) => k + 1); }
+    setTab(id);
+  };
 
   return (
     <InviteProgressProvider token={token}>
@@ -43,7 +59,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 flex gap-6">
         <aside className="hidden md:flex flex-col gap-1 w-52 shrink-0">
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => openCreate(t.id)}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${tab === t.id ? "grad-btn shadow-lg" : "text-muted-foreground hover:text-white hover:bg-white/5"}`}>
               <Icon name={t.icon as string} size={17} fallback="Circle" />
               <span className="flex-1 text-left">{t.label}</span>
@@ -56,7 +72,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/5 flex">
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => openCreate(t.id)}
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs transition-colors relative ${tab === t.id ? "text-purple-400" : "text-muted-foreground"}`}>
               <div className="relative">
                 <Icon name={t.icon as string} size={18} fallback="Circle" />
@@ -80,7 +96,16 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
           )}
           {tab === "invites" && <AdminInvitesTab token={token} />}
           {tab === "dm" && <AdminDmTab token={token} />}
-          {tab === "dispatch" && <AdminDispatchTab token={token} />}
+          {tab === "dispatch" && (
+            <AdminDispatchTab
+              key={dispatchKey}
+              token={token}
+              initialOrder={editOrder?.order ?? null}
+              editId={editOrder?.id ?? null}
+              onSent={() => setEditOrder(null)}
+            />
+          )}
+          {tab === "archive" && <AdminArchiveTab token={token} onEdit={handleEditFromArchive} />}
         </main>
       </div>
     </div>
