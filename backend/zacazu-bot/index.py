@@ -708,7 +708,7 @@ def handler(event: dict, context) -> dict:
             {'command': 'status', 'description': '📊 Мой статус'},
         ]})
         menu = tg_call('setChatMenuButton', {
-            'menu_button': {'type': 'commands'}
+            'menu_button': {'type': 'commands', 'text': 'Подписка'}
         })
         return {'statusCode': 200, 'headers': cors,
                 'body': json.dumps({'commands': cmds, 'menu': menu})}
