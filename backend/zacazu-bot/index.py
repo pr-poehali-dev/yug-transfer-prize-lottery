@@ -386,6 +386,17 @@ def handler(event: dict, context) -> dict:
     if qs0.get('reset'):
         res = tg_call('deleteWebhook', {'drop_pending_updates': True})
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
+    # Проверка ЮKassa: ?testpay=1 — создать пробный платёж на 10 ₽.
+    if qs0.get('testpay'):
+        from lib import yk_create_payment
+        has_keys = bool(os.environ.get('YOOKASSA_SHOP_ID') and os.environ.get('YOOKASSA_SECRET_KEY'))
+        pay = yk_create_payment(10.0, 'Проверка интеграции ЮKassa', {'test': '1'})
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
+            'keys_present': has_keys,
+            'ok': pay.get('ok'),
+            'has_url': bool(pay.get('url')),
+            'error': pay.get('error', ''),
+        })}
     # Привязать webhook к самому себе по GET из браузера: ?bind=1
     if qs0.get('bind'):
         import urllib.request as _u
