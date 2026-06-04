@@ -160,10 +160,17 @@ def handle_telegram(update: dict):
             return
 
         msg = update.get('message')
-        if msg and (msg.get('text') or '').startswith('/start'):
-            tg_send(msg['chat']['id'],
-                    "👋 Это бот заказов. Принимай заказы в группе кнопкой «✅ Принять заказ» "
-                    "и оплачивай комиссию здесь.")
+        if msg:
+            chat = msg.get('chat', {})
+            chat_type = chat.get('type', '')
+            text = msg.get('text') or ''
+            # В группе по команде /id показываем её ID — чтобы вписать в DISPATCH_CHAT_ID.
+            if chat_type in ('group', 'supergroup') and text.startswith('/id'):
+                tg_send(chat['id'], f"🆔 ID этой группы: <code>{chat['id']}</code>")
+            elif text.startswith('/start'):
+                tg_send(chat['id'],
+                        "👋 Это бот заказов. Принимай заказы в группе кнопкой «✅ Принять заказ» "
+                        "и оплачивай комиссию здесь.")
     finally:
         cur.close()
         conn.close()
