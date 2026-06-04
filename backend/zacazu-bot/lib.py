@@ -1,6 +1,7 @@
 """Общая логика бота @zacazubot: очередь, платежи ЮKassa, уведомления."""
 import os
 import json
+import time
 import uuid
 import base64
 import urllib.request
@@ -22,17 +23,23 @@ def tg_call(method: str, payload: dict) -> dict:
         return {'ok': False, 'description': 'ZACAZU_BOT_TOKEN не задан'}
     url = f"https://api.telegram.org/bot{token}/{method}"
     data = json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
+    last_err = 'fail'
+    # Короткий таймаут + 2 повтора, чтобы единичный зависший запрос не ломал обработку.
+    for attempt in range(2):
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
         try:
-            return json.loads(e.read())
-        except Exception:
-            return {'ok': False, 'description': f'HTTP {e.code}'}
-    except Exception as e:
-        return {'ok': False, 'description': f'{type(e).__name__}: {str(e)[:200]}'}
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            try:
+                return json.loads(e.read())
+            except Exception:
+                return {'ok': False, 'description': f'HTTP {e.code}'}
+        except Exception as e:
+            last_err = f'{type(e).__name__}: {str(e)[:200]}'
+            if attempt < 1:
+                time.sleep(1)
+    return {'ok': False, 'description': last_err}
 
 
 def tg_send(chat_id, text: str, reply_markup: dict = None) -> dict:
