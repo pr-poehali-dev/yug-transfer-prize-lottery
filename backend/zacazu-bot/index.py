@@ -40,6 +40,30 @@ def offer_to_first(cur, conn, order_id: int):
         award_order(cur, conn, order_id, nxt)
         return
 
+    yk_ready = bool(os.environ.get('YOOKASSA_SHOP_ID') and os.environ.get('YOOKASSA_SECRET_KEY'))
+
+    # ТЕСТОВЫЙ РЕЖИМ: ЮKassa не настроена — даём кнопку «Я оплатил (тест)».
+    if not yk_ready:
+        cur.execute(
+            f"UPDATE {SCHEMA}.order_queue SET status='paying', payment_id='TEST' WHERE id=%s",
+            (nxt['id'],),
+        )
+        cur.execute(
+            f"UPDATE {SCHEMA}.dispatch_orders SET current_user_id=%s, current_deadline=%s WHERE id=%s",
+            (nxt['tg_user_id'], deadline_dt(), order_id),
+        )
+        conn.commit()
+        tg_send(
+            nxt['tg_user_id'],
+            f"🚖 <b>Твоя очередь!</b>\nЗаказ: {order_brief(o)}\n\n"
+            f"🧪 <b>Тестовый режим</b> (ЮKassa ещё не подключена).\n"
+            f"Комиссия была бы <b>{amount:.0f} ₽</b>. Нажми кнопку, чтобы сымитировать оплату "
+            f"({DEADLINE_MINUTES} мин на оплату).",
+            {'inline_keyboard': [[{'text': f'✅ Я оплатил (тест)', 'callback_data': f'paid:{order_id}'}]]},
+        )
+        update_queue_message(cur, conn, order_id)
+        return
+
     pay = yk_create_payment(
         amount, f'Комиссия за заказ #{order_id}: {order_brief(o)}',
         {'order_id': str(order_id), 'tg_user_id': str(nxt['tg_user_id'])},
@@ -140,6 +164,24 @@ def handle_accept(cur, conn, order_id: int, user: dict, callback_id: str):
     offer_to_first(cur, conn, order_id)
 
 
+def handle_test_paid(cur, conn, order_id: int, user: dict, callback_id: str):
+    """Тестовая имитация оплаты: только текущий плательщик может нажать."""
+    o = get_order(cur, order_id)
+    if not o or o['sale_status'] != 'selling':
+        tg_answer_callback(callback_id, 'Заказ уже закрыт', True)
+        return
+    cur.execute(
+        f"SELECT * FROM {SCHEMA}.order_queue WHERE order_id=%s AND tg_user_id=%s AND status='paying' LIMIT 1",
+        (order_id, user['id']),
+    )
+    q = cur.fetchone()
+    if not q:
+        tg_answer_callback(callback_id, 'Сейчас не твоя очередь оплачивать', True)
+        return
+    tg_answer_callback(callback_id, 'Оплата принята (тест)', False)
+    award_order(cur, conn, order_id, dict(q))
+
+
 def handle_telegram(update: dict):
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -155,6 +197,14 @@ def handle_telegram(update: dict):
                     tg_answer_callback(cb['id'], 'Ошибка', True)
                     return
                 handle_accept(cur, conn, order_id, user, cb['id'])
+            elif data.startswith('paid:'):
+                # Тестовая имитация оплаты.
+                try:
+                    order_id = int(data.split(':', 1)[1])
+                except Exception:
+                    tg_answer_callback(cb['id'], 'Ошибка', True)
+                    return
+                handle_test_paid(cur, conn, order_id, user, cb['id'])
             else:
                 tg_answer_callback(cb['id'])
             return
