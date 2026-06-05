@@ -327,6 +327,9 @@ def update_order(d: dict) -> dict:
         full = text + render_queue_block(oid)
         tg_edit_order(row[0], full, oid)
         edit_second(oid, full)
+    # Главное: обновляем личное сообщение победителя (контакты клиента),
+    # чтобы изменённый телефон/адрес сразу увидел водитель.
+    update_winner_message(oid)
     return {'ok': True, 'id': oid}
 
 
@@ -337,6 +340,99 @@ def build_text_for(order_id: int, d: dict) -> str:
         t += f"\n\n💳 <b>Комиссия за заказ:</b> {commission_rub:.0f} ₽"
     t += f"\n\n👉 Нажми «Принять заказ» и оплати комиссию в течение 5 минут.\n#заказ_{order_id}"
     return t
+
+
+def winner_order_text(o: dict) -> str:
+    """Текст личного сообщения победителю: инфо о заказе + контакты клиента."""
+    head = f"🔖 <b>Заказ #{o['id']}</b> — ИНФОРМАЦИЯ"
+    lines = [head, '']
+    if o.get('from_city'):
+        lines.append(f"📍 <b>Откуда:</b> {esc(o['from_city'])}")
+    if o.get('to_city'):
+        lines.append(f"🏁 <b>Куда:</b> {esc(o['to_city'])}")
+    if o.get('order_date'):
+        lines.append(f"📅 <b>Дата:</b> {esc(o['order_date'])} {esc(o.get('order_time') or '')}".strip())
+    if o.get('price'):
+        lines.append(f"💰 <b>Стоимость:</b> {esc(o['price'])} ₽")
+    if o.get('tariff'):
+        lines.append(f"🎫 <b>Тариф:</b> {esc(o['tariff'])}")
+    if o.get('commission_rub'):
+        lines.append(f"💳 <b>Комиссия:</b> {float(o['commission_rub']):.0f} ₽")
+
+    lines += ['', '━━━━━━━━━━━━━━━', '🎉 <b>Заказ ваш! Контакты клиента:</b>', '']
+    lines.append(f"📞 <b>Телефон:</b> {esc(o.get('client_phone') or '—')}")
+    if o.get('from_address'):
+        lines.append(f"➡️ <b>Точный адрес подачи:</b> {esc(o['from_address'])}")
+    if o.get('to_address'):
+        lines.append(f"⬅️ <b>Точный адрес назначения:</b> {esc(o['to_address'])}")
+    if o.get('comment'):
+        lines.append(f"💬 {esc(o['comment'])}")
+    return '\n'.join(lines)
+
+
+def tg_edit_dm(chat_id, message_id, text: str, keyboard: dict) -> dict:
+    """Редактирует личное сообщение водителю с заданной клавиатурой."""
+    token = (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
+             or os.environ.get('ZACAZU_BOT_TOKEN', '')
+             or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
+    if not token or not chat_id or not message_id:
+        return {'ok': False, 'error': 'no creds/message'}
+    payload = json.dumps({
+        'chat_id': chat_id, 'message_id': message_id, 'text': text,
+        'parse_mode': 'HTML', 'disable_web_page_preview': True,
+        'reply_markup': keyboard,
+    }).encode()
+    url = f"https://api.telegram.org/bot{token}/editMessageText"
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=payload,
+                                         headers={'Content-Type': 'application/json'}, method='POST')
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.loads(e.read())
+                if 'message is not modified' in body.get('description', ''):
+                    return {'ok': True, 'unchanged': True}
+                return {'ok': False, 'error': body.get('description', f'HTTP {e.code}')}
+            except Exception:
+                return {'ok': False, 'error': f'HTTP {e.code}'}
+        except Exception:
+            if attempt < 2:
+                time.sleep(2)
+    return {'ok': False, 'error': 'fail'}
+
+
+def update_winner_message(order_id: int):
+    """Если у заказа есть победитель с личным сообщением — пересобираем его
+       (контакты клиента) с актуальными данными и нужной кнопкой по trip_status."""
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        f"SELECT id, from_city, to_city, from_address, to_address, order_date, order_time, "
+        f"price, tariff, client_phone, comment, commission_rub, trip_status, "
+        f"winner_chat_id, winner_message_id "
+        f"FROM {SCHEMA}.dispatch_orders WHERE id=%s", (order_id,)
+    )
+    o = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not o or not o.get('winner_chat_id') or not o.get('winner_message_id'):
+        return
+    o = dict(o)
+    text = winner_order_text(o)
+    ts = o.get('trip_status')
+    if ts == 'completed':
+        text += '\n\n✅ <b>Заказ завершён</b>'
+        kb = {'inline_keyboard': []}
+    elif ts == 'in_progress':
+        text += '\n\n🚗 <b>Клиент в машине</b>'
+        kb = {'inline_keyboard': [[{'text': '✅ Завершил заказ',
+                                    'callback_data': f'trip_done:{order_id}'}]]}
+    else:
+        kb = {'inline_keyboard': [[{'text': '🚗 Клиент в машине',
+                                    'callback_data': f'trip_pickup:{order_id}'}]]}
+    tg_edit_dm(o['winner_chat_id'], o['winner_message_id'], text, kb)
 
 
 def prepare_order_for_sale(d: dict, clear_queue: bool = True) -> int:
