@@ -600,14 +600,19 @@ def handle_telegram(update: dict):
                         user = msg.get('from', {})
                         handle_accept(cur, conn, order_id, user, None)
                         return
-                # Обычный /start: при первом заходе — полное приветствие,
-                # при повторном — тихо возвращаем нижнюю клавиатуру (чтобы кнопки не пропадали).
+                # Меню подписки доступно ТОЛЬКО в личке с ботом, в группах игнорируем.
+                if chat_type != 'private':
+                    return
                 u = msg.get('from', {})
                 start_already_seen(cur, conn, u.get('id'), u)
                 send_start_menu(chat['id'])
             elif text.startswith('/podpiska') or text.startswith('/подписка') or text.startswith('/sub'):
+                if chat_type != 'private':
+                    return
                 send_start_menu(chat['id'])
             elif text.startswith('/status'):
+                if chat_type != 'private':
+                    return
                 uid = msg.get('from', {}).get('id')
                 handle_sub_status(cur, chat['id'], uid)
             # Нажатия кнопок нижней клавиатуры (приходят как текст) — только в личке.
@@ -704,11 +709,19 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
     # Настроить кнопку «Меню» возле строки ввода и команды бота: ?setupmenu=1
     if qs0.get('setupmenu'):
-        cmds = tg_call('setMyCommands', {'commands': [
+        private_cmds = [
             {'command': 'start', 'description': '🏠 Главное меню'},
             {'command': 'podpiska', 'description': '💳 Подписка'},
             {'command': 'status', 'description': '📊 Мой статус'},
-        ]})
+        ]
+        # Команды видны ТОЛЬКО в личке с ботом.
+        cmds = tg_call('setMyCommands', {
+            'commands': private_cmds,
+            'scope': {'type': 'all_private_chats'},
+        })
+        # В группах команды бота скрываем полностью.
+        tg_call('deleteMyCommands', {'scope': {'type': 'all_group_chats'}})
+        tg_call('deleteMyCommands', {})  # сброс дефолтного scope (на всякий случай)
         menu = tg_call('setChatMenuButton', {
             'menu_button': {'type': 'commands', 'text': 'Подписка'}
         })
