@@ -716,6 +716,35 @@ def handler(event: dict, context) -> dict:
         member = tg_call('getChatMember', {'chat_id': chat_id, 'user_id': bot_id})
         return {'statusCode': 200, 'headers': cors,
                 'body': json.dumps({'chat_id': chat_id, 'member': member})}
+    # Восстановить сообщение победителю: контакты + кнопка по текущему trip_status.
+    # ?rewinmsg=<order_id>
+    if qs0.get('rewinmsg'):
+        oid = int(qs0.get('rewinmsg'))
+        conn = db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            o = get_order(cur, oid)
+            if not o or not o.get('winner_chat_id') or not o.get('winner_message_id'):
+                return {'statusCode': 200, 'headers': cors,
+                        'body': json.dumps({'ok': False, 'error': 'нет победителя/сообщения'})}
+            ts = o.get('trip_status')
+            text = order_public_text(dict(o)) + '\n\n' + contacts_block(dict(o), with_phone=True)
+            if ts == 'in_progress':
+                text += '\n\n🚗 <b>Клиент в машине</b>'
+                kb = {'inline_keyboard': [[{'text': '✅ Завершил заказ',
+                                            'callback_data': f'trip_done:{oid}'}]]}
+            else:
+                kb = {'inline_keyboard': [[{'text': '🚗 Клиент в машине',
+                                            'callback_data': f'trip_pickup:{oid}'}]]}
+            res = tg_call('editMessageText', {
+                'chat_id': o['winner_chat_id'], 'message_id': o['winner_message_id'],
+                'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+                'reply_markup': kb,
+            })
+            return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
+        finally:
+            cur.close()
+            conn.close()
     # Диагностика webhook: GET ?info=1
     if qs0.get('info'):
         res = tg_call('getWebhookInfo', {})
