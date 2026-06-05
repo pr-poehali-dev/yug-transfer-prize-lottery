@@ -409,10 +409,9 @@ def handle_trip_status(cur, conn, order_id: int, user: dict, callback_id: str, s
     )
     conn.commit()
     tg_answer_callback(callback_id, 'Заказ завершён', False)
-    # Завершён — оставляем инфо о заказе И контакты клиента, дописываем статус, убираем кнопки.
+    # Завершён — оставляем инфо о заказе, телефон клиента СКРЫВАЕМ, убираем кнопки.
     if win_chat and win_msg:
-        text = (order_public_text(dict(o)) + '\n\n' + contacts_block(dict(o), with_phone=True)
-                + '\n\n━━━━━━━━━━━━━━━\n✅ <b>Заказ завершён</b>')
+        text = order_public_text(dict(o)) + '\n\n━━━━━━━━━━━━━━━\n✅ <b>Заказ завершён</b>'
         tg_call('editMessageText', {
             'chat_id': win_chat, 'message_id': win_msg,
             'text': text,
@@ -717,29 +716,6 @@ def handler(event: dict, context) -> dict:
         member = tg_call('getChatMember', {'chat_id': chat_id, 'user_id': bot_id})
         return {'statusCode': 200, 'headers': cors,
                 'body': json.dumps({'chat_id': chat_id, 'member': member})}
-    # Досыл контактов клиента победителю по уже завершённому заказу: ?fixcontacts=<order_id>
-    if qs0.get('fixcontacts'):
-        oid = int(qs0.get('fixcontacts'))
-        conn = db()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        try:
-            o = get_order(cur, oid)
-            if not o or not o.get('winner_chat_id') or not o.get('winner_message_id'):
-                return {'statusCode': 200, 'headers': cors,
-                        'body': json.dumps({'ok': False, 'error': 'нет победителя/сообщения'})}
-            done = (o.get('trip_status') == 'done')
-            text = order_public_text(dict(o)) + '\n\n' + contacts_block(dict(o), with_phone=True)
-            if done:
-                text += '\n\n━━━━━━━━━━━━━━━\n✅ <b>Заказ завершён</b>'
-            res = tg_call('editMessageText', {
-                'chat_id': o['winner_chat_id'], 'message_id': o['winner_message_id'],
-                'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
-                'reply_markup': {'inline_keyboard': []},
-            })
-            return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
-        finally:
-            cur.close()
-            conn.close()
     # Диагностика webhook: GET ?info=1
     if qs0.get('info'):
         res = tg_call('getWebhookInfo', {})
