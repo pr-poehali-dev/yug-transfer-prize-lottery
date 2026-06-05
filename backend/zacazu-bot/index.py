@@ -711,6 +711,14 @@ def handler(event: dict, context) -> dict:
     if qs0.get('getchat'):
         res = tg_call('getChat', {'chat_id': qs0.get('getchat')})
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
+    # Права бота в группе: ?botrights=1 (по DISPATCH_CHAT_ID или ?chat=<id>)
+    if qs0.get('botrights'):
+        chat_id = qs0.get('chat') or os.environ.get('DISPATCH_CHAT_ID', '')
+        me = tg_call('getMe', {})
+        bot_id = (me.get('result') or {}).get('id')
+        member = tg_call('getChatMember', {'chat_id': chat_id, 'user_id': bot_id})
+        return {'statusCode': 200, 'headers': cors,
+                'body': json.dumps({'chat_id': chat_id, 'member': member})}
     # Диагностика webhook: GET ?info=1
     if qs0.get('info'):
         res = tg_call('getWebhookInfo', {})
