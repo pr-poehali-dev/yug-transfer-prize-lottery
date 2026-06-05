@@ -93,6 +93,14 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
           {tab === "posts" && (
             postsToken ? (
               <div className="space-y-3">
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => { sessionStorage.removeItem(POSTS_SESSION_KEY); setPostsToken(null); }}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 text-muted-foreground hover:text-white hover:bg-white/5 transition-all text-sm"
+                  >
+                    <Icon name="Lock" size={15} />Выйти из постов
+                  </button>
+                </div>
                 <AdminPostsTab token={token} onTotalChange={setPostsTotal}
                   expanded={openSection === "posts"} onToggle={() => toggleSection("posts")} />
                 <AdminBotTab token={token}
