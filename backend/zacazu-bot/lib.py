@@ -146,6 +146,22 @@ def yk_refund(payment_id: str, amount_rub: float = None, description: str = '') 
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
+def log_payment(cur, conn, kind: str, tg_user_id, amount_rub=0,
+                order_id=None, payment_id='', username='', first_name='', note=''):
+    """Записывает событие платежа в журнал (для раздела «Платежи» в админке)."""
+    try:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.payment_log "
+            f"(kind, tg_user_id, username, first_name, amount_rub, order_id, payment_id, note) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (kind, tg_user_id, username or '', first_name or '',
+             float(amount_rub or 0), order_id, payment_id or '', note or ''),
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"log_payment error: {e}")
+
+
 # ─────────────────────── Подписка водителя ───────────────────────
 
 SUB_PLANS = {

@@ -9,7 +9,7 @@ from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_answer_callback, tg_call,
     yk_create_payment, yk_refund, get_order, queue_list, render_queue_text, render_queue_block,
     client_contacts_text, contacts_block, order_brief, order_public_text, mention, deadline_dt,
-    has_active_sub, sub_active_until, commission_for, extend_sub, SUB_PLANS,
+    has_active_sub, sub_active_until, commission_for, extend_sub, SUB_PLANS, log_payment,
     edit_second_message,
 )
 
@@ -194,6 +194,11 @@ def award_order(cur, conn, order_id: int, winner: dict):
         if pay_id and pay_id != 'TEST':
             r = yk_refund(pay_id, description=f'Возврат: заказ #{order_id} уже выкуплен')
             refunded = bool(r.get('ok'))
+        ref_amount = commission_for(cur, dict(o), winner['tg_user_id']) if o else 0
+        log_payment(cur, conn, 'refund', winner['tg_user_id'],
+                    amount_rub=ref_amount, order_id=order_id, payment_id=pay_id or '',
+                    username=winner.get('username', ''), first_name=winner.get('first_name', ''),
+                    note='возврат: заказ уже выкуплен' if refunded else 'возврат не выполнен автоматически')
         if refunded:
             tg_send(winner['tg_user_id'],
                     "⚠️ Этот заказ только что выкупил другой водитель.\n"
@@ -208,6 +213,12 @@ def award_order(cur, conn, order_id: int, winner: dict):
         (order_id, winner['tg_user_id']),
     )
     conn.commit()
+    paid_amount = commission_for(cur, dict(o), winner['tg_user_id']) if o else 0
+    log_payment(cur, conn, 'commission', winner['tg_user_id'],
+                amount_rub=paid_amount, order_id=order_id,
+                payment_id=winner.get('payment_id', '') or '',
+                username=winner.get('username', ''), first_name=winner.get('first_name', ''),
+                note='комиссия за заказ')
 
     # Не заменяем текст заказа, а ДОПИСЫВАЕМ блок контактов к информации о заказе.
     contacts = order_public_text(dict(o)) + '\n\n' + contacts_block(dict(o))
@@ -700,6 +711,10 @@ def handle_yookassa(body: dict):
     if event != 'payment.succeeded' or not payment_id:
         return
     meta = obj.get('metadata') or {}
+    try:
+        paid_value = float((obj.get('amount') or {}).get('value') or 0)
+    except Exception:
+        paid_value = 0
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
@@ -710,6 +725,10 @@ def handle_yookassa(body: dict):
             if uid:
                 until = extend_sub(cur, conn, int(uid), months,
                                    meta.get('username', ''), meta.get('first_name', ''), payment_id)
+                log_payment(cur, conn, 'subscription', int(uid),
+                            amount_rub=paid_value, payment_id=payment_id,
+                            username=meta.get('username', ''), first_name=meta.get('first_name', ''),
+                            note=f'подписка {months} мес.')
                 tg_send(int(uid),
                         f"✅ <b>Подписка активирована!</b>\n"
                         f"Теперь комиссия по заказам — <b>10%</b>.\n"
@@ -725,6 +744,10 @@ def handle_yookassa(body: dict):
             # Очереди уже нет (заказ закрыт/переоткрыт), но деньги списаны — возвращаем.
             uid = meta.get('tg_user_id')
             r = yk_refund(payment_id, description='Возврат: заказ недоступен')
+            if uid:
+                log_payment(cur, conn, 'refund', int(uid),
+                            amount_rub=paid_value, order_id=int(meta.get('order_id') or 0) or None,
+                            payment_id=payment_id, note='возврат: заказ недоступен')
             if r.get('ok') and uid:
                 tg_send(int(uid), "💸 Комиссия возвращена: заказ уже недоступен.")
             return

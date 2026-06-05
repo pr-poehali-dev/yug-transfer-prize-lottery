@@ -51,6 +51,19 @@ export interface DriverSub {
   is_active: boolean;
 }
 
+export interface PaymentRow {
+  id: number;
+  kind: "commission" | "subscription" | "refund";
+  tg_user_id: number;
+  username: string;
+  first_name: string;
+  amount_rub: number;
+  order_id: number | null;
+  payment_id: string;
+  note: string;
+  created_at: string | null;
+}
+
 export interface Post {
   id: number;
   title: string;

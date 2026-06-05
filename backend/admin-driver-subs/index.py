@@ -28,9 +28,44 @@ def handler(event: dict, context) -> dict:
     if not ADMIN_PASSWORD or token != ADMIN_PASSWORD:
         return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'ok': False, 'error': 'unauthorized'})}
 
+    qs = event.get('queryStringParameters') or {}
     conn = psycopg2.connect(DB_URL)
     try:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Журнал всех платежей и возвратов.
+        if qs.get('action') == 'payments':
+            cur.execute(
+                f"SELECT id, kind, tg_user_id, username, first_name, amount_rub, "
+                f"order_id, payment_id, note, created_at "
+                f"FROM {SCHEMA}.payment_log ORDER BY created_at DESC LIMIT 500"
+            )
+            payments = []
+            total_in = 0.0
+            total_refund = 0.0
+            for r in cur.fetchall():
+                amt = float(r['amount_rub'] or 0)
+                if r['kind'] in ('commission', 'subscription'):
+                    total_in += amt
+                elif r['kind'] == 'refund':
+                    total_refund += amt
+                payments.append({
+                    'id': r['id'],
+                    'kind': r['kind'],
+                    'tg_user_id': r['tg_user_id'],
+                    'username': r['username'] or '',
+                    'first_name': r['first_name'] or '',
+                    'amount_rub': amt,
+                    'order_id': r['order_id'],
+                    'payment_id': r['payment_id'] or '',
+                    'note': r['note'] or '',
+                    'created_at': r['created_at'].isoformat() if r['created_at'] else None,
+                })
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+                'ok': True, 'payments': payments,
+                'total_income': round(total_in, 2), 'total_refund': round(total_refund, 2),
+            })}
+
         cur.execute(
             f"SELECT tg_user_id, username, first_name, active_until, updated_at, "
             f"(active_until IS NOT NULL AND active_until > NOW()) AS is_active "
