@@ -291,6 +291,54 @@ def archive_delete(order_id: int) -> dict:
     return {'ok': True}
 
 
+def update_order(d: dict) -> dict:
+    """Сохраняет ВСЕ поля заказа без смены статуса/очереди.
+       Если заказ сейчас продаётся и опубликован — обновляет сообщение в группе."""
+    oid = int(d['id'])
+    commission_rub = calc_commission_rub(d.get('price'), d.get('commission'))
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE {SCHEMA}.dispatch_orders SET "
+        f"from_city=%s, to_city=%s, from_address=%s, to_address=%s, stops=%s, order_date=%s, order_time=%s, "
+        f"price=%s, tariff=%s, commission=%s, client_phone=%s, people=%s, luggage=%s, "
+        f"booster=%s, child_seat=%s, animal=%s, comment=%s, commission_rub=%s "
+        f"WHERE id=%s",
+        (
+            d.get('from_city', ''), d.get('to_city', ''), d.get('from_address', ''), d.get('to_address', ''),
+            json.dumps([s for s in (d.get('stops') or []) if s]), d.get('date', ''), d.get('time', ''),
+            str(d.get('price', '')), d.get('tariff', ''), d.get('commission', ''),
+            d.get('client_phone', ''), str(d.get('people', '')), str(d.get('luggage', '')),
+            bool(d.get('booster')), bool(d.get('child_seat')), bool(d.get('animal')), d.get('comment', ''),
+            commission_rub, oid,
+        ),
+    )
+    conn.commit()
+    # Если заказ ещё продаётся и опубликован — обновим текст сообщения в группе.
+    cur.execute(
+        f"SELECT tg_message_id, sale_status FROM {SCHEMA}.dispatch_orders WHERE id=%s", (oid,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if row and row[0] and row[1] == 'selling':
+        text = build_text_for(oid, d)
+        set_order_message(oid, row[0], text)
+        full = text + render_queue_block(oid)
+        tg_edit_order(row[0], full, oid)
+        edit_second(oid, full)
+    return {'ok': True, 'id': oid}
+
+
+def build_text_for(order_id: int, d: dict) -> str:
+    commission_rub = calc_commission_rub(d.get('price'), d.get('commission'))
+    t = f"🔖 <b>Заказ #{order_id}</b>\n\n" + build_message(d)
+    if commission_rub > 0:
+        t += f"\n\n💳 <b>Комиссия за заказ:</b> {commission_rub:.0f} ₽"
+    t += f"\n\n👉 Нажми «Принять заказ» и оплати комиссию в течение 5 минут.\n#заказ_{order_id}"
+    return t
+
+
 def prepare_order_for_sale(d: dict, clear_queue: bool = True) -> int:
     """Сохраняет/обновляет заказ как «продаётся», возвращает его id."""
     commission_rub = calc_commission_rub(d.get('price'), d.get('commission'))
@@ -559,6 +607,14 @@ def handler(event: dict, context) -> dict:
         if not oid:
             return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no id'})}
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps(cancel_order(int(oid)))}
+
+    if action == 'update':
+        if not data.get('id'):
+            return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no id'})}
+        if not has_content(data):
+            return {'statusCode': 400, 'headers': cors,
+                    'body': json.dumps({'ok': False, 'error': 'Заполни хотя бы маршрут или телефон клиента'})}
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps(update_order(data))}
 
     if not has_content(data):
         return {'statusCode': 400, 'headers': cors,

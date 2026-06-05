@@ -19,6 +19,7 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
   const [form, setForm] = useState<OrderForm>(initialOrder ? { ...initialOrder } : { ...EMPTY_ORDER });
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Пока открыта вкладка — проверяем просрочки оплаты и передаём заказ следующему.
@@ -76,6 +77,31 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
       setMsg({ ok: false, text: "Ошибка сети" });
     } finally {
       setSending(false);
+    }
+  }
+
+  async function saveEdit() {
+    if (!validate()) return;
+    setSaving(true);
+    setMsg(null);
+    try {
+      const { body } = payload("update");
+      const r = await fetch(`${DISPATCH_ORDER_URL}?action=update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setMsg({ ok: true, text: "Изменения сохранены" });
+        onSent?.();
+      } else {
+        setMsg({ ok: false, text: j.error || "Не удалось сохранить" });
+      }
+    } catch {
+      setMsg({ ok: false, text: "Ошибка сети" });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -256,12 +282,21 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
       )}
 
       <div className="flex flex-col sm:flex-row gap-2">
-        <button onClick={submit} disabled={sending || archiving}
-          className="grad-btn px-5 py-2 rounded-lg text-sm font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+        {editId && (
+          <button onClick={saveEdit} disabled={sending || archiving || saving}
+            className="grad-btn px-5 py-2 rounded-lg text-sm font-semibold shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+            <Icon name={saving ? "Loader" : "Save"} size={15} className={saving ? "animate-spin" : ""} />
+            {saving ? "Сохранение..." : "Сохранить"}
+          </button>
+        )}
+        <button onClick={submit} disabled={sending || archiving || saving}
+          className={`px-5 py-2 rounded-lg text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2 ${
+            editId ? "border border-white/15 text-white hover:bg-white/5 transition-colors" : "grad-btn shadow-lg"
+          }`}>
           <Icon name={sending ? "Loader" : "Send"} size={15} className={sending ? "animate-spin" : ""} />
           {sending ? "Отправка..." : "Отправить на продажу"}
         </button>
-        <button onClick={toArchive} disabled={sending || archiving}
+        <button onClick={toArchive} disabled={sending || archiving || saving}
           className="px-5 py-2 rounded-lg text-sm font-semibold border border-white/15 text-white hover:bg-white/5 disabled:opacity-60 flex items-center justify-center gap-2 transition-colors">
           <Icon name={archiving ? "Loader" : "Archive"} size={15} className={archiving ? "animate-spin" : ""} />
           {archiving ? "Сохранение..." : "Отправить в архив"}
