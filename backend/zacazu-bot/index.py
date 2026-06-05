@@ -7,7 +7,7 @@ from datetime import datetime
 
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_answer_callback, tg_call,
-    yk_create_payment, get_order, queue_list, render_queue_text, render_queue_block,
+    yk_create_payment, yk_refund, get_order, queue_list, render_queue_text, render_queue_block,
     client_contacts_text, contacts_block, order_brief, order_public_text, mention, deadline_dt,
     has_active_sub, sub_active_until, commission_for, extend_sub, SUB_PLANS,
     edit_second_message,
@@ -179,11 +179,29 @@ def award_order(cur, conn, order_id: int, winner: dict):
         (winner['tg_user_id'], order_id),
     )
     if cur.rowcount == 0:
+        # Повторный вебхук по тому же победителю (ЮKassa шлёт ретраи) — ничего не возвращаем.
+        if o and o.get('winner_user_id') == winner['tg_user_id']:
+            conn.commit()
+            return True
+        # Заказ уже продан ДРУГОМУ — помечаем опоздавшего и делаем автовозврат комиссии.
+        cur.execute(
+            f"UPDATE {SCHEMA}.order_queue SET status='refunded' WHERE order_id=%s AND tg_user_id=%s",
+            (order_id, winner['tg_user_id']),
+        )
         conn.commit()
-        # Заказ уже продан другому. Сообщаем опоздавшему, что его комиссия будет возвращена.
-        tg_send(winner['tg_user_id'],
-                "⚠️ Этот заказ только что выкупил другой водитель.\n"
-                "Если с тебя списали комиссию — она будет возвращена. Извини за неудобство.")
+        pay_id = winner.get('payment_id')
+        refunded = False
+        if pay_id and pay_id != 'TEST':
+            r = yk_refund(pay_id, description=f'Возврат: заказ #{order_id} уже выкуплен')
+            refunded = bool(r.get('ok'))
+        if refunded:
+            tg_send(winner['tg_user_id'],
+                    "⚠️ Этот заказ только что выкупил другой водитель.\n"
+                    "💸 Комиссия возвращена на твою карту (поступит в течение нескольких минут).")
+        else:
+            tg_send(winner['tg_user_id'],
+                    "⚠️ Этот заказ только что выкупил другой водитель.\n"
+                    "Если с тебя списали комиссию — она будет возвращена. Извини за неудобство.")
         return False
     cur.execute(
         f"UPDATE {SCHEMA}.order_queue SET status='paid' WHERE order_id=%s AND tg_user_id=%s",
@@ -243,8 +261,26 @@ def update_queue_message(cur, conn, order_id: int):
     o = get_order(cur, order_id)
     if not o or not o['tg_chat_id'] or not o.get('tg_message_id'):
         return
-    queue = [dict(q) for q in queue_list(cur, order_id)]
     base = o.get('tg_message_text') or order_public_text(dict(o))
+    # Заказ уже продан — кнопку «Принять» НЕ показываем, оставляем ник победителя.
+    if o['sale_status'] != 'selling':
+        cur.execute(
+            f"SELECT username, first_name FROM {SCHEMA}.order_queue "
+            f"WHERE order_id=%s AND tg_user_id=%s LIMIT 1",
+            (order_id, o.get('winner_user_id')),
+        )
+        w = cur.fetchone()
+        m = mention(o.get('winner_user_id'),
+                    (w or {}).get('username', ''), (w or {}).get('first_name', ''))
+        text = base + f"\n\n━━━━━━━━━━━━━━━\n✅ <b>Заказ отдан:</b> {m}"
+        tg_call('editMessageText', {
+            'chat_id': o['tg_chat_id'], 'message_id': o['tg_message_id'],
+            'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+            'reply_markup': {'inline_keyboard': []},
+        })
+        edit_second_message(dict(o), text)
+        return
+    queue = [dict(q) for q in queue_list(cur, order_id)]
     text = base + render_queue_block(queue)
     btn = {'text': '✅ Принять заказ',
            'url': f'https://t.me/{BOT_USERNAME}?start=accept_{order_id}'}
@@ -681,16 +717,21 @@ def handle_yookassa(body: dict):
             return
         # Оплата КОМИССИИ за заказ.
         cur.execute(
-            f"SELECT * FROM {SCHEMA}.order_queue WHERE payment_id=%s AND status='paying' LIMIT 1",
+            f"SELECT * FROM {SCHEMA}.order_queue WHERE payment_id=%s LIMIT 1",
             (payment_id,),
         )
         q = cur.fetchone()
         if not q:
+            # Очереди уже нет (заказ закрыт/переоткрыт), но деньги списаны — возвращаем.
+            uid = meta.get('tg_user_id')
+            r = yk_refund(payment_id, description='Возврат: заказ недоступен')
+            if r.get('ok') and uid:
+                tg_send(int(uid), "💸 Комиссия возвращена: заказ уже недоступен.")
             return
         order_id = q['order_id']
-        o = get_order(cur, order_id)
-        if o and o['sale_status'] == 'selling':
-            award_order(cur, conn, order_id, dict(q))
+        # award_order атомарно: либо отдаёт заказ этому водителю,
+        # либо (если уже продан другому) делает автовозврат комиссии внутри себя.
+        award_order(cur, conn, order_id, dict(q))
     finally:
         cur.close()
         conn.close()

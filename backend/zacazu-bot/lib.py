@@ -112,6 +112,40 @@ def yk_create_payment(amount_rub: float, description: str, metadata: dict) -> di
         return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
 
 
+def yk_refund(payment_id: str, amount_rub: float = None, description: str = '') -> dict:
+    """Возврат комиссии по платежу ЮKassa (полный, либо на сумму amount_rub)."""
+    if not payment_id or payment_id == 'TEST':
+        return {'ok': False, 'error': 'нет реального платежа'}
+    if not os.environ.get('YOOKASSA_SHOP_ID') or not os.environ.get('YOOKASSA_SECRET_KEY'):
+        return {'ok': False, 'error': 'ЮKassa не настроена'}
+    payload = {'payment_id': payment_id}
+    if amount_rub and amount_rub > 0:
+        payload['amount'] = {'value': f'{amount_rub:.2f}', 'currency': 'RUB'}
+    if description:
+        payload['description'] = description[:128]
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        'https://api.yookassa.ru/v3/refunds', data=body, method='POST',
+        headers={
+            'Authorization': yk_auth_header(),
+            'Idempotence-Key': str(uuid.uuid4()),
+            'Content-Type': 'application/json',
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            j = json.loads(resp.read())
+        return {'ok': True, 'refund_id': j.get('id'), 'status': j.get('status')}
+    except urllib.error.HTTPError as e:
+        try:
+            err = json.loads(e.read())
+            return {'ok': False, 'error': err.get('description', f'HTTP {e.code}')}
+        except Exception:
+            return {'ok': False, 'error': f'HTTP {e.code}'}
+    except Exception as e:
+        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
 # ─────────────────────── Подписка водителя ───────────────────────
 
 SUB_PLANS = {
