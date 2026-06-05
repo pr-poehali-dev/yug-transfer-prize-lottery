@@ -166,16 +166,28 @@ def _save_pay_msg(cur, conn, queue_id: int, chat_id, res: dict):
 
 
 def award_order(cur, conn, order_id: int, winner: dict):
-    """Победитель определён: отдаём контакты, закрываем заказ."""
+    """Победитель определён: отдаём контакты, закрываем заказ.
+       Атомарно: заказ может перейти 'selling'->'sold' только ОДИН раз —
+       это защищает от продажи одного заказа двум водителям при гонке вебхуков."""
     o = get_order(cur, order_id)
+    # Закрываем заказ ТОЛЬКО если он ещё продаётся. Если кто-то уже выкупил —
+    # rowcount=0, значит мы опоздали: возвращаем False, второму отдавать нельзя.
+    cur.execute(
+        f"UPDATE {SCHEMA}.dispatch_orders SET sale_status='sold', winner_user_id=%s, "
+        f"current_user_id=NULL, current_deadline=NULL "
+        f"WHERE id=%s AND sale_status='selling'",
+        (winner['tg_user_id'], order_id),
+    )
+    if cur.rowcount == 0:
+        conn.commit()
+        # Заказ уже продан другому. Сообщаем опоздавшему, что его комиссия будет возвращена.
+        tg_send(winner['tg_user_id'],
+                "⚠️ Этот заказ только что выкупил другой водитель.\n"
+                "Если с тебя списали комиссию — она будет возвращена. Извини за неудобство.")
+        return False
     cur.execute(
         f"UPDATE {SCHEMA}.order_queue SET status='paid' WHERE order_id=%s AND tg_user_id=%s",
         (order_id, winner['tg_user_id']),
-    )
-    cur.execute(
-        f"UPDATE {SCHEMA}.dispatch_orders SET sale_status='sold', winner_user_id=%s, "
-        f"current_user_id=NULL, current_deadline=NULL WHERE id=%s",
-        (winner['tg_user_id'], order_id),
     )
     conn.commit()
 
@@ -223,6 +235,7 @@ def award_order(cur, conn, order_id: int, winner: dict):
             'reply_markup': {'inline_keyboard': []},
         })
         edit_second_message(dict(o), text)  # та же отметка во второй группе
+    return True
 
 
 def update_queue_message(cur, conn, order_id: int):
@@ -359,8 +372,11 @@ def handle_test_paid(cur, conn, order_id: int, user: dict, callback_id: str):
     if not q:
         tg_answer_callback(callback_id, 'Сейчас не твоя очередь оплачивать', True)
         return
-    tg_answer_callback(callback_id, 'Оплата принята (тест)', False)
-    award_order(cur, conn, order_id, dict(q))
+    ok = award_order(cur, conn, order_id, dict(q))
+    if ok:
+        tg_answer_callback(callback_id, 'Оплата принята (тест)', False)
+    else:
+        tg_answer_callback(callback_id, 'Заказ уже выкупил другой водитель', True)
 
 
 def handle_trip_status(cur, conn, order_id: int, user: dict, callback_id: str, step: str):
