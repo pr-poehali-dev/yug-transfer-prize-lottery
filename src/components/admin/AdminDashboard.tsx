@@ -95,6 +95,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               initialOrder={editOrder?.order ?? null}
               editId={editOrder?.id ?? null}
               onSent={() => setEditOrder(null)}
+              onSaved={() => { setEditOrder(null); setTab("archive"); }}
             />
           )}
           {tab === "archive" && <AdminArchiveTab token={token} onEdit={handleEditFromArchive} />}

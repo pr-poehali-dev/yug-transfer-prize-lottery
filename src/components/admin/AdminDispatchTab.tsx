@@ -13,9 +13,10 @@ interface DispatchTabProps {
   initialOrder?: OrderForm | null;
   editId?: number | null;
   onSent?: () => void;
+  onSaved?: () => void;
 }
 
-export function AdminDispatchTab({ token, initialOrder, editId, onSent }: DispatchTabProps) {
+export function AdminDispatchTab({ token, initialOrder, editId, onSent, onSaved }: DispatchTabProps) {
   const [form, setForm] = useState<OrderForm>(initialOrder ? { ...initialOrder } : { ...EMPTY_ORDER });
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -94,7 +95,7 @@ export function AdminDispatchTab({ token, initialOrder, editId, onSent }: Dispat
       const j = await r.json();
       if (j.ok) {
         setMsg({ ok: true, text: "Изменения сохранены" });
-        onSent?.();
+        if (onSaved) onSaved(); else onSent?.();
       } else {
         setMsg({ ok: false, text: j.error || "Не удалось сохранить" });
       }
