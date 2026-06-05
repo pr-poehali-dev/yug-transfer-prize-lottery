@@ -199,6 +199,13 @@ export function AdminArchiveTab({ token, onEdit }: ArchiveTabProps) {
                     )}
                   </div>
                 )}
+                {!!o.refunds_count && o.refunds_count > 0 && (
+                  <div className="text-[12px] text-amber-400 mt-1 flex items-center gap-1.5">
+                    <Icon name="Undo2" size={13} />
+                    Возврат комиссии: {o.refunds_count}{" "}
+                    {o.refunds_count === 1 ? "водителю" : "водителям"}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button onClick={() => sendToSale(o)} disabled={busyId === o.id}

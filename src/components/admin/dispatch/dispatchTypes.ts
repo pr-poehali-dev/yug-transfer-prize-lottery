@@ -26,6 +26,7 @@ export interface ArchivedOrder extends OrderForm {
   winner_user_id?: number | null;
   winner_username?: string;
   winner_first_name?: string;
+  refunds_count?: number;
 }
 
 export interface StatusBadge {

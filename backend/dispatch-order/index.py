@@ -189,6 +189,7 @@ def row_to_order(r: dict) -> dict:
         'winner_user_id': r.get('winner_user_id'),
         'winner_username': r.get('winner_username') or '',
         'winner_first_name': r.get('winner_first_name') or '',
+        'refunds_count': int(r.get('refunds_count') or 0),
     }
 
 
@@ -219,7 +220,9 @@ def archive_list() -> dict:
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        f"SELECT d.*, q.username AS winner_username, q.first_name AS winner_first_name "
+        f"SELECT d.*, q.username AS winner_username, q.first_name AS winner_first_name, "
+        f"(SELECT COUNT(*) FROM {SCHEMA}.order_queue rq "
+        f" WHERE rq.order_id = d.id AND rq.status='refunded') AS refunds_count "
         f"FROM {SCHEMA}.dispatch_orders d "
         f"LEFT JOIN {SCHEMA}.order_queue q "
         f"ON q.order_id = d.id AND q.tg_user_id = d.winner_user_id AND q.status='paid' "
