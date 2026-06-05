@@ -14,10 +14,12 @@ import { ExcludedTabHeader } from "./excluded/ExcludedTabHeader";
 import { ExcludedSettingsCard } from "./excluded/ExcludedSettingsCard";
 import { ExcludedHistoryCard } from "./excluded/ExcludedHistoryCard";
 
-interface Props { token: string; }
+interface Props { token: string; expanded?: boolean; onToggle?: () => void; }
 
-export function AdminExcludedTab({ token }: Props) {
-  const [tabExpanded, setTabExpanded] = useState(false);
+export function AdminExcludedTab({ token, expanded: controlledExpanded, onToggle }: Props) {
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const tabExpanded = controlledExpanded ?? localExpanded;
+  const setTabExpanded = onToggle ?? (() => setLocalExpanded(v => !v));
   const [settings, setSettings] = useState<Settings | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [template, setTemplate] = useState("");

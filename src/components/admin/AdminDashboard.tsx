@@ -15,6 +15,10 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   const [postsTotal, setPostsTotal] = useState<number | null>(null);
   const [editOrder, setEditOrder] = useState<{ order: OrderForm; id: number } | null>(null);
   const [dispatchKey, setDispatchKey] = useState(0);
+  // Аккордеон внутри «Постов»: открыт только один раздел за раз.
+  type Section = "posts" | "bot" | "stories" | "excluded";
+  const [openSection, setOpenSection] = useState<Section | null>(null);
+  const toggleSection = (s: Section) => setOpenSection((cur) => (cur === s ? null : s));
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
@@ -82,10 +86,14 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
           {tab === "posts" && (
             <div className="space-y-3">
-              <AdminPostsTab token={token} onTotalChange={setPostsTotal} />
-              <AdminBotTab token={token} />
-              <AdminStoriesTab token={token} />
-              <AdminExcludedTab token={token} />
+              <AdminPostsTab token={token} onTotalChange={setPostsTotal}
+                expanded={openSection === "posts"} onToggle={() => toggleSection("posts")} />
+              <AdminBotTab token={token}
+                expanded={openSection === "bot"} onToggle={() => toggleSection("bot")} />
+              <AdminStoriesTab token={token}
+                expanded={openSection === "stories"} onToggle={() => toggleSection("stories")} />
+              <AdminExcludedTab token={token}
+                expanded={openSection === "excluded"} onToggle={() => toggleSection("excluded")} />
             </div>
           )}
           {tab === "dispatch" && (

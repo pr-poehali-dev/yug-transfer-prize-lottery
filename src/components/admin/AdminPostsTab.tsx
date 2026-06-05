@@ -10,6 +10,8 @@ import { convertToVideoNote, type ConvertProgress } from "@/lib/convertVideoNote
 interface AdminPostsTabProps {
   token: string;
   onTotalChange?: (n: number) => void;
+  expanded?: boolean;
+  onToggle?: () => void;
 }
 
 function toLocalInput(iso: string | null | undefined) {
@@ -25,7 +27,7 @@ const EMPTY: PostFormData = {
   status: "draft", scheduled_at: null,
 };
 
-export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
+export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpanded, onToggle }: AdminPostsTabProps) {
   // ── форма ──
   const [form, setForm] = useState<PostFormData>({ ...EMPTY });
   const [savedForm, setSavedForm] = useState<PostFormData>({ ...EMPTY });
@@ -48,7 +50,9 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [editingInTgId, setEditingInTgId] = useState<number | null>(null);
-  const [formExpanded, setFormExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const formExpanded = controlledExpanded ?? localExpanded;
+  const toggleExpanded = onToggle ?? (() => setLocalExpanded(v => !v));
 
   const fetchPosts = async (sf = statusFilter) => {
     setLoading(true);
@@ -386,7 +390,7 @@ export function AdminPostsTab({ token, onTotalChange }: AdminPostsTabProps) {
     <div className="card-glow rounded-2xl overflow-hidden">
       <button
         type="button"
-        onClick={() => setFormExpanded(v => !v)}
+        onClick={toggleExpanded}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
       >
         <div className="flex items-center gap-2">

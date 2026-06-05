@@ -3,7 +3,7 @@ import { type Settings, isLoopAlive } from "./excludedTypes";
 
 interface Props {
   tabExpanded: boolean;
-  setTabExpanded: (fn: (v: boolean) => boolean) => void;
+  setTabExpanded: (fn?: (v: boolean) => boolean) => void;
   settings: Settings | null;
   enabled: boolean;
 }

@@ -58,9 +58,11 @@ async function uploadVideoFile(file: File, token: string, onProgress: (pct: numb
 
 interface Props {
   token: string;
+  expanded?: boolean;
+  onToggle?: () => void;
 }
 
-export function AdminStoriesTab({ token }: Props) {
+export function AdminStoriesTab({ token, expanded: controlledExpanded, onToggle }: Props) {
   const [items, setItems] = useState<BotStory[]>([]);
   const [loading, setLoading] = useState(true);
   const [videoUrl, setVideoUrl] = useState("");
@@ -72,7 +74,9 @@ export function AdminStoriesTab({ token }: Props) {
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [tabExpanded, setTabExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const tabExpanded = controlledExpanded ?? localExpanded;
+  const toggleExpanded = onToggle ?? (() => setLocalExpanded(v => !v));
 
   const headers = { "Content-Type": "application/json", "X-Admin-Token": token };
 
@@ -154,7 +158,7 @@ export function AdminStoriesTab({ token }: Props) {
     <div className="card-glow rounded-2xl overflow-hidden">
       <button
         type="button"
-        onClick={() => setTabExpanded(v => !v)}
+        onClick={toggleExpanded}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
       >
         <div className="flex items-center gap-2">

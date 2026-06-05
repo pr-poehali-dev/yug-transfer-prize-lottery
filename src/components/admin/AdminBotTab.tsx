@@ -9,9 +9,11 @@ import { BotCronStatus } from "./bot/BotCronStatus";
 
 interface AdminBotTabProps {
   token: string;
+  expanded?: boolean;
+  onToggle?: () => void;
 }
 
-export function AdminBotTab({ token }: AdminBotTabProps) {
+export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: AdminBotTabProps) {
   const [posts, setPosts] = useState<BotPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -20,7 +22,9 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
   const [sending, setSending] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const expanded = controlledExpanded ?? localExpanded;
+  const toggleExpanded = onToggle ?? (() => setLocalExpanded(v => !v));
 
   const fetchPosts = async () => {
     try {
@@ -158,7 +162,7 @@ export function AdminBotTab({ token }: AdminBotTabProps) {
     <div className="card-glow rounded-2xl overflow-hidden">
       <button
         type="button"
-        onClick={() => setExpanded(v => !v)}
+        onClick={toggleExpanded}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
       >
         <div className="flex items-center gap-2">
