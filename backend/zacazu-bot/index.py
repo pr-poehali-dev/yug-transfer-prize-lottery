@@ -584,6 +584,18 @@ def handle_telegram(update: dict):
             chat = msg.get('chat', {})
             chat_type = chat.get('type', '')
             text = msg.get('text') or ''
+            # В ГРУППЕ всё, что связано с подпиской — нажатия нижних кнопок и команды бота,
+            # чистим: удаляем такое сообщение, чтобы подписка жила только в личке с ботом.
+            if chat_type in ('group', 'supergroup'):
+                sub_texts = {SUB_BTN_SUB, SUB_BTN_STATUS, SUB_BTN_1, SUB_BTN_6, SUB_BTN_12}
+                t = text.strip()
+                is_sub_cmd = (t in sub_texts
+                              or t.startswith('/podpiska') or t.startswith('/подписка')
+                              or t.startswith('/sub') or t.startswith('/status')
+                              or (t.startswith('/start') and 'accept_' not in t))
+                if is_sub_cmd:
+                    tg_call('deleteMessage', {'chat_id': chat['id'], 'message_id': msg.get('message_id')})
+                    return
             # В группе по команде /id показываем её ID — чтобы вписать в DISPATCH_CHAT_ID.
             if chat_type in ('group', 'supergroup') and text.startswith('/id'):
                 tg_send(chat['id'], f"🆔 ID этой группы: <code>{chat['id']}</code>")
