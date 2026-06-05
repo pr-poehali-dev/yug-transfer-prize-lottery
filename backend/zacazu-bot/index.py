@@ -784,6 +784,42 @@ def handler(event: dict, context) -> dict:
             conn.close()
         return {'statusCode': 200, 'headers': cors,
                 'body': json.dumps({'ok': True, 'active_orders': active})}
+    # Починка отметки победителя в группе: ?fixwinmsg=<order_id>
+    # Перерисовывает «Заказ отдан: @ник» по реальному оплатившему водителю.
+    if qs0.get('fixwinmsg'):
+        oid = int(qs0.get('fixwinmsg'))
+        conn = db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            o = get_order(cur, oid)
+            if not o:
+                return {'statusCode': 200, 'headers': cors,
+                        'body': json.dumps({'ok': False, 'error': 'заказ не найден'})}
+            cur.execute(
+                f"SELECT tg_user_id, username, first_name FROM {SCHEMA}.order_queue "
+                f"WHERE order_id=%s AND status='paid' ORDER BY id DESC LIMIT 1", (oid,)
+            )
+            w = cur.fetchone()
+            if not w:
+                return {'statusCode': 200, 'headers': cors,
+                        'body': json.dumps({'ok': False, 'error': 'нет оплатившего водителя'})}
+            m = mention(w['tg_user_id'], w.get('username', ''), w.get('first_name', ''))
+            base = o.get('tg_message_text') or order_public_text(dict(o))
+            text = base + f"\n\n━━━━━━━━━━━━━━━\n✅ <b>Заказ отдан:</b> {m}"
+            res = []
+            if o['tg_chat_id'] and o.get('tg_message_id'):
+                res.append(tg_call('editMessageText', {
+                    'chat_id': o['tg_chat_id'], 'message_id': o['tg_message_id'],
+                    'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+                    'reply_markup': {'inline_keyboard': []},
+                }))
+            edit_second_message(dict(o), text)
+            return {'statusCode': 200, 'headers': cors,
+                    'body': json.dumps({'ok': True, 'winner': w.get('username') or w['tg_user_id'],
+                                        'result': res})}
+        finally:
+            cur.close()
+            conn.close()
     # Узнать ID чата по @username: ?getchat=@UG_DRIVER
     if qs0.get('getchat'):
         res = tg_call('getChat', {'chat_id': qs0.get('getchat')})
