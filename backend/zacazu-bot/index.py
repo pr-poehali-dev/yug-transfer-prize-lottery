@@ -719,14 +719,17 @@ def handler(event: dict, context) -> dict:
             'commands': private_cmds,
             'scope': {'type': 'all_private_chats'},
         })
-        # В группах команды бота скрываем полностью.
-        tg_call('deleteMyCommands', {'scope': {'type': 'all_group_chats'}})
-        tg_call('deleteMyCommands', {})  # сброс дефолтного scope (на всякий случай)
+        # В группах команды бота скрываем полностью (убираем кнопку «/»).
+        d1 = tg_call('deleteMyCommands', {'scope': {'type': 'all_group_chats'}})
+        d2 = tg_call('deleteMyCommands', {'scope': {'type': 'all_chat_administrators'}})
+        d3 = tg_call('deleteMyCommands', {'scope': {'type': 'default'}})
+        # Кнопка-меню возле строки ввода: в личке — «Подписка», в группах — стандартная.
         menu = tg_call('setChatMenuButton', {
             'menu_button': {'type': 'commands', 'text': 'Подписка'}
         })
         return {'statusCode': 200, 'headers': cors,
-                'body': json.dumps({'commands': cmds, 'menu': menu})}
+                'body': json.dumps({'commands': cmds, 'menu': menu,
+                                    'deleted': [d1, d2, d3]})}
     # Удалить webhook и сбросить накопленные апдейты: ?reset=1
     if qs0.get('reset'):
         res = tg_call('deleteWebhook', {'drop_pending_updates': True})
