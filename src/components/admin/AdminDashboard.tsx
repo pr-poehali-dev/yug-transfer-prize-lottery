@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { AdminTab } from "./adminTypes";
+import { AdminLogin } from "./AdminLogin";
 import { AdminPostsTab } from "./AdminPostsTab";
 import { AdminBotTab } from "./AdminBotTab";
 import { AdminStoriesTab } from "./AdminStoriesTab";
@@ -11,7 +12,7 @@ import { AdminDriversTab } from "./AdminDriversTab";
 import type { OrderForm } from "./dispatch/dispatchTypes";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [tab, setTab] = useState<AdminTab>("posts");
+  const [tab, setTab] = useState<AdminTab>("dispatch");
   const [postsTotal, setPostsTotal] = useState<number | null>(null);
   const [editOrder, setEditOrder] = useState<{ order: OrderForm; id: number } | null>(null);
   const [dispatchKey, setDispatchKey] = useState(0);
@@ -19,6 +20,11 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   type Section = "posts" | "bot" | "stories" | "excluded";
   const [openSection, setOpenSection] = useState<Section | null>(null);
   const toggleSection = (s: Section) => setOpenSection((cur) => (cur === s ? null : s));
+  // Раздел «Посты в канал» защищён отдельным паролем.
+  const POSTS_SESSION_KEY = "posts_token";
+  const [postsToken, setPostsToken] = useState<string | null>(
+    () => sessionStorage.getItem(POSTS_SESSION_KEY)
+  );
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
@@ -85,16 +91,26 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
 
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
           {tab === "posts" && (
-            <div className="space-y-3">
-              <AdminPostsTab token={token} onTotalChange={setPostsTotal}
-                expanded={openSection === "posts"} onToggle={() => toggleSection("posts")} />
-              <AdminBotTab token={token}
-                expanded={openSection === "bot"} onToggle={() => toggleSection("bot")} />
-              <AdminStoriesTab token={token}
-                expanded={openSection === "stories"} onToggle={() => toggleSection("stories")} />
-              <AdminExcludedTab token={token}
-                expanded={openSection === "excluded"} onToggle={() => toggleSection("excluded")} />
-            </div>
+            postsToken ? (
+              <div className="space-y-3">
+                <AdminPostsTab token={token} onTotalChange={setPostsTotal}
+                  expanded={openSection === "posts"} onToggle={() => toggleSection("posts")} />
+                <AdminBotTab token={token}
+                  expanded={openSection === "bot"} onToggle={() => toggleSection("bot")} />
+                <AdminStoriesTab token={token}
+                  expanded={openSection === "stories"} onToggle={() => toggleSection("stories")} />
+                <AdminExcludedTab token={token}
+                  expanded={openSection === "excluded"} onToggle={() => toggleSection("excluded")} />
+              </div>
+            ) : (
+              <AdminLogin
+                scope="posts"
+                title="Посты в канал"
+                subtitle="Доступ только по отдельному паролю"
+                sessionKey={POSTS_SESSION_KEY}
+                onSuccess={(t) => setPostsToken(t)}
+              />
+            )
           )}
           {tab === "dispatch" && (
             <AdminDispatchTab

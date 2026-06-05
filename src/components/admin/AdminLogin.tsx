@@ -2,7 +2,21 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { ADMIN_AUTH_URL, SESSION_KEY } from "./adminTypes";
 
-export function AdminLogin({ onSuccess }: { onSuccess: (token: string) => void }) {
+interface AdminLoginProps {
+  onSuccess: (token: string) => void;
+  scope?: "admin" | "posts";
+  title?: string;
+  subtitle?: string;
+  sessionKey?: string;
+}
+
+export function AdminLogin({
+  onSuccess,
+  scope = "admin",
+  title = "Панель управления",
+  subtitle = "ЮГ ТРАНСФЕР — Администратор",
+  sessionKey = SESSION_KEY,
+}: AdminLoginProps) {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -15,10 +29,10 @@ export function AdminLogin({ onSuccess }: { onSuccess: (token: string) => void }
     try {
       const res = await fetch(ADMIN_AUTH_URL, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login, password }),
+        body: JSON.stringify({ login, password, scope }),
       });
       const data = await res.json();
-      if (data.ok) { sessionStorage.setItem(SESSION_KEY, data.token); onSuccess(data.token); }
+      if (data.ok) { sessionStorage.setItem(sessionKey, data.token); onSuccess(data.token); }
       else setError(data.error || "Ошибка входа");
     } catch { setError("Нет соединения с сервером"); }
     finally { setLoading(false); }
@@ -34,8 +48,8 @@ export function AdminLogin({ onSuccess }: { onSuccess: (token: string) => void }
             <div className="flex justify-center mb-6">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl">🔐</div>
             </div>
-            <h1 className="font-oswald text-2xl font-bold text-white text-center mb-1">Панель управления</h1>
-            <p className="text-muted-foreground text-sm text-center mb-6">ЮГ ТРАНСФЕР — Администратор</p>
+            <h1 className="font-oswald text-2xl font-bold text-white text-center mb-1">{title}</h1>
+            <p className="text-muted-foreground text-sm text-center mb-6">{subtitle}</p>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="text-xs text-muted-foreground mb-1.5 block font-medium uppercase tracking-wider">Логин</label>

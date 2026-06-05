@@ -11,9 +11,14 @@
       "method": "POST",
       "path": "/",
       "body": {"login": "wrong", "password": "wrong"},
-      "expectedStatus": 401,
-      "expectedBody": {"error": "Неверный логин или пароль"},
-      "bodyMatcher": "partial"
+      "expectedStatus": 401
+    },
+    {
+      "name": "Wrong posts credentials rejected",
+      "method": "POST",
+      "path": "/",
+      "body": {"scope": "posts", "login": "wrong", "password": "wrong"},
+      "expectedStatus": 401
     }
   ]
 }

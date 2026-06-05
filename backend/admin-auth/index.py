@@ -25,6 +25,20 @@ def handler(event: dict, context) -> dict:
 
     login = body.get('login', '').strip()
     password = body.get('password', '').strip()
+    scope = body.get('scope', 'admin').strip()
+
+    # Раздел «Посты в канал» защищён отдельным логином/паролем.
+    if scope == 'posts':
+        posts_login = os.environ.get('POSTS_LOGIN', '')
+        posts_password = os.environ.get('POSTS_PASSWORD', '')
+        if not posts_login or not posts_password or login != posts_login or password != posts_password:
+            return {
+                'statusCode': 401,
+                'headers': CORS,
+                'body': json.dumps({'error': 'Неверный логин или пароль'}),
+            }
+        token = hashlib.sha256(f"{posts_login}:{posts_password}:posts_secret_2026".encode()).hexdigest()
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'token': token})}
 
     admin_login = os.environ.get('ADMIN_LOGIN', '')
     admin_password = os.environ.get('ADMIN_PASSWORD', '')
