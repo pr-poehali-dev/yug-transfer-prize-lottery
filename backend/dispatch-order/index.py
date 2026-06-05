@@ -454,27 +454,39 @@ def edit_second(order_id: int, text: str):
         tg_edit_order(mid2, text, order_id, chat_id=str(chat2))
 
 
-def tg_edit(chat_id, message_id, text: str):
+def tg_edit(chat_id, message_id, text: str) -> dict:
     token = (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
              or os.environ.get('ZACAZU_BOT_TOKEN', '')
              or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
     if not token or not chat_id or not message_id:
-        return
+        return {'ok': False, 'error': 'no creds/message'}
     payload = json.dumps({
         'chat_id': chat_id, 'message_id': message_id, 'text': text,
         'parse_mode': 'HTML', 'disable_web_page_preview': True,
         'reply_markup': {'inline_keyboard': []},
     }).encode()
     url = f"https://api.telegram.org/bot{token}/editMessageText"
+    last_err = 'fail'
     for attempt in range(3):
         try:
             req = urllib.request.Request(url, data=payload,
                                          headers={'Content-Type': 'application/json'}, method='POST')
             with urllib.request.urlopen(req, timeout=8) as resp:
                 return json.loads(resp.read())
-        except Exception:
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.loads(e.read())
+                desc = body.get('description', '')
+                if 'message is not modified' in desc:
+                    return {'ok': True, 'unchanged': True}
+                return {'ok': False, 'error': f"HTTP {e.code}: {desc[:200]}"}
+            except Exception:
+                return {'ok': False, 'error': f"HTTP {e.code}"}
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {str(e)[:200]}"
             if attempt < 2:
                 time.sleep(2)
+    return {'ok': False, 'error': last_err}
 
 
 def cancel_order(order_id: int) -> dict:
@@ -497,13 +509,14 @@ def cancel_order(order_id: int) -> dict:
     conn.close()
     if row and row[0] and row[1]:
         base = row[2] or '🚖 <b>ЗАКАЗ</b>'
-        text = base + "\n\n━━━━━━━━━━━━━━━\n🚫 <b>Отменён диспетчером</b>"
-        tg_edit(row[0], row[1], text)
+        text = base + render_queue_block(order_id) + "\n\n━━━━━━━━━━━━━━━\n🚫 <b>Отменён диспетчером</b>"
+        res1 = tg_edit(row[0], row[1], text)
         # Та же отметка во второй группе.
         chat2, mid2 = get_second_msg(order_id)
-        if chat2 and mid2:
-            tg_edit(chat2, mid2, text)
-    return {'ok': True}
+        res2 = tg_edit(chat2, mid2, text) if (chat2 and mid2) else {'ok': True, 'skipped': True}
+        ok = bool(res1.get('ok'))
+        return {'ok': ok, 'tg': res1, 'tg2': res2}
+    return {'ok': True, 'no_message': True}
 
 
 def handler(event: dict, context) -> dict:
