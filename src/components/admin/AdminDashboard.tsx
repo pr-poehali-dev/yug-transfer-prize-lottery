@@ -27,7 +27,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
   );
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
-    { id: "posts", label: "Посты в канал", icon: "Send", badge: postsTotal },
     { id: "dispatch", label: "Диспетчерская", icon: "Headset" },
     { id: "archive", label: "Архив", icon: "Archive" },
     { id: "drivers", label: "Подписки", icon: "BadgeCheck" },
@@ -61,7 +60,7 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
       </header>
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 flex gap-6">
-        <aside className="hidden md:flex flex-col gap-1 w-52 shrink-0">
+        <aside className="hidden md:flex flex-col gap-1 w-52 shrink-0 min-h-[70vh]">
           {TABS.map(t => (
             <button key={t.id} onClick={() => openCreate(t.id)}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${tab === t.id ? "grad-btn shadow-lg" : "text-muted-foreground hover:text-white hover:bg-white/5"}`}>
@@ -72,6 +71,15 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               )}
             </button>
           ))}
+
+          <button onClick={() => openCreate("posts")}
+            className={`mt-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === "posts" ? "grad-btn shadow" : "text-muted-foreground/70 hover:text-white hover:bg-white/5"}`}>
+            <Icon name="Send" size={13} />
+            <span className="flex-1 text-left">Посты</span>
+            {typeof postsTotal === "number" && (
+              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${tab === "posts" ? "bg-white/20 text-white" : "bg-white/10 text-white/50"}`}>{postsTotal}</span>
+            )}
+          </button>
         </aside>
 
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/5 flex">
@@ -87,6 +95,11 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               {t.label}
             </button>
           ))}
+          <button onClick={() => openCreate("posts")}
+            className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs transition-colors ${tab === "posts" ? "text-purple-400" : "text-muted-foreground"}`}>
+            <Icon name="Send" size={18} />
+            Посты
+          </button>
         </div>
 
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
