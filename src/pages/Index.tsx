@@ -83,12 +83,6 @@ const Index = () => {
                 <span className="hidden sm:inline">Личный кабинет</span>
               </Button>
             </Link>
-            <Link to="/admin">
-              <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
-                <Icon name="LogIn" size={14} />
-                <span className="hidden sm:inline">Админ-панель</span>
-              </Button>
-            </Link>
           </div>
         </div>
       </header>
