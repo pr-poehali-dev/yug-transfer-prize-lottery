@@ -170,7 +170,13 @@ export default function Cabinet() {
             </button>
           </div>
 
-          <a href="/" className="mt-6 block text-center text-xs text-white/40 hover:text-white">← На главную</a>
+          <div className="mt-6 flex items-center justify-center gap-4 text-xs">
+            <a href="/" className="text-white/40 hover:text-white">← На главную</a>
+            <span className="text-white/20">•</span>
+            <a href="/admin" className="text-white/40 hover:text-amber-400 inline-flex items-center gap-1">
+              <Icon name="LogIn" size={12} /> Админ-панель
+            </a>
+          </div>
         </div>
       </div>
     );
