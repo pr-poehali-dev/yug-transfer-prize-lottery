@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Service alive",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Create request without route rejected",
+      "method": "POST",
+      "path": "/?action=create_request",
+      "body": {"phone": "+79991234567"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "Send code bad phone rejected",
+      "method": "POST",
+      "path": "/?action=send_code",
+      "body": {"phone": "123"},
+      "expectedStatus": 400
+    }
+  ]
+}

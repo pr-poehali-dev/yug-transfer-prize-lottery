@@ -1,4 +1,5 @@
 {
+  "client-cabinet": "https://functions.poehali.dev/ad9f9612-b556-400b-b85c-f33e0f8b0b45",
   "zacazu-bot": "https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98",
   "queue-timeout": "https://functions.poehali.dev/50a40cbf-ab82-41f6-b352-bed85050df19",
   "dispatch-order": "https://functions.poehali.dev/645f8ead-4009-4674-b51c-7394bc7dad47",

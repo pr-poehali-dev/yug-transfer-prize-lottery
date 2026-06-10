@@ -18,6 +18,14 @@ const cards = [
     grad: "from-pink-500 to-orange-400",
     glow: "from-pink-600 to-orange-500",
   },
+  {
+    to: "/cabinet",
+    icon: "UserRound",
+    title: "Личный кабинет",
+    desc: "Клиент отслеживает статус своей заявки",
+    grad: "from-emerald-500 to-teal-500",
+    glow: "from-emerald-600 to-teal-600",
+  },
 ];
 
 export default function Hub() {
@@ -33,7 +41,7 @@ export default function Hub() {
         <p className="text-muted-foreground text-sm mt-2">Панель управления — выбери раздел</p>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-5 w-full max-w-2xl">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-4xl">
         {cards.map((c) => (
           <button
             key={c.to}

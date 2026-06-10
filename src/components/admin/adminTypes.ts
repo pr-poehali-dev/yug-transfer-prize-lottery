@@ -10,6 +10,7 @@ export const ADMIN_DRIVER_SUBS_URL = "https://functions.poehali.dev/95d0380a-04e
 export const TG_ACCOUNTS_URL = "https://functions.poehali.dev/c23d251a-47cc-43e5-bd98-f9e0ebee8f2a";
 export const DISPATCH_ORDER_URL = "https://functions.poehali.dev/645f8ead-4009-4674-b51c-7394bc7dad47";
 export const ZACAZU_BOT_URL = "https://functions.poehali.dev/84e2bef2-8bf6-46b9-a156-ce877a6c3c98";
+export const CLIENT_CABINET_URL = "https://functions.poehali.dev/ad9f9612-b556-400b-b85c-f33e0f8b0b45";
 
 export interface TgAccount {
   id: number;

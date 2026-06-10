@@ -9,6 +9,7 @@ const Index = lazy(() => import("./pages/Index"));
 const Hub = lazy(() => import("./pages/Hub"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Posts = lazy(() => import("./pages/Posts"));
+const Cabinet = lazy(() => import("./pages/Cabinet"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Offer = lazy(() => import("./pages/Offer"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/admin" element={<Hub />} />
           <Route path="/dispatch" element={<Admin />} />
           <Route path="/posts" element={<Posts />} />
+          <Route path="/cabinet" element={<Cabinet />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/offer" element={<Offer />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
