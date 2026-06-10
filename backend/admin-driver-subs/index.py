@@ -5,12 +5,19 @@ Returns: {ok, subs: [...], total_active}
 """
 import json
 import os
+import hashlib
 import psycopg2
 import psycopg2.extras
 
 DB_URL = os.environ.get('DATABASE_URL', '')
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA') or 't_p67171637_yug_transfer_prize_l'
+
+
+def verify_token(token: str) -> bool:
+    admin_login = os.environ.get('ADMIN_LOGIN', '')
+    admin_password = os.environ.get('ADMIN_PASSWORD', '')
+    token_base = f"{admin_login}:{admin_password}:admin_secret_2026"
+    return bool(token) and token == hashlib.sha256(token_base.encode()).hexdigest()
 
 
 def handler(event: dict, context) -> dict:
@@ -25,7 +32,7 @@ def handler(event: dict, context) -> dict:
 
     h = event.get('headers') or {}
     token = h.get('X-Admin-Token') or h.get('x-admin-token') or ''
-    if not ADMIN_PASSWORD or token != ADMIN_PASSWORD:
+    if not verify_token(token):
         return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'ok': False, 'error': 'unauthorized'})}
 
     qs = event.get('queryStringParameters') or {}
