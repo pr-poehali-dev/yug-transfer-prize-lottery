@@ -3,8 +3,6 @@
   "queue-timeout": "https://functions.poehali.dev/50a40cbf-ab82-41f6-b352-bed85050df19",
   "dispatch-order": "https://functions.poehali.dev/645f8ead-4009-4674-b51c-7394bc7dad47",
   "tg-accounts": "https://functions.poehali.dev/c23d251a-47cc-43e5-bd98-f9e0ebee8f2a",
-  "excluded-watcher": "https://functions.poehali.dev/2db8bbe3-c6b3-4bda-866c-c22a8c621520",
-  "tg-user-auth2": "https://functions.poehali.dev/731984b0-8855-47a8-a7b1-6c6a4ec6d87f",
   "tg-user-auth": "https://functions.poehali.dev/1d230a4a-3752-4182-9d42-e67398b99b97",
   "admin-bot-stories": "https://functions.poehali.dev/58582409-0dd6-4199-9901-fc7977290659",
   "stories-cron": "https://functions.poehali.dev/4358e85d-c5de-4dd3-840a-8f6ce8b6f2eb",

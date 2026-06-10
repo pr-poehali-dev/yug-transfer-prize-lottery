@@ -3,11 +3,10 @@ import Icon from "@/components/ui/icon";
 import { AdminPostsTab } from "./AdminPostsTab";
 import { AdminBotTab } from "./AdminBotTab";
 import { AdminStoriesTab } from "./AdminStoriesTab";
-import { AdminExcludedTab } from "./AdminExcludedTab";
 
 export function PostsDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [, setPostsTotal] = useState<number | null>(null);
-  type Section = "posts" | "bot" | "stories" | "excluded";
+  type Section = "posts" | "bot" | "stories";
   const [openSection, setOpenSection] = useState<Section | null>("posts");
   const toggleSection = (s: Section) => setOpenSection((cur) => (cur === s ? null : s));
 
@@ -39,8 +38,6 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
           expanded={openSection === "bot"} onToggle={() => toggleSection("bot")} />
         <AdminStoriesTab token={token}
           expanded={openSection === "stories"} onToggle={() => toggleSection("stories")} />
-        <AdminExcludedTab token={token}
-          expanded={openSection === "excluded"} onToggle={() => toggleSection("excluded")} />
       </div>
     </div>
   );
