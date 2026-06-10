@@ -124,6 +124,30 @@ def build_text_with_title(post: dict) -> str:
     return f'<b>{title}</b>\n\n{text}' if text.strip() else f'<b>{title}</b>'
 
 
+def normalize_button_url(url: str) -> str:
+    """Telegram inline-кнопка требует полный URL. Превращаем @username / username / t.me/x в https://t.me/x."""
+    u = (url or '').strip()
+    if not u:
+        return ''
+    if u.startswith('http://') or u.startswith('https://'):
+        return u
+    if u.startswith('tg://'):
+        return u
+    if u.startswith('@'):
+        return 'https://t.me/' + u[1:]
+    if u.startswith('t.me/'):
+        return 'https://' + u
+    if u.startswith('www.t.me/'):
+        return 'https://' + u[4:]
+    if u.startswith('mailto:') or u.startswith('tel:'):
+        return u
+    # bare username (буквы/цифры/подчёркивания) -> telegram
+    if all(ch.isalnum() or ch == '_' for ch in u):
+        return 'https://t.me/' + u
+    # иначе считаем веб-адресом без схемы
+    return 'https://' + u
+
+
 def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     """Публикует пост в Telegram, возвращает {ok, message_id}"""
     text = build_text_with_title(post)
@@ -133,6 +157,9 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     button_url = post.get('button_url', '')
     button2_text = post.get('button2_text', '')
     button2_url = post.get('button2_url', '')
+
+    button_url = normalize_button_url(button_url)
+    button2_url = normalize_button_url(button2_url)
 
     reply_markup = None
     buttons_row = []
