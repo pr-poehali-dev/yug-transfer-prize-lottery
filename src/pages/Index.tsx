@@ -5,9 +5,7 @@ import Icon from "@/components/ui/icon";
 import { CLIENT_CABINET_URL } from "@/components/admin/adminTypes";
 
 const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
-const PHONE = "+7 (990) 201-20-35";
 const TG_LINK = "https://t.me/";
-const WA_LINK = "https://wa.me/79902012035";
 const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес"];
 const COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
@@ -69,28 +67,35 @@ const Index = () => {
       className="min-h-screen bg-cover bg-center bg-fixed relative"
       style={{ backgroundImage: `url(${BG})` }}
     >
-      <div className="absolute inset-0 bg-black/70" />
+      <div className="absolute inset-0 bg-black/60" />
 
-      <header className="relative z-20 mx-auto w-full max-w-6xl px-5 py-5 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Icon name="Car" size={26} className="text-amber-400" />
-          <span className="font-bold text-white text-lg md:text-xl tracking-wide">TRANSFER AVTO</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <a href={`tel:${PHONE.replace(/\D/g, "")}`} className="font-bold text-white text-base md:text-xl hover:text-amber-400 transition-colors">
-            {PHONE}
-          </a>
-          <a href={TG_LINK} target="_blank" rel="noreferrer" className="w-9 h-9 rounded-full bg-sky-500/90 hover:bg-sky-500 flex items-center justify-center text-white">
-            <Icon name="Send" size={16} />
-          </a>
-          <a href={WA_LINK} target="_blank" rel="noreferrer" className="w-9 h-9 rounded-full bg-green-500/90 hover:bg-green-500 flex items-center justify-center text-white">
-            <Icon name="MessageCircle" size={16} />
-          </a>
+      <header className="sticky top-4 z-20 mx-auto w-[calc(100%-2rem)] max-w-6xl">
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md shadow-lg">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+              <Icon name="Car" size={18} className="text-white" />
+            </div>
+            <span className="font-bold text-white text-base md:text-lg">Мой Трансфер</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link to="/cabinet">
+              <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
+                <Icon name="UserRound" size={14} />
+                <span className="hidden sm:inline">Личный кабинет</span>
+              </Button>
+            </Link>
+            <Link to="/admin">
+              <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
+                <Icon name="LogIn" size={14} />
+                <span className="hidden sm:inline">Админ-панель</span>
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
-      <div className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-16 grid lg:grid-cols-2 gap-8 items-start">
-        <div className="flex flex-col justify-center pt-6 lg:pt-24">
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-5 pt-10 pb-16 grid lg:grid-cols-2 gap-8 items-start">
+        <div className="flex flex-col justify-center pt-6 lg:pt-20">
           <div className="bg-black/55 backdrop-blur-sm rounded-2xl p-7 max-w-md">
             <h2 className="text-amber-400 text-2xl md:text-3xl font-bold mb-3">Сервис приема заказов</h2>
             <p className="text-white text-lg md:text-xl leading-snug">
@@ -103,15 +108,6 @@ const Index = () => {
                 Напишите нам в телеграм
               </Button>
             </a>
-            <div className="mt-5 flex items-center gap-3 text-xs text-white/60">
-              <Link to="/cabinet" className="hover:text-amber-400 flex items-center gap-1">
-                <Icon name="UserRound" size={13} /> Личный кабинет
-              </Link>
-              <span>•</span>
-              <Link to="/admin" className="hover:text-amber-400 flex items-center gap-1">
-                <Icon name="LogIn" size={13} /> Админ-панель
-              </Link>
-            </div>
           </div>
         </div>
 
