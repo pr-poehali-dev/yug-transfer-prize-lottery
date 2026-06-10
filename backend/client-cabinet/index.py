@@ -83,6 +83,33 @@ def create_request(data: dict) -> dict:
     )
     req_id = cur.fetchone()[0]
     conn.commit()
+
+    # Дублируем заявку в архив диспетчерской (таблица dispatch_orders)
+    name = (data.get('name') or '').strip()
+    base_comment = (data.get('comment') or '').strip()
+    parts = ['Заявка с сайта']
+    if name:
+        parts.append(f'Имя: {name}')
+    if base_comment:
+        parts.append(base_comment)
+    disp_comment = '. '.join(parts)
+    try:
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.dispatch_orders "
+            f"(from_city, to_city, order_date, order_time, tariff, client_phone, "
+            f"people, luggage, child_seat, booster, animal, comment, sale_status) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'archived')",
+            (data.get('from_city', ''), data.get('to_city', ''),
+             data.get('trip_date', ''), data.get('trip_time', ''),
+             data.get('tariff', ''), phone,
+             data.get('people', ''), data.get('baggage', ''),
+             bool(data.get('child_seat')), bool(data.get('booster')),
+             bool(data.get('animals')), disp_comment),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
     cur.close()
     conn.close()
     return resp(200, {'ok': True, 'id': req_id})
