@@ -147,7 +147,7 @@ const Index = () => {
                   <input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
                   {[
                     { k: "child_seat", label: "Дет. кресло" },
                     { k: "booster", label: "Бустер" },
@@ -173,7 +173,7 @@ const Index = () => {
 
                 <Button
                   onClick={submit} disabled={loading}
-                  className="w-full mt-14 py-7 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
+                  className="w-full mt-20 py-7 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
                 >
                   {loading ? "Отправка..." : "Отправить"}
                 </Button>
