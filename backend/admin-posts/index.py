@@ -31,10 +31,15 @@ SCHEMA = 't_p67171637_yug_transfer_prize_l'
 
 
 def verify_token(token: str) -> bool:
+    if not token:
+        return False
     admin_login = os.environ.get('ADMIN_LOGIN', '')
     admin_password = os.environ.get('ADMIN_PASSWORD', '')
-    token_base = f"{admin_login}:{admin_password}:admin_secret_2026"
-    return token == hashlib.sha256(token_base.encode()).hexdigest()
+    admin_tok = hashlib.sha256(f"{admin_login}:{admin_password}:admin_secret_2026".encode()).hexdigest()
+    posts_login = os.environ.get('POSTS_LOGIN', '')
+    posts_password = os.environ.get('POSTS_PASSWORD', '')
+    posts_tok = hashlib.sha256(f"{posts_login}:{posts_password}:posts_secret_2026".encode()).hexdigest()
+    return token == admin_tok or (bool(posts_login) and token == posts_tok)
 
 
 def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:

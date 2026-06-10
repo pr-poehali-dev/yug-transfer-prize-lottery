@@ -26,11 +26,15 @@ CHUNK_PREFIX = "uploads/chunks"
 def _check_auth(headers: dict) -> bool:
     import hashlib
     token = headers.get('x-admin-token') or headers.get('X-Admin-Token', '')
+    if not token:
+        return False
     admin_login = os.environ.get('ADMIN_LOGIN', '')
     admin_password = os.environ.get('ADMIN_PASSWORD', '')
-    token_base = f"{admin_login}:{admin_password}:admin_secret_2026"
-    expected = hashlib.sha256(token_base.encode()).hexdigest()
-    return token == expected
+    admin_tok = hashlib.sha256(f"{admin_login}:{admin_password}:admin_secret_2026".encode()).hexdigest()
+    posts_login = os.environ.get('POSTS_LOGIN', '')
+    posts_password = os.environ.get('POSTS_PASSWORD', '')
+    posts_tok = hashlib.sha256(f"{posts_login}:{posts_password}:posts_secret_2026".encode()).hexdigest()
+    return token == admin_tok or (bool(posts_login) and token == posts_tok)
 
 
 def _s3():
