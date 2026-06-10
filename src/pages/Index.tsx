@@ -156,6 +156,11 @@ const Index = () => {
                   ))}
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Как вас зовут" className={inputCls} />
+                  <input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
+                </div>
+
                 {error && (
                   <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-red-300 text-xs flex items-center gap-2">
                     <Icon name="AlertCircle" size={14} />{error}
