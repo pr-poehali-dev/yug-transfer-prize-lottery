@@ -109,16 +109,12 @@ const Index = () => {
             <>
               <h2 className="text-xl md:text-2xl font-bold text-amber-400 text-center mb-4">Оставить заявку</h2>
               <div className="space-y-2.5">
-                <div className="grid grid-cols-2 gap-3">
-                  <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Как вас зовут" className={inputCls} />
-                  <input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
-                </div>
+                <input value={form.from_city} onChange={(e) => set("from_city", e.target.value)} placeholder="Откуда вас забрать?" className={inputCls} />
+                <input value={form.to_city} onChange={(e) => set("to_city", e.target.value)} placeholder="Куда довезти?" className={inputCls} />
                 <div className="grid grid-cols-2 gap-3">
                   <input value={form.trip_date} onChange={(e) => set("trip_date", e.target.value)} type="date" className={inputCls} />
                   <input value={form.trip_time} onChange={(e) => set("trip_time", e.target.value)} type="time" className={inputCls} />
                 </div>
-                <input value={form.from_city} onChange={(e) => set("from_city", e.target.value)} placeholder="Откуда вас забрать?" className={inputCls} />
-                <input value={form.to_city} onChange={(e) => set("to_city", e.target.value)} placeholder="Куда довезти?" className={inputCls} />
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
