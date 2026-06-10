@@ -1,11 +1,6 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { AdminTab } from "./adminTypes";
-import { AdminLogin } from "./AdminLogin";
-import { AdminPostsTab } from "./AdminPostsTab";
-import { AdminBotTab } from "./AdminBotTab";
-import { AdminStoriesTab } from "./AdminStoriesTab";
-import { AdminExcludedTab } from "./AdminExcludedTab";
 import { AdminDispatchTab } from "./AdminDispatchTab";
 import { AdminArchiveTab } from "./AdminArchiveTab";
 import { AdminDriversTab } from "./AdminDriversTab";
@@ -13,18 +8,8 @@ import type { OrderForm } from "./dispatch/dispatchTypes";
 
 export function AdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("dispatch");
-  const [postsTotal, setPostsTotal] = useState<number | null>(null);
   const [editOrder, setEditOrder] = useState<{ order: OrderForm; id: number } | null>(null);
   const [dispatchKey, setDispatchKey] = useState(0);
-  // Аккордеон внутри «Постов»: открыт только один раздел за раз.
-  type Section = "posts" | "bot" | "stories" | "excluded";
-  const [openSection, setOpenSection] = useState<Section | null>(null);
-  const toggleSection = (s: Section) => setOpenSection((cur) => (cur === s ? null : s));
-  // Раздел «Посты в канал» защищён отдельным паролем.
-  const POSTS_SESSION_KEY = "posts_token";
-  const [postsToken, setPostsToken] = useState<string | null>(
-    () => sessionStorage.getItem(POSTS_SESSION_KEY)
-  );
 
   const TABS: { id: AdminTab; label: string; icon: string; badge?: number | null }[] = [
     { id: "dispatch", label: "Диспетчерская", icon: "Headset" },
@@ -71,15 +56,6 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               )}
             </button>
           ))}
-
-          <button onClick={() => openCreate("posts")}
-            className={`mt-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === "posts" ? "grad-btn shadow" : "text-muted-foreground/70 hover:text-white hover:bg-white/5"}`}>
-            <Icon name="Send" size={13} />
-            <span className="flex-1 text-left">Посты</span>
-            {typeof postsTotal === "number" && (
-              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${tab === "posts" ? "bg-white/20 text-white" : "bg-white/10 text-white/50"}`}>{postsTotal}</span>
-            )}
-          </button>
         </aside>
 
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/5 flex">
@@ -95,44 +71,9 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
               {t.label}
             </button>
           ))}
-          <button onClick={() => openCreate("posts")}
-            className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs transition-colors ${tab === "posts" ? "text-purple-400" : "text-muted-foreground"}`}>
-            <Icon name="Send" size={18} />
-            Посты
-          </button>
         </div>
 
         <main className="flex-1 min-w-0 pb-20 md:pb-0">
-          {tab === "posts" && (
-            postsToken ? (
-              <div className="space-y-3">
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => { sessionStorage.removeItem(POSTS_SESSION_KEY); setPostsToken(null); }}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 text-muted-foreground hover:text-white hover:bg-white/5 transition-all text-sm"
-                  >
-                    <Icon name="Lock" size={15} />Выйти из постов
-                  </button>
-                </div>
-                <AdminPostsTab token={token} onTotalChange={setPostsTotal}
-                  expanded={openSection === "posts"} onToggle={() => toggleSection("posts")} />
-                <AdminBotTab token={token}
-                  expanded={openSection === "bot"} onToggle={() => toggleSection("bot")} />
-                <AdminStoriesTab token={token}
-                  expanded={openSection === "stories"} onToggle={() => toggleSection("stories")} />
-                <AdminExcludedTab token={token}
-                  expanded={openSection === "excluded"} onToggle={() => toggleSection("excluded")} />
-              </div>
-            ) : (
-              <AdminLogin
-                scope="posts"
-                title="Посты в канал"
-                subtitle="Доступ только по отдельному паролю"
-                sessionKey={POSTS_SESSION_KEY}
-                onSuccess={(t) => setPostsToken(t)}
-              />
-            )
-          )}
           {tab === "dispatch" && (
             <AdminDispatchTab
               key={dispatchKey}
@@ -150,3 +91,5 @@ export function AdminDashboard({ token, onLogout }: { token: string; onLogout: (
     </div>
   );
 }
+
+export default AdminDashboard;
