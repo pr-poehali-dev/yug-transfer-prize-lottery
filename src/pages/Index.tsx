@@ -88,6 +88,10 @@ const Index = () => {
       </header>
 
       <div className="relative z-10 w-full max-w-lg px-5 pt-6 pb-10">
+        <div className="text-center mb-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-white">Мой Трансфер</h1>
+          <p className="text-white/80 text-base md:text-lg mt-2">Сервис заказа легкового такси</p>
+        </div>
         <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-5 md:p-6">
           {sent ? (
             <div className="text-center py-8 space-y-4">
