@@ -636,8 +636,25 @@ def tg_edit(chat_id, message_id, text: str) -> dict:
     return {'ok': False, 'error': last_err}
 
 
+def deactivate_pay_messages(cur, order_id: int):
+    """Гасит личные сообщения с кнопкой оплаты у всех в очереди заказа:
+       убирает кнопку и помечает «Заказ отменён диспетчером», чтобы ссылка
+       на оплату перестала работать визуально."""
+    cur.execute(
+        f"SELECT pay_chat_id, pay_msg_id FROM {SCHEMA}.order_queue "
+        f"WHERE order_id=%s AND pay_msg_id IS NOT NULL AND pay_chat_id IS NOT NULL",
+        (order_id,),
+    )
+    for pay_chat, pay_msg in cur.fetchall():
+        tg_edit(pay_chat, pay_msg,
+                "🚫 <b>Заказ отменён диспетчером.</b>\n"
+                "Оплата по этому заказу больше не принимается.")
+
+
 def cancel_order(order_id: int) -> dict:
-    """Отмена заказа диспетчером: статус cancelled, пометка в группе (не удаляя)."""
+    """Отмена заказа диспетчером: статус cancelled, пометка в группе (не удаляя).
+       Убирает из сообщения список откликнувшихся/оплачивающих, гасит ссылки оплаты
+       и очищает очередь, чтобы оплата по заказу прекратилась."""
     conn = db()
     cur = conn.cursor()
     cur.execute(
@@ -646,17 +663,22 @@ def cancel_order(order_id: int) -> dict:
         (order_id,),
     )
     row = cur.fetchone()
+    # Гасим личные сообщения с кнопкой оплаты до очистки очереди.
+    deactivate_pay_messages(cur, order_id)
     cur.execute(
         f"UPDATE {SCHEMA}.dispatch_orders SET sale_status='cancelled', "
         f"current_user_id=NULL, current_deadline=NULL WHERE id=%s",
         (order_id,),
     )
+    # Полностью очищаем очередь откликнувшихся — заказ закрыт.
+    cur.execute(f"DELETE FROM {SCHEMA}.order_queue WHERE order_id=%s", (order_id,))
     conn.commit()
     cur.close()
     conn.close()
     if row and row[0] and row[1]:
         base = row[2] or '🚖 <b>ЗАКАЗ</b>'
-        text = base + render_queue_block(order_id) + "\n\n━━━━━━━━━━━━━━━\n🚫 <b>Отменён диспетчером</b>"
+        # Без render_queue_block — список откликнувшихся убираем из сообщения.
+        text = base + "\n\n━━━━━━━━━━━━━━━\n🚫 <b>Отменён диспетчером</b>"
         res1 = tg_edit(row[0], row[1], text)
         # Та же отметка во второй группе.
         chat2, mid2 = get_second_msg(order_id)
