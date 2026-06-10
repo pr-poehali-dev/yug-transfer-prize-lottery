@@ -9,7 +9,7 @@ const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Мин
 const COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
 const inputCls =
-  "w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/40 text-sm outline-none focus:border-amber-500/60 transition-colors [color-scheme:dark]";
+  "w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-white/40 text-sm outline-none focus:border-amber-500/60 transition-colors [color-scheme:dark]";
 
 const Index = () => {
   const [form, setForm] = useState({
@@ -93,8 +93,8 @@ const Index = () => {
         </div>
       </header>
 
-      <div className="relative z-10 mx-auto w-full max-w-lg px-5 pt-10 pb-16">
-        <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-6 md:p-8">
+      <div className="relative z-10 w-full max-w-lg px-5 pt-6 pb-10">
+        <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-5 md:p-6">
           {sent ? (
             <div className="text-center py-8 space-y-4">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500/40">
@@ -113,8 +113,8 @@ const Index = () => {
             </div>
           ) : (
             <>
-              <h2 className="text-2xl md:text-3xl font-bold text-amber-400 text-center mb-6">Оставить заявку</h2>
-              <div className="space-y-4">
+              <h2 className="text-xl md:text-2xl font-bold text-amber-400 text-center mb-4">Оставить заявку</h2>
+              <div className="space-y-2.5">
                 <div className="grid grid-cols-2 gap-3">
                   <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Как вас зовут" className={inputCls} />
                   <input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
@@ -128,13 +128,13 @@ const Index = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-white/80 text-sm font-medium mb-1.5">Кол-во человек</label>
+                    <label className="block text-white/80 text-xs font-medium mb-1">Кол-во человек</label>
                     <select value={form.people} onChange={(e) => set("people", e.target.value)} className={inputCls}>
                       {COUNTS.map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-white/80 text-sm font-medium mb-1.5">Кол-во багажа</label>
+                    <label className="block text-white/80 text-xs font-medium mb-1">Кол-во багажа</label>
                     <select value={form.baggage} onChange={(e) => set("baggage", e.target.value)} className={inputCls}>
                       {["0", ...COUNTS].map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
                     </select>
@@ -142,7 +142,7 @@ const Index = () => {
                 </div>
 
                 <div>
-                  <label className="block text-white/80 text-sm font-medium mb-1.5">Выберите тариф</label>
+                  <label className="block text-white/80 text-xs font-medium mb-1">Выберите тариф</label>
                   <select value={form.tariff} onChange={(e) => set("tariff", e.target.value)} className={inputCls}>
                     {TARIFFS.map((t) => <option key={t} value={t} className="bg-[#1a1a1a]">{t}</option>)}
                   </select>
@@ -174,7 +174,7 @@ const Index = () => {
 
                 <Button
                   onClick={submit} disabled={loading}
-                  className="w-full py-6 text-base font-semibold bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
+                  className="w-full py-5 text-base font-semibold bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
                 >
                   {loading ? "Отправка..." : "Отправить"}
                 </Button>
