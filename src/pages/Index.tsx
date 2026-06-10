@@ -68,8 +68,8 @@ const Index = () => {
     >
       <div className="absolute inset-0 bg-black/60" />
 
-      <header className="sticky top-4 z-20 mx-auto w-[calc(100%-2rem)] max-w-6xl">
-        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md shadow-lg">
+      <header className="sticky top-0 z-20 w-full">
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-white/10 border-b border-white/20 backdrop-blur-md shadow-lg">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
               <Icon name="Car" size={18} className="text-white" />
