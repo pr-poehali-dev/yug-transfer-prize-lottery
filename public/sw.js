@@ -1,7 +1,7 @@
 self.addEventListener('push', function(event) {
   if (!event.data) return;
   const data = event.data.json();
-  const title = data.title || 'ЮГ ТРАНСФЕР';
+  const title = data.title || 'Мой Трансфер';
   const options = {
     body: data.body || '',
     icon: '/favicon.svg',

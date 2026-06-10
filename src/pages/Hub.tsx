@@ -29,7 +29,7 @@ export default function Hub() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl grad-btn mb-5 text-3xl shadow-lg">
           🚐
         </div>
-        <h1 className="font-oswald text-3xl md:text-4xl font-bold text-white">ЮГ ТРАНСФЕР</h1>
+        <h1 className="font-oswald text-3xl md:text-4xl font-bold text-white">Мой Трансфер</h1>
         <p className="text-muted-foreground text-sm mt-2">Панель управления — выбери раздел</p>
       </div>
 

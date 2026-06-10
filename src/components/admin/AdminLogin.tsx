@@ -14,7 +14,7 @@ export function AdminLogin({
   onSuccess,
   scope = "admin",
   title = "Панель управления",
-  subtitle = "ЮГ ТРАНСФЕР — Администратор",
+  subtitle = "Мой Трансфер — Администратор",
   sessionKey = SESSION_KEY,
 }: AdminLoginProps) {
   const [login, setLogin] = useState("");

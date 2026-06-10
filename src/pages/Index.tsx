@@ -13,7 +13,7 @@ const Index = () => {
       <div className="absolute inset-0 bg-black/40" />
       <div className="relative z-10 text-center space-y-8 px-6">
         <h1 className="text-5xl md:text-6xl font-bold text-white drop-shadow-lg">
-          ЮГ-ТРАНСФЕР
+          МОЙ ТРАНСФЕР
         </h1>
         <p className="text-lg text-white/90 drop-shadow">
           Трансферы по всему югу России

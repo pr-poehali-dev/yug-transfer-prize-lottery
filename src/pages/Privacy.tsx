@@ -9,10 +9,10 @@ export default function Privacy() {
           <Link to="/" className="flex items-center gap-3">
             <img
               src="https://cdn.poehali.dev/files/67b1710e-13db-49da-a319-264e54d63c57.png"
-              alt="ЮГ ТРАНСФЕР"
+              alt="Мой Трансфер"
               className="h-9 w-auto drop-shadow-[0_0_12px_rgba(255,140,40,0.35)]"
             />
-            <span className="font-oswald text-base text-white hidden sm:block">ЮГ ТРАНСФЕР</span>
+            <span className="font-oswald text-base text-white hidden sm:block">Мой Трансфер</span>
           </Link>
           <Link
             to="/"
