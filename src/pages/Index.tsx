@@ -173,7 +173,7 @@ const Index = () => {
 
                 <Button
                   onClick={submit} disabled={loading}
-                  className="w-full mt-8 py-7 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
+                  className="w-full mt-14 py-7 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
                 >
                   {loading ? "Отправка..." : "Отправить"}
                 </Button>
