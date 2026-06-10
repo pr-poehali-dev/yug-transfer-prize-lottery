@@ -12,12 +12,22 @@ const Index = () => {
     >
       <div className="absolute inset-0 bg-black/40" />
 
-      <Link to="/admin" className="absolute top-4 right-4 z-20">
-        <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg shadow-lg bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-sm">
-          <Icon name="LogIn" size={14} />
-          Админ-панель
-        </Button>
-      </Link>
+      <header className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[calc(100%-2rem)] max-w-5xl">
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md shadow-lg">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+              <Icon name="Car" size={18} className="text-white" />
+            </div>
+            <span className="font-bold text-white text-base md:text-lg">Мой Трансфер</span>
+          </div>
+          <Link to="/admin">
+            <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
+              <Icon name="LogIn" size={14} />
+              Админ-панель
+            </Button>
+          </Link>
+        </div>
+      </header>
 
       <div className="relative z-10 text-center space-y-8 px-6">
         <h1 className="text-5xl md:text-6xl font-bold text-white drop-shadow-lg">
