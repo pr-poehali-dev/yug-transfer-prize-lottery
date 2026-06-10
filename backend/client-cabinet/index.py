@@ -72,10 +72,13 @@ def create_request(data: dict) -> dict:
     cur = conn.cursor()
     cur.execute(
         f"INSERT INTO {SCHEMA}.client_requests "
-        f"(phone, name, from_city, to_city, trip_date, trip_time, people, comment) "
-        f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+        f"(phone, name, from_city, to_city, trip_date, trip_time, people, baggage, "
+        f"tariff, child_seat, booster, animals, comment) "
+        f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
         (phone, data.get('name', ''), data.get('from_city', ''), data.get('to_city', ''),
          data.get('trip_date', ''), data.get('trip_time', ''), data.get('people', ''),
+         data.get('baggage', ''), data.get('tariff', ''),
+         bool(data.get('child_seat')), bool(data.get('booster')), bool(data.get('animals')),
          data.get('comment', '')),
     )
     req_id = cur.fetchone()[0]
@@ -147,7 +150,8 @@ def list_requests(phone: str) -> dict:
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        f"SELECT id, from_city, to_city, trip_date, trip_time, people, comment, status, created_at "
+        f"SELECT id, from_city, to_city, trip_date, trip_time, people, baggage, tariff, "
+        f"child_seat, booster, animals, comment, status, created_at "
         f"FROM {SCHEMA}.client_requests WHERE phone=%s ORDER BY created_at DESC LIMIT 50",
         (phone,),
     )
@@ -173,8 +177,8 @@ def admin_list() -> dict:
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
         f"SELECT id, phone, name, from_city, to_city, trip_date, trip_time, people, "
-        f"comment, status, created_at FROM {SCHEMA}.client_requests "
-        f"ORDER BY created_at DESC LIMIT 200"
+        f"baggage, tariff, child_seat, booster, animals, comment, status, created_at "
+        f"FROM {SCHEMA}.client_requests ORDER BY created_at DESC LIMIT 200"
     )
     rows = cur.fetchall()
     cur.close()

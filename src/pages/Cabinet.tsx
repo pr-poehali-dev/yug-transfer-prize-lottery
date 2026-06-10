@@ -9,6 +9,11 @@ interface ClientRequest {
   trip_date: string;
   trip_time: string;
   people: string;
+  baggage: string;
+  tariff: string;
+  child_seat: boolean;
+  booster: boolean;
+  animals: boolean;
   comment: string;
   status: string;
   status_label: string;
