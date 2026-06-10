@@ -1,10 +1,8 @@
-"""Клиентский личный кабинет: заявка на трансфер, вход по SMS-коду, статус заявок."""
+"""Клиентский личный кабинет: заявка на трансфер, регистрация/вход по паролю, статус заявок."""
 import os
 import json
-import random
-import urllib.request
-import urllib.parse
-from datetime import datetime, timedelta
+import hashlib
+import secrets
 
 import psycopg2
 import psycopg2.extras
@@ -14,7 +12,7 @@ SCHEMA = os.environ.get('MAIN_DB_SCHEMA') or 't_p67171637_yug_transfer_prize_l'
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Phone, X-Admin-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Phone, X-Client-Token, X-Admin-Token',
     'Access-Control-Max-Age': '86400',
 }
 
@@ -44,22 +42,27 @@ def norm_phone(raw: str) -> str:
     return digits
 
 
-def send_sms(phone: str, text: str) -> dict:
-    api_id = os.environ.get('SMSRU_API_ID', '')
-    if not api_id:
-        return {'ok': False, 'error': 'SMS не настроена'}
-    params = urllib.parse.urlencode({
-        'api_id': api_id, 'to': phone, 'msg': text, 'json': 1,
-    })
-    url = f'https://sms.ru/sms/send?{params}'
-    try:
-        with urllib.request.urlopen(url, timeout=15) as r:
-            data = json.loads(r.read())
-        if data.get('status') == 'OK':
-            return {'ok': True}
-        return {'ok': False, 'error': data.get('status_text', 'Ошибка SMS')}
-    except Exception as e:
-        return {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:150]}'}
+def hash_password(password: str) -> str:
+    return hashlib.sha256(('tg_transfer_salt_' + password).encode()).hexdigest()
+
+
+def make_token() -> str:
+    return secrets.token_hex(24)
+
+
+def account_by_token(token: str):
+    if not token:
+        return None
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        f"SELECT id, phone, name FROM {SCHEMA}.client_accounts WHERE token=%s",
+        (token,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return dict(row) if row else None
 
 
 def create_request(data: dict) -> dict:
@@ -115,59 +118,64 @@ def create_request(data: dict) -> dict:
     return resp(200, {'ok': True, 'id': req_id})
 
 
-def send_code(data: dict) -> dict:
+def register(data: dict) -> dict:
     phone = norm_phone(data.get('phone'))
+    password = str(data.get('password', ''))
+    name = str(data.get('name', '')).strip()
     if len(phone) != 11:
         return resp(400, {'ok': False, 'error': 'Укажите корректный номер телефона'})
-    code = f'{random.randint(0, 9999):04d}'
-    expires = datetime.utcnow() + timedelta(minutes=10)
+    if len(password) < 4:
+        return resp(400, {'ok': False, 'error': 'Пароль должен быть не короче 4 символов'})
     conn = db()
     cur = conn.cursor()
+    cur.execute(f"SELECT id FROM {SCHEMA}.client_accounts WHERE phone=%s", (phone,))
+    if cur.fetchone():
+        cur.close()
+        conn.close()
+        return resp(200, {'ok': False, 'error': 'Этот номер уже зарегистрирован. Войдите по паролю.'})
+    token = make_token()
     cur.execute(
-        f"INSERT INTO {SCHEMA}.client_auth_codes (phone, code, expires_at) VALUES (%s,%s,%s)",
-        (phone, code, expires),
+        f"INSERT INTO {SCHEMA}.client_accounts (phone, name, password_hash, token) "
+        f"VALUES (%s,%s,%s,%s)",
+        (phone, name, hash_password(password), token),
     )
     conn.commit()
     cur.close()
     conn.close()
-    sms = send_sms(phone, f'Код для входа в личный кабинет: {code}')
-    if not sms.get('ok'):
-        return resp(200, {'ok': False, 'error': sms.get('error', 'Не удалось отправить SMS')})
-    return resp(200, {'ok': True})
+    return resp(200, {'ok': True, 'token': token, 'phone': phone, 'name': name})
 
 
-def verify_code(data: dict) -> dict:
+def login(data: dict) -> dict:
     phone = norm_phone(data.get('phone'))
-    code = str(data.get('code', '')).strip()
-    if len(phone) != 11 or not code:
-        return resp(400, {'ok': False, 'error': 'Введите телефон и код'})
+    password = str(data.get('password', ''))
+    if len(phone) != 11 or not password:
+        return resp(400, {'ok': False, 'error': 'Введите телефон и пароль'})
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        f"SELECT id, code, expires_at, used, attempts FROM {SCHEMA}.client_auth_codes "
-        f"WHERE phone=%s ORDER BY created_at DESC LIMIT 1",
+        f"SELECT id, name, password_hash FROM {SCHEMA}.client_accounts WHERE phone=%s",
         (phone,),
     )
     row = cur.fetchone()
-    if not row or row['used'] or row['expires_at'] < datetime.utcnow():
+    if not row or row['password_hash'] != hash_password(password):
         cur.close()
         conn.close()
-        return resp(200, {'ok': False, 'error': 'Код не найден или истёк. Запросите новый.'})
-    if row['attempts'] >= 5:
-        cur.close()
-        conn.close()
-        return resp(200, {'ok': False, 'error': 'Слишком много попыток. Запросите новый код.'})
-    if row['code'] != code:
-        cur.execute(f"UPDATE {SCHEMA}.client_auth_codes SET attempts=attempts+1 WHERE id=%s", (row['id'],))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return resp(200, {'ok': False, 'error': 'Неверный код'})
-    cur.execute(f"UPDATE {SCHEMA}.client_auth_codes SET used=TRUE WHERE id=%s", (row['id'],))
+        return resp(200, {'ok': False, 'error': 'Неверный телефон или пароль'})
+    token = make_token()
+    cur.execute(f"UPDATE {SCHEMA}.client_accounts SET token=%s WHERE id=%s", (token, row['id']))
     conn.commit()
     cur.close()
     conn.close()
-    return resp(200, {'ok': True, 'phone': phone})
+    return resp(200, {'ok': True, 'token': token, 'phone': phone, 'name': row['name'] or ''})
+
+
+def me(event: dict) -> dict:
+    token = (event.get('headers') or {}).get('X-Client-Token') or \
+        (event.get('headers') or {}).get('x-client-token') or ''
+    acc = account_by_token(token)
+    if not acc:
+        return resp(200, {'ok': False, 'error': 'Не авторизован'})
+    return resp(200, {'ok': True, 'phone': acc['phone'], 'name': acc['name'] or ''})
 
 
 def list_requests(phone: str) -> dict:
@@ -236,7 +244,7 @@ def admin_set_status(data: dict) -> dict:
 
 
 def handler(event: dict, context) -> dict:
-    """Клиентский кабинет: заявки на трансфер и отслеживание статуса по SMS-коду."""
+    """Клиентский кабинет: заявки на трансфер, регистрация/вход по паролю, статус заявок."""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 
@@ -245,8 +253,14 @@ def handler(event: dict, context) -> dict:
 
     if event.get('httpMethod') == 'GET':
         if action == 'requests':
-            phone = (event.get('headers') or {}).get('X-Client-Phone') or qs.get('phone', '')
-            return list_requests(phone)
+            headers = event.get('headers') or {}
+            token = headers.get('X-Client-Token') or headers.get('x-client-token') or ''
+            acc = account_by_token(token)
+            if not acc:
+                return resp(200, {'ok': False, 'error': 'Не авторизован'})
+            return list_requests(acc['phone'])
+        if action == 'me':
+            return me(event)
         if action == 'admin_list':
             if not is_admin(event):
                 return resp(403, {'ok': False, 'error': 'forbidden'})
@@ -263,10 +277,10 @@ def handler(event: dict, context) -> dict:
 
     if action == 'create_request':
         return create_request(data)
-    if action == 'send_code':
-        return send_code(data)
-    if action == 'verify_code':
-        return verify_code(data)
+    if action == 'register':
+        return register(data)
+    if action == 'login':
+        return login(data)
     if action == 'admin_set_status':
         if not is_admin(event):
             return resp(403, {'ok': False, 'error': 'forbidden'})

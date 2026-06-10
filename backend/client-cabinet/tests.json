@@ -20,10 +20,17 @@
       "expectedStatus": 400
     },
     {
-      "name": "Send code bad phone rejected",
+      "name": "Register bad phone rejected",
       "method": "POST",
-      "path": "/?action=send_code",
-      "body": {"phone": "123"},
+      "path": "/?action=register",
+      "body": {"phone": "123", "password": "1234"},
+      "expectedStatus": 400
+    },
+    {
+      "name": "Login without password rejected",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {"phone": "+79991234567"},
       "expectedStatus": 400
     }
   ]
