@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 
 const Index = lazy(() => import("./pages/Index"));
+const Hub = lazy(() => import("./pages/Hub"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Posts = lazy(() => import("./pages/Posts"));
 const Privacy = lazy(() => import("./pages/Privacy"));
@@ -24,7 +25,8 @@ const App = () => (
       <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin" element={<Hub />} />
+          <Route path="/dispatch" element={<Admin />} />
           <Route path="/posts" element={<Posts />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/offer" element={<Offer />} />
