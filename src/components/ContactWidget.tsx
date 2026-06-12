@@ -14,7 +14,7 @@ const ContactWidget = () => {
         <p className="text-white/50 text-xs mt-0.5 mb-2.5">Закажите по телефону или в мессенджере</p>
         <div className="flex items-center gap-2">
           <a
-            href={`https://t.me/${PHONE_DIGITS}`}
+            href="https://t.me/camry503"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Telegram"
