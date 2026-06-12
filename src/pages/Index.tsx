@@ -73,7 +73,7 @@ const Index = () => {
 
       <SiteHeader />
 
-      <div className="relative z-10 w-full max-w-lg px-5 pt-6 md:pt-10 pb-10 md:pb-4">
+      <div className="relative z-10 w-full max-w-lg px-5 pt-6 md:pt-3 pb-10 md:absolute md:bottom-4 md:left-0 md:pb-0">
         <div className="text-center mb-6 md:mb-2">
           <h1 className="text-3xl md:text-2xl font-bold text-white">Мой Трансфер</h1>
           <p className="md:hidden text-white/80 text-base mt-2">Сервис заказа легкового такси</p>
