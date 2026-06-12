@@ -87,12 +87,12 @@ const Index = () => {
         </div>
       </header>
 
-      <div className="relative z-10 w-full max-w-lg px-5 pt-6 pb-10">
-        <div className="text-center mb-6">
-          <h1 className="text-3xl md:text-4xl font-bold text-white">Мой Трансфер</h1>
+      <div className="relative z-10 w-full max-w-lg px-5 pt-6 md:pt-3 pb-10 md:pb-4">
+        <div className="text-center mb-6 md:mb-2">
+          <h1 className="text-3xl md:text-2xl font-bold text-white">Мой Трансфер</h1>
           <p className="md:hidden text-white/80 text-base mt-2">Сервис заказа легкового такси</p>
         </div>
-        <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-5 md:p-6">
+        <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-5 md:p-5">
           {sent ? (
             <div className="text-center py-8 space-y-4">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500/40">
@@ -111,8 +111,8 @@ const Index = () => {
             </div>
           ) : (
             <>
-              <h2 className="text-xl md:text-2xl font-bold text-amber-400 text-center mb-4">Оставить заявку</h2>
-              <div className="space-y-2.5">
+              <h2 className="text-xl md:text-lg font-bold text-amber-400 text-center mb-4 md:mb-2">Оставить заявку</h2>
+              <div className="space-y-2.5 md:space-y-2">
                 <input value={form.from_city} onChange={(e) => set("from_city", e.target.value)} placeholder="Откуда вас забрать?" className={inputCls} />
                 <input value={form.to_city} onChange={(e) => set("to_city", e.target.value)} placeholder="Куда довезти?" className={inputCls} />
                 <div className="grid grid-cols-2 gap-3">
@@ -173,7 +173,7 @@ const Index = () => {
 
                 <Button
                   onClick={submit} disabled={loading}
-                  className="w-full mt-20 md:mt-6 py-7 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
+                  className="w-full mt-20 md:mt-3 py-7 md:py-5 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
                 >
                   {loading ? "Отправка..." : "Отправить"}
                 </Button>
