@@ -3,10 +3,13 @@ import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 
 const NAV = [
-  { to: "/routes", label: "Маршруты" },
-  { to: "/prices", label: "Цены" },
+  { to: "/directions", label: "Направления" },
+  { to: "/tariffs", label: "Тарифы" },
   { to: "/contacts", label: "Контакты" },
 ];
+
+export const SITE_PHONE = "+7 (900) 000-00-00";
+const PHONE_TEL = "+79000000000";
 
 export default function SiteHeader() {
   const { pathname } = useLocation();
@@ -35,17 +38,15 @@ export default function SiteHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <a href={`tel:${PHONE_TEL}`} className="hidden sm:flex items-center gap-1.5 text-white font-semibold text-sm hover:text-amber-400 transition-colors whitespace-nowrap">
+            <Icon name="Phone" size={14} className="text-amber-400" />
+            {SITE_PHONE}
+          </a>
           <Link to="/cabinet">
             <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
               <Icon name="UserRound" size={14} />
               <span className="hidden sm:inline">Личный кабинет</span>
-            </Button>
-          </Link>
-          <Link to="/admin">
-            <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
-              <Icon name="LogIn" size={14} />
-              <span className="hidden sm:inline">Админ-панель</span>
             </Button>
           </Link>
         </div>
@@ -63,6 +64,9 @@ export default function SiteHeader() {
             {n.label}
           </Link>
         ))}
+        <a href={`tel:${PHONE_TEL}`} className="px-2 py-1 text-amber-400 text-sm font-semibold whitespace-nowrap">
+          {SITE_PHONE}
+        </a>
       </nav>
     </header>
   );

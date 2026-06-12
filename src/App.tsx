@@ -12,6 +12,9 @@ const Posts = lazy(() => import("./pages/Posts"));
 const Cabinet = lazy(() => import("./pages/Cabinet"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Offer = lazy(() => import("./pages/Offer"));
+const Directions = lazy(() => import("./pages/RoutesPage"));
+const Tariffs = lazy(() => import("./pages/TariffsPage"));
+const Contacts = lazy(() => import("./pages/ContactsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 if ("serviceWorker" in navigator) {
@@ -32,6 +35,9 @@ const App = () => (
           <Route path="/cabinet" element={<Cabinet />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/offer" element={<Offer />} />
+          <Route path="/directions" element={<Directions />} />
+          <Route path="/tariffs" element={<Tariffs />} />
+          <Route path="/contacts" element={<Contacts />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

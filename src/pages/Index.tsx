@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
+import SiteHeader from "@/components/SiteHeader";
 import { CLIENT_CABINET_URL } from "@/components/admin/adminTypes";
 
 const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
@@ -68,24 +69,7 @@ const Index = () => {
     >
       <div className="absolute inset-0 bg-black/60" />
 
-      <header className="sticky top-0 z-20 w-full">
-        <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-white/10 border-b border-white/20 backdrop-blur-md shadow-lg">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-              <Icon name="Car" size={18} className="text-white" />
-            </div>
-            <span className="font-bold text-white text-base md:text-lg">Мой Трансфер</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link to="/cabinet">
-              <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
-                <Icon name="UserRound" size={14} />
-                <span className="hidden sm:inline">Личный кабинет</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="relative z-10 w-full max-w-lg px-5 pt-6 md:pt-3 pb-10 md:pb-4">
         <div className="text-center mb-6 md:mb-2">

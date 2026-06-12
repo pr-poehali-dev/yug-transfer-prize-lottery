@@ -13,7 +13,7 @@ const ROUTES = [
 
 export default function RoutesPage() {
   return (
-    <PageShell title="Маршруты" icon="Route">
+    <PageShell title="Направления" icon="Route">
       <p className="text-white/70 mb-6">Популярные направления трансфера. Точную стоимость рассчитаем под ваш заказ.</p>
       <div className="grid sm:grid-cols-2 gap-3">
         {ROUTES.map((r) => (
