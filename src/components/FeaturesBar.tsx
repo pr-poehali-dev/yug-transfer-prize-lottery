@@ -1,7 +1,6 @@
 import Icon from "@/components/ui/icon";
 
 const FEATURES = [
-  { icon: "Clock", label: "Подача 10 мин" },
   { icon: "MapPin", label: "По всей России" },
   { icon: "ShieldCheck", label: "Безопасность" },
   { icon: "BadgeRussianRuble", label: "Фикс. цена" },
