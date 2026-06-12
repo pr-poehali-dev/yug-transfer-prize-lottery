@@ -9,7 +9,7 @@ const FEATURES = [
 
 const FeaturesBar = () => {
   return (
-    <div className="fixed z-20 flex flex-wrap items-center gap-2.5 pointer-events-none bottom-4 left-4 right-4 lg:right-72 lg:justify-center">
+    <div className="fixed z-20 flex flex-wrap items-center gap-2.5 pointer-events-none bottom-4 left-4 right-4 lg:left-[560px] lg:right-80 lg:justify-center">
       {FEATURES.map((f) => (
         <div
           key={f.label}
