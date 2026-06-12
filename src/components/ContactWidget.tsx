@@ -32,6 +32,15 @@ const ContactWidget = () => {
             <Icon name="MessageCircle" size={16} className="text-white" />
           </a>
           <a
+            href={`https://max.ru/u/${PHONE_DIGITS}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="MAX"
+            className="w-9 h-9 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] hover:opacity-90 flex items-center justify-center transition-opacity"
+          >
+            <span className="text-white text-xs font-bold leading-none">MAX</span>
+          </a>
+          <a
             href={`tel:${PHONE_TEL}`}
             aria-label="Позвонить"
             className="w-9 h-9 rounded-full bg-[#9B6BF5] hover:opacity-90 flex items-center justify-center transition-opacity"
