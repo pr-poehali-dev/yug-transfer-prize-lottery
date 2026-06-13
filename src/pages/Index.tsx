@@ -128,18 +128,18 @@ const Index = () => {
                   </select>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-4 md:pt-2">
+                <div className="flex items-center justify-between gap-1.5 pt-4 md:pt-2">
                   {[
                     { k: "child_seat", label: "Дет. кресло" },
                     { k: "booster", label: "Бустер" },
                     { k: "animals", label: "Животные" },
                   ].map((c) => (
-                    <label key={c.k} className="flex items-center gap-2 text-white/90 text-sm cursor-pointer">
+                    <label key={c.k} className="flex items-center gap-1.5 text-white/90 text-xs sm:text-sm cursor-pointer whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={form[c.k as keyof typeof form] as boolean}
                         onChange={(e) => set(c.k, e.target.checked)}
-                        className="w-4 h-4 accent-amber-500"
+                        className="w-4 h-4 accent-amber-500 shrink-0"
                       />
                       {c.label}
                     </label>
