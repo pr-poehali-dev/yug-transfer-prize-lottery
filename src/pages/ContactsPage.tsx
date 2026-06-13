@@ -4,7 +4,7 @@ import Icon from "@/components/ui/icon";
 import { SITE_PHONE } from "@/components/SiteHeader";
 
 const CONTACTS = [
-  { icon: "Phone", label: "Телефон", value: SITE_PHONE, href: "tel:+79000000000" },
+  { icon: "Phone", label: "Телефон", value: SITE_PHONE, href: "tel:+79956141414" },
   { icon: "Mail", label: "Почта", value: "info@moy-transfer.ru", href: "mailto:info@moy-transfer.ru" },
   { icon: "Clock", label: "Режим работы", value: "Круглосуточно, без выходных", href: "" },
   { icon: "MapPin", label: "Город", value: "Краснодарский край", href: "" },

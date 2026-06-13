@@ -8,8 +8,8 @@ const NAV = [
   { to: "/contacts", label: "Контакты" },
 ];
 
-export const SITE_PHONE = "+7 (900) 000-00-00";
-const PHONE_TEL = "+79000000000";
+export const SITE_PHONE = "+7 (995) 614-14-14";
+const PHONE_TEL = "+79956141414";
 
 export default function SiteHeader() {
   const { pathname } = useLocation();
