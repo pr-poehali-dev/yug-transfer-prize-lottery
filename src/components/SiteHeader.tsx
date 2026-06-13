@@ -39,7 +39,7 @@ export default function SiteHeader() {
               className="w-full h-full object-cover"
             />
           </div>
-          <span className="font-bold text-white text-base md:text-lg">Мой Трансфер</span>
+          <span className="hidden md:inline font-bold text-white text-base md:text-lg">Мой Трансфер</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
