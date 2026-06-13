@@ -18,8 +18,12 @@ export default function SiteHeader() {
     <header className="sticky top-0 z-20 w-full">
       <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-white/10 border-b border-white/20 backdrop-blur-md shadow-lg">
         <Link to="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-            <Icon name="Car" size={18} className="text-white" />
+          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0">
+            <img
+              src="https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/64907c55-9fa4-41c3-8060-94e8e73046d4.jpg"
+              alt="Мой Трансфер"
+              className="w-full h-full object-cover"
+            />
           </div>
           <span className="font-bold text-white text-base md:text-lg">Мой Трансфер</span>
         </Link>
