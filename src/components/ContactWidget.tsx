@@ -32,7 +32,7 @@ const ContactWidget = () => {
             <Icon name="MessageCircle" size={16} className="text-white" />
           </a>
           <a
-            href="https://max.ru/u/f9LHodD0cOLzdRDodXNdc9djrpZZdu-v0zZD4IeF_lUFvaKexfCu8S7gRtU"
+            href="https://max.ru/u/f9LHodD0cOI0G4brAI4KCKvVahfV0mnfAqqlH0Coj23Qfu8YvsF3FHXX84E"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="MAX"
