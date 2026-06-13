@@ -128,11 +128,6 @@ const Index = () => {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Как вас зовут" className={inputCls} />
-                  <input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
-                </div>
-
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-4 md:pt-2">
                   {[
                     { k: "child_seat", label: "Дет. кресло" },
@@ -149,6 +144,11 @@ const Index = () => {
                       {c.label}
                     </label>
                   ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Как вас зовут" className={inputCls} />
+                  <input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
                 </div>
 
                 {error && (
