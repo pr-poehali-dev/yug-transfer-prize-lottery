@@ -119,6 +119,49 @@ export default function SiteHeader() {
               </Button>
             </Link>
           </nav>
+
+          <footer className="shrink-0 px-6 pt-4 pb-6 border-t border-white/10">
+            <div className="flex items-center gap-2 mb-3">
+              <a
+                href="https://t.me/ug_transfer_online"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Telegram"
+                className="w-10 h-10 rounded-full bg-[#2AABEE] flex items-center justify-center"
+              >
+                <Icon name="Send" size={18} className="text-white" />
+              </a>
+              <a
+                href="https://max.ru/u/f9LHodD0cOI0G4brAI4KCKvVahfV0mnfAqqlH0Coj23Qfu8YvsF3FHXX84E"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="MAX"
+                className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] flex items-center justify-center"
+              >
+                <span className="text-white text-xs font-bold leading-none">MAX</span>
+              </a>
+              <a
+                href={`https://wa.me/79956141414`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="WhatsApp"
+                className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center"
+              >
+                <Icon name="MessageCircle" size={18} className="text-white" />
+              </a>
+            </div>
+            <div className="space-y-1 text-white/60 text-sm">
+              <div className="flex items-center gap-2">
+                <Icon name="Clock" size={14} className="text-amber-400 shrink-0" />
+                Круглосуточно, без выходных
+              </div>
+              <div className="flex items-center gap-2">
+                <Icon name="MapPin" size={14} className="text-amber-400 shrink-0" />
+                Краснодарский край, по всей России
+              </div>
+            </div>
+            <p className="text-white/30 text-xs mt-3">© 2026 Мой Трансфер</p>
+          </footer>
         </div>
       )}
     </header>
