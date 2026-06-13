@@ -61,6 +61,24 @@ export default function SiteHeader() {
             <Icon name="Phone" size={14} className="text-amber-400" />
             {SITE_PHONE}
           </a>
+          <a
+            href="https://t.me/ug_transfer_online"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Telegram"
+            className="hidden md:flex w-8 h-8 rounded-full bg-[#2AABEE] hover:opacity-90 items-center justify-center transition-opacity shrink-0"
+          >
+            <Icon name="Send" size={15} className="text-white" />
+          </a>
+          <a
+            href="https://max.ru/u/f9LHodD0cOI0G4brAI4KCKvVahfV0mnfAqqlH0Coj23Qfu8YvsF3FHXX84E"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="MAX"
+            className="hidden md:flex w-8 h-8 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] hover:opacity-90 items-center justify-center transition-opacity shrink-0"
+          >
+            <span className="text-white text-[10px] font-bold leading-none">MAX</span>
+          </a>
           <Link to="/cabinet" className="hidden md:block">
             <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
               <Icon name="UserRound" size={14} />
