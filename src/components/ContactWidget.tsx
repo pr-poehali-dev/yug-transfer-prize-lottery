@@ -6,7 +6,7 @@ const PHONE_DIGITS = "79956141414";
 
 const ContactWidget = () => {
   return (
-    <div className="fixed bottom-4 right-4 z-30 max-w-[calc(100vw-2rem)]">
+    <div className="hidden lg:block fixed bottom-4 right-4 z-30 max-w-[calc(100vw-2rem)]">
       <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl px-4 py-3">
         <a href={`tel:${PHONE_TEL}`} className="block text-white font-bold text-lg leading-tight hover:text-amber-400 transition-colors">
           {PHONE}
