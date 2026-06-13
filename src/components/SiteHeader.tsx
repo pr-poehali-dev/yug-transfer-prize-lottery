@@ -80,14 +80,25 @@ export default function SiteHeader() {
       </div>
 
       {open && (
-        <div className="md:hidden bg-[#1a1a1a]/95 backdrop-blur-md border-b border-white/10 shadow-xl">
-          <nav className="flex flex-col px-4 py-2">
+        <div className="md:hidden fixed inset-0 z-30 bg-[#0f0f0f]/98 backdrop-blur-md flex flex-col">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 shrink-0">
+            <span className="font-bold text-white text-lg">Меню</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Закрыть"
+              className="w-9 h-9 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 flex items-center justify-center text-white"
+            >
+              <Icon name="X" size={20} />
+            </button>
+          </div>
+          <nav className="flex flex-col flex-1 px-6 py-4 gap-1 overflow-y-auto">
             {NAV.map((n) => (
               <Link
                 key={n.to}
                 to={n.to}
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-2 px-2 py-3 rounded-lg text-base font-medium border-b border-white/5 transition-colors ${
+                className={`flex items-center gap-2 py-4 text-xl font-semibold border-b border-white/5 transition-colors ${
                   pathname === n.to ? "text-amber-400" : "text-white/90"
                 }`}
               >
@@ -96,14 +107,14 @@ export default function SiteHeader() {
             ))}
             <a
               href={`tel:${PHONE_TEL}`}
-              className="flex items-center gap-2 px-2 py-3 text-amber-400 font-semibold border-b border-white/5"
+              className="flex items-center gap-2 py-4 text-amber-400 text-xl font-semibold border-b border-white/5"
             >
-              <Icon name="Phone" size={16} />
+              <Icon name="Phone" size={20} />
               {SITE_PHONE}
             </a>
-            <Link to="/cabinet" onClick={() => setOpen(false)} className="py-3">
-              <Button className="w-full gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold">
-                <Icon name="UserRound" size={16} />
+            <Link to="/cabinet" onClick={() => setOpen(false)} className="mt-auto pt-4">
+              <Button className="w-full gap-2 h-12 text-base bg-amber-500 hover:bg-amber-400 text-black font-bold">
+                <Icon name="UserRound" size={18} />
                 Личный кабинет
               </Button>
             </Link>
