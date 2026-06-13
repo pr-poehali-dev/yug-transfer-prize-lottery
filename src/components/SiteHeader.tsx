@@ -112,6 +112,15 @@ export default function SiteHeader() {
           >
             <span className="text-white text-[10px] font-bold leading-none">MAX</span>
           </a>
+          <a
+            href="https://wa.me/79956141414"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="WhatsApp"
+            className="md:hidden flex w-8 h-8 rounded-full bg-[#25D366] items-center justify-center shrink-0"
+          >
+            <Icon name="MessageCircle" size={15} className="text-white" />
+          </a>
 
           <button
             type="button"
