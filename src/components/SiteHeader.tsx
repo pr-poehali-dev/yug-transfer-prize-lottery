@@ -86,11 +86,38 @@ export default function SiteHeader() {
             </Button>
           </Link>
 
+          <a
+            href={`tel:${PHONE_TEL}`}
+            aria-label="Позвонить"
+            className="md:hidden flex items-center gap-1 text-white font-semibold text-xs whitespace-nowrap"
+          >
+            <Icon name="Phone" size={13} className="text-amber-400" />
+            {SITE_PHONE}
+          </a>
+          <a
+            href="https://t.me/ug_transfer_online"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Telegram"
+            className="md:hidden flex w-8 h-8 rounded-full bg-[#2AABEE] items-center justify-center shrink-0"
+          >
+            <Icon name="Send" size={15} className="text-white" />
+          </a>
+          <a
+            href="https://max.ru/u/f9LHodD0cOI0G4brAI4KCKvVahfV0mnfAqqlH0Coj23Qfu8YvsF3FHXX84E"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="MAX"
+            className="md:hidden flex w-8 h-8 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] items-center justify-center shrink-0"
+          >
+            <span className="text-white text-[10px] font-bold leading-none">MAX</span>
+          </a>
+
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-label="Меню"
-            className="md:hidden w-9 h-9 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 flex items-center justify-center text-white"
+            className="md:hidden w-9 h-9 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 flex items-center justify-center text-white shrink-0"
           >
             <Icon name={open ? "X" : "Menu"} size={20} />
           </button>
