@@ -73,12 +73,12 @@ const Index = () => {
 
       <SiteHeader />
 
-      <div className="relative z-10 w-full max-w-lg px-5 pt-5 md:pt-3 pb-5 md:absolute md:bottom-4 md:left-0 md:pb-0">
+      <div className="relative z-10 w-full max-w-lg px-5 pt-5 md:pt-3 pb-5 md:pb-0 min-h-[calc(100vh-72px)] md:min-h-0 flex flex-col justify-center md:block md:absolute md:bottom-4 md:left-0">
         <div className="text-center mb-3 md:mb-2">
           <h1 className="text-2xl md:text-2xl font-bold text-white">Мой Трансфер</h1>
           <p className="md:hidden text-white/80 text-sm mt-0.5">Сервис заказа легкового такси</p>
         </div>
-        <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-4 md:p-5">
+        <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-4 md:p-5 flex flex-col md:block">
           {sent ? (
             <div className="text-center py-8 space-y-4">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500/40">
@@ -96,9 +96,9 @@ const Index = () => {
               </Link>
             </div>
           ) : (
-            <>
-              <h2 className="text-lg md:text-lg font-bold text-amber-400 text-center mb-2 md:mb-2">Оставить заявку</h2>
-              <div className="space-y-2 md:space-y-2">
+            <div className="flex-1 flex flex-col md:block">
+              <h2 className="text-lg md:text-lg font-bold text-amber-400 text-center mb-3 md:mb-2">Оставить заявку</h2>
+              <div className="space-y-3 md:space-y-2 flex-1 flex flex-col justify-center">
                 <input value={form.from_city} onChange={(e) => set("from_city", e.target.value)} placeholder="Откуда вас забрать?" className={inputCls} />
                 <input value={form.to_city} onChange={(e) => set("to_city", e.target.value)} placeholder="Куда довезти?" className={inputCls} />
                 <div className="grid grid-cols-2 gap-3">
@@ -164,7 +164,7 @@ const Index = () => {
                   {loading ? "Отправка..." : "Отправить"}
                 </Button>
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>
