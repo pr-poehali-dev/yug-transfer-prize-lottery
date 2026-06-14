@@ -102,8 +102,14 @@ const Index = () => {
                 <input value={form.from_city} onChange={(e) => set("from_city", e.target.value)} placeholder="Откуда вас забрать?" className={inputCls} />
                 <input value={form.to_city} onChange={(e) => set("to_city", e.target.value)} placeholder="Куда довезти?" className={inputCls} />
                 <div className="grid grid-cols-2 gap-3">
-                  <input value={form.trip_date} onChange={(e) => set("trip_date", e.target.value)} type="date" className={inputCls} />
-                  <input value={form.trip_time} onChange={(e) => set("trip_time", e.target.value)} type="time" className={inputCls} />
+                  <div>
+                    <label className="block text-white/80 text-xs font-medium mb-1">Дата поездки</label>
+                    <input value={form.trip_date} onChange={(e) => set("trip_date", e.target.value)} type="date" className={`${inputCls} ${!form.trip_date ? "text-white/40" : ""}`} />
+                  </div>
+                  <div>
+                    <label className="block text-white/80 text-xs font-medium mb-1">Время</label>
+                    <input value={form.trip_time} onChange={(e) => set("trip_time", e.target.value)} type="time" className={`${inputCls} ${!form.trip_time ? "text-white/40" : ""}`} />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
