@@ -78,7 +78,7 @@ const Index = () => {
           <h1 className="text-2xl md:text-2xl font-bold text-white">Мой Трансфер</h1>
           <p className="md:hidden text-white/80 text-sm mt-0.5">Сервис заказа легкового такси</p>
         </div>
-        <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-4 md:p-5 flex flex-col md:block">
+        <div className="uc-tariffCalc bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-4 md:p-5 flex flex-col md:block">
           {sent ? (
             <div className="text-center py-8 space-y-4">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500/40">
