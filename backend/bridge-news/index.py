@@ -38,6 +38,23 @@ def clean_text(raw: str) -> str:
     return text.strip()
 
 
+def strip_promo(text: str) -> str:
+    if not text:
+        return text
+    lines = text.split('\n')
+    kept = []
+    for line in lines:
+        low = line.lower()
+        if 'без задержек' in low or 'подписывайтесь' in low or 'официальный канал в max' in low or 'оперативная информация»' in low:
+            continue
+        if 't.me/' in low or 'http://' in low or 'https://' in low:
+            continue
+        kept.append(line)
+    result = '\n'.join(kept)
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    return result.strip()
+
+
 def parse_posts(page: str):
     posts = []
     blocks = re.split(r'<div class="tgme_widget_message[ "]', page)[1:]
@@ -54,7 +71,7 @@ def parse_posts(page: str):
         if not m_text:
             m_text = re.search(r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', block, re.S)
         if m_text:
-            text = clean_text(m_text.group(1))
+            text = strip_promo(clean_text(m_text.group(1)))
 
         image = None
         m_img = re.search(r"tgme_widget_message_photo_wrap[^>]*style=\"[^\"]*background-image:url\('([^']+)'\)", block)
