@@ -25,10 +25,22 @@ function formatDate(iso: string | null): string {
   });
 }
 
+function formatAgo(ts: number, now: number): string {
+  const sec = Math.max(0, Math.floor((now - ts) / 1000));
+  if (sec < 10) return "обновлено только что";
+  if (sec < 60) return `обновлено ${sec} сек назад`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `обновлено ${min} мин назад`;
+  const h = Math.floor(min / 60);
+  return `обновлено ${h} ч назад`;
+}
+
 export default function BridgePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     let active = true;
@@ -41,6 +53,7 @@ export default function BridgePage() {
           if (data.posts && data.posts.length) {
             setPosts(data.posts);
             setError(false);
+            setUpdatedAt(Date.now());
           } else {
             setError(true);
           }
@@ -67,6 +80,11 @@ export default function BridgePage() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
     };
+  }, []);
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(tick);
   }, []);
 
   return (
@@ -97,6 +115,16 @@ export default function BridgePage() {
             официальном канале
           </a>
           .
+        </div>
+      )}
+
+      {!loading && !error && updatedAt && (
+        <div className="flex items-center gap-1.5 text-white/50 text-xs mb-3">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+          </span>
+          {formatAgo(updatedAt, now)}
         </div>
       )}
 
