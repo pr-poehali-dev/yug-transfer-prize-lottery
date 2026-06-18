@@ -21,12 +21,19 @@ LIMIT = 5
 
 def fetch_html(channel: str) -> str:
     url = f'https://t.me/s/{channel}'
-    req = urllib.request.Request(url, headers={
+    headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
         'Accept-Language': 'ru,en;q=0.9',
-    })
-    with urllib.request.urlopen(req, timeout=25) as resp:
-        return resp.read().decode('utf-8', errors='ignore')
+    }
+    last_err = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                return resp.read().decode('utf-8', errors='ignore')
+        except Exception as e:
+            last_err = e
+    raise last_err
 
 
 def clean_text(raw: str) -> str:

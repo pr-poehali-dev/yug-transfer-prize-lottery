@@ -46,7 +46,7 @@ export default function BridgePage() {
   useEffect(() => {
     let active = true;
 
-    const load = () =>
+    const load = (retries = 2): Promise<void> =>
       fetch(`${BRIDGE_NEWS_URL}?t=${Date.now()}`)
         .then((r) => r.json())
         .then((data) => {
@@ -55,15 +55,21 @@ export default function BridgePage() {
             setPosts(data.posts);
             setError(false);
             setUpdatedAt(Date.now());
+            setLoading(false);
+          } else if (retries > 0) {
+            return new Promise<void>((res) => setTimeout(() => res(load(retries - 1)), 2000));
           } else {
             setError(true);
+            setLoading(false);
           }
         })
         .catch(() => {
-          if (active) setError(true);
-        })
-        .finally(() => {
-          if (active) setLoading(false);
+          if (!active) return;
+          if (retries > 0) {
+            return new Promise<void>((res) => setTimeout(() => res(load(retries - 1)), 2000));
+          }
+          setError(true);
+          setLoading(false);
         });
 
     load();
