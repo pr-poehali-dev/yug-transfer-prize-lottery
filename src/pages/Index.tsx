@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import SiteHeader from "@/components/SiteHeader";
@@ -33,6 +33,24 @@ const Index = () => {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    const comment = searchParams.get("comment");
+    if (from || to || comment) {
+      setForm((f) => ({
+        ...f,
+        from_city: from || f.from_city,
+        to_city: to || f.to_city,
+        comment: comment || f.comment,
+      }));
+      const el = document.querySelector(".uc-tariffCalc");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [searchParams]);
 
   const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 

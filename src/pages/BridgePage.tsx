@@ -43,10 +43,17 @@ export default function BridgePage() {
 
   return (
     <PageShell title="Крымский Мост" icon="Construction">
-      <p className="text-white/70 mb-6 max-w-2xl">
+      <p className="text-white/70 mb-5 max-w-2xl">
         Оперативная информация о проезде через Крымский мост — обстановка на досмотре, важные новости и правила.
         Данные обновляются автоматически из официального канала.
       </p>
+
+      <Link
+        to="/?comment=Трансфер через Крымский мост"
+        className="inline-flex items-center gap-2 mb-7 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold transition-colors"
+      >
+        <Icon name="Car" size={20} /> Заказать трансфер через Крымский мост
+      </Link>
 
       {loading && (
         <div className="flex items-center gap-2 text-white/60 py-8">
