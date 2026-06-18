@@ -4,7 +4,7 @@ import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
 
 const BRIDGE_NEWS_URL = "https://functions.poehali.dev/3af26657-db34-4fcf-9d05-41d0122fbe3b";
-const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/7b9fb117-27b7-44d6-a11c-ccd750a8ffd5.jpg";
+const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/ef99d146-2170-4132-a35a-31bf88fc2377.jpg";
 
 interface Post {
   id: string;
