@@ -129,7 +129,7 @@ export default function BridgePage() {
               key={p.id}
               className="block bg-[#1a1a1a]/95 rounded-2xl border border-white/10 overflow-hidden"
             >
-              <img src={p.image || FALLBACK_IMG} alt="" className="w-full max-h-72 object-cover" loading="lazy" />
+              <img src={p.image || FALLBACK_IMG} alt="" className="w-full h-40 object-cover" loading="lazy" />
               <div className="p-5">
                 {p.date && (
                   <div className="flex items-center gap-1.5 text-amber-400 text-xs font-medium mb-2">
