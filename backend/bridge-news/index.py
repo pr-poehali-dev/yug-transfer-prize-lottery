@@ -52,7 +52,9 @@ def strip_promo(text: str) -> str:
         kept.append(line)
     result = '\n'.join(kept)
     result = re.sub(r'\n{3,}', '\n\n', result)
-    return result.strip()
+    result = result.strip()
+    result = re.sub(r'^\d{1,2}:\d{2}\s*', '', result).strip()
+    return result
 
 
 def parse_posts(page: str):
