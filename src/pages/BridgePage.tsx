@@ -132,12 +132,9 @@ export default function BridgePage() {
       {!loading && !error && (
         <div className="space-y-4">
           {posts.map((p) => (
-            <a
+            <div
               key={p.id}
-              href={p.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block bg-[#1a1a1a]/95 rounded-2xl border border-white/10 overflow-hidden hover:border-amber-500/40 transition-colors"
+              className="block bg-[#1a1a1a]/95 rounded-2xl border border-white/10 overflow-hidden"
             >
               <img src={p.image || FALLBACK_IMG} alt="" className="w-full max-h-72 object-cover" loading="lazy" />
               <div className="p-5">
@@ -149,11 +146,11 @@ export default function BridgePage() {
                 )}
                 <p className="text-white/90 whitespace-pre-line leading-relaxed text-[15px]">{p.text}</p>
                 <div className="flex items-center gap-1.5 text-white/40 text-xs mt-3">
-                  <Icon name="Send" size={13} />
-                  Открыть в Telegram
+                  <Icon name="Info" size={13} />
+                  Источник: официальный канал «Крымский мост»
                 </div>
               </div>
-            </a>
+            </div>
           ))}
         </div>
       )}
