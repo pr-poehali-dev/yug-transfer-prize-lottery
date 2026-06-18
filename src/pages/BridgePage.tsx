@@ -4,6 +4,7 @@ import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
 
 const BRIDGE_NEWS_URL = "https://functions.poehali.dev/3af26657-db34-4fcf-9d05-41d0122fbe3b";
+const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/7b9fb117-27b7-44d6-a11c-ccd750a8ffd5.jpg";
 
 interface Post {
   id: string;
@@ -138,9 +139,7 @@ export default function BridgePage() {
               rel="noopener noreferrer"
               className="block bg-[#1a1a1a]/95 rounded-2xl border border-white/10 overflow-hidden hover:border-amber-500/40 transition-colors"
             >
-              {p.image && (
-                <img src={p.image} alt="" className="w-full max-h-72 object-cover" loading="lazy" />
-              )}
+              <img src={p.image || FALLBACK_IMG} alt="" className="w-full max-h-72 object-cover" loading="lazy" />
               <div className="p-5">
                 {p.date && (
                   <div className="flex items-center gap-1.5 text-amber-400 text-xs font-medium mb-2">
