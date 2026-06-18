@@ -138,7 +138,11 @@ export default function BridgePage() {
                   </div>
                 )}
                 <p className="text-white/90 whitespace-pre-line leading-relaxed text-[15px]">{p.text}</p>
-                <div className="flex items-center gap-1.5 text-white/40 text-xs mt-3">
+                <div className="flex items-center gap-1.5 text-amber-400 text-sm font-semibold mt-3">
+                  <Icon name="Car" size={15} />
+                  Заказывайте трансфер заблаговременно
+                </div>
+                <div className="flex items-center gap-1.5 text-white/40 text-xs mt-2">
                   <Icon name="Info" size={13} />
                   Источник: официальный канал «Крымский мост»
                 </div>
