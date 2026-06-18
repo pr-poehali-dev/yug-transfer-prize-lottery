@@ -6,6 +6,7 @@ import Icon from "@/components/ui/icon";
 const NAV = [
   { to: "/directions", label: "Направления" },
   { to: "/tariffs", label: "Тарифы" },
+  { to: "/bridge", label: "Крымский Мост" },
   { to: "/contacts", label: "Контакты" },
 ];
 

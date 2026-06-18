@@ -15,6 +15,7 @@ const Offer = lazy(() => import("./pages/Offer"));
 const Directions = lazy(() => import("./pages/RoutesPage"));
 const Tariffs = lazy(() => import("./pages/TariffsPage"));
 const Contacts = lazy(() => import("./pages/ContactsPage"));
+const Bridge = lazy(() => import("./pages/BridgePage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 if ("serviceWorker" in navigator) {
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/directions" element={<Directions />} />
           <Route path="/tariffs" element={<Tariffs />} />
           <Route path="/contacts" element={<Contacts />} />
+          <Route path="/bridge" element={<Bridge />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
