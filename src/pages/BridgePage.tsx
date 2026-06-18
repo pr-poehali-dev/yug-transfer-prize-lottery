@@ -31,14 +31,42 @@ export default function BridgePage() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch(BRIDGE_NEWS_URL)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.posts && data.posts.length) setPosts(data.posts);
-        else setError(true);
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+    let active = true;
+
+    const load = () =>
+      fetch(`${BRIDGE_NEWS_URL}?t=${Date.now()}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (!active) return;
+          if (data.posts && data.posts.length) {
+            setPosts(data.posts);
+            setError(false);
+          } else {
+            setError(true);
+          }
+        })
+        .catch(() => {
+          if (active) setError(true);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+
+    load();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 60000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   return (
