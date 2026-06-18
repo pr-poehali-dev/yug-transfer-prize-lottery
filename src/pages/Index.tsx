@@ -198,7 +198,7 @@ const Index = () => {
         </div>
       </div>
 
-      <div className="hidden md:block relative z-10 w-full max-w-sm px-5 md:absolute md:bottom-4 md:right-0">
+      <div className="hidden md:block relative z-10 w-full max-w-xs md:absolute md:top-20 md:right-5">
         <BridgeNewsWidget />
       </div>
 

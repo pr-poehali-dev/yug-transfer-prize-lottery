@@ -27,7 +27,7 @@ export default function BridgeNewsWidget() {
       fetch(`${BRIDGE_NEWS_URL}?t=${Date.now()}`)
         .then((r) => r.json())
         .then((data) => {
-          if (active && data.posts && data.posts.length) setPosts(data.posts.slice(0, 3));
+          if (active && data.posts && data.posts.length) setPosts(data.posts.slice(0, 2));
         })
         .catch(() => {});
     load();
@@ -45,24 +45,24 @@ export default function BridgeNewsWidget() {
   return (
     <Link
       to="/bridge"
-      className="block bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-4 hover:border-amber-500/40 transition-colors"
+      className="block bg-[#1a1a1a]/95 backdrop-blur rounded-xl border border-white/10 shadow-2xl p-3 hover:border-amber-500/40 transition-colors"
     >
-      <div className="flex items-center gap-2 mb-3">
-        <Icon name="Construction" size={16} className="text-amber-400" />
-        <span className="font-bold text-white text-sm">Крымский Мост</span>
-        <span className="relative flex h-2 w-2 ml-0.5">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Icon name="Construction" size={14} className="text-amber-400" />
+        <span className="font-bold text-white text-xs">Крымский Мост</span>
+        <span className="relative flex h-1.5 w-1.5 ml-0.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
         </span>
-        <span className="ml-auto text-amber-400 text-xs flex items-center gap-0.5">
-          Все новости <Icon name="ChevronRight" size={13} />
+        <span className="ml-auto text-amber-400 text-[11px] flex items-center gap-0.5">
+          Все <Icon name="ChevronRight" size={12} />
         </span>
       </div>
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {posts.map((p) => (
-          <div key={p.id} className="border-b border-white/5 last:border-0 pb-2.5 last:pb-0">
-            {p.date && <div className="text-amber-400/80 text-[11px] mb-0.5">{timeOnly(p.date)}</div>}
-            <p className="text-white/85 text-xs leading-snug line-clamp-2">{p.text}</p>
+          <div key={p.id} className="border-b border-white/5 last:border-0 pb-2 last:pb-0">
+            {p.date && <div className="text-amber-400/80 text-[10px] mb-0.5">{timeOnly(p.date)}</div>}
+            <p className="text-white/85 text-[11px] leading-snug line-clamp-2">{p.text}</p>
           </div>
         ))}
       </div>
