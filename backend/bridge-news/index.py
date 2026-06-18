@@ -3,11 +3,13 @@
 через веб-версию t.me/s/ и возвращает последние посты для блока новостей на сайте.
 GET — последние посты (текст, фото, дата, ссылка на оригинал).
 """
+import os
 import json
 import re
 import html
 import urllib.request
-from datetime import datetime
+import psycopg2
+from datetime import datetime, timezone
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -17,6 +19,45 @@ CORS = {
 
 CHANNEL = 'most_official'
 LIMIT = 5
+CACHE_TTL = 60  # секунд: не чаще раза в минуту дёргаем Telegram
+SCHEMA = os.environ.get('MAIN_DB_SCHEMA') or 't_p67171637_yug_transfer_prize_l'
+CACHE_TABLE = f'{SCHEMA}.bridge_news_cache'
+
+
+def db_connect():
+    return psycopg2.connect(os.environ['DATABASE_URL'])
+
+
+def read_cache():
+    """Возвращает (payload_str, age_seconds) или (None, None)."""
+    try:
+        conn = db_connect()
+        cur = conn.cursor()
+        cur.execute("SELECT payload, EXTRACT(EPOCH FROM (now() - updated_at)) FROM " + CACHE_TABLE + " WHERE id = 1")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row:
+            return row[0], float(row[1])
+    except Exception:
+        pass
+    return None, None
+
+
+def write_cache(payload_str):
+    try:
+        conn = db_connect()
+        cur = conn.cursor()
+        safe = payload_str.replace("'", "''")
+        cur.execute(
+            "INSERT INTO " + CACHE_TABLE + " (id, payload, updated_at) VALUES (1, '" + safe + "', now()) "
+            "ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()"
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
 
 
 def fetch_html(channel: str) -> str:
@@ -107,22 +148,33 @@ def parse_posts(page: str):
     return posts[-LIMIT:][::-1]
 
 
+def json_response(body_str):
+    return {
+        'statusCode': 200,
+        'headers': {**CORS, 'Content-Type': 'application/json'},
+        'body': body_str,
+    }
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 
+    cached, age = read_cache()
+
+    # Кэш свежий — отдаём готовое, Telegram не трогаем.
+    if cached is not None and age is not None and age < CACHE_TTL:
+        return json_response(cached)
+
+    # Кэш устарел или пуст — обновляем из Telegram.
     try:
         page = fetch_html(CHANNEL)
         posts = parse_posts(page)
+        payload = json.dumps({'posts': posts, 'channel': CHANNEL}, ensure_ascii=False)
+        write_cache(payload)
+        return json_response(payload)
     except Exception as e:
-        return {
-            'statusCode': 200,
-            'headers': {**CORS, 'Content-Type': 'application/json'},
-            'body': json.dumps({'posts': [], 'error': str(e), 'channel': CHANNEL}, ensure_ascii=False),
-        }
-
-    return {
-        'statusCode': 200,
-        'headers': {**CORS, 'Content-Type': 'application/json'},
-        'body': json.dumps({'posts': posts, 'channel': CHANNEL}, ensure_ascii=False),
-    }
+        # Telegram недоступен — отдаём старый кэш, если он есть.
+        if cached is not None:
+            return json_response(cached)
+        return json_response(json.dumps({'posts': [], 'error': str(e), 'channel': CHANNEL}, ensure_ascii=False))
