@@ -129,7 +129,7 @@ export default function BridgePage() {
       )}
 
       {!loading && !error && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-2xl">
           {posts.map((p) => (
             <div
               key={p.id}
@@ -161,6 +161,8 @@ export default function BridgePage() {
       <Link to="/" className="inline-flex items-center gap-2 mt-7 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold transition-colors">
         <Icon name="Plus" size={18} /> Заказать трансфер
       </Link>
+
+      <div className="h-28 lg:h-32" aria-hidden />
     </PageShell>
   );
 }
