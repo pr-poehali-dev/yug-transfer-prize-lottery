@@ -1,8 +1,8 @@
 import Icon from "@/components/ui/icon";
 
-const PHONE = "+7 (995) 614-14-14";
-const PHONE_TEL = "+79956141414";
-const PHONE_DIGITS = "79956141414";
+const PHONE = "+7 (990) 133-77-95";
+const PHONE_TEL = "+79901337795";
+const PHONE_DIGITS = "79901337795";
 
 const ContactWidget = () => {
   return (

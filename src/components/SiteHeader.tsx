@@ -10,8 +10,8 @@ const NAV = [
   { to: "/contacts", label: "Контакты" },
 ];
 
-export const SITE_PHONE = "+7 (995) 614-14-14";
-const PHONE_TEL = "+79956141414";
+export const SITE_PHONE = "+7 (990) 133-77-95";
+const PHONE_TEL = "+79901337795";
 
 export default function SiteHeader() {
   const { pathname } = useLocation();
@@ -114,7 +114,7 @@ export default function SiteHeader() {
             <span className="text-white text-[10px] font-bold leading-none">MAX</span>
           </a>
           <a
-            href="https://wa.me/79956141414"
+            href="https://wa.me/79901337795"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="WhatsApp"
@@ -196,7 +196,7 @@ export default function SiteHeader() {
                 <span className="text-white text-xs font-bold leading-none">MAX</span>
               </a>
               <a
-                href={`https://wa.me/79956141414`}
+                href={`https://wa.me/79901337795`}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="WhatsApp"
