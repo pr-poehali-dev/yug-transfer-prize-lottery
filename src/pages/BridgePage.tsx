@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
+import BridgeNewsWidget from "@/components/BridgeNewsWidget";
 
 const BRIDGE_NEWS_URL = "https://functions.poehali.dev/3af26657-db34-4fcf-9d05-41d0122fbe3b";
 const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/ef99d146-2170-4132-a35a-31bf88fc2377.jpg";
@@ -95,11 +96,21 @@ export default function BridgePage() {
   }, []);
 
   return (
-    <PageShell title="Крымский Мост" icon="Construction">
+    <PageShell title="Проезд через Крымский мост: прогноз и расчёт времени" icon="Construction">
       <p className="text-white/70 mb-5 max-w-2xl">
-        Оперативная информация о проезде через Крымский мост — обстановка на досмотре, важные новости и правила.
-        Данные обновляются автоматически из официального канала.
+        Мы отслеживаем обстановку на Крымском мосту, чтобы строить точный прогноз времени в пути.
+        При заказе учитываем среднее время досмотра и пиковые часы. Ниже — расчёт времени проезда
+        по текущей длине очереди с каждой стороны.
       </p>
+
+      <div className="max-w-2xl mb-7">
+        <BridgeNewsWidget />
+      </div>
+
+      <h2 className="text-white font-bold text-lg mb-3 flex items-center gap-2">
+        <Icon name="Newspaper" size={18} className="text-amber-400" />
+        Обстановка на досмотре
+      </h2>
 
       {loading && (
         <div className="flex items-center gap-2 text-white/60 py-8">
