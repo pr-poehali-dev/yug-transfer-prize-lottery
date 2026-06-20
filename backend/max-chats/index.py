@@ -38,7 +38,7 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 
-    raw_token = os.environ.get('MAX_BOT_TOKEN', '')
+    raw_token = os.environ.get('MAX_BOT_TOKEN_NEW', '') or os.environ.get('MAX_BOT_TOKEN', '')
     token = raw_token.strip()
     diag = {
         'token_present': bool(raw_token),
