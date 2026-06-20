@@ -56,9 +56,8 @@ export default function TariffsPage() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {TARIFFS.map((t) => (
           <div key={t.name} className="bg-[#1a1a1a]/95 rounded-2xl border border-white/10 overflow-hidden flex flex-col">
-            <div className="relative h-40 overflow-hidden">
-              <img src={t.image} alt={t.name} loading="lazy" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-transparent to-transparent" />
+            <div className="relative h-44 overflow-hidden bg-gradient-to-b from-white/[0.07] to-transparent flex items-center justify-center p-2">
+              <img src={t.image} alt={t.name} loading="lazy" className="w-full h-full object-contain" />
               <span className="absolute top-2.5 right-2.5 bg-black/70 text-white text-xs font-semibold px-2.5 py-1 rounded-lg">{t.pax}</span>
             </div>
             <div className="p-4 flex flex-col flex-1">
