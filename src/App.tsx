@@ -13,6 +13,7 @@ const Cabinet = lazy(() => import("./pages/Cabinet"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Offer = lazy(() => import("./pages/Offer"));
 const Directions = lazy(() => import("./pages/RoutesPage"));
+const RouteDetail = lazy(() => import("./pages/RouteDetailPage"));
 const Tariffs = lazy(() => import("./pages/TariffsPage"));
 const Contacts = lazy(() => import("./pages/ContactsPage"));
 const Bridge = lazy(() => import("./pages/BridgePage"));
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/offer" element={<Offer />} />
           <Route path="/directions" element={<Directions />} />
+          <Route path="/route/:slug" element={<RouteDetail />} />
           <Route path="/tariffs" element={<Tariffs />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/bridge" element={<Bridge />} />

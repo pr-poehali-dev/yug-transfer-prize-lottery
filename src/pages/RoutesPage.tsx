@@ -2,15 +2,7 @@ import { Link } from "react-router-dom";
 import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
 import useSEO from "@/hooks/useSEO";
-
-const ROUTES = [
-  { from: "Краснодар", to: "Сочи", time: "≈ 4 ч", price: "от 6 000 ₽" },
-  { from: "Краснодар", to: "Анапа", time: "≈ 2.5 ч", price: "от 4 000 ₽" },
-  { from: "Краснодар", to: "Геленджик", time: "≈ 2.5 ч", price: "от 4 500 ₽" },
-  { from: "Краснодар", to: "Новороссийск", time: "≈ 2 ч", price: "от 3 800 ₽" },
-  { from: "Сочи", to: "Аэропорт Адлер", time: "≈ 40 мин", price: "от 1 500 ₽" },
-  { from: "Краснодар", to: "Кабардинка", time: "≈ 2.5 ч", price: "от 4 500 ₽" },
-];
+import { ROUTES } from "@/data/routesData";
 
 export default function RoutesPage() {
   useSEO({
@@ -21,19 +13,26 @@ export default function RoutesPage() {
 
   return (
     <PageShell title="Направления" icon="Route">
-      <p className="text-white/70 mb-6">Популярные направления трансфера. Точную стоимость рассчитаем под ваш заказ.</p>
+      <p className="text-white/70 mb-6">Популярные направления трансфера. Нажмите на маршрут — увидите цены, время в пути и сможете заказать.</p>
       <div className="grid sm:grid-cols-2 gap-3">
         {ROUTES.map((r) => (
-          <div key={`${r.from}-${r.to}`} className="bg-[#1a1a1a]/95 rounded-2xl border border-white/10 p-4">
-            <div className="flex items-center gap-2 text-white font-semibold">
-              <Icon name="MapPin" size={16} className="text-amber-400" />
-              {r.from} → {r.to}
+          <Link
+            key={r.slug}
+            to={`/route/${r.slug}`}
+            className="group bg-[#1a1a1a]/95 rounded-2xl border border-white/10 p-4 hover:border-amber-500/50 transition-colors"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-white font-semibold">
+                <Icon name="MapPin" size={16} className="text-amber-400" />
+                {r.from} → {r.to}
+              </div>
+              <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-amber-400 transition-colors" />
             </div>
             <div className="flex items-center justify-between mt-2 text-sm">
-              <span className="text-white/50">{r.time}</span>
-              <span className="text-amber-400 font-bold">{r.price}</span>
+              <span className="text-white/50">{r.time} · {r.distance}</span>
+              <span className="text-amber-400 font-bold">{r.priceFrom}</span>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
       <Link to="/" className="inline-flex items-center gap-2 mt-7 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold transition-colors">
