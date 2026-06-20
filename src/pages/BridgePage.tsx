@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
 import BridgeNewsWidget from "@/components/BridgeNewsWidget";
+import useSEO from "@/hooks/useSEO";
 
 const BRIDGE_NEWS_URL = "https://functions.poehali.dev/3af26657-db34-4fcf-9d05-41d0122fbe3b";
 const FALLBACK_IMG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/ef99d146-2170-4132-a35a-31bf88fc2377.jpg";
@@ -38,6 +39,12 @@ function formatAgo(ts: number, now: number): string {
 }
 
 export default function BridgePage() {
+  useSEO({
+    title: "Проезд через Крымский мост сегодня: статус и расчёт времени в пути",
+    description:
+      "Актуальный статус проезда через Крымский мост и расчёт времени досмотра по длине очереди со стороны Крыма и Тамани. Закажите трансфер через мост с прогнозом времени в пути.",
+  });
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
