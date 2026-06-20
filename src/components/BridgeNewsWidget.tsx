@@ -24,6 +24,35 @@ const STATUS_META: Record<BridgeStatus, { label: string; dot: string; text: stri
 const BRIDGE_LENGTH_KM = 19;
 const BRIDGE_DRIVE_MIN = 17;
 
+const CITY_MIN: Record<string, number> = {
+  керчь: 30,
+  феодосия: 110,
+  судак: 150,
+  алушта: 195,
+  ялта: 220,
+  симферополь: 130,
+  севастополь: 200,
+  евпатория: 175,
+  саки: 160,
+  джанкой: 130,
+  краснодар: 270,
+  анапа: 90,
+  новороссийск: 110,
+  геленджик: 160,
+  тамань: 25,
+  "темрюк": 60,
+  сочи: 400,
+  ростов: 480,
+};
+
+function lookupCity(q: string): number | null {
+  const k = q.trim().toLowerCase();
+  if (!k) return null;
+  if (CITY_MIN[k] != null) return CITY_MIN[k];
+  const hit = Object.keys(CITY_MIN).find((c) => c.startsWith(k) || k.startsWith(c));
+  return hit ? CITY_MIN[hit] : null;
+}
+
 function fmtDuration(total: number | null): string {
   if (total == null) return "—";
   const h = Math.floor(total / 60);
@@ -70,7 +99,7 @@ function SideRow({
   );
 }
 
-export default function BridgeNewsWidget() {
+export default function BridgeNewsWidget({ calc = false }: { calc?: boolean }) {
   const [data, setData] = useState<BridgeData | null>(null);
 
   useEffect(() => {
@@ -102,6 +131,18 @@ export default function BridgeNewsWidget() {
 
   const status: BridgeStatus = data?.status || "open";
   const meta = STATUS_META[status];
+
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const fromMin = lookupCity(from);
+  const toMin = lookupCity(to);
+  const bridgeWait = Math.max(data?.crimea_wait ?? 0, data?.taman_wait ?? 0);
+  const roadMin =
+    fromMin != null && toMin != null ? Math.abs(toMin - fromMin) || Math.max(fromMin, toMin) : null;
+  const totalMin = roadMin != null && status !== "closed" ? roadMin + BRIDGE_DRIVE_MIN + bridgeWait : null;
+  const showCalc = calc;
+  const calcError = (from.trim() || to.trim()) && (fromMin == null || toMin == null);
 
   return (
     <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-xl border border-white/10 shadow-2xl p-3">
@@ -141,6 +182,41 @@ export default function BridgeNewsWidget() {
       <p className="text-white/40 text-[9px] leading-snug mb-1.5">
         Время = очередь на досмотр + проезд моста ({BRIDGE_LENGTH_KM} км, ≈{BRIDGE_DRIVE_MIN} мин). Может меняться в пиковые часы.
       </p>
+
+      {showCalc && (
+        <div className="rounded-lg bg-[#111]/70 border border-white/10 p-2.5 mb-2">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Icon name="Calculator" size={13} className="text-amber-400" />
+            <span className="text-white text-[11px] font-semibold">Расчёт времени в пути</span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+            <input
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              placeholder="Откуда"
+              className="w-full bg-black/40 border border-white/10 rounded-md px-2 py-1.5 text-white placeholder-white/35 text-[11px] outline-none focus:border-amber-500/60"
+            />
+            <input
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="Куда"
+              className="w-full bg-black/40 border border-white/10 rounded-md px-2 py-1.5 text-white placeholder-white/35 text-[11px] outline-none focus:border-amber-500/60"
+            />
+          </div>
+          {totalMin != null ? (
+            <div className="flex items-center justify-between rounded-md bg-amber-500/10 border border-amber-500/25 px-2.5 py-1.5">
+              <span className="text-white/70 text-[10px]">Ориентир. время в пути</span>
+              <span className="text-amber-400 font-bold text-[13px]">≈ {fmtDuration(totalMin)}</span>
+            </div>
+          ) : status === "closed" && (from.trim() || to.trim()) ? (
+            <p className="text-red-400/80 text-[10px]">Мост перекрыт — расчёт недоступен.</p>
+          ) : calcError ? (
+            <p className="text-white/40 text-[10px]">Укажите города рядом с мостом (Керчь, Краснодар, Ялта, Анапа…).</p>
+          ) : (
+            <p className="text-white/40 text-[10px]">Впишите города — покажем время с учётом проезда моста.</p>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
         {data?.status_updated ? (

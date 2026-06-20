@@ -111,7 +111,7 @@ export default function BridgePage() {
       </p>
 
       <div className="max-w-2xl mb-7">
-        <BridgeNewsWidget />
+        <BridgeNewsWidget calc />
       </div>
 
       <h2 className="text-white font-bold text-lg mb-3 flex items-center gap-2">
