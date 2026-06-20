@@ -200,9 +200,6 @@ const Index = () => {
           )}
         </div>
 
-        <div className="mt-4 md:hidden">
-          <BridgeNewsWidget />
-        </div>
       </div>
 
       <div className="hidden md:block relative z-10 w-full max-w-xs md:absolute md:top-20 md:right-5">
