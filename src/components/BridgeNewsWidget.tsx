@@ -21,6 +21,9 @@ const STATUS_META: Record<BridgeStatus, { label: string; dot: string; text: stri
   closed: { label: "Проезд перекрыт", dot: "bg-red-500", text: "text-red-400" },
 };
 
+const BRIDGE_LENGTH_KM = 19;
+const BRIDGE_DRIVE_MIN = 17;
+
 function fmtDuration(total: number | null): string {
   if (total == null) return "—";
   const h = Math.floor(total / 60);
@@ -47,20 +50,21 @@ function SideRow({
   wait: number | null;
 }) {
   const free = cars != null && cars <= 0;
+  const total = wait != null ? wait + BRIDGE_DRIVE_MIN : null;
   return (
-    <div className="flex items-center justify-between rounded-lg bg-[#111]/70 border border-white/10 px-3 py-2.5">
-      <div className="flex items-center gap-2">
-        <Icon name="Car" size={15} className="text-amber-400" />
-        <div>
-          <div className="text-white text-xs font-medium">{title}</div>
-          <div className="text-white/45 text-[10px]">
-            {cars == null ? "нет данных" : free ? "очереди нет" : `в очереди ~${cars} авто`}
+    <div className="flex items-center justify-between rounded-lg bg-[#111]/70 border border-white/10 px-2.5 py-1.5">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <Icon name="Car" size={13} className="text-amber-400 shrink-0" />
+        <div className="min-w-0">
+          <div className="text-white text-[11px] font-medium truncate">{title}</div>
+          <div className="text-white/45 text-[9px]">
+            {cars == null ? "нет данных" : free ? "очереди нет" : `~${cars} авто в очереди`}
           </div>
         </div>
       </div>
-      <div className="text-right">
-        <div className="text-amber-400 font-bold text-sm">{fmtDuration(wait)}</div>
-        <div className="text-white/40 text-[10px]">досмотр</div>
+      <div className="text-right shrink-0 pl-2">
+        <div className="text-amber-400 font-bold text-[13px] leading-none">{fmtDuration(total)}</div>
+        <div className="text-white/40 text-[9px] mt-0.5">досмотр + мост</div>
       </div>
     </div>
   );
@@ -100,53 +104,52 @@ export default function BridgeNewsWidget() {
   const meta = STATUS_META[status];
 
   return (
-    <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-xl border border-white/10 shadow-2xl p-4">
-      <div className="flex items-center gap-1.5 mb-3">
-        <Icon name="Construction" size={15} className="text-amber-400" />
-        <span className="font-bold text-white text-sm">Проезд через Крымский мост</span>
-      </div>
-
-      <div className="flex items-center gap-2 mb-3">
-        <span className="relative flex h-2 w-2">
-          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${meta.dot}`} />
-          <span className={`relative inline-flex h-2 w-2 rounded-full ${meta.dot}`} />
-        </span>
-        <span className={`font-semibold text-sm ${meta.text}`}>{meta.label}</span>
+    <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-xl border border-white/10 shadow-2xl p-3">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Icon name="Construction" size={14} className="text-amber-400 shrink-0" />
+          <span className="font-bold text-white text-[13px] truncate">Крымский мост</span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="relative flex h-2 w-2">
+            <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${meta.dot}`} />
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${meta.dot}`} />
+          </span>
+          <span className={`font-semibold text-[12px] ${meta.text}`}>{meta.label}</span>
+        </div>
       </div>
 
       {status === "closed" ? (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/25 p-3 mb-3">
-          <p className="text-white/85 text-xs leading-snug mb-2">
-            Сейчас проезд по мосту закрыт. Оставьте заявку — подберём альтернативный маршрут и рассчитаем
-            точное время в пути.
+        <div className="rounded-lg bg-red-500/10 border border-red-500/25 p-2.5 mb-2">
+          <p className="text-white/85 text-[11px] leading-snug mb-1.5">
+            Сейчас проезд по мосту закрыт. Оставьте заявку — подберём альтернативный маршрут.
           </p>
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:underline"
+            className="inline-flex items-center gap-1 text-amber-400 text-[11px] font-semibold hover:underline"
           >
-            <Icon name="Plus" size={13} /> Оставить заявку
+            <Icon name="Plus" size={12} /> Оставить заявку
           </Link>
         </div>
       ) : (
-        <div className="space-y-2 mb-3">
+        <div className="space-y-1.5 mb-2">
           <SideRow title="Со стороны Крыма (Керчь)" cars={data?.crimea_cars ?? null} wait={data?.crimea_wait ?? null} />
           <SideRow title="Со стороны Тамани" cars={data?.taman_cars ?? null} wait={data?.taman_wait ?? null} />
         </div>
       )}
 
-      <p className="text-white/40 text-[10px] leading-snug mb-2">
-        Время рассчитано по длине очереди на досмотр и может меняться. Окончательный прогноз формируется при
-        заказе — учитываем среднее время досмотра и пиковые часы.
+      <p className="text-white/40 text-[9px] leading-snug mb-1.5">
+        Время = очередь на досмотр + проезд моста ({BRIDGE_LENGTH_KM} км, ≈{BRIDGE_DRIVE_MIN} мин). Может меняться в пиковые часы.
       </p>
 
-      <div className="flex items-center justify-between pt-2 border-t border-white/5">
+      <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
         {data?.status_updated ? (
-          <span className="text-white/35 text-[10px]">Обновлено: {timeOnly(data.status_updated)}</span>
+          <span className="text-white/35 text-[9px]">Обновлено: {timeOnly(data.status_updated)}</span>
         ) : (
-          <span className="text-white/35 text-[10px]">Отслеживаем обстановку</span>
+          <span className="text-white/35 text-[9px]">Отслеживаем обстановку</span>
         )}
-        <Link to="/bridge" className="text-amber-400 text-[11px] flex items-center gap-0.5 hover:underline">
-          Подробнее <Icon name="ChevronRight" size={12} />
+        <Link to="/bridge" className="text-amber-400 text-[10px] flex items-center gap-0.5 hover:underline">
+          Подробнее <Icon name="ChevronRight" size={11} />
         </Link>
       </div>
     </div>
