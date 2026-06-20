@@ -6,6 +6,7 @@ import SiteHeader from "@/components/SiteHeader";
 import ContactWidget from "@/components/ContactWidget";
 import FeaturesBar from "@/components/FeaturesBar";
 import BridgeNewsWidget from "@/components/BridgeNewsWidget";
+import BridgeStatusDot from "@/components/BridgeStatusDot";
 import { CLIENT_CABINET_URL } from "@/components/admin/adminTypes";
 import useSEO from "@/hooks/useSEO";
 
@@ -205,10 +206,7 @@ const Index = () => {
           className="md:hidden mt-3 flex items-center justify-between gap-2 bg-[#1a1a1a]/95 backdrop-blur rounded-xl border border-white/10 px-3.5 py-2.5"
         >
           <span className="flex items-center gap-2 min-w-0">
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
-            </span>
+            <BridgeStatusDot />
             <Icon name="Construction" size={16} className="text-amber-400 shrink-0" />
             <span className="text-white text-[13px] font-semibold truncate">Статус Крымского моста</span>
           </span>
