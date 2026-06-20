@@ -1014,3 +1014,61 @@ export const ROUTES: RouteInfo[] = [
 export function getRoute(slug: string): RouteInfo | undefined {
   return ROUTES.find((r) => r.slug === slug);
 }
+
+export const REGIONS = ["Все", "Крым", "Побережье", "Кавказ и КМВ", "Города и аэропорты"] as const;
+export type Region = (typeof REGIONS)[number];
+
+const CRIMEA = [
+  "krasnodar-yalta",
+  "krasnodar-simferopol",
+  "krasnodar-sevastopol",
+  "krasnodar-feodosiya",
+  "krasnodar-kerch",
+  "krasnodar-alushta",
+  "krasnodar-sudak",
+  "krasnodar-evpatoriya",
+  "krasnodar-saki",
+  "krasnodar-bakhchisaray",
+  "krasnodar-gurzuf",
+  "krasnodar-koktebel",
+  "krasnodar-dzhankoy",
+  "krasnodar-armyansk",
+];
+
+const COAST = [
+  "krasnodar-sochi",
+  "krasnodar-anapa",
+  "krasnodar-gelendzhik",
+  "krasnodar-novorossiysk",
+  "sochi-aeroport-adler",
+  "krasnodar-kabardinka",
+  "sochi-krasnaya-polyana",
+  "krasnodar-vityazevo",
+  "krasnodar-dzhubga",
+  "sochi-krasnodar",
+  "krasnodar-adler",
+  "krasnodar-tuapse",
+  "krasnodar-lazarevskoe",
+  "krasnodar-abrau-dyurso",
+  "krasnodar-yeysk",
+  "krasnodar-divnomorskoe",
+  "krasnodar-arkhipo-osipovka",
+  "krasnodar-sochi-centr",
+  "krasnodar-temryuk",
+];
+
+const CAUCASUS = [
+  "krasnodar-pyatigorsk",
+  "krasnodar-kislovodsk",
+  "krasnodar-essentuki",
+  "krasnodar-mineralnye-vody",
+  "krasnodar-goryachy-klyuch",
+  "krasnodar-maykop",
+];
+
+export function getRegion(slug: string): Region {
+  if (CRIMEA.includes(slug)) return "Крым";
+  if (COAST.includes(slug)) return "Побережье";
+  if (CAUCASUS.includes(slug)) return "Кавказ и КМВ";
+  return "Города и аэропорты";
+}
