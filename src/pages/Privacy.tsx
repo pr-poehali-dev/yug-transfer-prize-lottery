@@ -1,7 +1,13 @@
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import useSEO from "@/hooks/useSEO";
 
 export default function Privacy() {
+  useSEO({
+    title: "Политика конфиденциальности — «Мой Трансфер»",
+    description: "Политика конфиденциальности сервиса трансфера «Мой Трансфер»: какие данные собираем, как храним и используем, права пользователей.",
+  });
+
   return (
     <div className="min-h-screen mesh-bg">
       <header className="glass border-b border-white/5 sticky top-0 z-50">

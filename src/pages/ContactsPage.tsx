@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
 import { SITE_PHONE } from "@/components/SiteHeader";
+import useSEO from "@/hooks/useSEO";
 
 const CONTACTS = [
   { icon: "Phone", label: "Телефон", value: SITE_PHONE, href: "tel:+79901337795" },
@@ -11,6 +12,12 @@ const CONTACTS = [
 ];
 
 export default function ContactsPage() {
+  useSEO({
+    title: "Контакты — заказ трансфера и такси по Краснодарскому краю круглосуточно",
+    description:
+      "Свяжитесь с нами для заказа трансфера: телефон, почта, WhatsApp и Telegram. Работаем круглосуточно без выходных по Краснодарскому краю. Поможем подобрать машину и рассчитать цену.",
+  });
+
   return (
     <PageShell title="Контакты" icon="Phone">
       <p className="text-white/70 mb-6">Свяжитесь с нами любым удобным способом — поможем подобрать машину и рассчитать стоимость.</p>

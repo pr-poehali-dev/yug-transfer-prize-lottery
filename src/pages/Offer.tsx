@@ -1,7 +1,13 @@
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import useSEO from "@/hooks/useSEO";
 
 export default function Offer() {
+  useSEO({
+    title: "Публичная оферта — условия оказания услуг трансфера «Мой Трансфер»",
+    description: "Публичная оферта на услуги трансфера и пассажирских перевозок «Мой Трансфер». Условия заказа, оплаты и ответственности сторон.",
+  });
+
   return (
     <div className="min-h-screen mesh-bg">
       <header className="glass border-b border-white/5 sticky top-0 z-50">

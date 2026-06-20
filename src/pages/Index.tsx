@@ -7,6 +7,7 @@ import ContactWidget from "@/components/ContactWidget";
 import FeaturesBar from "@/components/FeaturesBar";
 import BridgeNewsWidget from "@/components/BridgeNewsWidget";
 import { CLIENT_CABINET_URL } from "@/components/admin/adminTypes";
+import useSEO from "@/hooks/useSEO";
 
 const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
 const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес"];
@@ -16,6 +17,12 @@ const inputCls =
   "w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-white/40 text-sm outline-none focus:border-amber-500/60 transition-colors [color-scheme:dark]";
 
 const Index = () => {
+  useSEO({
+    title: "Мой Трансфер — заказ такси и трансфера по Краснодарскому краю и Крыму 24/7",
+    description:
+      "Трансфер и такси по Краснодарскому краю, к морю и через Крымский мост. Фиксированная цена, иномарки комфорт и бизнес-класса, детские кресла, круглосуточно. Подача за 5 минут.",
+  });
+
   const [form, setForm] = useState({
     name: "",
     phone: "",

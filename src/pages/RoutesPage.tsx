@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
+import useSEO from "@/hooks/useSEO";
 
 const ROUTES = [
   { from: "Краснодар", to: "Сочи", time: "≈ 4 ч", price: "от 6 000 ₽" },
@@ -12,6 +13,12 @@ const ROUTES = [
 ];
 
 export default function RoutesPage() {
+  useSEO({
+    title: "Направления трансфера: Краснодар, Сочи, Анапа, Геленджик — цены и время в пути",
+    description:
+      "Популярные направления трансфера по Краснодарскому краю и побережью: Краснодар — Сочи, Анапа, Геленджик, Новороссийск. Время в пути и цены от перевозчика. Закажите машину онлайн.",
+  });
+
   return (
     <PageShell title="Направления" icon="Route">
       <p className="text-white/70 mb-6">Популярные направления трансфера. Точную стоимость рассчитаем под ваш заказ.</p>

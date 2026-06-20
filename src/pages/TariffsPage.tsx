@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
+import useSEO from "@/hooks/useSEO";
 
 const TARIFFS = [
   { name: "Срочный", desc: "Подача в ближайшее время, приоритетный заказ", price: "по запросу", icon: "Zap" },
@@ -11,6 +12,12 @@ const TARIFFS = [
 ];
 
 export default function TariffsPage() {
+  useSEO({
+    title: "Тарифы на трансфер и такси: Стандарт, Комфорт, Минивэн, Бизнес — цены за км",
+    description:
+      "Тарифы на трансфер: седан Стандарт от 25 ₽/км, Комфорт, Минивэн до 7 мест, Бизнес премиум-класса. Фиксированная цена без накруток. Рассчитаем стоимость поездки при заказе.",
+  });
+
   return (
     <PageShell title="Тарифы" icon="Wallet">
       <p className="text-white/70 mb-4 text-sm md:text-base">Выберите класс автомобиля под вашу поездку. Итоговую цену рассчитаем при оформлении заявки.</p>
