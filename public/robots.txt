@@ -12,3 +12,9 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /dispatch
+Disallow: /posts
+Disallow: /cabinet
+
+Sitemap: https://moy-transfer.ru/sitemap.xml
