@@ -1,0 +1,1 @@
+{"tests": [{"name": "Список чатов MAX", "method": "GET", "path": "/", "expectedStatus": 200, "expectedBody": {"ok": "boolean"}, "bodyMatcher": "partial"}, {"name": "CORS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200}]}
