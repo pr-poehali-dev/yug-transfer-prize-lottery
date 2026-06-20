@@ -19,18 +19,27 @@ export default function RoutesPage() {
           <Link
             key={r.slug}
             to={`/route/${r.slug}`}
-            className="group bg-[#1a1a1a]/95 rounded-2xl border border-white/10 p-4 hover:border-amber-500/50 transition-colors"
+            className="group bg-[#1a1a1a]/95 rounded-2xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors"
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-white font-semibold">
-                <Icon name="MapPin" size={16} className="text-amber-400" />
-                {r.from} → {r.to}
-              </div>
-              <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-amber-400 transition-colors" />
+            <div className="relative h-36 overflow-hidden">
+              <img
+                src={r.image}
+                alt={`${r.from} — ${r.to}`}
+                loading="lazy"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-[#1a1a1a]/20 to-transparent" />
+              <span className="absolute top-2.5 right-2.5 bg-amber-500 text-black text-xs font-bold px-2.5 py-1 rounded-lg">{r.priceFrom}</span>
             </div>
-            <div className="flex items-center justify-between mt-2 text-sm">
-              <span className="text-white/50">{r.time} · {r.distance}</span>
-              <span className="text-amber-400 font-bold">{r.priceFrom}</span>
+            <div className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-white font-semibold">
+                  <Icon name="MapPin" size={16} className="text-amber-400" />
+                  {r.from} → {r.to}
+                </div>
+                <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-amber-400 transition-colors" />
+              </div>
+              <div className="mt-2 text-sm text-white/50">{r.time} · {r.distance}</div>
             </div>
           </Link>
         ))}

@@ -53,6 +53,14 @@ export default function RouteDetailPage() {
         <Icon name="ChevronLeft" size={15} /> Все направления
       </Link>
 
+      <div className="relative h-48 sm:h-60 rounded-2xl overflow-hidden border border-white/10 mb-6">
+        <img src={route.image} alt={`${route.from} — ${route.to}`} className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+        <div className="absolute bottom-3 left-4 text-white font-bold text-xl drop-shadow">
+          {route.from} → {route.to}
+        </div>
+      </div>
+
       <div className="bg-[#1a1a1a]/95 rounded-2xl border border-white/10 p-5 mb-6">
         <p className="text-white/80 leading-relaxed mb-4">{route.intro}</p>
         <div className="grid grid-cols-3 gap-3 mb-5">

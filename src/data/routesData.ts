@@ -16,6 +16,7 @@ export interface RouteInfo {
   time: string;
   distance: string;
   priceFrom: string;
+  image: string;
   intro: string;
   description: string[];
   prices: RoutePrice[];
@@ -49,6 +50,7 @@ export const ROUTES: RouteInfo[] = [
     time: "≈ 4 ч",
     distance: "≈ 280 км",
     priceFrom: "от 6 000 ₽",
+    image: "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/ee56c829-4973-42bc-8f77-ba6dca0fd8d6.jpg",
     intro:
       "Комфортный трансфер из Краснодара в Сочи без пересадок и ожидания. Подача к дому, фиксированная цена, оплата после поездки.",
     description: [
@@ -69,6 +71,7 @@ export const ROUTES: RouteInfo[] = [
     time: "≈ 2.5 ч",
     distance: "≈ 165 км",
     priceFrom: "от 4 000 ₽",
+    image: "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/1b87c1dd-dec3-4753-a9fe-5c9808d14bba.jpg",
     intro:
       "Быстрый и удобный трансфер Краснодар — Анапа. Прямая подача к адресу, без доплат за багаж, оплата после поездки.",
     description: [
@@ -89,6 +92,7 @@ export const ROUTES: RouteInfo[] = [
     time: "≈ 2.5 ч",
     distance: "≈ 170 км",
     priceFrom: "от 4 500 ₽",
+    image: "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/d28ae32e-5712-4993-ab43-9f7cf19fa703.jpg",
     intro:
       "Трансфер Краснодар — Геленджик с подачей к дому. Комфортные авто, фиксированная цена, поездка без пересадок.",
     description: [
@@ -109,6 +113,7 @@ export const ROUTES: RouteInfo[] = [
     time: "≈ 2 ч",
     distance: "≈ 140 км",
     priceFrom: "от 3 800 ₽",
+    image: "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/7e15364b-f1b3-4e89-8f4c-0a2315fad581.jpg",
     intro:
       "Трансфер Краснодар — Новороссийск за 2 часа. Подача к адресу, оплата после поездки, без доплат за багаж.",
     description: [
@@ -129,6 +134,7 @@ export const ROUTES: RouteInfo[] = [
     time: "≈ 40 мин",
     distance: "≈ 30 км",
     priceFrom: "от 1 500 ₽",
+    image: "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/283cab3c-2723-43ce-9ac2-6768466a9778.jpg",
     intro:
       "Трансфер из Сочи в аэропорт Адлер с подачей к отелю. Встреча, помощь с багажом, поездка точно к рейсу.",
     description: [
@@ -149,6 +155,7 @@ export const ROUTES: RouteInfo[] = [
     time: "≈ 2.5 ч",
     distance: "≈ 165 км",
     priceFrom: "от 4 500 ₽",
+    image: "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/8f0e5ef4-61f6-4927-855d-74404134d832.jpg",
     intro:
       "Трансфер Краснодар — Кабардинка к месту отдыха. Комфортные авто, фиксированная цена, оплата после поездки.",
     description: [
