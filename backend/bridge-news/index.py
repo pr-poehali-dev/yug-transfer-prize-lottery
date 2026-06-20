@@ -148,6 +148,67 @@ def parse_posts(page: str):
     return posts[-LIMIT:][::-1]
 
 
+def extract_status(posts):
+    """Достаёт из последних постов только ФАКТЫ: статус проезда и минуты ожидания.
+    Тексты не копируем — берём лишь статус (open/closed/limited) и число минут.
+    """
+    status = 'open'
+    wait = None
+    status_updated = None
+
+    for p in posts:
+        text = (p.get('text') or '').lower()
+        if not text:
+            continue
+
+        is_closed = any(w in text for w in [
+            'перекры', 'движение закры', 'проезд закры', 'мост закры', 'остановлено движение', 'движение остановлено'
+        ])
+        # Явный сигнал, что всё свободно.
+        no_trouble = ('затруднений' in text and 'нет' in text) or 'очереди' in text and 'нет' in text
+        is_open = no_trouble or any(w in text for w in [
+            'движение открыт', 'проезд открыт', 'движение восстановлен', 'мост открыт', 'свободн'
+        ])
+        is_limited = (not is_open) and any(w in text for w in [
+            'ограничен', 'затруднен', 'затруднён', 'усилен'
+        ])
+
+        # Минуты ожидания: прямо из текста, либо оценка по числу машин в очереди.
+        m_wait = re.search(r'(\d{1,3})\s*минут', text)
+        if m_wait is None:
+            m_wait = re.search(r'ожидани[ея][^\d]{0,15}(\d{1,3})', text)
+        cur_wait = int(m_wait.group(1)) if m_wait else None
+        if cur_wait is None:
+            m_cars = re.findall(r'(\d{1,4})\s*транспортн', text)
+            if m_cars:
+                max_cars = max(int(x) for x in m_cars)
+                # Грубая оценка: ~1 машина за 0.5 мин досмотра, минимум 5 мин.
+                cur_wait = max(5, round(max_cars * 0.5))
+
+        if is_closed:
+            status = 'closed'
+            wait = cur_wait
+            status_updated = p.get('date')
+            break
+        if is_open:
+            status = 'open'
+            if cur_wait is not None:
+                wait = cur_wait
+            status_updated = p.get('date')
+            break
+        if is_limited:
+            status = 'limited'
+            if cur_wait is not None:
+                wait = cur_wait
+            status_updated = p.get('date')
+            break
+
+    if status_updated is None and posts:
+        status_updated = posts[0].get('date')
+
+    return {'status': status, 'wait': wait, 'status_updated': status_updated}
+
+
 def json_response(body_str):
     return {
         'statusCode': 200,
@@ -170,7 +231,8 @@ def handler(event: dict, context) -> dict:
     try:
         page = fetch_html(CHANNEL)
         posts = parse_posts(page)
-        payload = json.dumps({'posts': posts, 'channel': CHANNEL}, ensure_ascii=False)
+        status_info = extract_status(posts)
+        payload = json.dumps({'posts': posts, 'channel': CHANNEL, **status_info}, ensure_ascii=False)
         write_cache(payload)
         return json_response(payload)
     except Exception as e:
