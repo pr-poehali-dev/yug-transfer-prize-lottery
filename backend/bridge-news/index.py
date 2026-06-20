@@ -148,12 +148,37 @@ def parse_posts(page: str):
     return posts[-LIMIT:][::-1]
 
 
+# Среднее время досмотра одной машины (минут). По нему считаем очередь.
+MIN_PER_CAR = 0.5
+
+
+def cars_near(text: str, side_words):
+    """Ищет число машин в очереди рядом с упоминанием стороны (Керчь/Тамань).
+    Возвращает int или None.
+    """
+    for sw in side_words:
+        idx = text.find(sw)
+        if idx == -1:
+            continue
+        # Берём фрагмент после упоминания стороны и ищем число + 'транспортн'.
+        window = text[idx:idx + 220]
+        m = re.search(r'(\d{1,4})\s*транспортн', window)
+        if m:
+            return int(m.group(1))
+        # Явное указание, что очереди нет.
+        if 'очереди' in window and 'нет' in window:
+            return 0
+    return None
+
+
 def extract_status(posts):
-    """Достаёт из последних постов только ФАКТЫ: статус проезда и минуты ожидания.
-    Тексты не копируем — берём лишь статус (open/closed/limited) и число минут.
+    """Достаёт из последних постов только ФАКТЫ: статус проезда и очереди по сторонам.
+    Тексты не копируем — берём лишь статус и числа машин с каждой стороны.
+    Крым = со стороны Керчи, Тамань = со стороны Тамани (Краснодарский край).
     """
     status = 'open'
-    wait = None
+    crimea_cars = None  # со стороны Керчи (выезд из Крыма)
+    taman_cars = None   # со стороны Тамани (въезд в Крым)
     status_updated = None
 
     for p in posts:
@@ -164,8 +189,7 @@ def extract_status(posts):
         is_closed = any(w in text for w in [
             'перекры', 'движение закры', 'проезд закры', 'мост закры', 'остановлено движение', 'движение остановлено'
         ])
-        # Явный сигнал, что всё свободно.
-        no_trouble = ('затруднений' in text and 'нет' in text) or 'очереди' in text and 'нет' in text
+        no_trouble = ('затруднений' in text and 'нет' in text) or ('очереди' in text and 'нет' in text)
         is_open = no_trouble or any(w in text for w in [
             'движение открыт', 'проезд открыт', 'движение восстановлен', 'мост открыт', 'свободн'
         ])
@@ -173,40 +197,41 @@ def extract_status(posts):
             'ограничен', 'затруднен', 'затруднён', 'усилен'
         ])
 
-        # Минуты ожидания: прямо из текста, либо оценка по числу машин в очереди.
-        m_wait = re.search(r'(\d{1,3})\s*минут', text)
-        if m_wait is None:
-            m_wait = re.search(r'ожидани[ея][^\d]{0,15}(\d{1,3})', text)
-        cur_wait = int(m_wait.group(1)) if m_wait else None
-        if cur_wait is None:
-            m_cars = re.findall(r'(\d{1,4})\s*транспортн', text)
-            if m_cars:
-                max_cars = max(int(x) for x in m_cars)
-                # Грубая оценка: ~1 машина за 0.5 мин досмотра, минимум 5 мин.
-                cur_wait = max(5, round(max_cars * 0.5))
+        c = cars_near(text, ['керч', 'крым'])
+        t = cars_near(text, ['тамани', 'тамань', 'краснодар'])
 
         if is_closed:
             status = 'closed'
-            wait = cur_wait
+            crimea_cars = c
+            taman_cars = t
             status_updated = p.get('date')
             break
-        if is_open:
-            status = 'open'
-            if cur_wait is not None:
-                wait = cur_wait
-            status_updated = p.get('date')
-            break
-        if is_limited:
-            status = 'limited'
-            if cur_wait is not None:
-                wait = cur_wait
+        if is_open or is_limited:
+            status = 'limited' if is_limited else 'open'
+            crimea_cars = c if c is not None else 0
+            taman_cars = t if t is not None else 0
             status_updated = p.get('date')
             break
 
     if status_updated is None and posts:
         status_updated = posts[0].get('date')
 
-    return {'status': status, 'wait': wait, 'status_updated': status_updated}
+    def to_wait(cars):
+        if cars is None:
+            return None
+        if cars <= 0:
+            return 5
+        return max(5, round(cars * MIN_PER_CAR))
+
+    return {
+        'status': status,
+        'crimea_cars': crimea_cars,
+        'taman_cars': taman_cars,
+        'crimea_wait': to_wait(crimea_cars),
+        'taman_wait': to_wait(taman_cars),
+        'min_per_car': MIN_PER_CAR,
+        'status_updated': status_updated,
+    }
 
 
 def json_response(body_str):

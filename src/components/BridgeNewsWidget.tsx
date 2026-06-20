@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 
@@ -8,7 +8,10 @@ type BridgeStatus = "open" | "limited" | "closed";
 
 interface BridgeData {
   status: BridgeStatus;
-  wait: number | null;
+  crimea_cars: number | null;
+  taman_cars: number | null;
+  crimea_wait: number | null;
+  taman_wait: number | null;
   status_updated: string | null;
 }
 
@@ -18,13 +21,8 @@ const STATUS_META: Record<BridgeStatus, { label: string; dot: string; text: stri
   closed: { label: "Проезд перекрыт", dot: "bg-red-500", text: "text-red-400" },
 };
 
-const ROUTES = [
-  { id: "anapa", label: "Анапа — Керчь", base: 90 },
-  { id: "krasnodar", label: "Краснодар — Симферополь", base: 270 },
-  { id: "rostov", label: "Ростов — Симферополь", base: 420 },
-];
-
-function fmtDuration(total: number): string {
+function fmtDuration(total: number | null): string {
+  if (total == null) return "—";
   const h = Math.floor(total / 60);
   const m = total % 60;
   if (h <= 0) return `${m} мин`;
@@ -39,9 +37,37 @@ function timeOnly(iso: string | null): string {
   return d.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+function SideRow({
+  title,
+  cars,
+  wait,
+}: {
+  title: string;
+  cars: number | null;
+  wait: number | null;
+}) {
+  const free = cars != null && cars <= 0;
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-[#111]/70 border border-white/10 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <Icon name="Car" size={15} className="text-amber-400" />
+        <div>
+          <div className="text-white text-xs font-medium">{title}</div>
+          <div className="text-white/45 text-[10px]">
+            {cars == null ? "нет данных" : free ? "очереди нет" : `в очереди ~${cars} авто`}
+          </div>
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="text-amber-400 font-bold text-sm">{fmtDuration(wait)}</div>
+        <div className="text-white/40 text-[10px]">досмотр</div>
+      </div>
+    </div>
+  );
+}
+
 export default function BridgeNewsWidget() {
   const [data, setData] = useState<BridgeData | null>(null);
-  const [routeId, setRouteId] = useState(ROUTES[0].id);
 
   useEffect(() => {
     let active = true;
@@ -52,7 +78,10 @@ export default function BridgeNewsWidget() {
           if (!active) return;
           setData({
             status: (d.status as BridgeStatus) || "open",
-            wait: typeof d.wait === "number" ? d.wait : null,
+            crimea_cars: typeof d.crimea_cars === "number" ? d.crimea_cars : null,
+            taman_cars: typeof d.taman_cars === "number" ? d.taman_cars : null,
+            crimea_wait: typeof d.crimea_wait === "number" ? d.crimea_wait : null,
+            taman_wait: typeof d.taman_wait === "number" ? d.taman_wait : null,
             status_updated: d.status_updated || null,
           });
         })
@@ -67,11 +96,8 @@ export default function BridgeNewsWidget() {
     };
   }, []);
 
-  const route = useMemo(() => ROUTES.find((r) => r.id === routeId) || ROUTES[0], [routeId]);
   const status: BridgeStatus = data?.status || "open";
-  const wait = data?.wait ?? (status === "open" ? 20 : 40);
   const meta = STATUS_META[status];
-  const total = route.base + wait;
 
   return (
     <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-xl border border-white/10 shadow-2xl p-4">
@@ -86,12 +112,6 @@ export default function BridgeNewsWidget() {
           <span className={`relative inline-flex h-2 w-2 rounded-full ${meta.dot}`} />
         </span>
         <span className={`font-semibold text-sm ${meta.text}`}>{meta.label}</span>
-        {status !== "closed" && (
-          <span className="ml-auto text-white/80 text-xs flex items-center gap-1">
-            <Icon name="Clock" size={13} className="text-amber-400" />
-            досмотр ~{wait} мин
-          </span>
-        )}
       </div>
 
       {status === "closed" ? (
@@ -108,30 +128,15 @@ export default function BridgeNewsWidget() {
           </Link>
         </div>
       ) : (
-        <div className="mb-3">
-          <label className="block text-white/50 text-[11px] mb-1.5">Откуда едете</label>
-          <select
-            value={routeId}
-            onChange={(e) => setRouteId(e.target.value)}
-            className="w-full bg-[#111]/80 border border-white/15 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500/50"
-          >
-            {ROUTES.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-
-          <div className="mt-3 flex items-center justify-between rounded-lg bg-amber-500/10 border border-amber-500/25 px-3 py-2.5">
-            <span className="text-white/70 text-xs">Время в пути с учётом досмотра</span>
-            <span className="text-amber-400 font-bold text-base">{fmtDuration(total)}</span>
-          </div>
+        <div className="space-y-2 mb-3">
+          <SideRow title="Со стороны Крыма (Керчь)" cars={data?.crimea_cars ?? null} wait={data?.crimea_wait ?? null} />
+          <SideRow title="Со стороны Тамани" cars={data?.taman_cars ?? null} wait={data?.taman_wait ?? null} />
         </div>
       )}
 
       <p className="text-white/40 text-[10px] leading-snug mb-2">
-        Время ожидания может меняться. Окончательный прогноз формируется при заказе — учитываем среднее время
-        досмотра и пиковые часы.
+        Время рассчитано по длине очереди на досмотр и может меняться. Окончательный прогноз формируется при
+        заказе — учитываем среднее время досмотра и пиковые часы.
       </p>
 
       <div className="flex items-center justify-between pt-2 border-t border-white/5">
