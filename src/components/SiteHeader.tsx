@@ -148,7 +148,7 @@ export default function SiteHeader() {
             </button>
           </div>
           <nav className="flex flex-col flex-1 px-6 py-4 gap-1 overflow-y-auto">
-            {NAV.map((n) => (
+            {NAV.filter((n) => n.to !== "/bridge").map((n) => (
               <Link
                 key={n.to}
                 to={n.to}
