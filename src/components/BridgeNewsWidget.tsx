@@ -24,37 +24,6 @@ const STATUS_META: Record<BridgeStatus, { label: string; dot: string; text: stri
 const BRIDGE_LENGTH_KM = 19;
 const BRIDGE_DRIVE_MIN = 17;
 
-type Side = "crimea" | "kuban";
-
-const CITY_INFO: Record<string, { min: number; side: Side }> = {
-  керчь: { min: 30, side: "crimea" },
-  феодосия: { min: 110, side: "crimea" },
-  судак: { min: 150, side: "crimea" },
-  алушта: { min: 195, side: "crimea" },
-  ялта: { min: 220, side: "crimea" },
-  симферополь: { min: 130, side: "crimea" },
-  севастополь: { min: 200, side: "crimea" },
-  евпатория: { min: 175, side: "crimea" },
-  саки: { min: 160, side: "crimea" },
-  джанкой: { min: 130, side: "crimea" },
-  краснодар: { min: 270, side: "kuban" },
-  анапа: { min: 90, side: "kuban" },
-  новороссийск: { min: 110, side: "kuban" },
-  геленджик: { min: 160, side: "kuban" },
-  тамань: { min: 25, side: "kuban" },
-  темрюк: { min: 60, side: "kuban" },
-  сочи: { min: 400, side: "kuban" },
-  ростов: { min: 480, side: "kuban" },
-};
-
-function lookupCity(q: string): { min: number; side: Side } | null {
-  const k = q.trim().toLowerCase();
-  if (!k) return null;
-  if (CITY_INFO[k]) return CITY_INFO[k];
-  const hit = Object.keys(CITY_INFO).find((c) => c.startsWith(k) || k.startsWith(c));
-  return hit ? CITY_INFO[hit] : null;
-}
-
 function fmtDuration(total: number | null): string {
   if (total == null) return "—";
   const h = Math.floor(total / 60);
@@ -101,7 +70,7 @@ function SideRow({
   );
 }
 
-export default function BridgeNewsWidget({ calc = false }: { calc?: boolean }) {
+export default function BridgeNewsWidget() {
   const [data, setData] = useState<BridgeData | null>(null);
 
   useEffect(() => {
@@ -133,27 +102,6 @@ export default function BridgeNewsWidget({ calc = false }: { calc?: boolean }) {
 
   const status: BridgeStatus = data?.status || "open";
   const meta = STATUS_META[status];
-
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-
-  const fromCity = lookupCity(from);
-  const toCity = lookupCity(to);
-  const crossesBridge = !!fromCity && !!toCity && fromCity.side !== toCity.side;
-  const bridgeWait = crossesBridge
-    ? toCity!.side === "crimea"
-      ? data?.taman_wait ?? 0
-      : data?.crimea_wait ?? 0
-    : 0;
-  const roadMin =
-    fromCity && toCity
-      ? crossesBridge
-        ? fromCity.min + toCity.min + BRIDGE_DRIVE_MIN + bridgeWait
-        : Math.abs(toCity.min - fromCity.min)
-      : null;
-  const totalMin = roadMin != null && !(crossesBridge && status === "closed") ? roadMin : null;
-  const showCalc = calc;
-  const calcError = (from.trim() || to.trim()) && (fromCity == null || toCity == null);
 
   return (
     <div className="bg-[#1a1a1a]/95 backdrop-blur rounded-xl border border-white/10 shadow-2xl p-3">
@@ -194,43 +142,6 @@ export default function BridgeNewsWidget({ calc = false }: { calc?: boolean }) {
         Время = очередь на досмотр + проезд моста ({BRIDGE_LENGTH_KM} км, ≈{BRIDGE_DRIVE_MIN} мин). Может меняться в пиковые часы.
       </p>
 
-      {showCalc && (
-        <div className="rounded-lg bg-[#111]/70 border border-white/10 p-2.5 mb-2">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Icon name="Calculator" size={13} className="text-amber-400" />
-            <span className="text-white text-[11px] font-semibold">Расчёт времени в пути</span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-            <input
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              placeholder="Откуда"
-              className="w-full bg-black/40 border border-white/10 rounded-md px-2 py-1.5 text-white placeholder-white/35 text-[11px] outline-none focus:border-amber-500/60"
-            />
-            <input
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              placeholder="Куда"
-              className="w-full bg-black/40 border border-white/10 rounded-md px-2 py-1.5 text-white placeholder-white/35 text-[11px] outline-none focus:border-amber-500/60"
-            />
-          </div>
-          {totalMin != null ? (
-            <div className="flex items-center justify-between gap-2 rounded-md bg-amber-500/10 border border-amber-500/25 px-2.5 py-1.5">
-              <span className="text-white/70 text-[10px] leading-tight">
-                Ориентир. время в пути
-                {crossesBridge ? " (через мост)" : " (мост не нужен)"}
-              </span>
-              <span className="text-amber-400 font-bold text-[13px] shrink-0">≈ {fmtDuration(totalMin)}</span>
-            </div>
-          ) : crossesBridge && status === "closed" ? (
-            <p className="text-red-400/80 text-[10px]">Мост перекрыт — расчёт через мост недоступен.</p>
-          ) : calcError ? (
-            <p className="text-white/40 text-[10px]">Укажите города рядом с мостом (Керчь, Краснодар, Ялта, Анапа…).</p>
-          ) : (
-            <p className="text-white/40 text-[10px]">Впишите города — покажем время с учётом проезда моста.</p>
-          )}
-        </div>
-      )}
 
       <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
         {data?.status_updated ? (
