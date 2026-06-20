@@ -267,6 +267,112 @@ def post_to_vk_user_wall(photo_url: str, text: str, debug: bool = False):
     return out
 
 
+MAX_API_BASE = 'https://platform-api.max.ru'
+
+
+def get_max_token():
+    return (os.environ.get('MAX_BOT_TOKEN_NEW', '') or os.environ.get('MAX_BOT_TOKEN', '')).strip()
+
+
+def max_upload_image(photo_url: str, token: str, log: list):
+    """Загружает фото в MAX и возвращает токен вложения."""
+    try:
+        with urllib.request.urlopen(photo_url, timeout=15) as resp:
+            photo_bytes = resp.read()
+            content_type = resp.headers.get('Content-Type', 'image/jpeg')
+        log.append({'step': 'max_download', 'ok': True, 'size': len(photo_bytes)})
+    except Exception as e:
+        log.append({'step': 'max_download', 'ok': False, 'err': str(e)})
+        return None
+
+    up_req = urllib.request.Request(f"{MAX_API_BASE}/uploads?type=image", method='POST')
+    up_req.add_header('Authorization', token)
+    try:
+        with urllib.request.urlopen(up_req, timeout=15) as r:
+            up = json.loads(r.read().decode('utf-8'))
+        upload_url = up.get('url')
+        log.append({'step': 'max_getUploadUrl', 'ok': bool(upload_url)})
+    except Exception as e:
+        log.append({'step': 'max_getUploadUrl', 'ok': False, 'err': str(e)})
+        return None
+    if not upload_url:
+        return None
+
+    import uuid
+    boundary = uuid.uuid4().hex
+    ext = 'jpg'
+    if 'png' in content_type:
+        ext = 'png'
+    elif 'webp' in content_type:
+        ext = 'webp'
+    crlf = b'\r\n'
+    body = b''
+    body += b'--' + boundary.encode() + crlf
+    body += f'Content-Disposition: form-data; name="data"; filename="photo.{ext}"'.encode() + crlf
+    body += f'Content-Type: {content_type}'.encode() + crlf + crlf
+    body += photo_bytes + crlf
+    body += b'--' + boundary.encode() + b'--' + crlf
+
+    req = urllib.request.Request(upload_url, data=body, headers={
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Content-Length': str(len(body)),
+    }, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            uploaded = json.loads(r.read().decode('utf-8'))
+        log.append({'step': 'max_upload', 'resp': uploaded})
+    except Exception as e:
+        log.append({'step': 'max_upload', 'ok': False, 'err': str(e)})
+        return None
+
+    photos = uploaded.get('photos') or {}
+    if photos:
+        first = next(iter(photos.values()))
+        return first.get('token')
+    return uploaded.get('token')
+
+
+def post_to_max(photo_url: str, text: str, debug: bool = False):
+    """Публикует пост с фото в канал MAX (MAX_CHAT_ID)."""
+    token = get_max_token()
+    chat_id = (os.environ.get('MAX_CHAT_ID', '') or '').strip()
+    if not token:
+        return {'ok': False, 'error': 'MAX_BOT_TOKEN не задан'}
+    if not chat_id:
+        return {'ok': False, 'error': 'MAX_CHAT_ID не задан'}
+
+    log = []
+    attachments = []
+    img_token = max_upload_image(photo_url, token, log) if photo_url else None
+    if img_token:
+        attachments.append({'type': 'image', 'payload': {'token': img_token}})
+
+    payload = {'text': text}
+    if attachments:
+        payload['attachments'] = attachments
+
+    url = f"{MAX_API_BASE}/messages?chat_id={urllib.parse.quote(chat_id)}"
+    data = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=data, method='POST')
+    req.add_header('Authorization', token)
+    req.add_header('Content-Type', 'application/json')
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            result = json.loads(r.read().decode('utf-8'))
+        out = {'ok': True, 'result': result}
+    except urllib.error.HTTPError as e:
+        try:
+            err = e.read().decode('utf-8')
+        except Exception:
+            err = ''
+        out = {'ok': False, 'error': f"HTTP {e.code}: {err[:200]}"}
+    except Exception as e:
+        out = {'ok': False, 'error': f"{type(e).__name__}: {str(e)[:200]}"}
+    if debug:
+        out['log'] = log
+    return out
+
+
 def get_next_post():
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
@@ -330,11 +436,18 @@ def handler(event: dict, context) -> dict:
     post_id, photo, greeting, description = row
     tg_text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
     vk_text = strip_html(f"{greeting}\n\n{description}\n{CONTACTS}")
+    max_text = vk_text
 
     if target == 'user_wall':
         vk_user = post_to_vk_user_wall(photo, vk_text, debug=True)
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
             'ok': vk_user.get('ok', False), 'post_id': post_id, 'vk_user_wall': vk_user,
+        })}
+
+    if target == 'max':
+        max_only = post_to_max(photo, max_text, debug=True)
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({
+            'ok': max_only.get('ok', False), 'post_id': post_id, 'max': max_only,
         })}
 
     tg_result = tg_api('sendPhoto', {
@@ -346,20 +459,23 @@ def handler(event: dict, context) -> dict:
 
     vk_result = post_to_vk(photo, vk_text)
     vk_user_result = post_to_vk_user_wall(photo, vk_text)
+    max_result = post_to_max(photo, max_text)
 
     tg_status = 'ok' if tg_result.get('ok') else f"err:{(tg_result.get('description') or 'fail')[:200]}"
     vk_status = 'ok' if vk_result.get('ok') else f"err:{(vk_result.get('error') or 'fail')[:200]}"
     vk_user_status = 'ok' if vk_user_result.get('ok') else f"err:{(vk_user_result.get('error') or 'fail')[:200]}"
+    max_status = 'ok' if max_result.get('ok') else f"err:{(max_result.get('error') or 'fail')[:200]}"
     try:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         tg_safe = tg_status.replace("'", "''")
         vk_safe = vk_status.replace("'", "''")
         vk_user_safe = vk_user_status.replace("'", "''")
+        max_safe = max_status.replace("'", "''")
         cur.execute(
             f"UPDATE {SCHEMA}.bot_daily_posts "
             f"SET last_tg_status = '{tg_safe}', last_vk_status = '{vk_safe}', "
-            f"last_vk_user_status = '{vk_user_safe}', last_sent_at = NOW() "
+            f"last_vk_user_status = '{vk_user_safe}', last_max_status = '{max_safe}', last_sent_at = NOW() "
             f"WHERE id = {post_id}"
         )
         conn.commit()
@@ -380,5 +496,7 @@ def handler(event: dict, context) -> dict:
             'vk_status': vk_status,
             'vk_user': vk_user_result,
             'vk_user_status': vk_user_status,
+            'max': max_result,
+            'max_status': max_status,
         }),
     }
