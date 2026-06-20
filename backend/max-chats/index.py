@@ -3,6 +3,7 @@ import os
 import json
 import urllib.request
 import urllib.parse
+import urllib.error
 
 
 CORS = {
@@ -11,7 +12,25 @@ CORS = {
     'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-API_BASE = 'https://botapi.max.ru'
+def try_request(url: str, use_header: bool, token: str):
+    """Пробует GET-запрос либо с токеном в заголовке, либо в query."""
+    if use_header:
+        req = urllib.request.Request(url, method='GET')
+        req.add_header('Authorization', token)
+    else:
+        sep = '&' if '?' in url else '?'
+        req = urllib.request.Request(f"{url}{sep}access_token={urllib.parse.quote(token)}", method='GET')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return {'status': r.status, 'body': json.loads(r.read().decode('utf-8'))}
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode('utf-8')
+        except Exception:
+            err_body = ''
+        return {'status': e.code, 'error': str(e), 'body': err_body}
+    except Exception as e:
+        return {'error': str(e)}
 
 
 def handler(event: dict, context) -> dict:
@@ -34,30 +53,34 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'ok': False, 'error': 'MAX_BOT_TOKEN не задан', 'diag': diag}, ensure_ascii=False),
         }
 
-    me_info = {}
-    try:
-        me_url = f"{API_BASE}/me?access_token={urllib.parse.quote(token)}"
-        me_req = urllib.request.Request(me_url, method='GET')
-        with urllib.request.urlopen(me_req, timeout=15) as r:
-            me_info = json.loads(r.read().decode('utf-8'))
-    except Exception as e:
-        me_info = {'error': str(e)}
+    bases = ['https://platform-api.max.ru', 'https://botapi.max.ru']
+    attempts = []
+    chats_result = None
+    for base in bases:
+        for use_header in (True, False):
+            res = try_request(f"{base}/chats?count=50", use_header, token)
+            attempts.append({
+                'base': base,
+                'auth': 'header' if use_header else 'query',
+                'status': res.get('status'),
+                'error': res.get('error'),
+            })
+            body = res.get('body')
+            if res.get('status') == 200 and isinstance(body, dict) and 'chats' in body:
+                chats_result = body
+                break
+        if chats_result:
+            break
 
-    url = f"{API_BASE}/chats?access_token={urllib.parse.quote(token)}&count=50"
-    try:
-        req = urllib.request.Request(url, method='GET')
-        with urllib.request.urlopen(req, timeout=15) as r:
-            raw = r.read().decode('utf-8')
-        data = json.loads(raw)
-    except Exception as e:
+    if not chats_result:
         return {
             'statusCode': 200,
             'headers': {**CORS, 'Content-Type': 'application/json'},
-            'body': json.dumps({'ok': False, 'error': str(e), 'diag': diag, 'me': me_info}, ensure_ascii=False),
+            'body': json.dumps({'ok': False, 'error': 'не удалось получить чаты', 'diag': diag, 'attempts': attempts}, ensure_ascii=False),
         }
 
     chats = []
-    for c in data.get('chats', []):
+    for c in chats_result.get('chats', []):
         chats.append({
             'chat_id': c.get('chat_id'),
             'title': c.get('title'),
@@ -69,5 +92,5 @@ def handler(event: dict, context) -> dict:
     return {
         'statusCode': 200,
         'headers': {**CORS, 'Content-Type': 'application/json'},
-        'body': json.dumps({'ok': True, 'chats': chats, 'diag': diag, 'me': me_info}, ensure_ascii=False),
+        'body': json.dumps({'ok': True, 'chats': chats, 'diag': diag, 'attempts': attempts}, ensure_ascii=False),
     }
