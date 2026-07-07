@@ -88,14 +88,14 @@ def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
         return {'ok': False, 'description': str(e)}
 
 
-def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 3) -> dict:
+def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2) -> dict:
     url = f"https://api.telegram.org/bot{bot_token}/{method}"
     data = json.dumps(payload).encode()
     last_err = 'timeout'
     for attempt in range(attempts):
         req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
         try:
-            with urllib.request.urlopen(req, timeout=25) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             # Ошибка от самого Telegram (например, неверный parse_mode) — повтор не поможет.
