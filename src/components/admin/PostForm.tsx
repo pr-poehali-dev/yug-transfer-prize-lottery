@@ -86,18 +86,36 @@ export function PostForm({
 
         {/* Текст */}
         <div>
-          <label className="text-[11px] text-white/50 mb-1 flex justify-between">
-            <span>Текст поста {!form.video_note_url && <span className="text-red-400">*</span>}</span>
-            <span className={form.text.length > 3600 ? "text-red-400" : "text-white/20"}>{form.text.length}/4096</span>
-          </label>
-          <textarea
-            value={form.text}
-            onChange={e => onFormChange({ text: e.target.value })}
-            placeholder="Текст сообщения... HTML: <b>жирный</b>, <i>курсив</i>, <a href='...'>ссылка</a>"
-            rows={4}
-            maxLength={4096}
-            className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-2 text-white text-sm outline-none resize-y font-mono leading-snug placeholder-white/20"
-          />
+          {(() => {
+            const captionMode = !!form.photo_url && !form.video_note_url;
+            const limit = captionMode ? 1024 : 4096;
+            const len = form.text.length;
+            const over = captionMode && len > 1024;
+            return (
+              <>
+                <label className="text-[11px] text-white/50 mb-1 flex justify-between">
+                  <span>Текст поста {!form.video_note_url && <span className="text-red-400">*</span>}</span>
+                  <span className={over ? "text-amber-400" : len > limit * 0.9 ? "text-amber-400" : "text-white/20"}>
+                    {len}/{limit}
+                  </span>
+                </label>
+                <textarea
+                  value={form.text}
+                  onChange={e => onFormChange({ text: e.target.value })}
+                  placeholder="Текст сообщения... HTML: <b>жирный</b>, <i>курсив</i>, <a href='...'>ссылка</a>"
+                  rows={4}
+                  maxLength={4096}
+                  className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-2 text-white text-sm outline-none resize-y font-mono leading-snug placeholder-white/20"
+                />
+                {over && (
+                  <p className="mt-1 text-[11px] text-amber-400 flex items-start gap-1">
+                    <Icon name="Info" size={12} className="mt-0.5 shrink-0" />
+                    <span>Текст длиннее 1024 символов — под фото столько не помещается. Фото уйдёт отдельно, а текст — следующим сообщением.</span>
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Фото + Видео в одну строку на md */}
