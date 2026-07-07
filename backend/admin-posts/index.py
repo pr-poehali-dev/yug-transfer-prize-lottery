@@ -197,6 +197,34 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
             return {'ok': True, 'message_id': msg_id}
         return {'ok': False, 'error': video_result.get('description', 'Ошибка отправки видео-кружка')}
 
+    # Telegram: подпись к фото ограничена 1024 символами, текст сообщения — 4096.
+    # Если фото есть, но текст длиннее лимита подписи — шлём фото отдельно,
+    # а длинный текст с кнопками отдельным сообщением.
+    CAPTION_LIMIT = 1024
+    long_with_photo = bool(photo_url) and len(text) > CAPTION_LIMIT
+
+    if long_with_photo:
+        photo_res = tg_request(bot_token, 'sendPhoto', {'chat_id': channel_id, 'photo': photo_url})
+        photo_msg_id = photo_res.get('result', {}).get('message_id') if photo_res.get('ok') else None
+
+        def try_send_text(parse_mode=None):
+            payload = {'chat_id': channel_id, 'text': text}
+            if parse_mode:
+                payload['parse_mode'] = parse_mode
+            if reply_markup:
+                payload['reply_markup'] = reply_markup
+            return tg_request(bot_token, 'sendMessage', payload)
+
+        text_res = try_send_text('HTML')
+        if not text_res.get('ok'):
+            print(f"[POSTS] HTML parse failed: {text_res.get('description')}, retrying without parse_mode")
+            text_res = try_send_text(None)
+
+        msg_id = text_res.get('result', {}).get('message_id') if text_res.get('ok') else photo_msg_id
+        if msg_id:
+            return {'ok': True, 'message_id': msg_id}
+        return {'ok': False, 'error': text_res.get('description') or photo_res.get('description', 'Unknown error')}
+
     def try_send(parse_mode=None):
         if photo_url:
             payload = {'chat_id': channel_id, 'photo': photo_url, 'caption': text}
