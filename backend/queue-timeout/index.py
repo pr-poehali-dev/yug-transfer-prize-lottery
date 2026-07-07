@@ -3,7 +3,7 @@ import os
 import json
 import psycopg2
 import psycopg2.extras
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from lib import (
     SCHEMA, DEADLINE_MINUTES, tg_send, tg_call, yk_create_payment,
@@ -150,13 +150,68 @@ def handler(event: dict, context) -> dict:
             offer_to_first(cur, conn, order_id)
             moved += 1
 
+        expired_by_time = expire_by_time(cur, conn)
         reminded = send_sub_reminders(cur, conn)
     finally:
         cur.close()
         conn.close()
 
     return {'statusCode': 200, 'headers': cors,
-            'body': json.dumps({'ok': True, 'moved': moved, 'reminded': reminded})}
+            'body': json.dumps({'ok': True, 'moved': moved,
+                                'expired_by_time': expired_by_time, 'reminded': reminded})}
+
+
+LOCAL_TZ_OFFSET_HOURS = 3  # Время заказа вводится по МСК (UTC+3)
+
+
+def expire_by_time(cur, conn) -> int:
+    """Заказы «на продаже», у которых наступило время поездки, а машину не нашли,
+    переводит в статус 'no_cars' и обновляет сообщение в группе на «Нет машин»."""
+    cur.execute(
+        f"SELECT id, from_city, to_city, order_date, order_time, price, commission_rub, "
+        f"tg_chat_id, tg_message_id, tg_message_text, current_user_id "
+        f"FROM {SCHEMA}.dispatch_orders "
+        f"WHERE sale_status='selling' "
+        f"AND order_date IS NOT NULL AND order_date <> '' "
+        f"AND order_time IS NOT NULL AND order_time <> ''"
+    )
+    rows = cur.fetchall()
+    now_local = datetime.utcnow() + timedelta(hours=LOCAL_TZ_OFFSET_HOURS)
+    expired = 0
+    for o in rows:
+        trip_dt = parse_trip_dt(o['order_date'], o['order_time'])
+        if not trip_dt or trip_dt > now_local:
+            continue
+        cur.execute(
+            f"UPDATE {SCHEMA}.dispatch_orders SET sale_status='no_cars', "
+            f"current_user_id=NULL, current_deadline=NULL WHERE id=%s AND sale_status='selling'",
+            (o['id'],),
+        )
+        if cur.rowcount == 0:
+            continue
+        conn.commit()
+        mark_order_message(dict(o), '❌ <b>Нет машин — время заказа истекло</b>')
+        expired += 1
+    return expired
+
+
+def parse_trip_dt(order_date: str, order_time: str):
+    """Парсит дату+время заказа. Дата: YYYY-MM-DD или DD.MM.YYYY, время: HH:MM."""
+    d = (order_date or '').strip()
+    t = (order_time or '').strip()[:5]
+    for date_fmt in ('%Y-%m-%d', '%d.%m.%Y', '%d.%m.%y'):
+        try:
+            base = datetime.strptime(d, date_fmt)
+            break
+        except ValueError:
+            base = None
+    if base is None:
+        return None
+    try:
+        hh, mm = t.split(':')[:2]
+        return base.replace(hour=int(hh), minute=int(mm))
+    except (ValueError, IndexError):
+        return base.replace(hour=23, minute=59)
 
 
 def send_sub_reminders(cur, conn) -> int:
