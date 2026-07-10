@@ -11,7 +11,7 @@ export interface PostFormData {
   button_url: string;
   button2_text: string;
   button2_url: string;
-  status: "draft" | "scheduled" | "published" | "failed";
+  status: "draft" | "scheduled" | "published" | "failed" | "expired";
   scheduled_at: string | null;
 }
 
@@ -24,6 +24,7 @@ interface PostFormProps {
   form: PostFormData;
   editId: number | null;
   scheduledAt: string;
+  expireHours: number;
   editInTg: boolean;
   saving: boolean;
   publishing: boolean;
@@ -35,6 +36,7 @@ interface PostFormProps {
   editingPublished: boolean;
   onFormChange: (patch: Partial<PostFormData>) => void;
   onScheduledAtChange: (v: string) => void;
+  onExpireHoursChange: (v: number) => void;
   onEditInTgToggle: () => void;
   onPhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onVideoNoteUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -44,9 +46,9 @@ interface PostFormProps {
 }
 
 export function PostForm({
-  form, editId, scheduledAt, editInTg, saving, publishing, uploading, uploadingVideo, videoProgress,
+  form, editId, scheduledAt, expireHours, editInTg, saving, publishing, uploading, uploadingVideo, videoProgress,
   formError, formSuccess, editingPublished,
-  onFormChange, onScheduledAtChange, onEditInTgToggle,
+  onFormChange, onScheduledAtChange, onExpireHoursChange, onEditInTgToggle,
   onPhotoUpload, onVideoNoteUpload, onSave, onPublishNow, onReset,
 }: PostFormProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -273,6 +275,33 @@ export function PostForm({
           {scheduledAt && (
             <span className="text-[11px] text-purple-400 w-full">
               Выйдет {new Date(scheduledAt).toLocaleString("ru", { day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </div>
+
+        {/* Автоудаление */}
+        <div className="rounded-xl bg-orange-500/5 border border-orange-500/15 p-2.5 flex items-center gap-2 flex-wrap">
+          <p className="text-[11px] text-orange-300 flex items-center gap-1 font-medium shrink-0">
+            <Icon name="Timer" size={12} /> Автоудаление
+          </p>
+          <select
+            value={expireHours}
+            onChange={e => onExpireHoursChange(Number(e.target.value))}
+            className="flex-1 min-w-[140px] bg-white/5 border border-white/10 focus:border-orange-500/50 rounded-lg px-2 py-1.5 text-white text-xs outline-none [color-scheme:dark]"
+          >
+            <option value={0}>Не удалять</option>
+            <option value={1}>Через 1 час</option>
+            <option value={3}>Через 3 часа</option>
+            <option value={6}>Через 6 часов</option>
+            <option value={12}>Через 12 часов</option>
+            <option value={24}>Через 1 сутки</option>
+            <option value={48}>Через 2 суток</option>
+            <option value={72}>Через 3 суток</option>
+            <option value={168}>Через неделю</option>
+          </select>
+          {expireHours > 0 && (
+            <span className="text-[11px] text-orange-400 w-full">
+              Пост автоматически удалится из канала через {expireHours < 24 ? `${expireHours} ч` : `${Math.round(expireHours / 24)} сут`} после публикации
             </span>
           )}
         </div>

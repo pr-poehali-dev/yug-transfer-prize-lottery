@@ -18,7 +18,7 @@ import psycopg2
 import urllib.request
 import urllib.parse
 import boto3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 CORS = {
@@ -189,12 +189,15 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
             text_result = try_send_text('HTML')
             if not text_result.get('ok'):
                 text_result = try_send_text(None)
-            msg_id = text_result.get('result', {}).get('message_id') if text_result.get('ok') else video_msg_id
+            text_msg_id = text_result.get('result', {}).get('message_id') if text_result.get('ok') else None
+            msg_id = text_msg_id or video_msg_id
         else:
             msg_id = video_msg_id
+            text_msg_id = None
 
+        all_ids = [m for m in (video_msg_id, text_msg_id) if m]
         if msg_id:
-            return {'ok': True, 'message_id': msg_id}
+            return {'ok': True, 'message_id': msg_id, 'message_ids': all_ids}
         return {'ok': False, 'error': video_result.get('description', 'Ошибка отправки видео-кружка')}
 
     # Telegram: подпись к фото ограничена 1024 символами, текст сообщения — 4096.
@@ -220,9 +223,11 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
             print(f"[POSTS] HTML parse failed: {text_res.get('description')}, retrying without parse_mode")
             text_res = try_send_text(None)
 
-        msg_id = text_res.get('result', {}).get('message_id') if text_res.get('ok') else photo_msg_id
+        text_msg_id = text_res.get('result', {}).get('message_id') if text_res.get('ok') else None
+        msg_id = text_msg_id or photo_msg_id
+        all_ids = [m for m in (photo_msg_id, text_msg_id) if m]
         if msg_id:
-            return {'ok': True, 'message_id': msg_id}
+            return {'ok': True, 'message_id': msg_id, 'message_ids': all_ids}
         return {'ok': False, 'error': text_res.get('description') or photo_res.get('description', 'Unknown error')}
 
     def try_send(parse_mode=None):
@@ -248,8 +253,19 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
 
     if result.get('ok'):
         msg_id = result.get('result', {}).get('message_id')
-        return {'ok': True, 'message_id': msg_id}
+        return {'ok': True, 'message_id': msg_id, 'message_ids': [msg_id] if msg_id else []}
     return {'ok': False, 'error': result.get('description', 'Unknown error')}
+
+
+def tg_delete_messages(bot_token: str, channel_id: str, message_ids: list) -> None:
+    """Удаляет сообщения поста из Telegram-канала."""
+    for mid in message_ids:
+        if not mid:
+            continue
+        try:
+            tg_request(bot_token, 'deleteMessage', {'chat_id': channel_id, 'message_id': mid})
+        except Exception as e:
+            print(f"[POSTS] deleteMessage {mid} failed: {e}")
 
 
 def edit_tg_message(bot_token: str, channel_id: str, message_id: int, post: dict) -> dict:
@@ -287,6 +303,9 @@ def row_to_post(r) -> dict:
         'video_note_url': r[12] or '',
         'button2_text': r[13] or '',
         'button2_url': r[14] or '',
+        'auto_expire_at': r[15].isoformat() if len(r) > 15 and r[15] else None,
+        'message_ids': list(r[16]) if len(r) > 16 and r[16] else [],
+        'expired_at': r[17].isoformat() if len(r) > 17 and r[17] else None,
     }
 
 
@@ -327,7 +346,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT id, title, text, photo_url, button_text, button_url,
                        status, scheduled_at, published_at, telegram_message_id, created_at, updated_at,
-                       video_note_url, button2_text, button2_url
+                       video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at
                 FROM {SCHEMA}.posts {where}
                 ORDER BY created_at DESC LIMIT %s OFFSET %s""",
             args + [limit, offset]
@@ -416,7 +435,7 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id = %s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at FROM {SCHEMA}.posts WHERE id = %s",
             (post_id,)
         )
         row = cur.fetchone()
@@ -438,13 +457,31 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 500, 'headers': CORS, 'body': json.dumps({'error': result.get('error', 'Ошибка Telegram')})}
 
         now = datetime.now(timezone.utc)
+        # Срок автоудаления: из тела запроса (expire_hours) или из сохранённого auto_expire_at
+        expire_hours = body.get('expire_hours')
+        expire_at = None
+        if expire_hours:
+            try:
+                expire_at = now + timedelta(hours=float(expire_hours))
+            except Exception:
+                expire_at = None
+        elif post.get('auto_expire_at'):
+            try:
+                stored = datetime.fromisoformat(post['auto_expire_at'])
+                # если сохранён как «через N часов после публикации» — не знаем, поэтому берём как абсолютное будущее время
+                if stored > now:
+                    expire_at = stored
+            except Exception:
+                expire_at = None
+
+        msg_ids = result.get('message_ids') or ([result.get('message_id')] if result.get('message_id') else [])
         cur.execute(
-            f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, updated_at=%s WHERE id=%s",
-            (now, result.get('message_id'), now, post_id)
+            f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, message_ids=%s, auto_expire_at=%s, updated_at=%s WHERE id=%s",
+            (now, result.get('message_id'), msg_ids, expire_at, now, post_id)
         )
         conn.commit()
         cur.close(); conn.close()
-        print(f"[POSTS] published post {post_id}, msg_id={result.get('message_id')}")
+        print(f"[POSTS] published post {post_id}, msg_ids={msg_ids}, expire_at={expire_at}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'message_id': result.get('message_id')})}
 
     # ── POST ?action=check_scheduled — авто-публикация запланированных ──────
@@ -453,7 +490,7 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         now = datetime.now(timezone.utc)
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE status='scheduled' AND scheduled_at <= %s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at FROM {SCHEMA}.posts WHERE status='scheduled' AND scheduled_at <= %s",
             (now,)
         )
         rows = cur.fetchall()
@@ -462,16 +499,18 @@ def handler(event: dict, context) -> dict:
             post = row_to_post(row)
             any_ok = False
             last_msg_id = None
+            msg_ids = []
             if bot_token and channel_main:
                 result = publish_post(bot_token, channel_main, post)
                 if result['ok']:
                     any_ok = True
                     last_msg_id = result.get('message_id')
+                    msg_ids = result.get('message_ids') or ([last_msg_id] if last_msg_id else [])
                     print(f"[POSTS] auto-published post {post['id']} to main")
             if any_ok:
                 cur.execute(
-                    f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, updated_at=%s WHERE id=%s",
-                    (now, last_msg_id, now, post['id'])
+                    f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, message_ids=%s, updated_at=%s WHERE id=%s",
+                    (now, last_msg_id, msg_ids, now, post['id'])
                 )
                 published.append(post['id'])
             else:
@@ -479,9 +518,30 @@ def handler(event: dict, context) -> dict:
                     f"UPDATE {SCHEMA}.posts SET status='failed', updated_at=%s WHERE id=%s",
                     (now, post['id'])
                 )
+
+        # ── Автоудаление истёкших постов ────────────────────────────────────
+        removed = []
+        cur.execute(
+            f"SELECT id, telegram_message_id, message_ids FROM {SCHEMA}.posts "
+            f"WHERE status='published' AND auto_expire_at IS NOT NULL AND auto_expire_at <= %s AND expired_at IS NULL",
+            (now,)
+        )
+        exp_rows = cur.fetchall()
+        for exp in exp_rows:
+            pid, single_id, ids = exp[0], exp[1], exp[2]
+            to_delete = list(ids) if ids else ([single_id] if single_id else [])
+            if bot_token and channel_main and to_delete:
+                tg_delete_messages(bot_token, channel_main, to_delete)
+            cur.execute(
+                f"UPDATE {SCHEMA}.posts SET status='expired', expired_at=%s, updated_at=%s WHERE id=%s",
+                (now, now, pid)
+            )
+            removed.append(pid)
+            print(f"[POSTS] auto-expired post {pid}, deleted msgs={to_delete}")
+
         conn.commit()
         cur.close(); conn.close()
-        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'published': published})}
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'published': published, 'expired': removed})}
 
     # ── POST — создать пост ─────────────────────────────────────────────────
     if method == 'POST':
@@ -507,18 +567,28 @@ def handler(event: dict, context) -> dict:
             except Exception:
                 sched_dt = None
 
+        # Автоудаление: expire_hours (число часов) относительно времени публикации
+        expire_hours = body.get('expire_hours')
+        base_dt = sched_dt or datetime.now(timezone.utc)
+        expire_at = None
+        if expire_hours:
+            try:
+                expire_at = base_dt + timedelta(hours=float(expire_hours))
+            except Exception:
+                expire_at = None
+
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, scheduled_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt)
+            f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, scheduled_at, auto_expire_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at)
         )
         new_id = cur.fetchone()[0]
         conn.commit()
 
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id=%s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at FROM {SCHEMA}.posts WHERE id=%s",
             (new_id,)
         )
         post = row_to_post(cur.fetchone())
@@ -565,17 +635,25 @@ def handler(event: dict, context) -> dict:
                 edit_tg_message(bot_token, channel_main, msg_id, {'text': text, 'photo_url': photo_url})
 
         now = datetime.now(timezone.utc)
+        expire_hours = body.get('expire_hours')
+        base_dt = sched_dt or now
+        expire_at = None
+        if expire_hours:
+            try:
+                expire_at = base_dt + timedelta(hours=float(expire_hours))
+            except Exception:
+                expire_at = None
         cur.execute(
             f"""UPDATE {SCHEMA}.posts
                 SET title=%s, text=%s, photo_url=%s, video_note_url=%s, button_text=%s, button_url=%s,
-                    button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, updated_at=%s
+                    button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, auto_expire_at=%s, updated_at=%s
                 WHERE id=%s""",
-            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, now, post_id)
+            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at, now, post_id)
         )
         conn.commit()
 
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url FROM {SCHEMA}.posts WHERE id=%s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at FROM {SCHEMA}.posts WHERE id=%s",
             (post_id,)
         )
         post = row_to_post(cur.fetchone())
@@ -592,14 +670,14 @@ def handler(event: dict, context) -> dict:
 
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
-        cur.execute(f"SELECT telegram_message_id, status FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+        cur.execute(f"SELECT telegram_message_id, status, message_ids FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
         row = cur.fetchone()
         tg_deleted = False
-        if row and row[0] and row[1] == 'published' and bot_token and channel_main:
-            msg_id = row[0]
-            result = tg_request(bot_token, 'deleteMessage', {'chat_id': channel_main, 'message_id': msg_id})
-            print(f"[POSTS] deleteMessage chat=main msg_id={msg_id}: {result}")
-            if result.get('ok'):
+        if row and row[1] in ('published', 'expired') and bot_token and channel_main:
+            to_delete = list(row[2]) if row[2] else ([row[0]] if row[0] else [])
+            if to_delete:
+                tg_delete_messages(bot_token, channel_main, to_delete)
+                print(f"[POSTS] deleteMessage chat=main ids={to_delete}")
                 tg_deleted = True
 
         cur.execute(f"DELETE FROM {SCHEMA}.posts WHERE id=%s", (post_id,))

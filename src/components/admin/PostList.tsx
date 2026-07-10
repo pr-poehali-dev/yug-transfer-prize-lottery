@@ -6,6 +6,7 @@ const STATUS_CFG = {
   scheduled: { label: "Запланирован",  color: "text-purple-400",  bg: "bg-purple-500/10 border-purple-500/20",    dot: "bg-purple-400" },
   published: { label: "Опубликован",   color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20",  dot: "bg-emerald-400" },
   failed:    { label: "Ошибка",        color: "text-red-400",     bg: "bg-red-500/10 border-red-500/20",          dot: "bg-red-400" },
+  expired:   { label: "Удалён",        color: "text-white/40",    bg: "bg-white/5 border-white/10",               dot: "bg-white/25" },
 };
 
 interface PostListProps {
@@ -113,6 +114,12 @@ export function PostList({
                       <span className="text-emerald-400/70 flex items-center gap-1">
                         <Icon name="CheckCircle2" size={10} />
                         {new Date(post.published_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    )}
+                    {post.auto_expire_at && post.status !== "expired" && (
+                      <span className="text-orange-400/70 flex items-center gap-1" title="Автоудаление">
+                        <Icon name="Timer" size={10} />
+                        удалится {new Date(post.auto_expire_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                       </span>
                     )}
                     {post.button_text && (

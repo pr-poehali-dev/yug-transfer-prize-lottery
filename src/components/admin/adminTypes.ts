@@ -61,10 +61,13 @@ export interface Post {
   button_url: string;
   button2_text: string;
   button2_url: string;
-  status: "draft" | "scheduled" | "published" | "failed";
+  status: "draft" | "scheduled" | "published" | "failed" | "expired";
   scheduled_at: string | null;
   published_at: string | null;
   telegram_message_id: number | null;
   created_at: string | null;
   updated_at: string | null;
+  auto_expire_at?: string | null;
+  expired_at?: string | null;
+  message_ids?: number[];
 }

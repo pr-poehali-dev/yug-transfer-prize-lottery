@@ -33,6 +33,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const [savedForm, setSavedForm] = useState<PostFormData>({ ...EMPTY });
   const [editId, setEditId] = useState<number | null>(null);
   const [scheduledAt, setScheduledAt] = useState("");
+  const [expireHours, setExpireHours] = useState(0);
   const [editInTg, setEditInTg] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -219,6 +220,16 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     setForm(newForm);
     setSavedForm(newForm);
     setScheduledAt(toLocalInput(post.scheduled_at));
+    // вычисляем срок автоудаления в часах относительно публикации/планирования
+    if (post.auto_expire_at) {
+      const base = post.scheduled_at || post.published_at || post.created_at;
+      const hrs = base
+        ? Math.round((new Date(post.auto_expire_at).getTime() - new Date(base).getTime()) / 3600000)
+        : 0;
+      setExpireHours(hrs > 0 ? hrs : 0);
+    } else {
+      setExpireHours(0);
+    }
     setEditInTg(false);
     setFormError(""); setFormSuccess("");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -229,6 +240,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     setForm({ ...EMPTY });
     setSavedForm({ ...EMPTY });
     setScheduledAt("");
+    setExpireHours(0);
     setEditInTg(false);
     setFormError(""); setFormSuccess("");
   };
@@ -249,6 +261,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
         ...form,
         status: saveStatus,
         scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        expire_hours: expireHours || 0,
         ...(editId ? { id: editId, edit_in_telegram: editInTg } : {}),
       };
       const res = await fetch(ADMIN_POSTS_URL, {
@@ -304,7 +317,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       const pubRes = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ post_id: postId }),
+        body: JSON.stringify({ post_id: postId, expire_hours: expireHours || 0 }),
       });
       const pubData = await pubRes.json();
       if (!pubData.ok) throw new Error(pubData.error || "Ошибка публикации");
@@ -411,6 +424,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             form={form}
             editId={editId}
             scheduledAt={scheduledAt}
+            expireHours={expireHours}
             editInTg={editInTg}
             saving={saving}
             publishing={publishing}
@@ -422,6 +436,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             editingPublished={!!editingPublished}
             onFormChange={patch => setForm(f => ({ ...f, ...patch }))}
             onScheduledAtChange={setScheduledAt}
+            onExpireHoursChange={setExpireHours}
             onEditInTgToggle={() => setEditInTg(v => !v)}
             onPhotoUpload={handlePhotoUpload}
             onVideoNoteUpload={handleVideoNoteUpload}
