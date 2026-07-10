@@ -280,28 +280,38 @@ export function PostForm({
         </div>
 
         {/* Автоудаление */}
-        <div className="rounded-xl bg-orange-500/5 border border-orange-500/15 p-2.5 flex items-center gap-2 flex-wrap">
-          <p className="text-[11px] text-orange-300 flex items-center gap-1 font-medium shrink-0">
-            <Icon name="Timer" size={12} /> Автоудаление
-          </p>
-          <select
-            value={expireHours}
-            onChange={e => onExpireHoursChange(Number(e.target.value))}
-            className="flex-1 min-w-[140px] bg-white/5 border border-white/10 focus:border-orange-500/50 rounded-lg px-2 py-1.5 text-white text-xs outline-none [color-scheme:dark]"
-          >
-            <option value={0}>Не удалять</option>
-            <option value={1}>Через 1 час</option>
-            <option value={3}>Через 3 часа</option>
-            <option value={6}>Через 6 часов</option>
-            <option value={12}>Через 12 часов</option>
-            <option value={24}>Через 1 сутки</option>
-            <option value={48}>Через 2 суток</option>
-            <option value={72}>Через 3 суток</option>
-            <option value={168}>Через неделю</option>
-          </select>
+        <div className="rounded-xl bg-orange-500/5 border border-orange-500/15 p-2.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-[11px] text-orange-300 flex items-center gap-1 font-medium shrink-0 mr-1">
+              <Icon name="Timer" size={12} /> Удалить через
+            </p>
+            {([
+              { h: 0, label: "Нет" },
+              { h: 1, label: "1ч" },
+              { h: 6, label: "6ч" },
+              { h: 12, label: "12ч" },
+              { h: 24, label: "1д" },
+              { h: 48, label: "2д" },
+              { h: 72, label: "3д" },
+              { h: 168, label: "нед" },
+            ] as const).map(({ h, label }) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => onExpireHoursChange(h)}
+                className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  expireHours === h
+                    ? "bg-orange-500 text-white"
+                    : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {expireHours > 0 && (
-            <span className="text-[11px] text-orange-400 w-full">
-              Пост автоматически удалится из канала через {expireHours < 24 ? `${expireHours} ч` : `${Math.round(expireHours / 24)} сут`} после публикации
+            <span className="text-[11px] text-orange-400 block mt-1.5">
+              Удалится из канала через {expireHours < 24 ? `${expireHours} ч` : `${Math.round(expireHours / 24)} сут`} после публикации
             </span>
           )}
         </div>
