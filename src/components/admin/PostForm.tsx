@@ -73,7 +73,7 @@ export function PostForm({
         </div>
       )}
 
-      <div className="p-3.5 space-y-2.5">
+      <div className="p-3 space-y-2">
 
         {/* Название */}
         <div>
@@ -105,7 +105,7 @@ export function PostForm({
                   value={form.text}
                   onChange={e => onFormChange({ text: e.target.value })}
                   placeholder="Текст сообщения... HTML: <b>жирный</b>, <i>курсив</i>, <a href='...'>ссылка</a>"
-                  rows={4}
+                  rows={3}
                   maxLength={4096}
                   className="w-full bg-white/5 border border-white/10 focus:border-purple-500/50 rounded-lg px-2.5 py-2 text-white text-sm outline-none resize-y font-mono leading-snug placeholder-white/20"
                 />
@@ -121,7 +121,7 @@ export function PostForm({
         </div>
 
         {/* Фото + Видео в одну строку на md */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <div>
           <label className="text-[11px] text-white/50 mb-1 block">Фото <span className="text-white/20">(необязательно)</span></label>
           {form.photo_url ? (
@@ -138,7 +138,7 @@ export function PostForm({
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="w-full h-16 rounded-lg border-2 border-dashed border-white/10 hover:border-purple-500/40 flex items-center justify-center gap-2 text-muted-foreground hover:text-white transition-colors"
+              className="w-full h-11 rounded-lg border-2 border-dashed border-white/10 hover:border-purple-500/40 flex items-center justify-center gap-2 text-muted-foreground hover:text-white transition-colors"
             >
               {uploading
                 ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -186,14 +186,14 @@ export function PostForm({
             <div className="grid grid-cols-2 gap-1.5">
               <button
                 onClick={() => videoCaptureRef.current?.click()}
-                className="h-16 rounded-lg border-2 border-dashed border-cyan-500/30 hover:border-cyan-500/70 bg-cyan-500/5 hover:bg-cyan-500/10 flex items-center justify-center gap-1.5 text-cyan-400 hover:text-cyan-300 transition-colors"
+                className="h-11 rounded-lg border-2 border-dashed border-cyan-500/30 hover:border-cyan-500/70 bg-cyan-500/5 hover:bg-cyan-500/10 flex items-center justify-center gap-1.5 text-cyan-400 hover:text-cyan-300 transition-colors"
               >
                 <Icon name="Camera" size={15} />
                 <span className="text-xs font-medium">Записать</span>
               </button>
               <button
                 onClick={() => videoRef.current?.click()}
-                className="h-16 rounded-lg border-2 border-dashed border-white/10 hover:border-white/30 flex items-center justify-center gap-1.5 text-white/40 hover:text-white/70 transition-colors"
+                className="h-11 rounded-lg border-2 border-dashed border-white/10 hover:border-white/30 flex items-center justify-center gap-1.5 text-white/40 hover:text-white/70 transition-colors"
               >
                 <Icon name="FolderOpen" size={15} />
                 <span className="text-xs">Файл</span>
@@ -262,7 +262,7 @@ export function PostForm({
         </div>
 
         {/* Расписание */}
-        <div className="rounded-xl bg-purple-500/5 border border-purple-500/15 p-2.5 flex items-center gap-2 flex-wrap">
+        <div className="rounded-xl bg-purple-500/5 border border-purple-500/15 p-2 flex items-center gap-2 flex-wrap">
           <p className="text-[11px] text-purple-300 flex items-center gap-1 font-medium shrink-0">
             <Icon name="Calendar" size={12} /> Расписание
           </p>
@@ -280,7 +280,7 @@ export function PostForm({
         </div>
 
         {/* Автоудаление */}
-        <div className="rounded-xl bg-orange-500/5 border border-orange-500/15 p-2.5">
+        <div className="rounded-xl bg-orange-500/5 border border-orange-500/15 p-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-[11px] text-orange-300 flex items-center gap-1 font-medium shrink-0 mr-1">
               <Icon name="Timer" size={12} /> Удалить через
