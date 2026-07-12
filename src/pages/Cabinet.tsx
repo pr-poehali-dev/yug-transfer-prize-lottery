@@ -397,6 +397,23 @@ function DashboardTab({
           </div>
         )}
       </div>
+
+      {/* extra service blocks (в разработке) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {[
+          { icon: "CreditCard", title: "Оплата онлайн", text: "Привязка карты и оплата поездок" },
+          { icon: "Star", title: "Оцените поездку", text: "Отзывы о водителях и авто" },
+        ].map((b) => (
+          <div key={b.title} className="relative bg-[#161616] rounded-2xl border border-white/10 p-5 overflow-hidden">
+            <span className="absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">Скоро</span>
+            <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
+              <Icon name={b.icon} size={22} className="text-amber-400" />
+            </div>
+            <div className="text-white font-semibold">{b.title}</div>
+            <div className="text-white/45 text-sm mt-1">{b.text}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
