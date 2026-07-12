@@ -6,6 +6,9 @@ import { CLIENT_CABINET_URL } from "@/components/admin/adminTypes";
 const TOKEN_KEY = "client_token";
 const SUPPORT_TG = "https://t.me/";
 
+const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес"];
+const COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
+
 interface ClientRequest {
   id: number;
   from_city: string;
@@ -24,6 +27,8 @@ interface ClientRequest {
   created_at: string;
 }
 
+type Tab = "trips" | "new" | "bonus" | "profile";
+
 const STATUS_STYLE: Record<string, string> = {
   new: "bg-blue-500/15 text-blue-300 border-blue-500/30",
   processing: "bg-amber-500/15 text-amber-300 border-amber-500/30",
@@ -36,6 +41,15 @@ const ACTIVE = ["new", "processing", "confirmed"];
 
 const fieldCls =
   "w-full bg-black/40 border border-amber-500/20 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors";
+const inputCls =
+  "w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white placeholder-white/40 text-sm outline-none focus:border-amber-500/60 transition-colors [color-scheme:dark]";
+
+const NAV: { key: Tab; icon: string; label: string }[] = [
+  { key: "trips", icon: "MapPinned", label: "Мои поездки" },
+  { key: "new", icon: "Plus", label: "Новый заказ" },
+  { key: "bonus", icon: "Gift", label: "Бонусы и кэшбэк" },
+  { key: "profile", icon: "UserRound", label: "Профиль" },
+];
 
 export default function Cabinet() {
   const navigate = useNavigate();
@@ -43,7 +57,8 @@ export default function Cabinet() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [requests, setRequests] = useState<ClientRequest[]>([]);
-  const [view, setView] = useState<"orders" | "history" | "profile">("orders");
+  const [tab, setTab] = useState<Tab>("trips");
+  const [tripFilter, setTripFilter] = useState<"active" | "all">("active");
 
   // auth form
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -118,7 +133,7 @@ export default function Cabinet() {
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
     setRequests([]);
-    setView("orders");
+    setTab("trips");
   };
 
   const fmtPhone = (p: string) => {
@@ -182,127 +197,382 @@ export default function Cabinet() {
     );
   }
 
-  // ---------- CABINET SCREEN ----------
+  // ---------- CABINET (DESKTOP) ----------
   const activeOrders = requests.filter((r) => ACTIVE.includes(r.status));
-  const list = view === "history" ? requests : activeOrders;
+  const doneCount = requests.filter((r) => r.status === "done").length;
 
-  const renderOrder = (req: ClientRequest) => (
-    <div key={req.id} className="rounded-2xl border border-white/10 bg-[#1c1c1c] p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-white font-semibold text-sm">Заказ №{req.id}</span>
-        <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_STYLE[req.status] || "bg-white/10 text-white/70 border-white/20"}`}>
-          {req.status_label}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 text-white/90 text-sm">
-        <Icon name="MapPin" size={14} className="text-amber-400" />
-        {req.from_city} → {req.to_city}
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-white/50 text-xs mt-2">
-        {(req.trip_date || req.trip_time) && <span>📅 {req.trip_date} {req.trip_time}</span>}
-        {req.tariff && <span>🎫 {req.tariff}</span>}
-        {req.people && <span>👤 {req.people}</span>}
+  return (
+    <div className="min-h-screen bg-[#0d0d0d] text-white">
+      <div className="mx-auto max-w-6xl flex flex-col md:flex-row gap-5 px-4 md:px-6 py-5 md:py-8">
+
+        {/* SIDEBAR */}
+        <aside className="md:w-72 md:shrink-0 md:sticky md:top-8 md:self-start space-y-4">
+          <div className="bg-[#161616] rounded-3xl border border-white/10 p-5">
+            <div className="flex items-center gap-3.5">
+              <div className="w-14 h-14 rounded-full bg-amber-500/15 border-2 border-amber-500 flex items-center justify-center shrink-0">
+                <Icon name="UserRound" size={26} className="text-amber-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-white font-bold text-lg leading-tight truncate">{name || "Клиент"}</div>
+                <div className="text-white/50 text-sm truncate">{fmtPhone(phone)}</div>
+              </div>
+            </div>
+          </div>
+
+          <nav className="bg-[#161616] rounded-3xl border border-white/10 p-2.5 space-y-1">
+            {NAV.map((item) => {
+              const isActive = tab === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setTab(item.key)}
+                  className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
+                    isActive ? "bg-amber-500 text-black font-semibold" : "text-white/80 hover:bg-white/5"
+                  }`}
+                >
+                  <Icon name={item.icon} size={20} className={isActive ? "text-black" : "text-amber-400"} />
+                  <span className="flex-1">{item.label}</span>
+                  {item.key === "trips" && activeOrders.length > 0 && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${isActive ? "bg-black/20 text-black" : "bg-amber-500/20 text-amber-400"}`}>
+                      {activeOrders.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="bg-[#161616] rounded-3xl border border-white/10 p-2.5 space-y-1">
+            <button
+              onClick={() => window.open(SUPPORT_TG, "_blank")}
+              className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-white/80 hover:bg-white/5 transition-colors"
+            >
+              <Icon name="Headphones" size={20} className="text-amber-400" />
+              <span>Поддержка</span>
+            </button>
+            <button
+              onClick={() => navigate("/")}
+              className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-white/80 hover:bg-white/5 transition-colors"
+            >
+              <Icon name="Home" size={20} className="text-amber-400" />
+              <span>На главную</span>
+            </button>
+            <button
+              onClick={logout}
+              className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <Icon name="LogOut" size={20} />
+              <span>Выйти</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* CONTENT */}
+        <main className="flex-1 min-w-0">
+          {tab === "trips" && (
+            <TripsTab
+              requests={requests}
+              activeOrders={activeOrders}
+              filter={tripFilter}
+              setFilter={setTripFilter}
+              onNew={() => setTab("new")}
+            />
+          )}
+          {tab === "new" && (
+            <NewOrderTab
+              token={token}
+              onCreated={() => { loadRequests(token); setTab("trips"); setTripFilter("active"); }}
+            />
+          )}
+          {tab === "bonus" && <BonusTab doneCount={doneCount} phone={phone} />}
+          {tab === "profile" && <ProfileTab name={name} phone={fmtPhone(phone)} onLogout={logout} />}
+        </main>
       </div>
     </div>
   );
+}
 
+/* ---------------- TRIPS TAB ---------------- */
+function TripsTab({
+  requests, activeOrders, filter, setFilter, onNew,
+}: {
+  requests: ClientRequest[];
+  activeOrders: ClientRequest[];
+  filter: "active" | "all";
+  setFilter: (f: "active" | "all") => void;
+  onNew: () => void;
+}) {
+  const list = filter === "active" ? activeOrders : requests;
   return (
-    <div className="min-h-screen bg-black flex justify-center">
-      <div className="w-full max-w-md px-4 py-6 pb-10">
-        {/* Profile header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-full bg-amber-500/15 border-2 border-amber-500 flex items-center justify-center">
-              <Icon name="UserRound" size={26} className="text-amber-400" />
-            </div>
-            <div>
-              <div className="text-white font-bold text-lg leading-tight">{name || "Клиент"}</div>
-              <div className="text-white/50 text-sm">{fmtPhone(phone)}</div>
-            </div>
+    <div>
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <h1 className="text-2xl font-bold text-white">Мои поездки</h1>
+        <button
+          onClick={onNew}
+          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl px-4 py-2.5 transition-colors"
+        >
+          <Icon name="Plus" size={18} /> Новый заказ
+        </button>
+      </div>
+
+      <div className="inline-flex bg-[#161616] border border-white/10 rounded-xl p-1 mb-5">
+        {([
+          { k: "active", label: `Активные (${activeOrders.length})` },
+          { k: "all", label: `Все (${requests.length})` },
+        ] as const).map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setFilter(t.k)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              filter === t.k ? "bg-amber-500 text-black" : "text-white/60 hover:text-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {list.length === 0 ? (
+        <div className="bg-[#161616] rounded-2xl border border-white/10 p-12 text-center">
+          <Icon name="MapPinned" size={46} className="text-amber-400 mx-auto mb-3" />
+          <div className="text-white font-bold text-lg">
+            {filter === "active" ? "Активных поездок нет" : "Поездок пока нет"}
           </div>
-          <button className="w-11 h-11 rounded-full border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Icon name="Bell" size={20} />
+          <div className="text-white/50 text-sm mt-1">Оформите первый заказ — он появится здесь</div>
+          <button
+            onClick={onNew}
+            className="mt-5 inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl px-5 py-2.5 transition-colors"
+          >
+            <Icon name="Plus" size={18} /> Заказать поездку
           </button>
         </div>
-
-        {view === "profile" ? (
-          <>
-            <button onClick={() => setView("orders")} className="flex items-center gap-1.5 text-amber-400 text-sm mb-4">
-              <Icon name="ArrowLeft" size={16} /> Назад
-            </button>
-            <h2 className="text-white font-bold text-lg mb-4">Профиль</h2>
-            <div className="bg-[#1c1c1c] rounded-2xl border border-white/10 p-5 space-y-3">
-              <div>
-                <div className="text-white/40 text-xs">Имя</div>
-                <div className="text-white">{name || "—"}</div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {list.map((req) => (
+            <div key={req.id} className="rounded-2xl border border-white/10 bg-[#161616] p-4 hover:border-amber-500/30 transition-colors">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-white font-semibold">Заказ №{req.id}</span>
+                <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_STYLE[req.status] || "bg-white/10 text-white/70 border-white/20"}`}>
+                  {req.status_label}
+                </span>
               </div>
-              <div>
-                <div className="text-white/40 text-xs">Телефон</div>
-                <div className="text-white">{fmtPhone(phone)}</div>
+              <div className="flex items-start gap-2 text-white/90 text-sm mb-3">
+                <Icon name="MapPin" size={16} className="text-amber-400 mt-0.5 shrink-0" />
+                <span>{req.from_city} <span className="text-white/40">→</span> {req.to_city}</span>
               </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-white/50 text-xs">
+                {(req.trip_date || req.trip_time) && <span>📅 {req.trip_date} {req.trip_time}</span>}
+                {req.tariff && <span>🎫 {req.tariff}</span>}
+                {req.people && <span>👤 {req.people}</span>}
+                {req.baggage && <span>🧳 {req.baggage}</span>}
+              </div>
+              {req.comment && <div className="text-white/40 text-xs mt-2 border-t border-white/5 pt-2">💬 {req.comment}</div>}
             </div>
-          </>
-        ) : (
-          <>
-            <h2 className="text-white font-bold text-lg mb-3">
-              {view === "history" ? "История заказов" : "Мои заказы"}
-            </h2>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-            {list.length === 0 ? (
-              <div className="bg-[#1c1c1c] rounded-2xl border border-white/10 p-8 text-center mb-4">
-                <Icon name="Package" size={42} className="text-amber-400 mx-auto mb-3" />
-                <div className="text-amber-400 font-bold text-lg">
-                  {view === "history" ? "Заказов пока нет" : "Активных заказов нет"}
-                </div>
-                <div className="text-white/50 text-sm mt-1">Ваши заказы появятся здесь</div>
-              </div>
-            ) : (
-              <div className="space-y-2.5 mb-4">{list.map(renderOrder)}</div>
-            )}
+/* ---------------- NEW ORDER TAB ---------------- */
+function NewOrderTab({ token, onCreated }: { token: string; onCreated: () => void }) {
+  const [form, setForm] = useState({
+    trip_date: "", trip_time: "", from_city: "", to_city: "",
+    people: "1", baggage: "1", tariff: "Срочный",
+    child_seat: false, booster: false, animals: false, comment: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
-            {view === "history" && (
-              <button onClick={() => setView("orders")} className="flex items-center gap-1.5 text-amber-400 text-sm mb-4">
-                <Icon name="ArrowLeft" size={16} /> К моим заказам
-              </button>
-            )}
-          </>
-        )}
+  const submit = async () => {
+    if (!form.from_city || !form.to_city) {
+      setError("Укажите маршрут — откуда и куда");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const r = await fetch(`${CLIENT_CABINET_URL}?action=create_request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Client-Token": token },
+        body: JSON.stringify(form),
+      });
+      const d = await r.json();
+      if (!d.ok) {
+        setError(d.error || "Не удалось отправить заявку");
+        return;
+      }
+      onCreated();
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        {/* Menu */}
-        {view === "orders" && (
-          <div className="space-y-2.5">
-            <MenuItem icon="Plus" label="Новый заказ" onClick={() => navigate("/")} highlight />
-            <MenuItem icon="History" label="История заказов" onClick={() => setView("history")} />
-            <MenuItem icon="UserRound" label="Профиль" onClick={() => setView("profile")} />
-            <MenuItem icon="CreditCard" label="Способы оплаты" onClick={() => {}} muted />
-            <MenuItem icon="Headphones" label="Поддержка" onClick={() => window.open(SUPPORT_TG, "_blank")} />
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-white mb-5">Новый заказ</h1>
+      <div className="bg-[#161616] rounded-2xl border border-white/10 p-5 md:p-6 max-w-2xl space-y-3">
+        <input value={form.from_city} onChange={(e) => set("from_city", e.target.value)} placeholder="Откуда вас забрать?" className={inputCls} />
+        <input value={form.to_city} onChange={(e) => set("to_city", e.target.value)} placeholder="Куда довезти?" className={inputCls} />
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-white/70 text-xs font-medium mb-1">Дата поездки</label>
+            <input value={form.trip_date} onChange={(e) => set("trip_date", e.target.value)} type="date" className={`${inputCls} ${!form.trip_date ? "text-white/40" : ""}`} />
+          </div>
+          <div>
+            <label className="block text-white/70 text-xs font-medium mb-1">Время</label>
+            <input value={form.trip_time} onChange={(e) => set("trip_time", e.target.value)} type="time" className={`${inputCls} ${!form.trip_time ? "text-white/40" : ""}`} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-white/70 text-xs font-medium mb-1">Кол-во человек</label>
+            <select value={form.people} onChange={(e) => set("people", e.target.value)} className={inputCls}>
+              {COUNTS.map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-white/70 text-xs font-medium mb-1">Кол-во багажа</label>
+            <select value={form.baggage} onChange={(e) => set("baggage", e.target.value)} className={inputCls}>
+              {["0", ...COUNTS].map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-white/70 text-xs font-medium mb-1">Выберите тариф</label>
+          <select value={form.tariff} onChange={(e) => set("tariff", e.target.value)} className={inputCls}>
+            {TARIFFS.map((t) => <option key={t} value={t} className="bg-[#1a1a1a]">{t}</option>)}
+          </select>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 pt-1">
+          {[
+            { k: "child_seat", label: "Дет. кресло" },
+            { k: "booster", label: "Бустер" },
+            { k: "animals", label: "Животные" },
+          ].map((c) => (
+            <label key={c.k} className="flex items-center gap-2 text-white/90 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form[c.k as keyof typeof form] as boolean}
+                onChange={(e) => set(c.k, e.target.checked)}
+                className="w-4 h-4 accent-amber-500 shrink-0"
+              />
+              {c.label}
+            </label>
+          ))}
+        </div>
+
+        <textarea
+          value={form.comment}
+          onChange={(e) => set("comment", e.target.value)}
+          placeholder="Комментарий (необязательно)"
+          rows={2}
+          className={`${inputCls} resize-y`}
+        />
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2 text-red-300 text-xs flex items-center gap-2">
+            <Icon name="AlertCircle" size={14} />{error}
           </div>
         )}
 
         <button
-          onClick={logout}
-          className="w-full mt-6 py-4 rounded-2xl border-2 border-amber-500 text-amber-400 font-bold hover:bg-amber-500/10 transition-colors"
+          onClick={submit}
+          disabled={loading}
+          className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold disabled:opacity-50 transition-colors"
         >
-          Выйти
+          {loading ? "Отправка..." : "Отправить заявку"}
         </button>
       </div>
     </div>
   );
 }
 
-function MenuItem({
-  icon, label, onClick, highlight, muted,
-}: { icon: string; label: string; onClick: () => void; highlight?: boolean; muted?: boolean }) {
+/* ---------------- BONUS TAB ---------------- */
+function BonusTab({ doneCount, phone }: { doneCount: number; phone: string }) {
+  const points = doneCount * 100;
+  const promo = phone ? `MOY${phone.slice(-4)}` : "MOYTRANSFER";
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center gap-3.5 bg-[#1c1c1c] rounded-2xl border border-white/10 px-5 py-4 hover:border-amber-500/40 transition-colors"
-    >
-      <span className={`w-9 h-9 rounded-full flex items-center justify-center ${highlight ? "bg-amber-500 text-black" : "text-amber-400"}`}>
-        <Icon name={icon} size={20} />
-      </span>
-      <span className={`flex-1 text-left font-medium ${muted ? "text-white/50" : "text-white"}`}>{label}</span>
-      <Icon name="ChevronRight" size={18} className="text-amber-400/60" />
-    </button>
+    <div>
+      <h1 className="text-2xl font-bold text-white mb-5">Бонусы и кэшбэк</h1>
+
+      <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-3xl p-6 text-black max-w-2xl mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-black/70 text-sm font-medium">Ваш баланс баллов</div>
+            <div className="text-4xl font-extrabold mt-1">{points}</div>
+            <div className="text-black/60 text-sm mt-1">1 балл = 1 ₽ скидки</div>
+          </div>
+          <Icon name="Gift" size={56} className="text-black/80" />
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3 max-w-2xl">
+        <div className="bg-[#161616] rounded-2xl border border-white/10 p-5">
+          <Icon name="Percent" size={22} className="text-amber-400 mb-2" />
+          <div className="text-white font-semibold">Кэшбэк 5%</div>
+          <div className="text-white/50 text-sm mt-1">Возвращаем баллами с каждой поездки</div>
+        </div>
+        <div className="bg-[#161616] rounded-2xl border border-white/10 p-5">
+          <Icon name="Award" size={22} className="text-amber-400 mb-2" />
+          <div className="text-white font-semibold">{doneCount} поездок завершено</div>
+          <div className="text-white/50 text-sm mt-1">Чем больше ездите — тем больше баллов</div>
+        </div>
+      </div>
+
+      <div className="bg-[#161616] rounded-2xl border border-amber-500/20 p-5 max-w-2xl mt-3">
+        <div className="text-white/60 text-sm mb-2">Ваш промокод для друзей</div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="text-amber-400 font-bold text-xl tracking-widest bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2">
+            {promo}
+          </div>
+          <span className="text-white/50 text-sm">Друг получит скидку, а вы — 200 баллов</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- PROFILE TAB ---------------- */
+function ProfileTab({ name, phone, onLogout }: { name: string; phone: string; onLogout: () => void }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-white mb-5">Профиль</h1>
+      <div className="bg-[#161616] rounded-2xl border border-white/10 p-6 max-w-xl">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-16 h-16 rounded-full bg-amber-500/15 border-2 border-amber-500 flex items-center justify-center">
+            <Icon name="UserRound" size={30} className="text-amber-400" />
+          </div>
+          <div>
+            <div className="text-white font-bold text-xl">{name || "Клиент"}</div>
+            <div className="text-white/50">{phone}</div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-t border-white/5 pt-3">
+            <span className="text-white/50 text-sm flex items-center gap-2"><Icon name="User" size={16} className="text-amber-400" /> Имя</span>
+            <span className="text-white">{name || "—"}</span>
+          </div>
+          <div className="flex items-center justify-between border-t border-white/5 pt-3">
+            <span className="text-white/50 text-sm flex items-center gap-2"><Icon name="Phone" size={16} className="text-amber-400" /> Телефон</span>
+            <span className="text-white">{phone}</span>
+          </div>
+        </div>
+
+        <button
+          onClick={onLogout}
+          className="w-full mt-6 py-3.5 rounded-xl border-2 border-amber-500 text-amber-400 font-bold hover:bg-amber-500/10 transition-colors"
+        >
+          Выйти из аккаунта
+        </button>
+      </div>
+    </div>
   );
 }
