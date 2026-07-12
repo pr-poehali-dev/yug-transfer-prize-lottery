@@ -27,7 +27,7 @@ interface ClientRequest {
   created_at: string;
 }
 
-type Tab = "trips" | "new" | "bonus" | "profile";
+type Tab = "dashboard" | "trips" | "new" | "bonus" | "payment" | "profile" | "settings";
 
 const STATUS_STYLE: Record<string, string> = {
   new: "bg-blue-500/15 text-blue-300 border-blue-500/30",
@@ -44,11 +44,14 @@ const fieldCls =
 const inputCls =
   "w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-white placeholder-white/40 text-sm outline-none focus:border-amber-500/60 transition-colors [color-scheme:dark]";
 
-const NAV: { key: Tab; icon: string; label: string }[] = [
+const NAV: { key: Tab; icon: string; label: string; soon?: boolean }[] = [
+  { key: "dashboard", icon: "LayoutGrid", label: "Главная" },
   { key: "trips", icon: "MapPinned", label: "Мои поездки" },
   { key: "new", icon: "Plus", label: "Новый заказ" },
   { key: "bonus", icon: "Gift", label: "Бонусы и кэшбэк" },
+  { key: "payment", icon: "CreditCard", label: "Способы оплаты", soon: true },
   { key: "profile", icon: "UserRound", label: "Профиль" },
+  { key: "settings", icon: "Settings", label: "Настройки", soon: true },
 ];
 
 export default function Cabinet() {
@@ -57,8 +60,7 @@ export default function Cabinet() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [requests, setRequests] = useState<ClientRequest[]>([]);
-  const [tab, setTab] = useState<Tab>("trips");
-  const [tripFilter, setTripFilter] = useState<"active" | "all">("active");
+  const [tab, setTab] = useState<Tab>("dashboard");
 
   // auth form
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -133,7 +135,7 @@ export default function Cabinet() {
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
     setRequests([]);
-    setTab("trips");
+    setTab("dashboard");
   };
 
   const fmtPhone = (p: string) => {
@@ -200,14 +202,18 @@ export default function Cabinet() {
   // ---------- CABINET (DESKTOP) ----------
   const activeOrders = requests.filter((r) => ACTIVE.includes(r.status));
   const doneCount = requests.filter((r) => r.status === "done").length;
+  const points = doneCount * 100;
+
+  const goNew = () => setTab("new");
 
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white">
-      <div className="mx-auto max-w-6xl flex flex-col md:flex-row gap-5 px-4 md:px-6 py-5 md:py-8">
+      <div className="mx-auto max-w-[1400px] flex flex-col lg:flex-row gap-5 px-4 lg:px-6 py-5 lg:py-7">
 
         {/* SIDEBAR */}
-        <aside className="md:w-72 md:shrink-0 md:sticky md:top-8 md:self-start space-y-4">
-          <div className="bg-[#161616] rounded-3xl border border-white/10 p-5">
+        <aside className="lg:w-72 lg:shrink-0 lg:sticky lg:top-7 lg:self-start space-y-4">
+          {/* profile card */}
+          <div className="bg-gradient-to-br from-[#241a10] to-[#161616] rounded-3xl border border-amber-500/20 p-5">
             <div className="flex items-center gap-3.5">
               <div className="w-14 h-14 rounded-full bg-amber-500/15 border-2 border-amber-500 flex items-center justify-center shrink-0">
                 <Icon name="UserRound" size={26} className="text-amber-400" />
@@ -217,8 +223,13 @@ export default function Cabinet() {
                 <div className="text-white/50 text-sm truncate">{fmtPhone(phone)}</div>
               </div>
             </div>
+            <div className="mt-4 flex items-center justify-between bg-black/30 rounded-2xl px-4 py-2.5 border border-amber-500/10">
+              <span className="text-white/60 text-sm flex items-center gap-1.5"><Icon name="Gift" size={15} className="text-amber-400" /> Баллы</span>
+              <span className="text-amber-400 font-bold">{points}</span>
+            </div>
           </div>
 
+          {/* nav */}
           <nav className="bg-[#161616] rounded-3xl border border-white/10 p-2.5 space-y-1">
             {NAV.map((item) => {
               const isActive = tab === item.key;
@@ -237,11 +248,17 @@ export default function Cabinet() {
                       {activeOrders.length}
                     </span>
                   )}
+                  {item.soon && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? "bg-black/20 text-black" : "bg-white/10 text-white/40"}`}>
+                      скоро
+                    </span>
+                  )}
                 </button>
               );
             })}
           </nav>
 
+          {/* footer actions */}
           <div className="bg-[#161616] rounded-3xl border border-white/10 p-2.5 space-y-1">
             <button
               onClick={() => window.open(SUPPORT_TG, "_blank")}
@@ -269,22 +286,29 @@ export default function Cabinet() {
 
         {/* CONTENT */}
         <main className="flex-1 min-w-0">
-          {tab === "trips" && (
-            <TripsTab
+          {tab === "dashboard" && (
+            <DashboardTab
+              name={name}
               requests={requests}
-              activeOrders={activeOrders}
-              filter={tripFilter}
-              setFilter={setTripFilter}
-              onNew={() => setTab("new")}
+              activeCount={activeOrders.length}
+              doneCount={doneCount}
+              points={points}
+              onNew={goNew}
+              onAllTrips={() => setTab("trips")}
             />
+          )}
+          {tab === "trips" && (
+            <TripsTab requests={requests} activeOrders={activeOrders} onNew={goNew} />
           )}
           {tab === "new" && (
             <NewOrderTab
               token={token}
-              onCreated={() => { loadRequests(token); setTab("trips"); setTripFilter("active"); }}
+              onCreated={() => { loadRequests(token); setTab("trips"); }}
             />
           )}
-          {tab === "bonus" && <BonusTab doneCount={doneCount} phone={phone} />}
+          {tab === "bonus" && <BonusTab doneCount={doneCount} points={points} phone={phone} />}
+          {tab === "payment" && <StubTab icon="CreditCard" title="Способы оплаты" text="Скоро здесь можно будет привязать карту и оплачивать поездки онлайн." />}
+          {tab === "settings" && <StubTab icon="Settings" title="Настройки" text="Скоро добавим уведомления, смену пароля и другие настройки аккаунта." />}
           {tab === "profile" && <ProfileTab name={name} phone={fmtPhone(phone)} onLogout={logout} />}
         </main>
       </div>
@@ -292,16 +316,100 @@ export default function Cabinet() {
   );
 }
 
+/* ---------------- DASHBOARD ---------------- */
+function DashboardTab({
+  name, requests, activeCount, doneCount, points, onNew, onAllTrips,
+}: {
+  name: string;
+  requests: ClientRequest[];
+  activeCount: number;
+  doneCount: number;
+  points: number;
+  onNew: () => void;
+  onAllTrips: () => void;
+}) {
+  const stats = [
+    { icon: "MapPinned", label: "Всего поездок", value: requests.length, color: "text-amber-400" },
+    { icon: "Clock", label: "Активные", value: activeCount, color: "text-blue-400" },
+    { icon: "CheckCheck", label: "Завершено", value: doneCount, color: "text-emerald-400" },
+    { icon: "Gift", label: "Баллы", value: points, color: "text-amber-400" },
+  ];
+  const recent = requests.slice(0, 4);
+  return (
+    <div className="space-y-5">
+      {/* greeting */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Здравствуйте, {name || "Клиент"}!</h1>
+          <p className="text-white/50 text-sm mt-0.5">Добро пожаловать в личный кабинет</p>
+        </div>
+        <button
+          onClick={onNew}
+          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl px-4 py-2.5 transition-colors"
+        >
+          <Icon name="Plus" size={18} /> Новый заказ
+        </button>
+      </div>
+
+      {/* stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {stats.map((s) => (
+          <div key={s.label} className="bg-[#161616] rounded-2xl border border-white/10 p-4">
+            <Icon name={s.icon} size={22} className={`${s.color} mb-2`} />
+            <div className="text-2xl font-bold text-white">{s.value}</div>
+            <div className="text-white/50 text-sm">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* recent trips wide block */}
+      <div className="bg-[#161616] rounded-2xl border border-white/10 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-white">Последние поездки</h2>
+          <button onClick={onAllTrips} className="text-amber-400 text-sm hover:text-amber-300 flex items-center gap-1">
+            Все поездки <Icon name="ChevronRight" size={16} />
+          </button>
+        </div>
+        {recent.length === 0 ? (
+          <div className="text-center py-10">
+            <Icon name="MapPinned" size={40} className="text-amber-400 mx-auto mb-2" />
+            <div className="text-white/60">Поездок пока нет</div>
+            <button onClick={onNew} className="mt-4 inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl px-4 py-2 transition-colors">
+              <Icon name="Plus" size={16} /> Заказать
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {recent.map((req) => (
+              <div key={req.id} className="flex items-center gap-4 py-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Icon name="MapPin" size={18} className="text-amber-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-sm font-medium truncate">{req.from_city} → {req.to_city}</div>
+                  <div className="text-white/40 text-xs">№{req.id} · {req.trip_date} {req.trip_time} · {req.tariff}</div>
+                </div>
+                <span className={`text-xs px-2.5 py-1 rounded-full border shrink-0 ${STATUS_STYLE[req.status] || "bg-white/10 text-white/70 border-white/20"}`}>
+                  {req.status_label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- TRIPS TAB ---------------- */
 function TripsTab({
-  requests, activeOrders, filter, setFilter, onNew,
+  requests, activeOrders, onNew,
 }: {
   requests: ClientRequest[];
   activeOrders: ClientRequest[];
-  filter: "active" | "all";
-  setFilter: (f: "active" | "all") => void;
   onNew: () => void;
 }) {
+  const [filter, setFilter] = useState<"active" | "all">("active");
   const list = filter === "active" ? activeOrders : requests;
   return (
     <div>
@@ -495,8 +603,7 @@ function NewOrderTab({ token, onCreated }: { token: string; onCreated: () => voi
 }
 
 /* ---------------- BONUS TAB ---------------- */
-function BonusTab({ doneCount, phone }: { doneCount: number; phone: string }) {
-  const points = doneCount * 100;
+function BonusTab({ doneCount, points, phone }: { doneCount: number; points: number; phone: string }) {
   const promo = phone ? `MOY${phone.slice(-4)}` : "MOYTRANSFER";
   return (
     <div>
@@ -572,6 +679,23 @@ function ProfileTab({ name, phone, onLogout }: { name: string; phone: string; on
         >
           Выйти из аккаунта
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- STUB TAB ---------------- */
+function StubTab({ icon, title, text }: { icon: string; title: string; text: string }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-white mb-5">{title}</h1>
+      <div className="bg-[#161616] rounded-2xl border border-white/10 p-12 text-center max-w-2xl">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 mb-4">
+          <Icon name={icon} size={30} className="text-amber-400" />
+        </div>
+        <div className="text-white font-bold text-lg">Раздел в разработке</div>
+        <p className="text-white/50 text-sm mt-2 max-w-md mx-auto">{text}</p>
+        <span className="inline-block mt-4 text-xs px-3 py-1 rounded-full bg-white/10 text-white/50">Скоро</span>
       </div>
     </div>
   );
