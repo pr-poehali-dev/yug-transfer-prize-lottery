@@ -42,11 +42,12 @@ def tg_send(text: str, order_id: int, chat_id: str = None) -> dict:
         },
     }).encode()
     last_err = 'fail'
-    # До 3 попыток: единичные сетевые таймауты Telegram не должны срывать отправку.
-    for attempt in range(3):
+    # До 2 попыток с коротким таймаутом: должны уложиться в лимит функции (30с),
+    # даже когда Telegram недоступен, чтобы диспетчер не ждал и не ловил 504.
+    for attempt in range(2):
         req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=7) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             try:
@@ -56,8 +57,8 @@ def tg_send(text: str, order_id: int, chat_id: str = None) -> dict:
                 return {'ok': False, 'error': f"HTTP {e.code}"}
         except Exception as e:
             last_err = f"{type(e).__name__}: {str(e)[:200]}"
-            if attempt < 2:
-                time.sleep(2)
+            if attempt < 1:
+                time.sleep(1)
     return {'ok': False, 'error': last_err}
 
 
@@ -587,11 +588,15 @@ def publish_to_second(order_id: int, text: str):
     chat2 = os.environ.get('DISPATCH_CHAT_ID_2', '')
     if not chat2:
         return
-    res = tg_send(text, order_id, chat_id=chat2)
-    if res.get('ok'):
-        mid = (res.get('result') or {}).get('message_id')
-        if mid:
-            set_order_message2(order_id, chat2, mid)
+    try:
+        res = tg_send(text, order_id, chat_id=chat2)
+        if res.get('ok'):
+            mid = (res.get('result') or {}).get('message_id')
+            if mid:
+                set_order_message2(order_id, chat2, mid)
+    except Exception:
+        # Вторая группа — не критична: заказ уже опубликован в основной.
+        pass
 
 
 def edit_second(order_id: int, text: str):
@@ -780,4 +785,6 @@ def handler(event: dict, context) -> dict:
         publish_to_second(order_id, text)  # дублируем заказ во 2-ю группу
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'order_id': order_id})}
     return {'statusCode': 200, 'headers': cors,
-            'body': json.dumps({'ok': False, 'error': result.get('error', 'fail')})}
+            'body': json.dumps({'ok': False, 'order_id': order_id,
+                                'error': f"Telegram не принял заказ: {result.get('error', 'нет связи с ботом')}. "
+                                         f"Заказ сохранён в архиве — попробуйте «На продажу» ещё раз."})}
