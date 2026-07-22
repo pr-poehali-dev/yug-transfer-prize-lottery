@@ -288,10 +288,29 @@ def cleanup_unpaid() -> dict:
 def archive_delete(order_id: int) -> dict:
     conn = db()
     cur = conn.cursor()
+    # Сначала узнаём ID сообщений в обеих группах, чтобы удалить их из Telegram.
+    cur.execute(
+        f"SELECT tg_chat_id, tg_message_id, tg_chat_id2, tg_message_id2 "
+        f"FROM {SCHEMA}.dispatch_orders WHERE id=%s",
+        (order_id,),
+    )
+    row = cur.fetchone()
+    # Гасим личные сообщения с кнопкой оплаты, чтобы по удалённому заказу нельзя было платить.
+    deactivate_pay_messages(cur, order_id)
+    cur.execute(f"DELETE FROM {SCHEMA}.order_queue WHERE order_id=%s", (order_id,))
     cur.execute(f"DELETE FROM {SCHEMA}.dispatch_orders WHERE id = %s", (order_id,))
     conn.commit()
     cur.close()
     conn.close()
+
+    if row:
+        chat1 = row[0] or os.environ.get('DISPATCH_CHAT_ID', '')
+        # Основная группа.
+        if chat1 and row[1]:
+            tg_delete(chat1, row[1])
+        # Вторая группа.
+        if row[2] and row[3]:
+            tg_delete(row[2], row[3])
     return {'ok': True}
 
 
@@ -604,6 +623,30 @@ def edit_second(order_id: int, text: str):
     chat2, mid2 = get_second_msg(order_id)
     if chat2 and mid2:
         tg_edit_order(mid2, text, order_id, chat_id=str(chat2))
+
+
+def tg_delete(chat_id, message_id) -> dict:
+    """Удаляет сообщение заказа из Telegram-группы."""
+    token = (os.environ.get('ZACAZU_BOT_TOKEN_NEW', '')
+             or os.environ.get('ZACAZU_BOT_TOKEN', '')
+             or os.environ.get('TELEGRAM_BOT_TOKEN', ''))
+    if not token or not chat_id or not message_id:
+        return {'ok': False, 'error': 'no creds/message'}
+    payload = json.dumps({'chat_id': chat_id, 'message_id': message_id}).encode()
+    url = f"https://api.telegram.org/bot{token}/deleteMessage"
+    try:
+        req = urllib.request.Request(url, data=payload,
+                                     headers={'Content-Type': 'application/json'}, method='POST')
+        with urllib.request.urlopen(req, timeout=7) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read())
+            return {'ok': False, 'error': f"HTTP {e.code}: {body.get('description', '')[:200]}"}
+        except Exception:
+            return {'ok': False, 'error': f"HTTP {e.code}"}
+    except Exception as e:
+        return {'ok': False, 'error': f"{type(e).__name__}: {str(e)[:200]}"}
 
 
 def tg_edit(chat_id, message_id, text: str) -> dict:
