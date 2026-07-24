@@ -5,8 +5,6 @@ import Icon from "@/components/ui/icon";
 import SiteHeader from "@/components/SiteHeader";
 import ContactWidget from "@/components/ContactWidget";
 import FeaturesBar from "@/components/FeaturesBar";
-import BridgeNewsWidget from "@/components/BridgeNewsWidget";
-import BridgeStatusDot from "@/components/BridgeStatusDot";
 import { CLIENT_CABINET_URL } from "@/components/admin/adminTypes";
 import useSEO from "@/hooks/useSEO";
 
@@ -201,24 +199,6 @@ const Index = () => {
           )}
         </div>
 
-        <Link
-          to="/bridge"
-          className="md:hidden mt-3 flex items-center justify-between gap-2 bg-[#1a1a1a]/95 backdrop-blur rounded-xl border border-white/10 px-3.5 py-2.5"
-        >
-          <span className="flex items-center gap-2 min-w-0">
-            <BridgeStatusDot />
-            <Icon name="Construction" size={16} className="text-amber-400 shrink-0" />
-            <span className="text-white text-[13px] font-semibold truncate">Статус Крымского моста</span>
-          </span>
-          <span className="flex items-center gap-1 text-amber-400 text-[12px] font-semibold shrink-0">
-            Смотреть <Icon name="ChevronRight" size={14} />
-          </span>
-        </Link>
-
-      </div>
-
-      <div className="hidden md:block relative z-10 w-full max-w-xs md:absolute md:top-20 md:right-5">
-        <BridgeNewsWidget />
       </div>
 
       <ContactWidget />
