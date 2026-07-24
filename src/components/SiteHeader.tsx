@@ -44,7 +44,7 @@ export default function SiteHeader() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
-          {NAV.map((n) => (
+          {NAV.filter((n) => n.to !== "/bridge").map((n) => (
             <Link
               key={n.to}
               to={n.to}
@@ -148,7 +148,7 @@ export default function SiteHeader() {
             </button>
           </div>
           <nav className="flex flex-col flex-1 px-6 py-4 gap-1 overflow-y-auto">
-            {NAV.filter((n) => n.to !== "/bridge").map((n) => (
+            {NAV.map((n) => (
               <Link
                 key={n.to}
                 to={n.to}
