@@ -12,6 +12,7 @@ export default function Cabinet() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || "");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [avatar, setAvatar] = useState("");
   const [requests, setRequests] = useState<ClientRequest[]>([]);
   const [tab, setTab] = useState<Tab>("dashboard");
 
@@ -39,6 +40,7 @@ export default function Cabinet() {
     if (d.ok) {
       setName(d.name || "");
       setPhone(d.phone || "");
+      setAvatar(d.avatar_url || "");
     } else {
       localStorage.removeItem(TOKEN_KEY);
       setToken("");
@@ -79,6 +81,7 @@ export default function Cabinet() {
       setToken(d.token);
       setName(d.name || "");
       setPhone(d.phone || "");
+      setAvatar(d.avatar_url || "");
     } finally {
       setLoading(false);
     }
@@ -88,8 +91,29 @@ export default function Cabinet() {
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
     setRequests([]);
+    setAvatar("");
     setTab("dashboard");
   };
+
+  const uploadAvatar = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 5 * 1024 * 1024) { alert("Файл больше 5 МБ"); return; }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result));
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const r = await fetch(`${CLIENT_CABINET_URL}?action=set_avatar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Client-Token": token },
+      body: JSON.stringify({ image: dataUrl, ext }),
+    });
+    const d = await r.json();
+    if (d.ok) setAvatar(d.avatar_url || "");
+    else alert(d.error || "Не удалось загрузить фото");
+  }, [token]);
 
   const fmtPhone = (p: string) => {
     if (p.length !== 11) return p;
@@ -166,6 +190,8 @@ export default function Cabinet() {
         <CabinetHome
           name={name || "Клиент"}
           phone={fmtPhone(phone)}
+          avatar={avatar}
+          onUploadAvatar={uploadAvatar}
           activeCount={activeOrders.length}
           doneCount={doneCount}
           onNew={goNew}

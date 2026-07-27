@@ -32,6 +32,13 @@
       "path": "/?action=login",
       "body": {"phone": "+79991234567"},
       "expectedStatus": 400
+    },
+    {
+      "name": "Set avatar without auth rejected",
+      "method": "POST",
+      "path": "/?action=set_avatar",
+      "body": {"image": "aGVsbG8="},
+      "expectedStatus": 200
     }
   ]
 }

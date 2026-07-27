@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import Icon from "@/components/ui/icon";
 import {
   SITE_PHONE, LINK_TG, LINK_WA, LINK_MAX, CAR_IMG,
@@ -6,6 +7,8 @@ import {
 interface Props {
   name: string;
   phone: string;
+  avatar?: string;
+  onUploadAvatar?: (file: File) => void;
   activeCount: number;
   doneCount: number;
   rating?: number;
@@ -25,9 +28,16 @@ const MENU = [
 ] as const;
 
 export default function CabinetHome({
-  name, phone, activeCount, doneCount, rating = 4.9, clientSince = "2025",
+  name, phone, avatar, onUploadAvatar, activeCount, doneCount, rating = 4.9, clientSince = "2025",
   onNew, onTrips, onReview, onProfile, onLogout,
 }: Props) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pickFile = () => fileRef.current?.click();
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f && onUploadAvatar) onUploadAvatar(f);
+    e.target.value = "";
+  };
   const handle = (key: string) => {
     if (key === "trips") onTrips();
     else if (key === "review") onReview();
@@ -61,16 +71,31 @@ export default function CabinetHome({
       {/* profile */}
       <div className="flex items-start gap-4">
         <div className="relative shrink-0">
-          <div className="w-24 h-24 rounded-full border-[3px] border-amber-400 overflow-hidden bg-amber-500/10 flex items-center justify-center">
-            <Icon name="UserRound" size={44} className="text-amber-400" />
-          </div>
           <button
-            onClick={onProfile}
-            aria-label="Редактировать"
+            onClick={pickFile}
+            className="w-24 h-24 rounded-full border-[3px] border-amber-400 overflow-hidden bg-amber-500/10 flex items-center justify-center"
+            aria-label="Сменить фото"
+          >
+            {avatar ? (
+              <img src={avatar} alt="Фото профиля" className="w-full h-full object-cover" />
+            ) : (
+              <Icon name="UserRound" size={44} className="text-amber-400" />
+            )}
+          </button>
+          <button
+            onClick={pickFile}
+            aria-label="Загрузить фото"
             className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-amber-400 border-4 border-[#0d0d0d] flex items-center justify-center"
           >
             <Icon name="Pencil" size={13} className="text-black" />
           </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={onFile}
+          />
         </div>
         <div className="flex-1 min-w-0 pt-1">
           <div className="flex items-start justify-between gap-2">

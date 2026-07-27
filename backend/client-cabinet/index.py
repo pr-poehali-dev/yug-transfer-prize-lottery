@@ -3,7 +3,9 @@ import os
 import json
 import hashlib
 import secrets
+import base64
 
+import boto3
 import psycopg2
 import psycopg2.extras
 
@@ -56,7 +58,7 @@ def account_by_token(token: str):
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        f"SELECT id, phone, name FROM {SCHEMA}.client_accounts WHERE token=%s",
+        f"SELECT id, phone, name, avatar_url FROM {SCHEMA}.client_accounts WHERE token=%s",
         (token,),
     )
     row = cur.fetchone()
@@ -142,7 +144,7 @@ def register(data: dict) -> dict:
     conn.commit()
     cur.close()
     conn.close()
-    return resp(200, {'ok': True, 'token': token, 'phone': phone, 'name': name})
+    return resp(200, {'ok': True, 'token': token, 'phone': phone, 'name': name, 'avatar_url': ''})
 
 
 def login(data: dict) -> dict:
@@ -153,7 +155,7 @@ def login(data: dict) -> dict:
     conn = db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        f"SELECT id, name, password_hash FROM {SCHEMA}.client_accounts WHERE phone=%s",
+        f"SELECT id, name, password_hash, avatar_url FROM {SCHEMA}.client_accounts WHERE phone=%s",
         (phone,),
     )
     row = cur.fetchone()
@@ -166,7 +168,8 @@ def login(data: dict) -> dict:
     conn.commit()
     cur.close()
     conn.close()
-    return resp(200, {'ok': True, 'token': token, 'phone': phone, 'name': row['name'] or ''})
+    return resp(200, {'ok': True, 'token': token, 'phone': phone,
+                      'name': row['name'] or '', 'avatar_url': row.get('avatar_url') or ''})
 
 
 def me(event: dict) -> dict:
@@ -175,7 +178,52 @@ def me(event: dict) -> dict:
     acc = account_by_token(token)
     if not acc:
         return resp(200, {'ok': False, 'error': 'Не авторизован'})
-    return resp(200, {'ok': True, 'phone': acc['phone'], 'name': acc['name'] or ''})
+    return resp(200, {'ok': True, 'phone': acc['phone'], 'name': acc['name'] or '',
+                      'avatar_url': acc.get('avatar_url') or ''})
+
+
+def set_avatar(event: dict, data: dict) -> dict:
+    token = (event.get('headers') or {}).get('X-Client-Token') or \
+        (event.get('headers') or {}).get('x-client-token') or ''
+    acc = account_by_token(token)
+    if not acc:
+        return resp(200, {'ok': False, 'error': 'Не авторизован'})
+
+    raw = str(data.get('image') or '')
+    if ',' in raw and raw.strip().startswith('data:'):
+        raw = raw.split(',', 1)[1]
+    try:
+        binary = base64.b64decode(raw)
+    except Exception:
+        return resp(400, {'ok': False, 'error': 'Некорректное изображение'})
+    if not binary or len(binary) > 5 * 1024 * 1024:
+        return resp(400, {'ok': False, 'error': 'Файл пустой или больше 5 МБ'})
+
+    ext = str(data.get('ext') or 'jpg').lower().lstrip('.')
+    if ext not in ('jpg', 'jpeg', 'png', 'webp'):
+        ext = 'jpg'
+    content_type = 'image/jpeg' if ext in ('jpg', 'jpeg') else f'image/{ext}'
+    key = f"avatars/client_{acc['id']}_{secrets.token_hex(6)}.{ext}"
+
+    s3 = boto3.client(
+        's3',
+        endpoint_url='https://bucket.poehali.dev',
+        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+    )
+    s3.put_object(Bucket='files', Key=key, Body=binary, ContentType=content_type)
+    url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE {SCHEMA}.client_accounts SET avatar_url=%s WHERE id=%s",
+        (url, acc['id']),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return resp(200, {'ok': True, 'avatar_url': url})
 
 
 def list_requests(phone: str) -> dict:
@@ -275,6 +323,8 @@ def handler(event: dict, context) -> dict:
     except Exception:
         return resp(400, {'ok': False, 'error': 'bad json'})
 
+    if action == 'set_avatar':
+        return set_avatar(event, data)
     if action == 'create_request':
         return create_request(data)
     if action == 'register':
