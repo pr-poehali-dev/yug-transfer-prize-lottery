@@ -5,7 +5,7 @@ import { SITE_PHONE } from "@/components/SiteHeader";
 import useSEO from "@/hooks/useSEO";
 
 const CONTACTS = [
-  { icon: "Phone", label: "Телефон", value: SITE_PHONE, href: "tel:+79901337795" },
+  { icon: "Phone", label: "Телефон", value: SITE_PHONE, href: "tel:+79781092875" },
   { icon: "Mail", label: "Почта", value: "info@moy-transfer.ru", href: "mailto:info@moy-transfer.ru" },
   { icon: "Clock", label: "Режим работы", value: "Круглосуточно, без выходных", href: "" },
   { icon: "MapPin", label: "Город", value: "Краснодарский край", href: "" },

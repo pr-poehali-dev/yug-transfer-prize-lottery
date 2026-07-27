@@ -122,8 +122,8 @@ export default function Privacy() {
                 </a>
                 <br />
                 Телефон:{" "}
-                <a href="tel:+79180295672" className="text-purple-300 hover:text-purple-200">
-                  +7 (918) 029-56-72
+                <a href="tel:+79781092875" className="text-purple-300 hover:text-purple-200">
+                  +7 (978) 109-28-75
                 </a>
               </p>
             </section>
