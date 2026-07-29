@@ -213,7 +213,6 @@ export default function Cabinet() {
             requests={requests}
             activeOrders={activeOrders}
             doneCount={doneCount}
-            onNew={goNew}
             onTrips={() => setTab("trips")}
             onReview={() => setTab("review")}
             onLogout={logout}

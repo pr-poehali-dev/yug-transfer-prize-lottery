@@ -16,7 +16,6 @@ interface Props {
   doneCount: number;
   rating?: number;
   clientSince?: string;
-  onNew: () => void;
   onTrips: () => void;
   onReview: () => void;
   onLogout: () => void;
@@ -31,7 +30,7 @@ const MENU = [
 
 export default function CabinetDesktop({
   name, phone, avatar, onUploadAvatar, requests, activeOrders, doneCount,
-  rating = 4.9, clientSince = "2025", onNew, onTrips, onReview, onLogout,
+  rating = 4.9, clientSince = "2025", onTrips, onReview, onLogout,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const pickFile = () => fileRef.current?.click();
@@ -41,7 +40,7 @@ export default function CabinetDesktop({
     e.target.value = "";
   };
   const handle = (key: string) => {
-    if (key === "new") onNew();
+    if (key === "new") { window.location.href = "/"; }
     else if (key === "trips") onTrips();
     else if (key === "review") onReview();
     else if (key === "logout") onLogout();
@@ -156,12 +155,12 @@ export default function CabinetDesktop({
                 <div className="text-white/50 text-sm mt-1">
                   Оформите поездку на <a href="/" className="text-amber-400 hover:underline">главной странице</a>
                 </div>
-                <button
-                  onClick={onNew}
+                <a
+                  href="/"
                   className="mt-5 inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl px-5 py-2.5 transition-colors"
                 >
                   <Icon name="Plus" size={18} /> Новый заказ
-                </button>
+                </a>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
