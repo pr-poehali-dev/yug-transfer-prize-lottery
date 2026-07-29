@@ -75,7 +75,7 @@ export default function RouteDetailPage() {
           <a href={`https://wa.me/${PHONE_DIGITS}?text=${waText}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#25D366] hover:opacity-90 text-white font-bold transition-opacity">
             <Icon name="MessageCircle" size={18} /> WhatsApp
           </a>
-          <a href="https://t.me/ug_transfer_online" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#2AABEE] hover:opacity-90 text-white font-bold transition-opacity">
+          <a href="https://t.me/Dispether82" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#2AABEE] hover:opacity-90 text-white font-bold transition-opacity">
             <Icon name="Send" size={18} /> Telegram
           </a>
         </div>
