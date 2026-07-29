@@ -59,6 +59,50 @@ const Index = () => {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    const ld = {
+      "@context": "https://schema.org",
+      "@type": "TaxiService",
+      name: "Мой Трансфер",
+      description:
+        "Заказ трансфера и такси по Краснодарскому краю, к морю и в Крым через Крымский мост. Фиксированная цена, круглосуточно.",
+      url: "https://moy-transfer.ru/",
+      telephone: "+7 (978) 109-28-75",
+      priceRange: "от 2000 ₽",
+      image:
+        "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/59babb22-2f49-45ef-8194-86e9f5901762.jpg",
+      areaServed: [
+        { "@type": "State", name: "Краснодарский край" },
+        { "@type": "Place", name: "Республика Крым" },
+      ],
+      availableChannel: {
+        "@type": "ServiceChannel",
+        servicePhone: { "@type": "ContactPoint", telephone: "+7 (978) 109-28-75", contactType: "reservations" },
+        serviceUrl: "https://moy-transfer.ru/",
+      },
+      hoursAvailable: {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        opens: "00:00",
+        closes: "23:59",
+      },
+      makesOffer: [
+        "Трансфер в аэропорт",
+        "Междугородний трансфер",
+        "Трансфер к морю и на курорты",
+        "Трансфер через Крымский мост",
+        "Доставка посылок между городами",
+      ].map((n) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: n } })),
+    };
+    const el = document.createElement("script");
+    el.type = "application/ld+json";
+    el.text = JSON.stringify(ld);
+    document.head.appendChild(el);
+    return () => {
+      document.head.removeChild(el);
+    };
+  }, []);
+
   const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
   const submit = async () => {
