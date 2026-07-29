@@ -10,14 +10,6 @@ const cards = [
     grad: "from-pink-500 to-orange-400",
     glow: "from-pink-600 to-orange-500",
   },
-  {
-    to: "/cabinet",
-    icon: "UserRound",
-    title: "Личный кабинет",
-    desc: "Клиент отслеживает статус своей заявки",
-    grad: "from-emerald-500 to-teal-500",
-    glow: "from-emerald-600 to-teal-600",
-  },
 ];
 
 export default function Hub() {
