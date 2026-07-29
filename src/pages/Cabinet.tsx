@@ -5,6 +5,7 @@ import {
   TOKEN_KEY, ClientRequest, Tab, ACTIVE, fieldCls,
 } from "@/components/cabinet/cabinetShared";
 import CabinetHome from "@/components/cabinet/CabinetHome";
+import CabinetDesktop from "@/components/cabinet/CabinetDesktop";
 import TripsTab from "@/components/cabinet/CabinetTrips";
 import { NewOrderTab, BonusTab, ProfileTab, StubTab } from "@/components/cabinet/CabinetForms";
 
@@ -187,19 +188,38 @@ export default function Cabinet() {
   if (tab === "dashboard") {
     return (
       <div className="min-h-screen bg-[#0d0d0d] text-white">
-        <CabinetHome
-          name={name || "Клиент"}
-          phone={fmtPhone(phone)}
-          avatar={avatar}
-          onUploadAvatar={uploadAvatar}
-          activeCount={activeOrders.length}
-          doneCount={doneCount}
-          onNew={goNew}
-          onTrips={() => setTab("trips")}
-          onReview={() => setTab("review")}
-          onProfile={() => setTab("profile")}
-          onLogout={logout}
-        />
+        {/* Mobile / tablet dashboard */}
+        <div className="lg:hidden">
+          <CabinetHome
+            name={name || "Клиент"}
+            phone={fmtPhone(phone)}
+            avatar={avatar}
+            onUploadAvatar={uploadAvatar}
+            activeCount={activeOrders.length}
+            doneCount={doneCount}
+            onNew={goNew}
+            onTrips={() => setTab("trips")}
+            onReview={() => setTab("review")}
+            onProfile={() => setTab("profile")}
+            onLogout={logout}
+          />
+        </div>
+        {/* Desktop dashboard */}
+        <div className="hidden lg:block">
+          <CabinetDesktop
+            name={name || "Клиент"}
+            phone={fmtPhone(phone)}
+            avatar={avatar}
+            onUploadAvatar={uploadAvatar}
+            requests={requests}
+            activeOrders={activeOrders}
+            doneCount={doneCount}
+            onNew={goNew}
+            onTrips={() => setTab("trips")}
+            onReview={() => setTab("review")}
+            onLogout={logout}
+          />
+        </div>
       </div>
     );
   }

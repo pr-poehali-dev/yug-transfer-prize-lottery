@@ -46,7 +46,7 @@ export default function CabinetHome({
   };
 
   return (
-    <div className="mx-auto w-full max-w-md lg:max-w-5xl px-4 py-5 space-y-5">
+    <div className="mx-auto w-full max-w-md px-4 py-5 space-y-5">
       {/* top bar */}
       <div className="flex items-center justify-between gap-2">
         <a
@@ -68,9 +68,6 @@ export default function CabinetHome({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-      {/* left column: profile + banner */}
-      <div className="space-y-5">
       {/* profile */}
       <div className="flex items-start gap-4">
         <div className="relative shrink-0">
@@ -144,11 +141,7 @@ export default function CabinetHome({
           className="pointer-events-none absolute right-0 bottom-2 w-[52%] max-w-[260px] object-contain"
         />
       </div>
-      </div>
-      {/* end left column */}
 
-      {/* right column: stats + menu */}
-      <div className="space-y-5">
       {/* stats */}
       <div className="grid grid-cols-2 gap-3">
         <button onClick={onTrips} className="flex items-center gap-3 rounded-2xl bg-[#161616] border border-white/10 p-4 text-left">
@@ -188,9 +181,6 @@ export default function CabinetHome({
             <Icon name="ChevronRight" size={20} className={m.key === "logout" ? "text-red-400/60" : "text-amber-400"} />
           </button>
         ))}
-      </div>
-      </div>
-      {/* end right column */}
       </div>
     </div>
   );
