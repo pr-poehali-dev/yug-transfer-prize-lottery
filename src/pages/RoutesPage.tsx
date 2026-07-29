@@ -28,6 +28,20 @@ export default function RoutesPage() {
     <PageShell title="Направления" icon="Route">
       <p className="text-white/70 mb-4">Популярные направления трансфера. Нажмите на маршрут — увидите цены, время в пути и сможете заказать.</p>
 
+      <Link
+        to="/"
+        className="group flex items-center gap-4 mb-6 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-transparent p-4 hover:border-amber-500 transition-colors"
+      >
+        <div className="w-12 h-12 shrink-0 rounded-xl bg-amber-500 flex items-center justify-center">
+          <Icon name="Package" size={24} className="text-black" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-bold text-base">Доставка между городами</div>
+          <p className="text-white/60 text-sm leading-snug">Отвезём документы и посылки по любому маршруту. Быстро и бережно — от 2000 ₽</p>
+        </div>
+        <Icon name="ChevronRight" size={20} className="text-amber-400 shrink-0 group-hover:translate-x-1 transition-transform" />
+      </Link>
+
       <div className="relative mb-3">
         <Icon name="Search" size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
         <input
