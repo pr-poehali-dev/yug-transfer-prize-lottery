@@ -87,19 +87,14 @@ export default function TariffsPage() {
             </div>
           </Link>
         ))}
-        <Link to="/" className="group bg-[#1a1a1a]/95 rounded-xl border border-amber-500/40 overflow-hidden hover:border-amber-500 transition-colors flex flex-col">
-          <div className="relative h-24 sm:h-28 overflow-hidden">
+        <Link to="/" className="group bg-[#1a1a1a]/95 rounded-xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors self-start">
+          <div className="h-[168px] sm:h-[188px] overflow-hidden">
             <img
               src="/tariff-order.jpg"
-              alt="Заказать трансфер"
+              alt="Курьер доставки"
               loading="lazy"
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-[#1a1a1a]/20 to-transparent" />
-          </div>
-          <div className="p-2.5 flex items-center justify-center gap-1.5 flex-1 bg-amber-500 group-hover:bg-amber-400 transition-colors">
-            <Icon name="Plus" size={16} className="text-black shrink-0" />
-            <span className="text-sm font-bold text-black">Заказать трансфер</span>
           </div>
         </Link>
       </div>
