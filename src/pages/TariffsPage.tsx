@@ -48,14 +48,15 @@ const TARIFFS = [
     pax: "посылки",
     image: "/tariff-order.jpg",
     icon: "Package",
+    objectTop: true,
   },
 ];
 
 export default function TariffsPage() {
   useSEO({
-    title: "Тарифы на трансфер и такси: Стандарт, Комфорт, Минивэн, Бизнес — цены за км",
+    title: "Тарифы на трансфер и такси: Стандарт, Комфорт, Бизнес, Минивэн, Доставка — цены за км",
     description:
-      "Тарифы на трансфер: Стандарт от 30 ₽/км, Комфорт, Бизнес, Минивэн до 7 мест. Фиксированная цена без накруток. Рассчитаем стоимость поездки при заказе.",
+      "Тарифы на трансфер и такси: Стандарт от 30 ₽/км, Комфорт, Бизнес, Минивэн до 7 мест и доставка посылок от 2000 ₽. Фиксированная цена без накруток, детское кресло бесплатно. Рассчитаем стоимость поездки при заказе.",
   });
 
   return (
@@ -74,6 +75,8 @@ export default function TariffsPage() {
                 alt={t.name}
                 loading="lazy"
                 className={`w-full h-full object-cover transition-transform duration-500 ${
+                  t.objectTop ? "object-top" : ""
+                } ${
                   t.flip
                     ? "scale-x-[-1] group-hover:scale-x-[-1.05] group-hover:scale-y-[1.05]"
                     : "group-hover:scale-105"
