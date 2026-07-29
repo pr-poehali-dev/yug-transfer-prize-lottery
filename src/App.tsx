@@ -7,7 +7,6 @@ import { lazy, Suspense } from "react";
 
 const Index = lazy(() => import("./pages/Index"));
 const Hub = lazy(() => import("./pages/Hub"));
-const Admin = lazy(() => import("./pages/Admin"));
 const Posts = lazy(() => import("./pages/Posts"));
 const Cabinet = lazy(() => import("./pages/Cabinet"));
 const Privacy = lazy(() => import("./pages/Privacy"));
@@ -32,7 +31,6 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/admin" element={<Hub />} />
-          <Route path="/dispatch" element={<Admin />} />
           <Route path="/posts" element={<Posts />} />
           <Route path="/cabinet" element={<Cabinet />} />
           <Route path="/privacy" element={<Privacy />} />

@@ -3,14 +3,6 @@ import Icon from "@/components/ui/icon";
 
 const cards = [
   {
-    to: "/dispatch",
-    icon: "Headset",
-    title: "Диспетчерская",
-    desc: "Заказы, архив и подписки водителей",
-    grad: "from-purple-500 to-indigo-500",
-    glow: "from-purple-600 to-indigo-600",
-  },
-  {
     to: "/posts",
     icon: "Send",
     title: "Посты в канал",
