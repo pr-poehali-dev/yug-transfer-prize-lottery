@@ -197,7 +197,6 @@ export default function Cabinet() {
             onUploadAvatar={uploadAvatar}
             activeCount={activeOrders.length}
             doneCount={doneCount}
-            onNew={goNew}
             onTrips={() => setTab("trips")}
             onReview={() => setTab("review")}
             onProfile={() => setTab("profile")}

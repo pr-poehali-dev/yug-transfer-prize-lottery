@@ -13,7 +13,6 @@ interface Props {
   doneCount: number;
   rating?: number;
   clientSince?: string;
-  onNew: () => void;
   onTrips: () => void;
   onReview: () => void;
   onProfile: () => void;
@@ -29,7 +28,7 @@ const MENU = [
 
 export default function CabinetHome({
   name, phone, avatar, onUploadAvatar, activeCount, doneCount, rating = 4.9, clientSince = "2025",
-  onNew, onTrips, onReview, onProfile, onLogout,
+  onTrips, onReview, onProfile, onLogout,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const pickFile = () => fileRef.current?.click();
@@ -128,12 +127,12 @@ export default function CabinetHome({
           <p className="text-white/50 text-sm mt-2 leading-snug">
             Быстрый поиск, проверенные водители и высокий рейтинг
           </p>
-          <button
-            onClick={onNew}
+          <a
+            href="/"
             className="mt-4 inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-xl px-5 py-3 transition-colors"
           >
             Заказать такси <Icon name="ArrowRight" size={18} />
-          </button>
+          </a>
         </div>
         <img
           src={CAR_IMG}
