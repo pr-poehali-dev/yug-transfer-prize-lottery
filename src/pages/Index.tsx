@@ -9,7 +9,7 @@ import { CLIENT_CABINET_URL } from "@/components/admin/adminTypes";
 import useSEO from "@/hooks/useSEO";
 
 const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
-const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес"];
+const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес", "Доставка"];
 const COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
 const inputCls =

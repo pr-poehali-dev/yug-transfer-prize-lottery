@@ -87,13 +87,13 @@ export default function TariffsPage() {
             </div>
           </Link>
         ))}
-        <Link to="/" className="group bg-[#1a1a1a]/95 rounded-xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors self-start">
+        <Link to="/" className="group bg-white rounded-xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors self-start">
           <div className="h-[168px] sm:h-[188px] overflow-hidden">
             <img
               src="/tariff-order.jpg"
-              alt="Курьер доставки"
+              alt="Доставка — курьер с посылкой"
               loading="lazy"
-              className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
             />
           </div>
         </Link>
