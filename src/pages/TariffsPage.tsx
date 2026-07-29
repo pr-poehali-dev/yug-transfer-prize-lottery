@@ -33,6 +33,7 @@ const TARIFFS = [
     price: "80 ₽/км",
     pax: "до 4 чел.",
     image: `${CDN}/30690171-f6fe-441c-a86c-006ceba1d8b9.jpg`,
+    flip: true,
   },
   {
     name: "Минивэн",
@@ -40,6 +41,7 @@ const TARIFFS = [
     price: "60 ₽/км",
     pax: "до 7 чел.",
     image: `${CDN}/c2ae78de-4287-4158-a4e6-d5716003afaa.jpg`,
+    flip: true,
   },
 ];
 
@@ -65,7 +67,11 @@ export default function TariffsPage() {
                 src={t.image}
                 alt={t.name}
                 loading="lazy"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                className={`w-full h-full object-cover transition-transform duration-500 ${
+                  t.flip
+                    ? "scale-x-[-1] group-hover:scale-x-[-1.05] group-hover:scale-y-[1.05]"
+                    : "group-hover:scale-105"
+                }`}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-[#1a1a1a]/20 to-transparent" />
               <span className="absolute top-2.5 right-2.5 bg-amber-500 text-black text-xs font-bold px-2.5 py-1 rounded-lg">{t.price}</span>
