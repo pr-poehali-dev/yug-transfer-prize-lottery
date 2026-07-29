@@ -63,7 +63,7 @@ export default function SiteHeader() {
             {SITE_PHONE}
           </a>
           <a
-            href="https://t.me/ug_transfer_online"
+            href="https://t.me/Dispether82"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Telegram"
@@ -96,7 +96,7 @@ export default function SiteHeader() {
             {SITE_PHONE}
           </a>
           <a
-            href="https://t.me/ug_transfer_online"
+            href="https://t.me/Dispether82"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Telegram"
@@ -178,7 +178,7 @@ export default function SiteHeader() {
           <footer className="shrink-0 px-6 pt-4 pb-6 border-t border-white/10">
             <div className="flex items-center gap-2 mb-3">
               <a
-                href="https://t.me/ug_transfer_online"
+                href="https://t.me/Dispether82"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Telegram"

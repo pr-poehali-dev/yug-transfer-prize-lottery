@@ -1,8 +1,8 @@
 export const TOKEN_KEY = "client_token";
-export const SUPPORT_TG = "https://t.me/ug_transfer_online";
+export const SUPPORT_TG = "https://t.me/Dispether82";
 
 export const SITE_PHONE = "+7 (978) 109-28-75";
-export const LINK_TG = "https://t.me/ug_transfer_online";
+export const LINK_TG = "https://t.me/Dispether82";
 export const LINK_WA = "https://wa.me/79781092875";
 export const LINK_MAX = "https://max.ru/u/f9LHodD0cOI0G4brAI4KCKvVahfV0mnfAqqlH0Coj23Qfu8YvsF3FHXX84E";
 export const CAR_IMG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/2c34d055-d0da-42c2-a689-f53d909b6c3c.jpg";
