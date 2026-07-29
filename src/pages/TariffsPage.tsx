@@ -48,7 +48,6 @@ const TARIFFS = [
     pax: "посылки",
     image: "/tariff-order.jpg",
     icon: "Package",
-    contain: true,
   },
 ];
 
@@ -69,22 +68,18 @@ export default function TariffsPage() {
             to="/"
             className="group bg-[#1a1a1a]/95 rounded-xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors flex flex-col"
           >
-            <div className={`relative h-24 sm:h-28 overflow-hidden ${t.contain ? "bg-white" : ""}`}>
+            <div className="relative h-24 sm:h-28 overflow-hidden">
               <img
                 src={t.image}
                 alt={t.name}
                 loading="lazy"
-                className={`w-full h-full transition-transform duration-500 ${
-                  t.contain
-                    ? "object-contain group-hover:scale-105"
-                    : t.flip
-                    ? "object-cover scale-x-[-1] group-hover:scale-x-[-1.05] group-hover:scale-y-[1.05]"
-                    : "object-cover group-hover:scale-105"
+                className={`w-full h-full object-cover transition-transform duration-500 ${
+                  t.flip
+                    ? "scale-x-[-1] group-hover:scale-x-[-1.05] group-hover:scale-y-[1.05]"
+                    : "group-hover:scale-105"
                 }`}
               />
-              {!t.contain && (
-                <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-[#1a1a1a]/20 to-transparent" />
-              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-[#1a1a1a]/20 to-transparent" />
               <span className="absolute top-1.5 right-1.5 bg-amber-500 text-black text-[11px] font-bold px-2 py-0.5 rounded-md">{t.price}</span>
               <span className="absolute top-1.5 left-1.5 bg-black/70 text-white text-[11px] font-semibold px-2 py-0.5 rounded-md">{t.pax}</span>
             </div>
