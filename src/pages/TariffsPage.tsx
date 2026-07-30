@@ -2,55 +2,7 @@ import { Link } from "react-router-dom";
 import PageShell from "@/components/PageShell";
 import Icon from "@/components/ui/icon";
 import useSEO from "@/hooks/useSEO";
-
-const TARIFFS = [
-  {
-    name: "Срочный",
-    desc: "Автомобиль тарифа «Стандарт», но с максимально быстрой подачей",
-    price: "30 ₽/км + 1000 ₽",
-    pax: "до 4 чел.",
-    image: "/tariff-srochny.jpg",
-  },
-  {
-    name: "Стандарт",
-    desc: "Оптимальное сочетание цены и комфорта. В машине есть всё необходимое",
-    price: "30 ₽/км",
-    pax: "до 4 чел.",
-    image: "/tariff-standart.jpg",
-  },
-  {
-    name: "Комфорт",
-    desc: "Идеальный выбор для тех, кто ценит удобство. Просторный салон и дополнительные опции",
-    price: "40 ₽/км",
-    pax: "до 4 чел.",
-    image: "/tariff-komfort.jpg",
-  },
-  {
-    name: "Бизнес",
-    desc: "Премиум-класс для деловых поездок. Стильный автомобиль с повышенным комфортом",
-    price: "80 ₽/км",
-    pax: "до 4 чел.",
-    image: "/tariff-biznes.jpg",
-    flip: true,
-  },
-  {
-    name: "Минивэн",
-    desc: "Отличный вариант для большой компании. Вместительный салон и комфорт для всех пассажиров",
-    price: "60 ₽/км",
-    pax: "до 7 чел.",
-    image: "/tariff-minivan.jpg",
-    flip: true,
-  },
-  {
-    name: "Доставка",
-    desc: "Доставим документы и посылки по городу и между городами. Быстро и бережно",
-    price: "от 2000 ₽",
-    pax: "посылки",
-    image: "/tariff-order.jpg",
-    icon: "Package",
-    objectTop: true,
-  },
-];
+import { TARIFFS } from "@/data/tariffsData";
 
 export default function TariffsPage() {
   useSEO({
@@ -66,7 +18,7 @@ export default function TariffsPage() {
         {TARIFFS.map((t) => (
           <Link
             key={t.name}
-            to="/"
+            to={`/tariff/${t.slug}`}
             className="group bg-[#1a1a1a]/95 rounded-xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors flex flex-col lg:min-h-0"
           >
             <div className="relative h-24 sm:h-28 lg:h-auto lg:flex-1 overflow-hidden">

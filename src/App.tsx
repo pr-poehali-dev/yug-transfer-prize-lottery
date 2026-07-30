@@ -14,6 +14,7 @@ const Offer = lazy(() => import("./pages/Offer"));
 const Directions = lazy(() => import("./pages/RoutesPage"));
 const RouteDetail = lazy(() => import("./pages/RouteDetailPage"));
 const Tariffs = lazy(() => import("./pages/TariffsPage"));
+const TariffDetail = lazy(() => import("./pages/TariffDetailPage"));
 const Contacts = lazy(() => import("./pages/ContactsPage"));
 const Bridge = lazy(() => import("./pages/BridgePage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/directions" element={<Directions />} />
           <Route path="/route/:slug" element={<RouteDetail />} />
           <Route path="/tariffs" element={<Tariffs />} />
+          <Route path="/tariff/:slug" element={<TariffDetail />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/bridge" element={<Bridge />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
