@@ -28,20 +28,6 @@ export default function RoutesPage() {
     <PageShell title="Направления" icon="Route">
       <p className="text-white/70 mb-4">Популярные направления трансфера. Нажмите на маршрут — увидите цены, время в пути и сможете заказать.</p>
 
-      <Link
-        to="/"
-        className="group flex items-center gap-4 mb-6 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-transparent p-4 hover:border-amber-500 transition-colors"
-      >
-        <div className="w-12 h-12 shrink-0 rounded-xl bg-amber-500 flex items-center justify-center">
-          <Icon name="Package" size={24} className="text-black" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-white font-bold text-base">Доставка между городами</div>
-          <p className="text-white/60 text-sm leading-snug">Отвезём документы и посылки по любому маршруту. Быстро и бережно — от 2000 ₽</p>
-        </div>
-        <Icon name="ChevronRight" size={20} className="text-amber-400 shrink-0 group-hover:translate-x-1 transition-transform" />
-      </Link>
-
       <div className="relative mb-3">
         <Icon name="Search" size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
         <input
@@ -78,7 +64,7 @@ export default function RoutesPage() {
               to={`/route/${r.slug}`}
               className="group bg-[#1a1a1a]/95 rounded-2xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors"
             >
-              <div className="relative h-36 overflow-hidden">
+              <div className="relative h-52 overflow-hidden">
                 <img
                   src={r.image}
                   alt={`${r.from} — ${r.to}`}
@@ -86,17 +72,17 @@ export default function RoutesPage() {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-[#1a1a1a]/20 to-transparent" />
-                <span className="absolute top-2.5 right-2.5 bg-amber-500 text-black text-xs font-bold px-2.5 py-1 rounded-lg">{r.priceFrom}</span>
+                <span className="absolute top-3 right-3 bg-amber-500 text-black text-sm font-bold px-3 py-1.5 rounded-lg">{r.priceFrom}</span>
               </div>
-              <div className="p-4">
+              <div className="p-5">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-white font-semibold">
-                    <Icon name="MapPin" size={16} className="text-amber-400" />
+                  <div className="flex items-center gap-2 text-white font-bold text-lg">
+                    <Icon name="MapPin" size={18} className="text-amber-400" />
                     {r.from} → {r.to}
                   </div>
-                  <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-amber-400 transition-colors" />
+                  <Icon name="ChevronRight" size={20} className="text-white/30 group-hover:text-amber-400 transition-colors" />
                 </div>
-                <div className="mt-2 text-sm text-white/50">{r.time} · {r.distance}</div>
+                <div className="mt-2.5 text-sm text-white/50">{r.time} · {r.distance}</div>
               </div>
             </Link>
           ))}
