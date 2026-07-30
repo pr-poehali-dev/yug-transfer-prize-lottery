@@ -25,7 +25,7 @@ export default function RoutesPage() {
   }, [query, region]);
 
   return (
-    <PageShell title="Направления" icon="Route" maxWidth="max-w-7xl">
+    <PageShell title="Направления" icon="Route" maxWidth="max-w-7xl" hideContactWidget>
       <p className="text-white/70 mb-4">Популярные направления трансфера. Нажмите на маршрут — увидите цены, время в пути и сможете заказать.</p>
 
       <div className="relative mb-3">

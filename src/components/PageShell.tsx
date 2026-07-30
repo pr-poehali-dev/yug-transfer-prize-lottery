@@ -27,7 +27,7 @@ export default function PageShell({ title, icon, children, maxWidth = "max-w-5xl
         </div>
         {children}
       </div>
-      <ContactWidget />
+      {!hideContactWidget && <ContactWidget />}
     </div>
   );
 }

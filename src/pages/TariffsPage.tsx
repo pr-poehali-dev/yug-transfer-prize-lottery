@@ -60,7 +60,7 @@ export default function TariffsPage() {
   });
 
   return (
-    <PageShell title="Тарифы" icon="Wallet" maxWidth="max-w-7xl">
+    <PageShell title="Тарифы" icon="Wallet" maxWidth="max-w-7xl" hideContactWidget>
       <p className="text-white/70 mb-4 text-sm">Выберите класс автомобиля под вашу поездку. Итоговую цену рассчитаем при оформлении заявки.</p>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
         {TARIFFS.map((t) => (
