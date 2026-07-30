@@ -80,7 +80,7 @@ const Index = () => {
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-fixed relative"
+      className="h-screen overflow-hidden bg-cover bg-center relative"
       style={{ backgroundImage: `url(${BG})` }}
     >
       <div id="map" aria-hidden="true" className="absolute inset-0 z-0" />
@@ -88,7 +88,7 @@ const Index = () => {
 
       <SiteHeader />
 
-      <div className="relative z-10 w-full max-w-lg px-5 pt-5 md:pt-3 pb-5 md:pb-0 min-h-[calc(100vh-72px)] md:min-h-0 flex flex-col justify-center md:block md:absolute md:bottom-4 md:left-0">
+      <div className="relative z-10 w-full max-w-lg px-5 pt-5 md:pt-3 pb-5 md:pb-0 h-[calc(100vh-72px)] md:h-auto overflow-y-auto md:overflow-visible flex flex-col justify-center md:block md:absolute md:bottom-4 md:left-0">
         <div className="text-center mb-3 md:mb-2">
           <h1 className="text-2xl md:text-2xl font-bold text-white">Мой Трансфер</h1>
           <p className="md:hidden text-white/80 text-sm mt-0.5">Сервис заказа легкового такси</p>
