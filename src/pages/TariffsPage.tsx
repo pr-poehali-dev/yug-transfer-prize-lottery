@@ -60,16 +60,16 @@ export default function TariffsPage() {
   });
 
   return (
-    <PageShell title="Тарифы" icon="Wallet" maxWidth="max-w-7xl" hideContactWidget>
+    <PageShell title="Тарифы" icon="Wallet" maxWidth="max-w-7xl" hideContactWidget fill>
       <p className="text-white/70 mb-4 text-sm">Выберите класс автомобиля под вашу поездку. Итоговую цену рассчитаем при оформлении заявки.</p>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 lg:flex-1 lg:grid-rows-2 lg:min-h-0">
         {TARIFFS.map((t) => (
           <Link
             key={t.name}
             to="/"
-            className="group bg-[#1a1a1a]/95 rounded-xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors flex flex-col"
+            className="group bg-[#1a1a1a]/95 rounded-xl border border-white/10 overflow-hidden hover:border-amber-500/50 transition-colors flex flex-col lg:min-h-0"
           >
-            <div className="relative h-24 sm:h-28 overflow-hidden">
+            <div className="relative h-24 sm:h-28 lg:h-auto lg:flex-1 overflow-hidden">
               <img
                 src={t.image}
                 alt={t.name}
@@ -99,7 +99,7 @@ export default function TariffsPage() {
           </Link>
         ))}
       </div>
-      <Link to="/" className="inline-flex items-center gap-2 mt-5 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold transition-colors">
+      <Link to="/" className="inline-flex items-center gap-2 mt-5 lg:mt-4 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold transition-colors">
         <Icon name="Plus" size={18} /> Заказать трансфер
       </Link>
     </PageShell>

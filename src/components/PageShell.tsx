@@ -11,14 +11,24 @@ interface Props {
   children: ReactNode;
   maxWidth?: string;
   hideContactWidget?: boolean;
+  fill?: boolean;
 }
 
-export default function PageShell({ title, icon, children, maxWidth = "max-w-5xl", hideContactWidget = false }: Props) {
+export default function PageShell({ title, icon, children, maxWidth = "max-w-5xl", hideContactWidget = false, fill = false }: Props) {
   return (
-    <div className="min-h-screen bg-cover bg-center bg-fixed relative" style={{ backgroundImage: `url(${BG})` }}>
+    <div
+      className={`${fill ? "lg:h-screen lg:overflow-hidden" : ""} min-h-screen bg-cover bg-center bg-fixed relative`}
+      style={{ backgroundImage: `url(${BG})` }}
+    >
       <div className="absolute inset-0 bg-black/70" />
       <SiteHeader />
-      <div className={`relative z-10 w-full ${maxWidth} mx-auto px-5 pt-6 pb-10 lg:pb-44`}>
+      <div
+        className={`relative z-10 w-full ${maxWidth} mx-auto px-5 pt-6 pb-10 ${
+          fill
+            ? "lg:h-[calc(100vh-72px)] lg:pb-6 lg:flex lg:flex-col"
+            : "lg:pb-44"
+        }`}
+      >
         <div className="flex items-center gap-3 mb-4">
           <div className="w-11 h-11 rounded-2xl bg-amber-500 flex items-center justify-center">
             <Icon name={icon} size={22} className="text-black" />
