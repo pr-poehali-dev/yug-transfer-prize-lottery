@@ -383,3 +383,27 @@ html {
   background: rgba(245, 158, 11, 0.18) !important;
   color: #fbbf24 !important;
 }
+
+/* Кнопка "Заказать" в калькуляторе: держим форму и высоту при загрузке */
+.uc-tariffCalc button[type="submit"] {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  line-height: 1;
+  overflow: hidden;
+}
+
+/* Спиннер, который скрипт вставляет в кнопку при расчёте/отправке */
+.uc-tariffCalc button[type="submit"] .loading__svg {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  animation: tcSpin 0.8s linear infinite;
+}
+
+@keyframes tcSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
