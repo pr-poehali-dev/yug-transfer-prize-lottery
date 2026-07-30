@@ -83,7 +83,8 @@ const Index = () => {
       className="min-h-screen bg-cover bg-center bg-fixed relative"
       style={{ backgroundImage: `url(${BG})` }}
     >
-      <div className="absolute inset-0 bg-black/60" />
+      <div id="map" aria-hidden="true" className="absolute inset-0 z-0" />
+      <div className="absolute inset-0 bg-black/60 z-[1] pointer-events-none" />
 
       <SiteHeader />
 
@@ -98,8 +99,6 @@ const Index = () => {
             <div className="space-y-3 md:space-y-2 flex-1 flex flex-col justify-center">
               <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда вас забрать?" autoComplete="off" className={inputCls} />
               <input name="place_end" defaultValue={prefillTo} placeholder="Куда довезти?" autoComplete="off" className={inputCls} />
-
-              <div id="map" aria-hidden="true" className="absolute w-px h-px overflow-hidden opacity-0 pointer-events-none -left-[9999px] -top-[9999px]" />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
