@@ -37,7 +37,11 @@ export default function useTariffCalc(ready: boolean) {
         await loadScript("https://code.jquery.com/jquery-3.7.1.min.js", "tc-jquery");
         if (cancelled) return;
 
-        const mapsSrc = `https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_MAPS_API_KEY}&lang=ru_RU`;
+        // Ключ apikey не нужен: подсказки и расчёт цены считаются на стороне
+        // vse-zakazy.ru (get_yandex_key.php). Здесь грузим только саму библиотеку карт.
+        const mapsSrc = YANDEX_MAPS_API_KEY
+          ? `https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_MAPS_API_KEY}&lang=ru_RU`
+          : `https://api-maps.yandex.ru/2.1/?lang=ru_RU`;
         await loadScript(mapsSrc, "tc-yandex-maps");
         if (cancelled) return;
 
