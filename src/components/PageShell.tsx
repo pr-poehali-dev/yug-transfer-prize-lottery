@@ -10,9 +10,10 @@ interface Props {
   icon: string;
   children: ReactNode;
   maxWidth?: string;
+  hideContactWidget?: boolean;
 }
 
-export default function PageShell({ title, icon, children, maxWidth = "max-w-5xl" }: Props) {
+export default function PageShell({ title, icon, children, maxWidth = "max-w-5xl", hideContactWidget = false }: Props) {
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed relative" style={{ backgroundImage: `url(${BG})` }}>
       <div className="absolute inset-0 bg-black/70" />
