@@ -72,7 +72,7 @@ export default function SiteHeader() {
             <Icon name="Send" size={15} className="text-white" />
           </a>
           <a
-            href="https://max.ru/+79781092875"
+            href="https://max.ru/u/f9LHodD0cOIMaVYO_Z-nUVm8RnfeFCYBL1plEAksXVd6OihrEdaQR7wxrpU"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="MAX"
@@ -105,7 +105,7 @@ export default function SiteHeader() {
             <Icon name="Send" size={15} className="text-white" />
           </a>
           <a
-            href="https://max.ru/+79781092875"
+            href="https://max.ru/u/f9LHodD0cOIMaVYO_Z-nUVm8RnfeFCYBL1plEAksXVd6OihrEdaQR7wxrpU"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="MAX"
@@ -178,7 +178,7 @@ export default function SiteHeader() {
                 <Icon name="Send" size={18} className="text-white" />
               </a>
               <a
-                href="https://max.ru/+79781092875"
+                href="https://max.ru/u/f9LHodD0cOIMaVYO_Z-nUVm8RnfeFCYBL1plEAksXVd6OihrEdaQR7wxrpU"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="MAX"
