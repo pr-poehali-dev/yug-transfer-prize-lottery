@@ -99,7 +99,7 @@ const Index = () => {
               <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда вас забрать?" autoComplete="off" className={inputCls} />
               <input name="place_end" defaultValue={prefillTo} placeholder="Куда довезти?" autoComplete="off" className={inputCls} />
 
-              <div id="map" className="w-full h-40 rounded-lg overflow-hidden bg-black/30 border border-white/10" />
+              <div id="map" aria-hidden="true" className="absolute w-px h-px overflow-hidden opacity-0 pointer-events-none -left-[9999px] -top-[9999px]" />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
