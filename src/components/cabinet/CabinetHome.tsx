@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import Icon from "@/components/ui/icon";
 import {
-  SITE_PHONE, LINK_TG, LINK_WA, LINK_MAX, CAR_IMG,
+  SITE_PHONE, LINK_TG, LINK_MAX, CAR_IMG,
 } from "./cabinetShared";
 
 interface Props {
@@ -57,9 +57,6 @@ export default function CabinetHome({
         <div className="flex items-center gap-2">
           <a href={LINK_TG} target="_blank" rel="noopener noreferrer" aria-label="Telegram" className="w-10 h-10 rounded-full bg-[#2AABEE] flex items-center justify-center">
             <Icon name="Send" size={18} className="text-white" />
-          </a>
-          <a href={LINK_WA} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center">
-            <Icon name="MessageCircle" size={18} className="text-white" />
           </a>
           <a href={LINK_MAX} target="_blank" rel="noopener noreferrer" aria-label="MAX" className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] flex items-center justify-center">
             <span className="text-white text-[10px] font-bold leading-none">MAX</span>

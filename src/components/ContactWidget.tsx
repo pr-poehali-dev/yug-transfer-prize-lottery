@@ -2,7 +2,6 @@ import Icon from "@/components/ui/icon";
 
 const PHONE = "+7 (978) 109-28-75";
 const PHONE_TEL = "+79781092875";
-const PHONE_DIGITS = "79781092875";
 
 const ContactWidget = () => {
   return (
@@ -21,15 +20,6 @@ const ContactWidget = () => {
             className="w-9 h-9 rounded-full bg-[#2AABEE] hover:opacity-90 flex items-center justify-center transition-opacity"
           >
             <Icon name="Send" size={16} className="text-white" />
-          </a>
-          <a
-            href={`https://wa.me/${PHONE_DIGITS}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="WhatsApp"
-            className="w-9 h-9 rounded-full bg-[#25D366] hover:opacity-90 flex items-center justify-center transition-opacity"
-          >
-            <Icon name="MessageCircle" size={16} className="text-white" />
           </a>
           <a
             href="https://max.ru/+79781092875"

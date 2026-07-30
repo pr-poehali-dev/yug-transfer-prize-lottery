@@ -8,7 +8,6 @@ import NotFound from "@/pages/NotFound";
 
 const PHONE = "+7 (978) 109-28-75";
 const PHONE_TEL = "+79781092875";
-const PHONE_DIGITS = "79781092875";
 
 export default function RouteDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -45,8 +44,6 @@ export default function RouteDetailPage() {
 
   if (!route) return <NotFound />;
 
-  const waText = encodeURIComponent(`Здравствуйте! Хочу заказать трансфер ${route.from} — ${route.to}.`);
-
   return (
     <PageShell title={`${route.from} → ${route.to}`} icon="Route">
       <Link to="/directions" className="inline-flex items-center gap-1.5 text-white/50 hover:text-amber-400 text-sm mb-4 transition-colors">
@@ -71,9 +68,6 @@ export default function RouteDetailPage() {
         <div className="flex flex-wrap gap-2.5">
           <a href={`tel:${PHONE_TEL}`} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold transition-colors">
             <Icon name="Phone" size={18} /> Позвонить
-          </a>
-          <a href={`https://wa.me/${PHONE_DIGITS}?text=${waText}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#25D366] hover:opacity-90 text-white font-bold transition-opacity">
-            <Icon name="MessageCircle" size={18} /> WhatsApp
           </a>
           <a href="https://t.me/Dispether82" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#2AABEE] hover:opacity-90 text-white font-bold transition-opacity">
             <Icon name="Send" size={18} /> Telegram

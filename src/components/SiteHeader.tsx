@@ -113,15 +113,6 @@ export default function SiteHeader() {
           >
             <span className="text-white text-[10px] font-bold leading-none">MAX</span>
           </a>
-          <a
-            href="https://wa.me/79781092875"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="WhatsApp"
-            className="md:hidden flex w-8 h-8 rounded-full bg-[#25D366] items-center justify-center shrink-0"
-          >
-            <Icon name="MessageCircle" size={15} className="text-white" />
-          </a>
 
           <button
             type="button"
@@ -194,15 +185,6 @@ export default function SiteHeader() {
                 className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] flex items-center justify-center"
               >
                 <span className="text-white text-xs font-bold leading-none">MAX</span>
-              </a>
-              <a
-                href={`https://wa.me/79781092875`}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="WhatsApp"
-                className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center"
-              >
-                <Icon name="MessageCircle" size={18} className="text-white" />
               </a>
             </div>
             <div className="space-y-1 text-white/60 text-sm">
