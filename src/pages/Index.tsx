@@ -53,9 +53,45 @@ const Index = () => {
       (e.target as HTMLElement)?.classList?.remove("!border-red-500");
     };
 
+    // Внешний скрипт заказа (tariffCalc.js) при пустых полях вызывает window.alert.
+    // Перехватываем его: вместо модалки подсвечиваем нужное поле красным.
+    const highlight = (name: string) => {
+      const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
+      if (field) {
+        field.classList.add("!border-red-500");
+        field.focus();
+      }
+    };
+    const nativeAlert = window.alert;
+    window.alert = (msg?: unknown) => {
+      const text = String(msg ?? "").toLowerCase();
+      const map: { keys: string[]; name: string }[] = [
+        { keys: ["телефон", "phone"], name: "Phone" },
+        { keys: ["имя", "как вас зовут", "name"], name: "name" },
+        { keys: ["откуда", "start"], name: "place_start" },
+        { keys: ["куда", "end"], name: "place_end" },
+        { keys: ["дат"], name: "Date" },
+        { keys: ["время", "time"], name: "Time" },
+      ];
+      let matched = false;
+      for (const m of map) {
+        if (m.keys.some((k) => text.includes(k))) {
+          highlight(m.name);
+          matched = true;
+        }
+      }
+      if (!matched) {
+        for (const name of REQUIRED) {
+          const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
+          if (field && !field.value.trim()) field.classList.add("!border-red-500");
+        }
+      }
+    };
+
     form.addEventListener("submit", onSubmitCapture, true);
     form.addEventListener("input", clearError, true);
     return () => {
+      window.alert = nativeAlert;
       form.removeEventListener("submit", onSubmitCapture, true);
       form.removeEventListener("input", clearError, true);
     };
