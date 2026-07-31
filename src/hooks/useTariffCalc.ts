@@ -59,13 +59,16 @@ export default function useTariffCalc(ready: boolean) {
           if (cancelled) return;
           try {
             if (typeof w.tariffCalc_init === "function") w.tariffCalc_init();
+
+            // Подсказки адресов НЕ зависят от Яндекс.Карт (используют свой
+            // серверный ключ), поэтому запускаем их сразу, независимо от карты.
+            if (typeof w.initTariffAutocomplete === "function") w.initTariffAutocomplete();
+
+            // Карту инициализируем только если библиотека карт реально загрузилась.
             if (w.ymaps && typeof w.ymaps.ready === "function") {
               w.ymaps.ready(() => {
                 if (typeof w.initMap === "function") w.initMap();
-                if (typeof w.initTariffAutocomplete === "function") w.initTariffAutocomplete();
               });
-            } else if (typeof w.initTariffAutocomplete === "function") {
-              w.initTariffAutocomplete();
             }
           } catch (err) {
             console.error("[tariffCalc] ошибка инициализации", err);
