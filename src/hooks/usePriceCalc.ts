@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 // Расчёт стоимости поездки БЕЗ Яндекс.Карт:
 //   1. адрес -> координаты   (Nominatim / OpenStreetMap, без ключа)
@@ -146,13 +146,4 @@ export default function usePriceCalc() {
   }, []);
 
   return { ...state, calc, reset };
-}
-
-// Хелпер: дебаунс-обёртка для авторасчёта при вводе.
-export function useDebouncedEffect(fn: () => void, deps: unknown[], delay: number) {
-  useEffect(() => {
-    const id = setTimeout(fn, delay);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, delay]);
 }

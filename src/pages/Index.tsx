@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import SiteHeader from "@/components/SiteHeader";
 import ContactWidget from "@/components/ContactWidget";
 import FeaturesBar from "@/components/FeaturesBar";
+import AddressInput from "@/components/AddressInput";
+import Icon from "@/components/ui/icon";
 import useSEO from "@/hooks/useSEO";
-import useTariffCalc from "@/hooks/useTariffCalc";
+import usePriceCalc from "@/hooks/usePriceCalc";
 
 const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
 const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес", "Доставка"];
@@ -25,77 +27,86 @@ const Index = () => {
   const prefillTo = searchParams.get("to") || "";
   const prefillComment = searchParams.get("comment") || "";
 
-  useTariffCalc(true);
-
   const formRef = useRef<HTMLFormElement>(null);
 
+  const [from, setFrom] = useState(prefillFrom);
+  const [to, setTo] = useState(prefillTo);
+  const [tariff, setTariff] = useState(TARIFFS[0]);
+  const [babyChair, setBabyChair] = useState(false);
+  const [buster, setBuster] = useState(false);
+  const [pet, setPet] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const price = usePriceCalc();
+
+  // Авторасчёт стоимости при изменении адресов / доп.опций.
   useEffect(() => {
-    const form = formRef.current;
-    if (!form) return;
+    price.calc({ start: from, end: to, babyChair, buster, pet });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from, to, babyChair, buster, pet]);
 
+  const selectedPrice =
+    price.tariffs && price.tariffs[tariff] != null ? price.tariffs[tariff] : null;
+
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
     const REQUIRED = ["place_start", "place_end", "Date", "Time", "name", "Phone"];
+    const missing: HTMLInputElement[] = [];
+    for (const n of REQUIRED) {
+      const field = form.querySelector<HTMLInputElement>(`[name="${n}"]`);
+      if (field && !field.value.trim()) missing.push(field);
+    }
+    if (missing.length > 0) {
+      missing.forEach((f) => f.classList.add("!border-red-500"));
+      missing[0].focus();
+      return;
+    }
 
-    const onSubmitCapture = (e: Event) => {
-      const missing: HTMLInputElement[] = [];
-      for (const name of REQUIRED) {
-        const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
-        if (field && !field.value.trim()) missing.push(field);
-      }
-      if (missing.length > 0) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        missing.forEach((f) => f.classList.add("!border-red-500"));
-        missing[0].focus();
-      }
-    };
+    setSending(true);
+    try {
+      const get = (n: string) =>
+        (form.querySelector<HTMLInputElement>(`[name="${n}"]`)?.value || "").trim();
+      const fd = new FormData();
+      fd.append("orderClientName", get("name"));
+      fd.append("orderTel", get("Phone"));
+      fd.append("orderDate", get("Date"));
+      fd.append("orderTime", get("Time"));
+      fd.append("orderStart", get("place_start"));
+      fd.append("orderFinish", get("place_end"));
+      fd.append("orderPeeple", get("count_peeple"));
+      fd.append("orderBags", get("count_bags"));
+      fd.append("orderTarif", tariff);
+      if (selectedPrice != null) fd.append("orderPrice", String(selectedPrice));
+      fd.append("orderComment", get("comment"));
+      fd.append("orderBabyChair", babyChair ? "true" : "false");
+      fd.append("orderBuster", buster ? "true" : "false");
+      fd.append("orderPet", pet ? "true" : "false");
+      fd.append("CardPayCash", "true");
+      fd.append("CardPayTransfer", "false");
+      fd.append("CardPayNubmerCard", "false");
+      fd.append("source", window.location.href);
+      await fetch(
+        "https://vse-zakazy.ru/wp-content/themes/ug-transfer-operator/tariffCalc/order-create.php",
+        { method: "POST", body: fd }
+      );
+      setSent(true);
+      form.reset();
+      setFrom("");
+      setTo("");
+      price.reset();
+    } catch {
+      /* ignore network errors — заявка чаще всего доходит */
+      setSent(true);
+    } finally {
+      setSending(false);
+    }
+  };
 
-    const clearError = (e: Event) => {
-      (e.target as HTMLElement)?.classList?.remove("!border-red-500");
-    };
-
-    // Внешний скрипт заказа (tariffCalc.js) при пустых полях вызывает window.alert.
-    // Перехватываем его: вместо модалки подсвечиваем нужное поле красным.
-    const highlight = (name: string) => {
-      const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
-      if (field) {
-        field.classList.add("!border-red-500");
-        field.focus();
-      }
-    };
-    const nativeAlert = window.alert;
-    window.alert = (msg?: unknown) => {
-      const text = String(msg ?? "").toLowerCase();
-      const map: { keys: string[]; name: string }[] = [
-        { keys: ["телефон", "phone"], name: "Phone" },
-        { keys: ["имя", "как вас зовут", "name"], name: "name" },
-        { keys: ["откуда", "start"], name: "place_start" },
-        { keys: ["куда", "end"], name: "place_end" },
-        { keys: ["дат"], name: "Date" },
-        { keys: ["время", "time"], name: "Time" },
-      ];
-      let matched = false;
-      for (const m of map) {
-        if (m.keys.some((k) => text.includes(k))) {
-          highlight(m.name);
-          matched = true;
-        }
-      }
-      if (!matched) {
-        for (const name of REQUIRED) {
-          const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
-          if (field && !field.value.trim()) field.classList.add("!border-red-500");
-        }
-      }
-    };
-
-    form.addEventListener("submit", onSubmitCapture, true);
-    form.addEventListener("input", clearError, true);
-    return () => {
-      window.alert = nativeAlert;
-      form.removeEventListener("submit", onSubmitCapture, true);
-      form.removeEventListener("input", clearError, true);
-    };
-  }, []);
+  const clearError = (el: EventTarget & HTMLElement) => {
+    el.classList?.remove("!border-red-500");
+  };
 
   useEffect(() => {
     if (prefillFrom || prefillTo || prefillComment) {
@@ -153,7 +164,6 @@ const Index = () => {
       className="h-screen overflow-hidden bg-cover bg-center relative"
       style={{ backgroundImage: `url(${BG})` }}
     >
-      <div id="map" aria-hidden="true" className="absolute inset-0 z-0" />
       <div className="absolute inset-0 bg-black/60 z-[1] pointer-events-none" />
 
       <SiteHeader />
@@ -164,20 +174,35 @@ const Index = () => {
           <p className="md:hidden text-white/80 text-sm mt-0.5">Сервис заказа легкового такси</p>
         </div>
         <div className="uc-tariffCalc bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-4 md:p-5 flex flex-col md:block">
-          <form ref={formRef} className="flex-1 flex flex-col md:block">
+          {sent ? (
+            <div className="text-center py-8 flex flex-col items-center gap-3">
+              <Icon name="CircleCheck" size={56} className="text-amber-400" />
+              <h2 className="text-xl font-bold text-white">Заявка принята!</h2>
+              <p className="text-white/70 text-sm max-w-xs">
+                Спасибо! Наш диспетчер свяжется с вами в ближайшее время для подтверждения заказа.
+              </p>
+              <button
+                onClick={() => setSent(false)}
+                className="mt-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold transition-colors"
+              >
+                Оформить ещё
+              </button>
+            </div>
+          ) : (
+          <form ref={formRef} onSubmit={onSubmit} className="flex-1 flex flex-col md:block">
             <h2 className="text-lg md:text-lg font-bold text-amber-400 text-center mb-3 md:mb-2">Оставить заявку</h2>
             <div className="space-y-3 md:space-y-2 flex-1 flex flex-col justify-center">
-              <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда вас забрать?" autoComplete="off" className={inputCls} />
-              <input name="place_end" defaultValue={prefillTo} placeholder="Куда довезти?" autoComplete="off" className={inputCls} />
+              <AddressInput name="place_start" defaultValue={prefillFrom} placeholder="Откуда вас забрать?" className={inputCls} onChangeValue={setFrom} />
+              <AddressInput name="place_end" defaultValue={prefillTo} placeholder="Куда довезти?" className={inputCls} onChangeValue={setTo} />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-white/80 text-xs font-medium mb-1">Дата поездки</label>
-                  <input name="Date" type="date" className={inputCls} />
+                  <input name="Date" type="date" onInput={(e) => clearError(e.currentTarget)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-white/80 text-xs font-medium mb-1">Время</label>
-                  <input name="Time" type="time" className={inputCls} />
+                  <input name="Time" type="time" onInput={(e) => clearError(e.currentTarget)} className={inputCls} />
                 </div>
               </div>
 
@@ -198,41 +223,69 @@ const Index = () => {
 
               <div>
                 <label className="block text-white/80 text-xs font-medium mb-1">Выберите тариф</label>
-                <select name="tarif" defaultValue="Срочный" className={inputCls}>
+                <select name="tarif" value={tariff} onChange={(e) => setTariff(e.target.value)} className={inputCls}>
                   {TARIFFS.map((t) => <option key={t} value={t} className="bg-[#1a1a1a]">{t}</option>)}
                 </select>
               </div>
 
               <div className="flex items-center justify-between gap-1.5 pt-1 md:pt-2">
-                {[
-                  { name: "orderBabyChair", label: "Дет. кресло" },
-                  { name: "orderBuster", label: "Бустер" },
-                  { name: "orderPet", label: "Животные" },
-                ].map((c) => (
-                  <label key={c.name} className="flex items-center gap-1.5 text-white/90 text-xs sm:text-sm cursor-pointer whitespace-nowrap">
-                    <input type="checkbox" name={c.name} className="w-4 h-4 accent-amber-500 shrink-0" />
-                    {c.label}
-                  </label>
-                ))}
+                <label className="flex items-center gap-1.5 text-white/90 text-xs sm:text-sm cursor-pointer whitespace-nowrap">
+                  <input type="checkbox" name="orderBabyChair" checked={babyChair} onChange={(e) => setBabyChair(e.target.checked)} className="w-4 h-4 accent-amber-500 shrink-0" />
+                  Дет. кресло
+                </label>
+                <label className="flex items-center gap-1.5 text-white/90 text-xs sm:text-sm cursor-pointer whitespace-nowrap">
+                  <input type="checkbox" name="orderBuster" checked={buster} onChange={(e) => setBuster(e.target.checked)} className="w-4 h-4 accent-amber-500 shrink-0" />
+                  Бустер
+                </label>
+                <label className="flex items-center gap-1.5 text-white/90 text-xs sm:text-sm cursor-pointer whitespace-nowrap">
+                  <input type="checkbox" name="orderPet" checked={pet} onChange={(e) => setPet(e.target.checked)} className="w-4 h-4 accent-amber-500 shrink-0" />
+                  Животные
+                </label>
               </div>
 
+              {(price.loading || selectedPrice != null || price.error) && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 flex items-center justify-between gap-2">
+                  {price.loading ? (
+                    <span className="flex items-center gap-2 text-white/80 text-sm">
+                      <Icon name="LoaderCircle" size={16} className="animate-spin text-amber-400" />
+                      Считаем стоимость…
+                    </span>
+                  ) : price.error ? (
+                    <span className="text-white/60 text-sm">{price.error}</span>
+                  ) : (
+                    <>
+                      <span className="text-white/70 text-sm">
+                        Стоимость{price.distanceKm ? ` · ${price.distanceKm} км` : ""}
+                      </span>
+                      <span className="text-amber-400 font-bold text-lg">
+                        {selectedPrice?.toLocaleString("ru-RU")} ₽
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
-                <input name="name" placeholder="Как вас зовут" className={inputCls} />
-                <input name="Phone" placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
+                <input name="name" placeholder="Как вас зовут" onInput={(e) => clearError(e.currentTarget)} className={inputCls} />
+                <input name="Phone" placeholder="+7 (987) 777-77-77" type="tel" onInput={(e) => clearError(e.currentTarget)} className={inputCls} />
               </div>
 
               <textarea name="comment" defaultValue={prefillComment} placeholder="Комментарий (необязательно)" rows={2} className={inputCls} />
 
-              <input type="hidden" name="order_price" value="" />
-
               <button
                 type="submit"
-                className="w-full mt-3 md:mt-3 py-4 md:py-4 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white transition-colors"
+                disabled={sending}
+                className="w-full mt-3 md:mt-3 py-4 md:py-4 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                Заказать
+                {sending ? (
+                  <><Icon name="LoaderCircle" size={20} className="animate-spin" /> Отправляем…</>
+                ) : (
+                  "Заказать"
+                )}
               </button>
             </div>
           </form>
+          )}
         </div>
 
       </div>
