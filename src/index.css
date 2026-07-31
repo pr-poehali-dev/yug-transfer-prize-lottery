@@ -366,3 +366,30 @@ html {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Подсказки адресов калькулятора (tariffCalc.js создаёт ul#suggestions в body) */
+#suggestions {
+  background: #1f1f1f !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  padding: 6px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55) !important;
+  z-index: 10060 !important;
+  list-style: none !important;
+}
+
+#suggestions li {
+  color: #fff !important;
+  font-size: 14px !important;
+  line-height: 1.3 !important;
+  padding: 9px 12px !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease;
+}
+
+#suggestions li:hover,
+#suggestions li.active {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fbbf24 !important;
+}
