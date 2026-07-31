@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { TARIFF_CALC_SCRIPT_URL } from "@/lib/tariffCalcConfig";
+import { YANDEX_MAPS_API_KEY, TARIFF_CALC_SCRIPT_URL } from "@/lib/tariffCalcConfig";
 
 function loadScript(src: string, id: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -25,11 +25,10 @@ function loadScript(src: string, id: string): Promise<void> {
   });
 }
 
-// Загружает jQuery -> tariffCalc.js по порядку,
+// Загружает jQuery -> Яндекс.Карты -> tariffCalc.js по порядку,
 // когда форма калькулятора уже отрисована в DOM.
-// Яндекс.Карты НЕ грузим: подсказки адресов и расчёт цены считаются на
-// стороне vse-zakazy.ru (get_yandex_key.php + серверный геокодер), а
-// визуальная карта на домене poehali.dev самим скриптом не инициализируется.
+// Карта (ymaps) нужна для расчёта стоимости: скрипт считает расстояние
+// маршрута через ymaps.multiRouter, а цену — на сервере vse-zakazy.ru.
 export default function useTariffCalc(ready: boolean) {
   useEffect(() => {
     if (!ready) return;
@@ -40,23 +39,37 @@ export default function useTariffCalc(ready: boolean) {
         await loadScript("https://code.jquery.com/jquery-3.7.1.min.js", "tc-jquery");
         if (cancelled) return;
 
+        const mapsSrc = YANDEX_MAPS_API_KEY
+          ? `https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_MAPS_API_KEY}&lang=ru_RU`
+          : `https://api-maps.yandex.ru/2.1/?lang=ru_RU`;
+        await loadScript(mapsSrc, "tc-yandex-maps");
+        if (cancelled) return;
+
         // Скрипт калькулятора инициализируется по DOMContentLoaded,
         // поэтому подключаем его последним, когда форма уже в DOM.
         await loadScript(TARIFF_CALC_SCRIPT_URL, "tc-tariff-calc");
         if (cancelled) return;
 
-        // DOMContentLoaded в SPA уже прошёл, поэтому запускаем инициализацию
-        // вручную: сам калькулятор и подсказки адресов (работают через
-        // серверный геокодер vse-zakazy.ru, без Яндекс.Карт).
+        // DOMContentLoaded в SPA уже прошёл — запускаем инициализацию вручную:
+        // сам калькулятор, карту (для расчёта расстояния) и подсказки адресов.
         const w = window as unknown as {
           tariffCalc_init?: () => void;
+          initMap?: () => void;
           initTariffAutocomplete?: () => void;
+          ymaps?: { ready: (cb: () => void) => void };
         };
         setTimeout(() => {
           if (cancelled) return;
           try {
             if (typeof w.tariffCalc_init === "function") w.tariffCalc_init();
-            if (typeof w.initTariffAutocomplete === "function") w.initTariffAutocomplete();
+            if (w.ymaps && typeof w.ymaps.ready === "function") {
+              w.ymaps.ready(() => {
+                if (typeof w.initMap === "function") w.initMap();
+                if (typeof w.initTariffAutocomplete === "function") w.initTariffAutocomplete();
+              });
+            } else if (typeof w.initTariffAutocomplete === "function") {
+              w.initTariffAutocomplete();
+            }
           } catch (err) {
             console.error("[tariffCalc] ошибка инициализации", err);
           }
