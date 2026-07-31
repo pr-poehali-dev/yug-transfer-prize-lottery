@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import SiteHeader from "@/components/SiteHeader";
 import ContactWidget from "@/components/ContactWidget";
@@ -26,6 +26,48 @@ const Index = () => {
   const prefillComment = searchParams.get("comment") || "";
 
   useTariffCalc(true);
+
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+
+    const REQUIRED: { name: string; label: string }[] = [
+      { name: "place_start", label: "Откуда вас забрать" },
+      { name: "place_end", label: "Куда довезти" },
+      { name: "Date", label: "Дата поездки" },
+      { name: "Time", label: "Время" },
+      { name: "name", label: "Ваше имя" },
+      { name: "Phone", label: "Телефон" },
+    ];
+
+    const onSubmitCapture = (e: Event) => {
+      const missing: { field: HTMLInputElement; label: string }[] = [];
+      for (const r of REQUIRED) {
+        const field = form.querySelector<HTMLInputElement>(`[name="${r.name}"]`);
+        if (field && !field.value.trim()) missing.push({ field, label: r.label });
+      }
+      if (missing.length > 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        alert("Пожалуйста, заполните обязательные поля:\n\n• " + missing.map((m) => m.label).join("\n• "));
+        missing.forEach((m) => m.field.classList.add("!border-red-500"));
+        missing[0].field.focus();
+      }
+    };
+
+    const clearError = (e: Event) => {
+      (e.target as HTMLElement)?.classList?.remove("!border-red-500");
+    };
+
+    form.addEventListener("submit", onSubmitCapture, true);
+    form.addEventListener("input", clearError, true);
+    return () => {
+      form.removeEventListener("submit", onSubmitCapture, true);
+      form.removeEventListener("input", clearError, true);
+    };
+  }, []);
 
   useEffect(() => {
     if (prefillFrom || prefillTo || prefillComment) {
@@ -94,7 +136,7 @@ const Index = () => {
           <p className="md:hidden text-white/80 text-sm mt-0.5">Сервис заказа легкового такси</p>
         </div>
         <div className="uc-tariffCalc bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-4 md:p-5 flex flex-col md:block">
-          <form className="flex-1 flex flex-col md:block">
+          <form ref={formRef} className="flex-1 flex flex-col md:block">
             <h2 className="text-lg md:text-lg font-bold text-amber-400 text-center mb-3 md:mb-2">Оставить заявку</h2>
             <div className="space-y-3 md:space-y-2 flex-1 flex flex-col justify-center">
               <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда вас забрать?" autoComplete="off" className={inputCls} />
