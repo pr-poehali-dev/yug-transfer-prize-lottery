@@ -358,52 +358,11 @@ html {
   border-radius: 1.5rem;
 }
 
-/* Подсказки адресов калькулятора (tariffCalc.js создаёт ul#suggestions в body) */
-#suggestions {
-  background: #1f1f1f !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  border-radius: 12px !important;
-  padding: 6px !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55) !important;
-  z-index: 10060 !important;
+/* Горизонтальный ряд карточек без видимой полосы прокрутки */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
-#suggestions li {
-  color: #fff !important;
-  font-size: 14px !important;
-  line-height: 1.3 !important;
-  padding: 9px 12px !important;
-  border-radius: 8px !important;
-  cursor: pointer !important;
-  transition: background 0.15s ease;
-}
-
-#suggestions li:hover,
-#suggestions li.active {
-  background: rgba(245, 158, 11, 0.18) !important;
-  color: #fbbf24 !important;
-}
-
-/* Кнопка "Заказать" в калькуляторе: держим форму и высоту при загрузке */
-.uc-tariffCalc button[type="submit"] {
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  min-height: 56px;
-  line-height: 1;
-  overflow: hidden;
-}
-
-/* Спиннер, который скрипт вставляет в кнопку при расчёте/отправке */
-.uc-tariffCalc button[type="submit"] .loading__svg {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  animation: tcSpin 0.8s linear infinite;
-}
-
-@keyframes tcSpin {
-  to {
-    transform: rotate(360deg);
-  }
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

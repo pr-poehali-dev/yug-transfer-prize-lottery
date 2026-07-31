@@ -242,7 +242,7 @@ const Index = () => {
                     <span className="text-white/50 text-[11px]">маршрут {price.distanceKm} км</span>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="no-scrollbar flex gap-2 overflow-x-auto -mx-1 px-1 pb-1">
                   {TARIFFS.map((t) => {
                     const p = price.tariffs ? price.tariffs[t] : null;
                     const active = tariff === t;
@@ -252,7 +252,7 @@ const Index = () => {
                         key={t}
                         onClick={() => setTariff(t)}
                         className={
-                          "flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 transition-colors " +
+                          "shrink-0 w-[76px] flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1 py-2 transition-colors " +
                           (active
                             ? "border-amber-500 bg-amber-500/15"
                             : "border-white/10 bg-black/30 hover:border-amber-500/40")
@@ -260,15 +260,15 @@ const Index = () => {
                       >
                         <Icon
                           name={TARIFF_ICONS[t] || "Car"}
-                          size={22}
+                          size={20}
                           className={active ? "text-amber-400" : "text-white/70"}
                         />
-                        <span className={"text-[11px] leading-tight " + (active ? "text-white" : "text-white/70")}>
+                        <span className={"text-[10px] leading-tight " + (active ? "text-white" : "text-white/70")}>
                           {t}
                         </span>
                         <span
                           className={
-                            "text-[13px] font-bold leading-tight " +
+                            "text-[12px] font-bold leading-tight whitespace-nowrap " +
                             (active ? "text-amber-400" : "text-white/85")
                           }
                         >
