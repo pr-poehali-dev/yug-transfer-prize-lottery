@@ -10,6 +10,14 @@ import usePriceCalc from "@/hooks/usePriceCalc";
 
 const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
 const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес", "Доставка"];
+const TARIFF_ICONS: Record<string, string> = {
+  Срочный: "Zap",
+  Стандарт: "Car",
+  Комфорт: "CarFront",
+  Минивэн: "Bus",
+  Бизнес: "CarTaxiFront",
+  Доставка: "Package",
+};
 const COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
 const inputCls =
@@ -222,10 +230,57 @@ const Index = () => {
               </div>
 
               <div>
-                <label className="block text-white/80 text-xs font-medium mb-1">Выберите тариф</label>
-                <select name="tarif" value={tariff} onChange={(e) => setTariff(e.target.value)} className={inputCls}>
-                  {TARIFFS.map((t) => <option key={t} value={t} className="bg-[#1a1a1a]">{t}</option>)}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-white/80 text-xs font-medium">Выберите класс авто</label>
+                  {price.loading && (
+                    <span className="flex items-center gap-1 text-amber-400/80 text-[11px]">
+                      <Icon name="LoaderCircle" size={12} className="animate-spin" />
+                      считаем…
+                    </span>
+                  )}
+                  {!price.loading && price.distanceKm != null && (
+                    <span className="text-white/50 text-[11px]">маршрут {price.distanceKm} км</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {TARIFFS.map((t) => {
+                    const p = price.tariffs ? price.tariffs[t] : null;
+                    const active = tariff === t;
+                    return (
+                      <button
+                        type="button"
+                        key={t}
+                        onClick={() => setTariff(t)}
+                        className={
+                          "flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 transition-colors " +
+                          (active
+                            ? "border-amber-500 bg-amber-500/15"
+                            : "border-white/10 bg-black/30 hover:border-amber-500/40")
+                        }
+                      >
+                        <Icon
+                          name={TARIFF_ICONS[t] || "Car"}
+                          size={22}
+                          className={active ? "text-amber-400" : "text-white/70"}
+                        />
+                        <span className={"text-[11px] leading-tight " + (active ? "text-white" : "text-white/70")}>
+                          {t}
+                        </span>
+                        <span
+                          className={
+                            "text-[13px] font-bold leading-tight " +
+                            (active ? "text-amber-400" : "text-white/85")
+                          }
+                        >
+                          {p != null ? `${p.toLocaleString("ru-RU")} ₽` : "—"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {price.error && (
+                  <p className="text-white/50 text-xs mt-1.5">{price.error}</p>
+                )}
               </div>
 
               <div className="flex items-center justify-between gap-1.5 pt-1 md:pt-2">
@@ -242,28 +297,6 @@ const Index = () => {
                   Животные
                 </label>
               </div>
-
-              {(price.loading || selectedPrice != null || price.error) && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 flex items-center justify-between gap-2">
-                  {price.loading ? (
-                    <span className="flex items-center gap-2 text-white/80 text-sm">
-                      <Icon name="LoaderCircle" size={16} className="animate-spin text-amber-400" />
-                      Считаем стоимость…
-                    </span>
-                  ) : price.error ? (
-                    <span className="text-white/60 text-sm">{price.error}</span>
-                  ) : (
-                    <>
-                      <span className="text-white/70 text-sm">
-                        Стоимость{price.distanceKm ? ` · ${price.distanceKm} км` : ""}
-                      </span>
-                      <span className="text-amber-400 font-bold text-lg">
-                        {selectedPrice?.toLocaleString("ru-RU")} ₽
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <input name="name" placeholder="Как вас зовут" onInput={(e) => clearError(e.currentTarget)} className={inputCls} />
