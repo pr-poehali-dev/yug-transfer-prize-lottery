@@ -33,27 +33,19 @@ const Index = () => {
     const form = formRef.current;
     if (!form) return;
 
-    const REQUIRED: { name: string; label: string }[] = [
-      { name: "place_start", label: "Откуда вас забрать" },
-      { name: "place_end", label: "Куда довезти" },
-      { name: "Date", label: "Дата поездки" },
-      { name: "Time", label: "Время" },
-      { name: "name", label: "Ваше имя" },
-      { name: "Phone", label: "Телефон" },
-    ];
+    const REQUIRED = ["place_start", "place_end", "Date", "Time", "name", "Phone"];
 
     const onSubmitCapture = (e: Event) => {
-      const missing: { field: HTMLInputElement; label: string }[] = [];
-      for (const r of REQUIRED) {
-        const field = form.querySelector<HTMLInputElement>(`[name="${r.name}"]`);
-        if (field && !field.value.trim()) missing.push({ field, label: r.label });
+      const missing: HTMLInputElement[] = [];
+      for (const name of REQUIRED) {
+        const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
+        if (field && !field.value.trim()) missing.push(field);
       }
       if (missing.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        alert("Пожалуйста, заполните обязательные поля:\n\n• " + missing.map((m) => m.label).join("\n• "));
-        missing.forEach((m) => m.field.classList.add("!border-red-500"));
-        missing[0].field.focus();
+        missing.forEach((f) => f.classList.add("!border-red-500"));
+        missing[0].focus();
       }
     };
 
