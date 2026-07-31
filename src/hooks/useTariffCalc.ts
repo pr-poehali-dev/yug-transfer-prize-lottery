@@ -50,21 +50,15 @@ export default function useTariffCalc(ready: boolean) {
         await loadScript(TARIFF_CALC_SCRIPT_URL, "tc-tariff-calc");
         if (cancelled) return;
 
-        // DOMContentLoaded в SPA уже прошёл — запускаем инициализацию вручную.
+        // DOMContentLoaded в SPA уже прошёл — запускаем только штатную
+        // инициализацию скрипта: подсказки и карту он подключает сам.
         const w = window as unknown as {
           tariffCalc_init?: () => void;
-          initMap?: () => void;
-          initAutocompleteOnce?: () => void;
-          ymaps?: { ready: (cb: () => void) => void };
         };
         setTimeout(() => {
           if (cancelled) return;
           try {
             if (typeof w.tariffCalc_init === "function") w.tariffCalc_init();
-            if (w.ymaps && typeof w.initMap === "function") w.ymaps.ready(w.initMap);
-            if (w.ymaps && typeof w.initAutocompleteOnce === "function") {
-              w.ymaps.ready(w.initAutocompleteOnce);
-            }
           } catch (err) {
             console.error("[tariffCalc] ошибка инициализации", err);
           }
