@@ -217,7 +217,11 @@ function installCalcInterceptor() {
   XHR.send = function (this: XMLHttpRequest & { __url?: string }, body?: Document | XMLHttpRequestBodyInit | null) {
     try {
       if (this.__url && this.__url.includes("order-create.php") && body instanceof FormData) {
+        const fieldVal = document.querySelector<HTMLInputElement>("input[name=order_price]")?.value;
+        const btnTxt = document.querySelector<HTMLElement>(".uc-tariffCalc button[type=submit]")?.textContent;
+        console.log("[ORDER] before append: orderPrice(FormData)=", body.get("orderPrice"), "| field order_price=", fieldVal, "| button=", btnTxt);
         appendPriceToFormData(body);
+        console.log("[ORDER] after append: orderPrice(FormData)=", body.get("orderPrice"));
         // После успешной отправки — очищаем все поля формы.
         this.addEventListener("load", () => {
           if (this.status >= 200 && this.status < 300) {
