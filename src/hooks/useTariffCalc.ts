@@ -176,15 +176,27 @@ export function resetOrderForm() {
   window.dispatchEvent(new CustomEvent("orderFormReset"));
 }
 
-// Текущая выбранная цена (из кнопки/поля order_price) для отправки в заявке.
+// Текущая выбранная цена. Приоритет — цена активной карточки тарифа
+// (именно её видит пользователь), затем скрытое поле, затем кнопка.
 function currentSelectedPrice(): number {
+  const activeCard = document.querySelector<HTMLElement>(".calc__form__tarif__item.is-active .calc__form__tarif__item__price");
+  const fromCard = parsePrice(activeCard?.textContent || "");
+  if (fromCard > 0) return fromCard;
+
   const orderPrice = document.querySelector<HTMLInputElement>("input[name=order_price]");
-  if (orderPrice && orderPrice.value) {
-    const n = parseInt(orderPrice.value.replace(/[^0-9]/g, ""), 10);
-    if (n > 0) return n;
-  }
+  const fromField = parsePrice(orderPrice?.value || "");
+  if (fromField > 0) return fromField;
+
   const btn = document.querySelector<HTMLElement>(".uc-tariffCalc button[type=submit]");
   return parsePrice(btn?.textContent || "");
+}
+
+// Синхронно записать цену выбранного тарифа в поле order_price ПЕРЕД отправкой,
+// чтобы штатный скрипт прочитал её и добавил в заявку (orderPrice).
+export function syncOrderPriceField() {
+  const price = currentSelectedPrice();
+  const field = document.querySelector<HTMLInputElement>("input[name=order_price]");
+  if (field && price > 0) field.value = String(price);
 }
 
 // Штатное поле заявки — orderPrice (так его читает диспетчерская).

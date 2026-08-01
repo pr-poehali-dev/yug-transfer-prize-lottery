@@ -5,7 +5,7 @@ import ContactWidget from "@/components/ContactWidget";
 import FeaturesBar from "@/components/FeaturesBar";
 import Icon from "@/components/ui/icon";
 import useSEO from "@/hooks/useSEO";
-import useTariffCalc, { applySelectedTariffFromCache, clearTariffPriceCache } from "@/hooks/useTariffCalc";
+import useTariffCalc, { applySelectedTariffFromCache, clearTariffPriceCache, syncOrderPriceField } from "@/hooks/useTariffCalc";
 
 const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
 const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес", "Доставка"];
@@ -73,7 +73,11 @@ const Index = () => {
         e.stopImmediatePropagation();
         missing.forEach((f) => f.classList.add("!border-red-500"));
         missing[0].focus();
+        return;
       }
+      // Валидация ок — синхронно кладём цену в order_price ДО того,
+      // как штатный скрипт (bubble-фаза) прочитает поле для заявки.
+      syncOrderPriceField();
     };
     const clearErr = (e: Event) => {
       (e.target as HTMLElement)?.classList?.remove("!border-red-500");
