@@ -187,18 +187,15 @@ function currentSelectedPrice(): number {
   return parsePrice(btn?.textContent || "");
 }
 
-// Дописываем цену выбранного тарифа в FormData заявки (order-create.php).
+// Штатное поле заявки — orderPrice (так его читает диспетчерская).
+// Скрипт добавляет его в FormData только если input[name=order_price] непустой.
+// Гарантируем, что цена выбранного тарифа там есть.
 function appendPriceToFormData(fd: FormData) {
+  const existing = fd.get("orderPrice");
+  const hasValid = typeof existing === "string" && parsePrice(existing) > 0;
+  if (hasValid) return;
   const price = currentSelectedPrice();
-  if (!price) return;
-  const tarif = document.querySelector<HTMLSelectElement>("select[name=tarif]")?.value || "";
-  const formatted = new Intl.NumberFormat("ru-RU").format(price) + " \u20BD";
-  // Разные возможные имена — чтобы сумма точно попала в заявку менеджеру.
-  fd.set("orderPrice", String(price));
-  fd.set("orderCost", String(price));
-  fd.set("orderSumm", formatted);
-  fd.set("price", String(price));
-  if (tarif) fd.set("orderComment", ((fd.get("orderComment") as string) || "") + ` [Тариф: ${tarif}, цена: ${formatted}]`);
+  if (price > 0) fd.set("orderPrice", String(price));
 }
 
 // Перехватываем ответ расчёта calc_old.php и отправку заявки (XHR) один раз.
