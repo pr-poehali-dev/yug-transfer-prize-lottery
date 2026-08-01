@@ -5,7 +5,7 @@ import ContactWidget from "@/components/ContactWidget";
 import FeaturesBar from "@/components/FeaturesBar";
 import Icon from "@/components/ui/icon";
 import useSEO from "@/hooks/useSEO";
-import useTariffCalc from "@/hooks/useTariffCalc";
+import useTariffCalc, { applySelectedTariffFromCache, clearTariffPriceCache } from "@/hooks/useTariffCalc";
 
 const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
 const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес", "Доставка"];
@@ -42,13 +42,15 @@ const Index = () => {
   // Штатный скрипт: подсказки, расчёт цены и отправка заявки.
   useTariffCalc(true);
 
-  // Клик по карточке тарифа: меняем скрытый select[name=tarif] и триггерим
-  // событие change, чтобы скрипт калькулятора пересчитал стоимость.
+  // Клик по карточке тарифа: если цены уже посчитаны — просто подставляем
+  // стоимость выбранного тарифа в кнопку из кэша, без нового запроса.
+  // Пересчитываем только если цен ещё нет (первый расчёт).
   const pickTariff = (t: string) => {
     setTariff(t);
     const sel = tarifRef.current;
-    if (sel) {
-      sel.value = t;
+    if (sel) sel.value = t;
+    const applied = applySelectedTariffFromCache(t);
+    if (!applied && sel) {
       sel.dispatchEvent(new Event("change", { bubbles: true }));
     }
   };
@@ -102,12 +104,24 @@ const Index = () => {
       }
     };
 
+    // Смена маршрута/параметров делает кэш цен неактуальным — сбрасываем его,
+    // но НЕ трогаем при выборе самого тарифа.
+    const ROUTE_FIELDS = ["place_start", "place_end", "Date", "Time", "count_peeple", "count_bags", "orderBabyChair", "orderBuster", "orderPet"];
+    const onRouteChange = (e: Event) => {
+      const name = (e.target as HTMLElement)?.getAttribute?.("name") || "";
+      if (ROUTE_FIELDS.includes(name)) clearTariffPriceCache();
+    };
+
     form.addEventListener("submit", onSubmitCapture, true);
     form.addEventListener("input", clearErr, true);
+    form.addEventListener("input", onRouteChange, true);
+    form.addEventListener("change", onRouteChange, true);
     return () => {
       window.alert = nativeAlert;
       form.removeEventListener("submit", onSubmitCapture, true);
       form.removeEventListener("input", clearErr, true);
+      form.removeEventListener("input", onRouteChange, true);
+      form.removeEventListener("change", onRouteChange, true);
     };
   }, []);
 

@@ -33,6 +33,8 @@ function loadScript(src: string, id: string): Promise<void> {
 // от внутренней логики скрипта — цены появляются сразу на всех тарифах.
 function applyAllTariffPrices(costAll: Record<string, number> | null | undefined) {
   if (!costAll) return;
+  // Кэшируем цены всех тарифов, чтобы при клике подставлять без пересчёта.
+  (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices = costAll;
   const cards = document.querySelectorAll<HTMLElement>(".calc__form__tarif__item");
   cards.forEach((card) => {
     const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
@@ -44,6 +46,24 @@ function applyAllTariffPrices(costAll: Record<string, number> | null | undefined
       card.dataset.hasPrice = "1";
     }
   });
+}
+
+// Сбросить кэш цен (маршрут/параметры изменились — старые цены неактуальны).
+export function clearTariffPriceCache() {
+  (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices = undefined;
+}
+
+// Подставить цену выбранного тарифа в кнопку и order_price БЕЗ пересчёта.
+// Возвращает true, если цена нашлась в кэше.
+export function applySelectedTariffFromCache(tariff: string): boolean {
+  const cache = (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices;
+  const cost = cache?.[tariff];
+  if (typeof cost !== "number" || cost <= 0) return false;
+  const btn = document.querySelector<HTMLElement>(".calc__form__submit, form.uc-tariffCalc button[type=submit]");
+  if (btn) btn.textContent = new Intl.NumberFormat("ru-RU").format(cost) + " \u0440\u0443\u0431. \u0417\u0430\u043A\u0430\u0437\u0430\u0442\u044C";
+  const orderPrice = document.querySelector<HTMLInputElement>("input[name=order_price]");
+  if (orderPrice) orderPrice.value = String(cost);
+  return true;
 }
 
 // Делаем линию маршрута ярче. Скрипт рисует её тускло, менять его нельзя,
