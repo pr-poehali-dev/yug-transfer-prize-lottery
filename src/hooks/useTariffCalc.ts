@@ -133,11 +133,105 @@ function watchRouteLine() {
   obs.observe(map, { childList: true, subtree: true });
 }
 
-// Перехватываем ответ расчёта calc_old.php один раз на весь сеанс.
+// Полная очистка формы после успешной отправки заявки.
+export function resetOrderForm() {
+  const form = document.querySelector<HTMLFormElement>(".uc-tariffCalc form");
+  if (!form) return;
+
+  // Текстовые/числовые/дата/время поля и textarea.
+  form.querySelectorAll<HTMLInputElement>("input[type=text], input[type=tel], input[type=date], input[type=time], input:not([type]), textarea").forEach((el) => {
+    el.value = "";
+    el.classList.remove("!border-red-500");
+  });
+  form.querySelectorAll<HTMLTextAreaElement>("textarea").forEach((el) => (el.value = ""));
+
+  // Чекбоксы (дет. кресло, бустер, животные и пр.).
+  form.querySelectorAll<HTMLInputElement>("input[type=checkbox]").forEach((el) => (el.checked = false));
+  form.querySelectorAll<HTMLElement>(".calc__form__checkbox__selector.active").forEach((el) => el.classList.remove("active"));
+
+  // Селекты к первому значению.
+  form.querySelectorAll<HTMLSelectElement>("select").forEach((el) => (el.selectedIndex = 0));
+
+  // Цены на карточках и кэш.
+  document.querySelectorAll<HTMLElement>(".calc__form__tarif__item__price").forEach((el) => (el.textContent = ""));
+  document.querySelectorAll<HTMLElement>(".calc__form__tarif__item").forEach((el) => delete el.dataset.hasPrice);
+  clearTariffPriceCache();
+  const orderPrice = document.querySelector<HTMLInputElement>("input[name=order_price]");
+  if (orderPrice) orderPrice.value = "";
+
+  // Очистка карты (маршрут).
+  const map = document.getElementById("map");
+  if (map) {
+    const w = window as unknown as { myMap?: { geoObjects?: { removeAll?: () => void } } };
+    try {
+      w.myMap?.geoObjects?.removeAll?.();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Сообщаем React-компоненту сбросить активный тариф и вернуть кнопку.
+  window.dispatchEvent(new CustomEvent("orderFormReset"));
+}
+
+// Текущая выбранная цена (из кнопки/поля order_price) для отправки в заявке.
+function currentSelectedPrice(): number {
+  const orderPrice = document.querySelector<HTMLInputElement>("input[name=order_price]");
+  if (orderPrice && orderPrice.value) {
+    const n = parseInt(orderPrice.value.replace(/[^0-9]/g, ""), 10);
+    if (n > 0) return n;
+  }
+  const btn = document.querySelector<HTMLElement>(".uc-tariffCalc button[type=submit]");
+  return parsePrice(btn?.textContent || "");
+}
+
+// Дописываем цену выбранного тарифа в FormData заявки (order-create.php).
+function appendPriceToFormData(fd: FormData) {
+  const price = currentSelectedPrice();
+  if (!price) return;
+  const tarif = document.querySelector<HTMLSelectElement>("select[name=tarif]")?.value || "";
+  const formatted = new Intl.NumberFormat("ru-RU").format(price) + " \u20BD";
+  // Разные возможные имена — чтобы сумма точно попала в заявку менеджеру.
+  fd.set("orderPrice", String(price));
+  fd.set("orderCost", String(price));
+  fd.set("orderSumm", formatted);
+  fd.set("price", String(price));
+  if (tarif) fd.set("orderComment", ((fd.get("orderComment") as string) || "") + ` [Тариф: ${tarif}, цена: ${formatted}]`);
+}
+
+// Перехватываем ответ расчёта calc_old.php и отправку заявки (XHR) один раз.
 function installCalcInterceptor() {
   const w = window as unknown as { __calcFetchPatched?: boolean };
   if (w.__calcFetchPatched) return;
   w.__calcFetchPatched = true;
+
+  // Патчим XMLHttpRequest.send: скрипт шлёт заявку через jQuery.ajax (XHR).
+  // Если это POST на order-create.php с FormData — дописываем цену.
+  const XHR = XMLHttpRequest.prototype;
+  const origOpen = XHR.open;
+  const origSend = XHR.send;
+  XHR.open = function (this: XMLHttpRequest & { __url?: string }, method: string, url: string, ...rest: unknown[]) {
+    this.__url = url;
+    // @ts-expect-error проксируем оригинальную сигнатуру
+    return origOpen.call(this, method, url, ...rest);
+  };
+  XHR.send = function (this: XMLHttpRequest & { __url?: string }, body?: Document | XMLHttpRequestBodyInit | null) {
+    try {
+      if (this.__url && this.__url.includes("order-create.php") && body instanceof FormData) {
+        appendPriceToFormData(body);
+        // После успешной отправки — очищаем все поля формы.
+        this.addEventListener("load", () => {
+          if (this.status >= 200 && this.status < 300) {
+            setTimeout(resetOrderForm, 100);
+          }
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+    return origSend.call(this, body as XMLHttpRequestBodyInit);
+  };
+
   const origFetch = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;

@@ -116,12 +116,18 @@ const Index = () => {
     form.addEventListener("input", clearErr, true);
     form.addEventListener("input", onRouteChange, true);
     form.addEventListener("change", onRouteChange, true);
+    // После успешной отправки хук чистит поля и шлёт это событие —
+    // сбрасываем активный тариф на первый.
+    const onReset = () => setTariff(TARIFFS[0]);
+    window.addEventListener("orderFormReset", onReset);
+
     return () => {
       window.alert = nativeAlert;
       form.removeEventListener("submit", onSubmitCapture, true);
       form.removeEventListener("input", clearErr, true);
       form.removeEventListener("input", onRouteChange, true);
       form.removeEventListener("change", onRouteChange, true);
+      window.removeEventListener("orderFormReset", onReset);
     };
   }, []);
 
