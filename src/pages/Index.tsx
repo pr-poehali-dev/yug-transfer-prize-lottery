@@ -282,7 +282,7 @@ const Index = () => {
 
               <button
                 type="submit"
-                className="w-full mt-3 md:mt-3 py-4 md:py-4 text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white transition-colors"
+                className="w-full mt-3 md:mt-3 h-14 min-h-14 max-h-14 shrink-0 flex items-center justify-center gap-2 leading-none text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white transition-colors [&_img]:h-6 [&_img]:w-6 [&_svg]:h-6 [&_svg]:w-6 overflow-hidden"
               >
                 Заказать
               </button>
