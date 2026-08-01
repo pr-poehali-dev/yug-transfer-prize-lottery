@@ -46,6 +46,38 @@ function applyAllTariffPrices(costAll: Record<string, number> | null | undefined
   });
 }
 
+// Делаем линию маршрута ярче. Скрипт рисует её тускло, менять его нельзя,
+// поэтому подкрашиваем сам SVG-path карты: линия маршрута — самый «длинный»
+// path (большая длина атрибута d), мелкие иконки не трогаем.
+function brightenRouteLine() {
+  const map = document.getElementById("map");
+  if (!map) return;
+  const paths = Array.from(map.querySelectorAll<SVGPathElement>("path[stroke]"));
+  paths.forEach((p) => {
+    const d = p.getAttribute("d") || "";
+    if (d.length < 200) return; // короткие path — это иконки/маркеры, пропускаем
+    p.setAttribute("stroke", "#ffd21a");
+    p.setAttribute("stroke-width", "6");
+    p.setAttribute("stroke-opacity", "1");
+    p.style.filter = "drop-shadow(0 0 3px rgba(255,179,0,0.6))";
+  });
+}
+
+// Линия дорисовывается асинхронно — красим несколько раз и следим за изменениями DOM карты.
+function watchRouteLine() {
+  const w = window as unknown as { __routeWatcher?: boolean };
+  [200, 600, 1200, 2000].forEach((ms) => setTimeout(brightenRouteLine, ms));
+  if (w.__routeWatcher) return;
+  const map = document.getElementById("map");
+  if (!map) return;
+  w.__routeWatcher = true;
+  const obs = new MutationObserver(() => {
+    window.clearTimeout((watchRouteLine as unknown as { _t?: number })._t);
+    (watchRouteLine as unknown as { _t?: number })._t = window.setTimeout(brightenRouteLine, 150);
+  });
+  obs.observe(map, { childList: true, subtree: true });
+}
+
 // Перехватываем ответ расчёта calc_old.php один раз на весь сеанс.
 function installCalcInterceptor() {
   const w = window as unknown as { __calcFetchPatched?: boolean };
@@ -62,7 +94,10 @@ function installCalcInterceptor() {
         .then((txt) => {
           try {
             const data = JSON.parse(txt);
-            if (data && data.status === "true") applyAllTariffPrices(data.costAllTariff);
+            if (data && data.status === "true") {
+              applyAllTariffPrices(data.costAllTariff);
+              watchRouteLine();
+            }
           } catch {
             /* ignore */
           }
