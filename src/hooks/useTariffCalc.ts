@@ -159,15 +159,17 @@ export function resetOrderForm() {
   const orderPrice = document.querySelector<HTMLInputElement>("input[name=order_price]");
   if (orderPrice) orderPrice.value = "";
 
-  // Очистка карты (маршрут).
-  const map = document.getElementById("map");
-  if (map) {
-    const w = window as unknown as { myMap?: { geoObjects?: { removeAll?: () => void } } };
-    try {
-      w.myMap?.geoObjects?.removeAll?.();
-    } catch {
-      /* ignore */
-    }
+  // Очистка карты (маршрут). Функция clearRoutes у скрипта глобальна и
+  // очищает geoObjects карты через своё замыкание.
+  const w = window as unknown as {
+    clearRoutes?: () => void;
+    myMap?: { geoObjects?: { removeAll?: () => void } };
+  };
+  try {
+    if (typeof w.clearRoutes === "function") w.clearRoutes();
+    else w.myMap?.geoObjects?.removeAll?.();
+  } catch {
+    /* ignore */
   }
 
   // Сообщаем React-компоненту сбросить активный тариф и вернуть кнопку.
