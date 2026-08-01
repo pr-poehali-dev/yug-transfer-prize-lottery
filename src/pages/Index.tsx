@@ -242,13 +242,11 @@ const Index = () => {
                           {t}
                         </span>
                         <span
-                          className={
-                            "calc__form__tarif__item__price text-[12px] font-bold leading-tight whitespace-nowrap " +
-                            (active ? "text-amber-400" : "text-white/85")
-                          }
-                        >
-                          —
-                        </span>
+                          ref={(el) => {
+                            if (el && !el.textContent) el.textContent = "—";
+                          }}
+                          className="calc__form__tarif__item__price text-[12px] font-bold leading-tight whitespace-nowrap text-amber-300"
+                        />
                       </button>
                     );
                   })}
