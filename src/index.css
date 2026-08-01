@@ -367,6 +367,17 @@ html {
   display: none;
 }
 
+/* Цена тарифа: приглушённая по умолчанию, яркая и крупнее у выбранного */
+.calc__form__tarif__item__price {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 0.15s, font-size 0.15s;
+}
+.calc__form__tarif__item.is-active .calc__form__tarif__item__price {
+  color: #fbbf24;
+  font-size: 13px;
+}
+
 /* Подсказки адресов калькулятора (tariffCalc.js создаёт ul#suggestions в body) */
 #suggestions {
   background: #1f1f1f !important;

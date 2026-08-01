@@ -229,7 +229,7 @@ const Index = () => {
                         className={
                           "calc__form__tarif__item shrink-0 w-[76px] flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1 py-2 transition-colors " +
                           (active
-                            ? "border-amber-500 bg-amber-500/15"
+                            ? "is-active border-amber-500 bg-amber-500/15"
                             : "border-white/10 bg-black/30 hover:border-amber-500/40")
                         }
                       >
@@ -245,7 +245,7 @@ const Index = () => {
                           ref={(el) => {
                             if (el && !el.textContent) el.textContent = "—";
                           }}
-                          className="calc__form__tarif__item__price text-[12px] font-bold leading-tight whitespace-nowrap text-amber-300"
+                          className="calc__form__tarif__item__price font-bold leading-tight whitespace-nowrap"
                         />
                       </button>
                     );
