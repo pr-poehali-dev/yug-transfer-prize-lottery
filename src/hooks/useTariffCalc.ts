@@ -53,13 +53,32 @@ export function clearTariffPriceCache() {
   (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices = undefined;
 }
 
+// Достаём число из строки цены ("7 939 ₽" -> 7939).
+function parsePrice(text: string): number {
+  const digits = (text || "").replace(/[^0-9]/g, "");
+  return digits ? parseInt(digits, 10) : 0;
+}
+
 // Подставить цену выбранного тарифа в кнопку и order_price БЕЗ пересчёта.
-// Возвращает true, если цена нашлась в кэше.
+// Берём цену из кэша, а если его нет — прямо с карточки тарифа (её уже
+// отрисовал скрипт). Возвращает true, если цена найдена.
 export function applySelectedTariffFromCache(tariff: string): boolean {
   const cache = (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices;
-  const cost = cache?.[tariff];
-  if (typeof cost !== "number" || cost <= 0) return false;
-  const btn = document.querySelector<HTMLElement>(".calc__form__submit, form.uc-tariffCalc button[type=submit]");
+  let cost = cache?.[tariff] ?? 0;
+
+  if (!cost) {
+    const cards = document.querySelectorAll<HTMLElement>(".calc__form__tarif__item");
+    cards.forEach((card) => {
+      const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
+      if (title === tariff) {
+        cost = parsePrice(card.querySelector(".calc__form__tarif__item__price")?.textContent || "");
+      }
+    });
+  }
+
+  if (!cost || cost <= 0) return false;
+
+  const btn = document.querySelector<HTMLElement>(".uc-tariffCalc button[type=submit]");
   if (btn) btn.textContent = new Intl.NumberFormat("ru-RU").format(cost) + " \u0440\u0443\u0431. \u0417\u0430\u043A\u0430\u0437\u0430\u0442\u044C";
   const orderPrice = document.querySelector<HTMLInputElement>("input[name=order_price]");
   if (orderPrice) orderPrice.value = String(cost);
@@ -72,15 +91,31 @@ export function applySelectedTariffFromCache(tariff: string): boolean {
 function brightenRouteLine() {
   const map = document.getElementById("map");
   if (!map) return;
-  const paths = Array.from(map.querySelectorAll<SVGPathElement>("path[stroke]"));
-  paths.forEach((p) => {
-    const d = p.getAttribute("d") || "";
-    if (d.length < 200) return; // короткие path — это иконки/маркеры, пропускаем
+  const paths = Array.from(map.querySelectorAll<SVGPathElement>("path"));
+  if (!paths.length) return;
+
+  // Длина атрибута d у линии маршрута сильно больше, чем у иконок/меток.
+  // Красим все «длинные» линии, а также самую длинную гарантированно.
+  let longest: SVGPathElement | null = null;
+  let longestLen = 0;
+  const paint = (p: SVGPathElement) => {
     p.setAttribute("stroke", "#ffd21a");
     p.setAttribute("stroke-width", "6");
     p.setAttribute("stroke-opacity", "1");
-    p.style.filter = "drop-shadow(0 0 3px rgba(255,179,0,0.6))";
+    p.setAttribute("stroke-linecap", "round");
+    p.style.filter = "drop-shadow(0 0 3px rgba(255,179,0,0.7))";
+  };
+
+  paths.forEach((p) => {
+    const d = (p.getAttribute("d") || "").length;
+    if (d > longestLen) {
+      longestLen = d;
+      longest = p;
+    }
+    if (d >= 80) paint(p); // длинные пути — это линия(и) маршрута
   });
+
+  if (longest && longestLen >= 40) paint(longest);
 }
 
 // Линия дорисовывается асинхронно — красим несколько раз и следим за изменениями DOM карты.
