@@ -28,10 +28,56 @@ function loadScript(src: string, id: string): Promise<void> {
 // Штатная схема калькулятора: jQuery -> Яндекс.Карты -> tariffCalc.js.
 // Скрипт сам делает подсказки адресов, расчёт цены (пишет её в
 // .calc__form__tarif__item__price и order_price) и отправку заявки.
+// Раскладываем цены по ВСЕМ карточкам тарифов: берём costAllTariff из ответа
+// сервера и пишем цену в каждую карточку по названию тарифа (title). Не зависит
+// от внутренней логики скрипта — цены появляются сразу на всех тарифах.
+function applyAllTariffPrices(costAll: Record<string, number> | null | undefined) {
+  if (!costAll) return;
+  const cards = document.querySelectorAll<HTMLElement>(".calc__form__tarif__item");
+  cards.forEach((card) => {
+    const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
+    const priceEl = card.querySelector<HTMLElement>(".calc__form__tarif__item__price");
+    if (!priceEl) return;
+    const cost = costAll[title];
+    if (typeof cost === "number" && cost > 0) {
+      priceEl.textContent = new Intl.NumberFormat("ru-RU").format(cost) + " \u20BD";
+      card.dataset.hasPrice = "1";
+    }
+  });
+}
+
+// Перехватываем ответ расчёта calc_old.php один раз на весь сеанс.
+function installCalcInterceptor() {
+  const w = window as unknown as { __calcFetchPatched?: boolean };
+  if (w.__calcFetchPatched) return;
+  w.__calcFetchPatched = true;
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+    const res = await origFetch(input as RequestInfo, init);
+    if (url && url.includes("calc_old.php")) {
+      res
+        .clone()
+        .text()
+        .then((txt) => {
+          try {
+            const data = JSON.parse(txt);
+            if (data && data.status === "true") applyAllTariffPrices(data.costAllTariff);
+          } catch {
+            /* ignore */
+          }
+        })
+        .catch(() => {});
+    }
+    return res;
+  };
+}
+
 export default function useTariffCalc(ready: boolean) {
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
+    installCalcInterceptor();
 
     (async () => {
       try {
