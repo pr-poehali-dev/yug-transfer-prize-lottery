@@ -295,7 +295,7 @@ const Index = () => {
 
               <textarea name="comment" defaultValue={prefillComment} placeholder="Комментарий (необязательно)" rows={2} className={inputCls} />
 
-              <input type="hidden" name="order_price" value="" />
+              <input type="hidden" name="order_price" defaultValue="" />
               <input type="checkbox" name="CardPayCash" defaultChecked className="hidden" aria-hidden />
 
               <button
