@@ -63,7 +63,7 @@ const Index = () => {
 
   return (
     <div
-      className="h-screen overflow-hidden bg-cover bg-center relative"
+      className="h-screen [height:100dvh] overflow-hidden bg-cover bg-center relative"
       style={{ backgroundImage: `url(${BG})` }}
     >
       {/* Карта маршрута (скрипт калькулятора рисует маршрут в #map) */}
