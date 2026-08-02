@@ -20,7 +20,7 @@ const TARIFF_ICONS: Record<string, string> = {
 const COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
 const inputCls =
-  "w-full bg-[#2a2a2a] border border-white/5 rounded-2xl px-4 py-3.5 text-white placeholder-white/40 text-[15px] outline-none focus:border-amber-400/60 transition-colors [color-scheme:dark]";
+  "w-full bg-[#2a2a2a] border border-white/5 rounded-xl px-4 py-2.5 text-white placeholder-white/40 text-[15px] outline-none focus:border-amber-400/60 transition-colors [color-scheme:dark]";
 
 // Тумблер-переключатель поверх скрытого чекбокса (name читает скрипт калькулятора).
 function Toggle({ name, label }: { name: string; label: string }) {
@@ -264,7 +264,7 @@ const Index = () => {
         <div className="bg-[#141414] rounded-t-[28px] md:rounded-[28px] border-t md:border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)]">
           <form ref={formRef} className="flex flex-col">
             {/* «ручка» шторки */}
-            <div className="pt-3 pb-1 flex justify-center md:hidden">
+            <div className="pt-2 pb-0.5 flex justify-center md:hidden">
               <span className="w-11 h-1.5 rounded-full bg-white/20" />
             </div>
 
@@ -281,7 +281,7 @@ const Index = () => {
             )}
 
             {/* ПАНЕЛЬ: ГЛАВНАЯ */}
-            <div className={"px-5 pt-3 pb-2 space-y-2.5 " + (panel === "main" ? "" : "hidden")}>
+            <div className={"px-5 pt-2 pb-1 space-y-2 " + (panel === "main" ? "" : "hidden")}>
               <div className="relative">
                 <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда?" autoComplete="off" className={inputCls + " pr-12"} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-amber-400 flex items-center justify-center">
@@ -292,11 +292,11 @@ const Index = () => {
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-white/50 text-[11px] font-medium mb-1 ml-1">Дата поездки</label>
+                  <label className="block text-white/50 text-[11px] font-medium mb-0.5 ml-1">Дата поездки</label>
                   <input name="Date" type="date" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-white/50 text-[11px] font-medium mb-1 ml-1">Во сколько?</label>
+                  <label className="block text-white/50 text-[11px] font-medium mb-0.5 ml-1">Во сколько?</label>
                   <input name="Time" type="time" className={inputCls} />
                 </div>
               </div>
@@ -320,7 +320,7 @@ const Index = () => {
                       key={t}
                       onClick={() => pickTariff(t)}
                       className={
-                        "calc__form__tarif__item shrink-0 w-[92px] flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 transition-colors " +
+                        "calc__form__tarif__item shrink-0 w-[84px] flex flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 transition-colors " +
                         (active
                           ? "is-active border-amber-400 bg-amber-400/10"
                           : "border-white/10 bg-black/40 hover:border-amber-400/40")
@@ -328,7 +328,7 @@ const Index = () => {
                     >
                       <Icon
                         name={TARIFF_ICONS[t] || "Car"}
-                        size={26}
+                        size={22}
                         className={active ? "text-amber-400" : "text-white/60"}
                       />
                       <span className={"calc__form__tarif__item__title text-xs font-medium leading-tight " + (active ? "text-white" : "text-white/70")}>
@@ -388,7 +388,7 @@ const Index = () => {
             <input type="checkbox" name="CardPayNubmerCard" className="hidden" aria-hidden readOnly />
 
             {/* Нижняя панель действий */}
-            <div className="flex items-center gap-3 px-5 pt-2 pb-5 md:pb-5">
+            <div className="flex items-center gap-3 px-5 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-5">
               <button
                 type="button"
                 onClick={() => setPanel(panel === "pay" ? "main" : "pay")}
