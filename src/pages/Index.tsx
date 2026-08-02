@@ -425,7 +425,7 @@ const Index = () => {
 
       {/* ДЕСКТОПНАЯ ВЕРСИЯ: прежняя форма «Оставить заявку» */}
       {!isMobile && (
-      <div className="relative z-10 w-full max-w-lg px-5 pt-3 pb-0 h-auto overflow-visible block absolute bottom-4 left-0">
+      <div className="relative z-10 w-full max-w-lg px-5 pt-3 pb-0 h-auto overflow-visible block absolute bottom-16 left-0">
         <div className="text-center mb-2">
           <h1 className="text-2xl font-bold text-white">Мой Трансфер</h1>
         </div>
