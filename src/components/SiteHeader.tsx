@@ -31,7 +31,7 @@ export default function SiteHeader() {
 
   return (
     <header ref={headerRef} className="sticky top-0 z-20 w-full">
-      <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-white/10 border-b border-white/20 backdrop-blur-md shadow-lg">
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5 md:bg-white/10 md:border-b md:border-white/20 md:backdrop-blur-md md:shadow-lg">
         <Link to="/" onClick={() => setOpen(false)} className="flex items-center gap-2 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0">
             <img
@@ -95,25 +95,6 @@ export default function SiteHeader() {
             <Icon name="Phone" size={13} className="text-amber-400" />
             {SITE_PHONE}
           </a>
-          <a
-            href="https://t.me/Dispether82"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Telegram"
-            className="md:hidden flex w-8 h-8 rounded-full bg-[#2AABEE] items-center justify-center shrink-0"
-          >
-            <Icon name="Send" size={15} className="text-white" />
-          </a>
-          <a
-            href="https://max.ru/u/f9LHodD0cOIMaVYO_Z-nUVm8RnfeFCYBL1plEAksXVd6OihrEdaQR7wxrpU"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="MAX"
-            className="md:hidden flex w-8 h-8 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] items-center justify-center shrink-0"
-          >
-            <span className="text-white text-[10px] font-bold leading-none">MAX</span>
-          </a>
-
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}

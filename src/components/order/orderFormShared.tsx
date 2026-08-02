@@ -69,10 +69,6 @@ export interface OrderFormState {
   geoLoading: boolean;
   detectLocation: () => void;
   pickTariff: (t: string) => void;
-  waypoints: { id: number; value: string }[];
-  addWaypoint: () => void;
-  removeWaypoint: (id: number) => void;
-  setWaypoint: (id: number, value: string) => void;
 }
 
 // Вся логика формы заказа (state, геолокация, тарифы, валидация, оплата).
@@ -93,20 +89,6 @@ export function useOrderForm(): OrderFormState {
   // Способ оплаты (радио-логика): Наличные / Перевод / По номеру счёта.
   const [pay, setPay] = useState<"cash" | "transfer" | "account">("transfer");
   const [geoLoading, setGeoLoading] = useState(false);
-  // Промежуточные адреса маршрута (визуальные, дописываются в комментарий).
-  const [waypoints, setWaypoints] = useState<{ id: number; value: string }[]>([]);
-  const wpIdRef = useRef(0);
-
-  const addWaypoint = () => {
-    wpIdRef.current += 1;
-    setWaypoints((prev) => [...prev, { id: wpIdRef.current, value: "" }]);
-  };
-  const removeWaypoint = (id: number) => {
-    setWaypoints((prev) => prev.filter((w) => w.id !== id));
-  };
-  const setWaypoint = (id: number, value: string) => {
-    setWaypoints((prev) => prev.map((w) => (w.id === id ? { ...w, value } : w)));
-  };
 
   // Штатный скрипт: подсказки, расчёт цены и отправка заявки.
   useTariffCalc(true);
@@ -308,9 +290,5 @@ export function useOrderForm(): OrderFormState {
     geoLoading,
     detectLocation,
     pickTariff,
-    waypoints,
-    addWaypoint,
-    removeWaypoint,
-    setWaypoint,
   };
 }

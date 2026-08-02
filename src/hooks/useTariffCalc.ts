@@ -272,6 +272,38 @@ function installCalcInterceptor() {
   };
 }
 
+// Резервируем нижнюю зону карты под шторкой заказа, чтобы Яндекс.setBounds
+// (его вызывает скрипт при построении маршрута) центрировал маршрут в верхней
+// видимой части экрана, а не под шторкой. margin.addArea — штатный API карты.
+function reserveMapBottomMargin() {
+  const w = window as unknown as {
+    myMap?: {
+      margin?: { addArea?: (opts: unknown) => { setPosition?: (o: unknown) => void } };
+      container?: { getSize?: () => [number, number] };
+    };
+  };
+  const map = w.myMap;
+  if (!map || !map.margin || typeof map.margin.addArea !== "function") {
+    // Карта ещё не готова — пробуем чуть позже.
+    setTimeout(reserveMapBottomMargin, 500);
+    return;
+  }
+  try {
+    // Высота шторки заказа (нижняя панель). Резервируем её + небольшой отступ.
+    const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+    const sheetH = sheet ? sheet.getBoundingClientRect().height : Math.round(window.innerHeight * 0.45);
+    map.margin.addArea({
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: "100%",
+      height: Math.min(sheetH + 16, Math.round(window.innerHeight * 0.6)),
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function useTariffCalc(ready: boolean) {
   useEffect(() => {
     if (!ready) return;
@@ -313,6 +345,9 @@ export default function useTariffCalc(ready: boolean) {
             if (w.ymaps && typeof w.ymaps.ready === "function") {
               w.ymaps.ready(() => {
                 if (typeof w.initMap === "function") w.initMap();
+                // Резервируем нижнюю зону под шторкой, чтобы маршрут центрировался
+                // в верхней видимой части экрана (setBounds учитывает margin).
+                reserveMapBottomMargin();
               });
             }
           } catch (err) {
