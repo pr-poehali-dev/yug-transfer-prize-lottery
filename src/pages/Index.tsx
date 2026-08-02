@@ -342,7 +342,7 @@ const Index = () => {
                         ref={(el) => {
                           if (el && !el.textContent) el.textContent = "—";
                         }}
-                        className={"calc__form__tarif__item__price text-sm font-bold leading-tight whitespace-nowrap " + (active ? "text-amber-400" : "text-white/50")}
+                        className={"calc__form__tarif__item__price text-[15px] font-extrabold leading-tight whitespace-nowrap " + (active ? "text-amber-400" : "text-white/70")}
                       />
                     </button>
                   );
@@ -495,7 +495,7 @@ const Index = () => {
                           ref={(el) => {
                             if (el && !el.textContent) el.textContent = "—";
                           }}
-                          className="calc__form__tarif__item__price font-bold leading-tight whitespace-nowrap"
+                          className="calc__form__tarif__item__price text-sm font-extrabold leading-tight whitespace-nowrap text-amber-400"
                         />
                       </button>
                     );
