@@ -17,6 +17,10 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
     geoLoading,
     detectLocation,
     pickTariff,
+    waypoints,
+    addWaypoint,
+    removeWaypoint,
+    setWaypoint,
   } = state;
 
   return (
