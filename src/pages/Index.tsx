@@ -36,10 +36,10 @@ function Toggle({ name, label }: { name: string; label: string }) {
     }
   };
   return (
-    <button type="button" onClick={toggle} className="w-full flex items-center justify-between py-4 text-left">
-      <span className="text-white text-lg">{label}</span>
-      <span className={"relative w-14 h-8 rounded-full transition-colors shrink-0 " + (on ? "bg-amber-400/30" : "bg-white/10")}>
-        <span className={"absolute top-1 w-6 h-6 rounded-full transition-all " + (on ? "left-7 bg-amber-400" : "left-1 bg-white/50")} />
+    <button type="button" onClick={toggle} className="w-full flex items-center justify-between py-2.5 text-left">
+      <span className="text-white text-[15px]">{label}</span>
+      <span className={"relative w-11 h-6 rounded-full transition-colors shrink-0 " + (on ? "bg-amber-400/30" : "bg-white/10")}>
+        <span className={"absolute top-1 w-4 h-4 rounded-full transition-all " + (on ? "left-6 bg-amber-400" : "left-1 bg-white/50")} />
       </span>
       <input ref={ref} type="checkbox" name={name} className="hidden" aria-hidden readOnly />
     </button>
@@ -49,10 +49,10 @@ function Toggle({ name, label }: { name: string; label: string }) {
 // Тумблер выбора способа оплаты (радио-логика управляется извне).
 function PayToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="w-full flex items-center justify-between py-4 text-left">
-      <span className="text-white text-lg">{label}</span>
-      <span className={"relative w-14 h-8 rounded-full transition-colors shrink-0 " + (active ? "bg-amber-400/30" : "bg-white/10")}>
-        <span className={"absolute top-1 w-6 h-6 rounded-full transition-all " + (active ? "left-7 bg-amber-400" : "left-1 bg-white/50")} />
+    <button type="button" onClick={onClick} className="w-full flex items-center justify-between py-2.5 text-left">
+      <span className="text-white text-[15px]">{label}</span>
+      <span className={"relative w-11 h-6 rounded-full transition-colors shrink-0 " + (active ? "bg-amber-400/30" : "bg-white/10")}>
+        <span className={"absolute top-1 w-4 h-4 rounded-full transition-all " + (active ? "left-6 bg-amber-400" : "left-1 bg-white/50")} />
       </span>
     </button>
   );
@@ -273,9 +273,9 @@ const Index = () => {
               <button
                 type="button"
                 onClick={() => setPanel("main")}
-                className="flex items-center gap-3 px-6 pt-4 pb-2 text-white text-xl font-semibold"
+                className="flex items-center gap-2 px-6 pt-3 pb-1 text-white text-base font-semibold"
               >
-                <Icon name="ArrowLeft" size={26} />
+                <Icon name="ArrowLeft" size={20} />
                 Назад
               </button>
             )}
@@ -354,22 +354,22 @@ const Index = () => {
               <div className="h-px bg-white/10" />
               <Toggle name="orderBuster" label="Бустер" />
 
-              <div className="grid grid-cols-2 gap-3 pt-4">
+              <div className="grid grid-cols-2 gap-3 pt-2">
                 <div>
-                  <label className="block text-white/50 text-[11px] font-medium mb-1 ml-1">Количество человек</label>
+                  <label className="block text-white/50 text-[11px] font-medium mb-0.5 ml-1">Количество человек</label>
                   <select name="count_peeple" defaultValue="1" className={inputCls}>
                     {COUNTS.map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-white/50 text-[11px] font-medium mb-1 ml-1">Количество багажа</label>
+                  <label className="block text-white/50 text-[11px] font-medium mb-0.5 ml-1">Количество багажа</label>
                   <select name="count_bags" defaultValue="1" className={inputCls}>
                     {["0", ...COUNTS].map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
                   </select>
                 </div>
               </div>
 
-              <textarea name="comment" defaultValue={prefillComment} placeholder="Комментарий водителю" rows={3} className={inputCls + " mt-3 resize-none"} />
+              <textarea name="comment" defaultValue={prefillComment} placeholder="Комментарий водителю" rows={2} className={inputCls + " mt-2 resize-none"} />
             </div>
 
             {/* ПАНЕЛЬ: ОПЛАТА */}
