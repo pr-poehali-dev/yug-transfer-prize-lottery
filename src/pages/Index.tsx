@@ -81,9 +81,59 @@ const Index = () => {
   const [panel, setPanel] = useState<"main" | "extra" | "pay">("main");
   // Способ оплаты (радио-логика): Наличные / Перевод / По номеру счёта.
   const [pay, setPay] = useState<"cash" | "transfer" | "account">("transfer");
+  const [geoLoading, setGeoLoading] = useState(false);
 
   // Штатный скрипт: подсказки, расчёт цены и отправка заявки.
   useTariffCalc(true);
+
+  // Определение геолокации: координаты -> адрес (Яндекс) -> поле «Откуда?».
+  const detectLocation = () => {
+    if (geoLoading) return;
+    if (!navigator.geolocation) {
+      alert("Ваш браузер не поддерживает определение местоположения");
+      return;
+    }
+    setGeoLoading(true);
+
+    const fillStart = (address: string) => {
+      const field = formRef.current?.querySelector<HTMLInputElement>('[name="place_start"]');
+      if (field) {
+        field.value = address;
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const ymaps = (window as unknown as { ymaps?: { ready: (cb: () => void) => void; geocode: (c: number[]) => Promise<{ geoObjects: { get: (i: number) => { getAddressLine: () => string } | null } }> } }).ymaps;
+        if (ymaps && typeof ymaps.ready === "function") {
+          ymaps.ready(() => {
+            ymaps
+              .geocode([latitude, longitude])
+              .then((res) => {
+                const obj = res.geoObjects.get(0);
+                fillStart(obj ? obj.getAddressLine() : `${latitude}, ${longitude}`);
+                setGeoLoading(false);
+              })
+              .catch(() => {
+                fillStart(`${latitude}, ${longitude}`);
+                setGeoLoading(false);
+              });
+          });
+        } else {
+          fillStart(`${latitude}, ${longitude}`);
+          setGeoLoading(false);
+        }
+      },
+      () => {
+        setGeoLoading(false);
+        alert("Не удалось определить местоположение. Разрешите доступ к геолокации в настройках браузера.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   // Клик по карточке тарифа: если цены уже посчитаны — просто подставляем
   // стоимость выбранного тарифа в кнопку из кэша, без нового запроса.
@@ -288,9 +338,14 @@ const Index = () => {
             <div className={"px-5 pt-2 pb-1 space-y-2 " + (panel === "main" ? "" : "hidden")}>
               <div className="relative">
                 <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда?" autoComplete="off" className={inputCls + " pr-12"} />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-amber-400 flex items-center justify-center">
-                  <Icon name="MapPin" size={16} className="text-amber-400" />
-                </span>
+                <button
+                  type="button"
+                  onClick={detectLocation}
+                  aria-label="Определить моё местоположение"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-amber-400 flex items-center justify-center hover:bg-amber-400/15 active:scale-95 transition"
+                >
+                  <Icon name={geoLoading ? "LoaderCircle" : "LocateFixed"} size={16} className={"text-amber-400" + (geoLoading ? " animate-spin" : "")} />
+                </button>
               </div>
               <input name="place_end" defaultValue={prefillTo} placeholder="Куда?" autoComplete="off" className={inputCls} />
 
@@ -433,7 +488,17 @@ const Index = () => {
           <form ref={formRef} className="block">
             <h2 className="text-lg font-bold text-amber-400 text-center mb-2">Оставить заявку</h2>
             <div className="space-y-2">
-              <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда вас забрать?" autoComplete="off" className={inputCls} />
+              <div className="relative">
+                <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда вас забрать?" autoComplete="off" className={inputCls + " pr-11"} />
+                <button
+                  type="button"
+                  onClick={detectLocation}
+                  aria-label="Определить моё местоположение"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full border-2 border-amber-400 flex items-center justify-center hover:bg-amber-400/15 active:scale-95 transition"
+                >
+                  <Icon name={geoLoading ? "LoaderCircle" : "LocateFixed"} size={15} className={"text-amber-400" + (geoLoading ? " animate-spin" : "")} />
+                </button>
+              </div>
               <input name="place_end" defaultValue={prefillTo} placeholder="Куда довезти?" autoComplete="off" className={inputCls} />
 
               <div className="grid grid-cols-2 gap-3">
