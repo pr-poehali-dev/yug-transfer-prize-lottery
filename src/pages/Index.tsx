@@ -20,7 +20,43 @@ const TARIFF_ICONS: Record<string, string> = {
 const COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
 const inputCls =
-  "w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-white/40 text-sm outline-none focus:border-amber-500/60 transition-colors [color-scheme:dark]";
+  "w-full bg-[#2a2a2a] border border-white/5 rounded-2xl px-4 py-3.5 text-white placeholder-white/40 text-[15px] outline-none focus:border-amber-400/60 transition-colors [color-scheme:dark]";
+
+// Тумблер-переключатель поверх скрытого чекбокса (name читает скрипт калькулятора).
+function Toggle({ name, label }: { name: string; label: string }) {
+  const [on, setOn] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    const cb = ref.current;
+    if (cb) {
+      cb.checked = next;
+      cb.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  };
+  return (
+    <button type="button" onClick={toggle} className="w-full flex items-center justify-between py-4 text-left">
+      <span className="text-white text-lg">{label}</span>
+      <span className={"relative w-14 h-8 rounded-full transition-colors shrink-0 " + (on ? "bg-amber-400/30" : "bg-white/10")}>
+        <span className={"absolute top-1 w-6 h-6 rounded-full transition-all " + (on ? "left-7 bg-amber-400" : "left-1 bg-white/50")} />
+      </span>
+      <input ref={ref} type="checkbox" name={name} className="hidden" aria-hidden readOnly />
+    </button>
+  );
+}
+
+// Тумблер выбора способа оплаты (радио-логика управляется извне).
+function PayToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="w-full flex items-center justify-between py-4 text-left">
+      <span className="text-white text-lg">{label}</span>
+      <span className={"relative w-14 h-8 rounded-full transition-colors shrink-0 " + (active ? "bg-amber-400/30" : "bg-white/10")}>
+        <span className={"absolute top-1 w-6 h-6 rounded-full transition-all " + (active ? "left-7 bg-amber-400" : "left-1 bg-white/50")} />
+      </span>
+    </button>
+  );
+}
 
 const Index = () => {
   useSEO({
@@ -38,6 +74,10 @@ const Index = () => {
   const tarifRef = useRef<HTMLSelectElement>(null);
 
   const [tariff, setTariff] = useState(TARIFFS[0]);
+  // Активная панель нижней шторки: главная / доп. опции / оплата.
+  const [panel, setPanel] = useState<"main" | "extra" | "pay">("main");
+  // Способ оплаты (радио-логика): Наличные / Перевод / По номеру счёта.
+  const [pay, setPay] = useState<"cash" | "transfer" | "account">("transfer");
 
   // Штатный скрипт: подсказки, расчёт цены и отправка заявки.
   useTariffCalc(true);
@@ -121,8 +161,12 @@ const Index = () => {
     form.addEventListener("input", onRouteChange, true);
     form.addEventListener("change", onRouteChange, true);
     // После успешной отправки хук чистит поля и шлёт это событие —
-    // сбрасываем активный тариф на первый.
-    const onReset = () => setTariff(TARIFFS[0]);
+    // сбрасываем активный тариф, панель и оплату.
+    const onReset = () => {
+      setTariff(TARIFFS[0]);
+      setPanel("main");
+      setPay("transfer");
+    };
     window.addEventListener("orderFormReset", onReset);
 
     return () => {
@@ -134,6 +178,24 @@ const Index = () => {
       window.removeEventListener("orderFormReset", onReset);
     };
   }, []);
+
+  // Синхронизируем выбранный способ оплаты со скрытыми чекбоксами,
+  // которые читает штатный скрипт (CardPayCash / CardPayTransfer / CardPayNubmerCard).
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const map: Record<string, string> = {
+      cash: "CardPayCash",
+      transfer: "CardPayTransfer",
+      account: "CardPayNubmerCard",
+    };
+    (["cash", "transfer", "account"] as const).forEach((k) => {
+      const cb = form.querySelector<HTMLInputElement>(`[name="${map[k]}"]`);
+      if (cb) cb.checked = pay === k;
+    });
+    const active = form.querySelector<HTMLInputElement>(`[name="${map[pay]}"]`);
+    active?.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [pay]);
 
   useEffect(() => {
     if (prefillFrom || prefillTo || prefillComment) {
@@ -197,42 +259,51 @@ const Index = () => {
 
       <SiteHeader />
 
-      <div className="relative z-10 w-full max-w-lg px-5 pt-5 md:pt-3 pb-5 md:pb-0 h-[calc(100vh-72px)] md:h-auto overflow-y-auto md:overflow-visible flex flex-col justify-center md:block md:absolute md:bottom-4 md:left-0">
-        <div className="text-center mb-3 md:mb-2">
-          <h1 className="text-2xl md:text-2xl font-bold text-white">Мой Трансфер</h1>
-          <p className="md:hidden text-white/80 text-sm mt-0.5">Сервис заказа легкового такси</p>
-        </div>
-        <div className="uc-tariffCalc bg-[#1a1a1a]/95 backdrop-blur rounded-2xl border border-white/10 shadow-2xl p-4 md:p-5 flex flex-col md:block">
-          <form ref={formRef} className="flex-1 flex flex-col md:block">
-            <h2 className="text-lg md:text-lg font-bold text-amber-400 text-center mb-3 md:mb-2">Оставить заявку</h2>
-            <div className="space-y-3 md:space-y-2 flex-1 flex flex-col justify-center">
-              <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда вас забрать?" autoComplete="off" className={inputCls} />
-              <input name="place_end" defaultValue={prefillTo} placeholder="Куда довезти?" autoComplete="off" className={inputCls} />
+      {/* Нижняя шторка с формой поверх карты */}
+      <div className="uc-tariffCalc absolute z-10 inset-x-0 bottom-0 md:left-auto md:right-6 md:bottom-6 md:inset-x-auto md:w-[440px]">
+        <div className="bg-[#141414] rounded-t-[28px] md:rounded-[28px] border-t md:border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)]">
+          <form ref={formRef} className="flex flex-col">
+            {/* «ручка» шторки */}
+            <div className="pt-3 pb-1 flex justify-center md:hidden">
+              <span className="w-11 h-1.5 rounded-full bg-white/20" />
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
+            {/* Заголовок доп. панелей с кнопкой «Назад» */}
+            {panel !== "main" && (
+              <button
+                type="button"
+                onClick={() => setPanel("main")}
+                className="flex items-center gap-3 px-6 pt-4 pb-2 text-white text-xl font-semibold"
+              >
+                <Icon name="ArrowLeft" size={26} />
+                Назад
+              </button>
+            )}
+
+            {/* ПАНЕЛЬ: ГЛАВНАЯ */}
+            <div className={"px-5 pt-3 pb-2 space-y-2.5 " + (panel === "main" ? "" : "hidden")}>
+              <div className="relative">
+                <input name="place_start" defaultValue={prefillFrom} placeholder="Откуда?" autoComplete="off" className={inputCls + " pr-12"} />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-amber-400 flex items-center justify-center">
+                  <Icon name="MapPin" size={16} className="text-amber-400" />
+                </span>
+              </div>
+              <input name="place_end" defaultValue={prefillTo} placeholder="Куда?" autoComplete="off" className={inputCls} />
+
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-white/80 text-xs font-medium mb-1">Дата поездки</label>
+                  <label className="block text-white/50 text-[11px] font-medium mb-1 ml-1">Дата поездки</label>
                   <input name="Date" type="date" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-white/80 text-xs font-medium mb-1">Время</label>
+                  <label className="block text-white/50 text-[11px] font-medium mb-1 ml-1">Во сколько?</label>
                   <input name="Time" type="time" className={inputCls} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-white/80 text-xs font-medium mb-1">Кол-во человек</label>
-                  <select name="count_peeple" defaultValue="1" className={inputCls}>
-                    {COUNTS.map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-white/80 text-xs font-medium mb-1">Кол-во багажа</label>
-                  <select name="count_bags" defaultValue="1" className={inputCls}>
-                    {["0", ...COUNTS].map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
-                  </select>
-                </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <input name="name" placeholder="Ваше имя" className={inputCls} />
+                <input name="Phone" placeholder="Номер телефона" type="tel" className={inputCls} />
               </div>
 
               {/* Скрытый select — его читает скрипт калькулятора */}
@@ -240,78 +311,111 @@ const Index = () => {
                 {TARIFFS.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
 
-              <div>
-                <label className="block text-white/80 text-xs font-medium mb-1">Выберите класс авто</label>
-                <div className="no-scrollbar flex gap-2 overflow-x-auto -mx-1 px-1 pb-1">
-                  {TARIFFS.map((t) => {
-                    const active = tariff === t;
-                    return (
-                      <button
-                        type="button"
-                        key={t}
-                        onClick={() => pickTariff(t)}
-                        className={
-                          "calc__form__tarif__item shrink-0 w-[76px] flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1 py-2 transition-colors " +
-                          (active
-                            ? "is-active border-amber-500 bg-amber-500/15"
-                            : "border-white/10 bg-black/30 hover:border-amber-500/40")
-                        }
-                      >
-                        <Icon
-                          name={TARIFF_ICONS[t] || "Car"}
-                          size={20}
-                          className={active ? "text-amber-400" : "text-white/70"}
-                        />
-                        <span className={"calc__form__tarif__item__title text-[10px] leading-tight " + (active ? "text-white" : "text-white/70")}>
-                          {t}
-                        </span>
-                        <span
-                          ref={(el) => {
-                            if (el && !el.textContent) el.textContent = "—";
-                          }}
-                          className="calc__form__tarif__item__price font-bold leading-tight whitespace-nowrap"
-                        />
-                      </button>
-                    );
-                  })}
+              <div className="no-scrollbar flex gap-2 overflow-x-auto -mx-1 px-1 pt-1">
+                {TARIFFS.map((t) => {
+                  const active = tariff === t;
+                  return (
+                    <button
+                      type="button"
+                      key={t}
+                      onClick={() => pickTariff(t)}
+                      className={
+                        "calc__form__tarif__item shrink-0 w-[92px] flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 transition-colors " +
+                        (active
+                          ? "is-active border-amber-400 bg-amber-400/10"
+                          : "border-white/10 bg-black/40 hover:border-amber-400/40")
+                      }
+                    >
+                      <Icon
+                        name={TARIFF_ICONS[t] || "Car"}
+                        size={26}
+                        className={active ? "text-amber-400" : "text-white/60"}
+                      />
+                      <span className={"calc__form__tarif__item__title text-xs font-medium leading-tight " + (active ? "text-white" : "text-white/70")}>
+                        {t}
+                      </span>
+                      <span
+                        ref={(el) => {
+                          if (el && !el.textContent) el.textContent = "—";
+                        }}
+                        className={"calc__form__tarif__item__price text-sm font-bold leading-tight whitespace-nowrap " + (active ? "text-amber-400" : "text-white/50")}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ПАНЕЛЬ: ДОП. ОПЦИИ */}
+            <div className={"px-6 pt-1 pb-2 " + (panel === "extra" ? "" : "hidden")}>
+              <Toggle name="orderBabyChair" label="Детское кресло" />
+              <div className="h-px bg-white/10" />
+              <Toggle name="orderPet" label="С домашним животным" />
+              <div className="h-px bg-white/10" />
+              <Toggle name="orderBuster" label="Бустер" />
+
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <div>
+                  <label className="block text-white/50 text-[11px] font-medium mb-1 ml-1">Количество человек</label>
+                  <select name="count_peeple" defaultValue="1" className={inputCls}>
+                    {COUNTS.map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-white/50 text-[11px] font-medium mb-1 ml-1">Количество багажа</label>
+                  <select name="count_bags" defaultValue="1" className={inputCls}>
+                    {["0", ...COUNTS].map((c) => <option key={c} value={c} className="bg-[#1a1a1a]">{c}</option>)}
+                  </select>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-1.5 pt-1 md:pt-2">
-                <label className="flex items-center gap-1.5 text-white/90 text-xs sm:text-sm cursor-pointer whitespace-nowrap">
-                  <input type="checkbox" name="orderBabyChair" className="w-4 h-4 accent-amber-500 shrink-0" />
-                  Дет. кресло
-                </label>
-                <label className="flex items-center gap-1.5 text-white/90 text-xs sm:text-sm cursor-pointer whitespace-nowrap">
-                  <input type="checkbox" name="orderBuster" className="w-4 h-4 accent-amber-500 shrink-0" />
-                  Бустер
-                </label>
-                <label className="flex items-center gap-1.5 text-white/90 text-xs sm:text-sm cursor-pointer whitespace-nowrap">
-                  <input type="checkbox" name="orderPet" className="w-4 h-4 accent-amber-500 shrink-0" />
-                  Животные
-                </label>
-              </div>
+              <textarea name="comment" defaultValue={prefillComment} placeholder="Комментарий водителю" rows={3} className={inputCls + " mt-3 resize-none"} />
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <input name="name" placeholder="Как вас зовут" className={inputCls} />
-                <input name="Phone" placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
-              </div>
+            {/* ПАНЕЛЬ: ОПЛАТА */}
+            <div className={"px-6 pt-1 pb-2 " + (panel === "pay" ? "" : "hidden")}>
+              <PayToggle label="Наличные" active={pay === "cash"} onClick={() => setPay("cash")} />
+              <div className="h-px bg-white/10" />
+              <PayToggle label="Перевод" active={pay === "transfer"} onClick={() => setPay("transfer")} />
+              <div className="h-px bg-white/10" />
+              <PayToggle label="По номеру счёта" active={pay === "account"} onClick={() => setPay("account")} />
+            </div>
 
-              <textarea name="comment" defaultValue={prefillComment} placeholder="Комментарий (необязательно)" rows={2} className={inputCls} />
+            {/* Скрытые поля, которые читает скрипт */}
+            <input type="hidden" name="order_price" defaultValue="" />
+            <input type="checkbox" name="CardPayCash" className="hidden" aria-hidden readOnly />
+            <input type="checkbox" name="CardPayTransfer" className="hidden" aria-hidden defaultChecked readOnly />
+            <input type="checkbox" name="CardPayNubmerCard" className="hidden" aria-hidden readOnly />
 
-              <input type="hidden" name="order_price" defaultValue="" />
-              <input type="checkbox" name="CardPayCash" defaultChecked className="hidden" aria-hidden />
+            {/* Нижняя панель действий */}
+            <div className="flex items-center gap-3 px-5 pt-2 pb-5 md:pb-5">
+              <button
+                type="button"
+                onClick={() => setPanel(panel === "pay" ? "main" : "pay")}
+                aria-label="Способ оплаты"
+                className={"shrink-0 w-12 h-12 rounded-full flex items-center justify-center border transition-colors " + (panel === "pay" ? "border-amber-400 text-amber-400" : "border-amber-400/50 text-amber-400/80 hover:border-amber-400")}
+              >
+                <Icon name="Wallet" size={22} />
+              </button>
 
               <button
                 type="submit"
-                className="w-full mt-3 md:mt-3 h-14 min-h-14 max-h-14 shrink-0 flex items-center justify-center gap-2 leading-none text-lg font-bold rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white transition-colors [&_img]:h-6 [&_img]:w-6 [&_svg]:h-6 [&_svg]:w-6 overflow-hidden"
+                className="flex-1 h-12 flex items-center justify-center text-lg font-bold rounded-full bg-[#d1d13a] hover:bg-[#dede4a] text-black transition-colors"
               >
-                Заказать
+                Отправить
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPanel(panel === "extra" ? "main" : "extra")}
+                aria-label="Дополнительно"
+                className={"shrink-0 w-12 h-12 rounded-full flex items-center justify-center border transition-colors " + (panel === "extra" ? "border-amber-400 text-amber-400" : "border-amber-400/50 text-amber-400/80 hover:border-amber-400")}
+              >
+                <Icon name="SlidersHorizontal" size={22} />
               </button>
             </div>
           </form>
         </div>
-
       </div>
 
       <ContactWidget />
