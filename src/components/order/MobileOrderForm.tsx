@@ -20,9 +20,9 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
   } = state;
 
   return (
-    <div className="uc-tariffCalc absolute z-10 inset-x-0 bottom-0">
-      <div className="bg-[#141414] rounded-t-[28px] md:rounded-[28px] border-t md:border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)]">
-        <form ref={formRef} className="flex flex-col">
+    <div className="uc-tariffCalc absolute z-10 inset-x-0 bottom-0 max-h-[90vh] flex flex-col">
+      <div className="bg-[#141414] rounded-t-[28px] md:rounded-[28px] border-t md:border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)] flex flex-col max-h-[90vh] min-h-0">
+        <form ref={formRef} className="flex flex-col min-h-0">
           {/* «ручка» шторки */}
           <div className="pt-2 pb-0.5 flex justify-center md:hidden">
             <span className="w-11 h-1.5 rounded-full bg-white/20" />
@@ -40,6 +40,8 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
             </button>
           )}
 
+          {/* Прокручиваемая область с панелями (кнопки внизу остаются видимыми) */}
+          <div className="flex-1 overflow-y-auto min-h-0">
           {/* ПАНЕЛЬ: ГЛАВНАЯ */}
           <div className={"px-5 pt-2 pb-1 space-y-2 " + (panel === "main" ? "" : "hidden")}>
             <div className="relative">
@@ -145,6 +147,7 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
             <div className="h-px bg-white/10" />
             <PayToggle label="По номеру счёта" active={pay === "account"} onClick={() => setPay("account")} />
           </div>
+          </div>
 
           {/* Скрытые поля, которые читает скрипт */}
           <input type="hidden" name="order_price" defaultValue="" />
@@ -153,7 +156,7 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
           <input type="checkbox" name="CardPayNubmerCard" className="hidden" aria-hidden readOnly />
 
           {/* Нижняя панель действий */}
-          <div className="flex items-center gap-3 px-5 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-5">
+          <div className="shrink-0 flex items-center gap-3 px-5 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-5 border-t border-white/10 bg-[#141414]">
             <button
               type="button"
               onClick={() => setPanel(panel === "pay" ? "main" : "pay")}
