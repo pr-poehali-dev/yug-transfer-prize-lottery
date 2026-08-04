@@ -293,34 +293,56 @@ function installCalcInterceptor() {
   };
 }
 
-// Высота, которую шторка заказа реально перекрывает снизу карты (в пикселях).
-// Берём не всю высоту шторки, а насколько её ВЕРХ заходит на карту снизу:
-// шторка может частично уходить за нижний край экрана.
-function orderSheetHeight(): number {
+// Ключевая проблема: контейнер #map занимает ВЕСЬ экран (inset-0), его низ
+// уходит ПОД шторку заказа. Скрипт вписывает маршрут в полную высоту карты
+// (boundsAutoApply), поэтому центр маршрута оказывается под формой.
+// Решение: физически ужимаем высоту #map до верха шторки — тогда весь маршрут
+// вписывается в видимую область НАД формой. Пересчитываем при изменении
+// размеров шторки/экрана и переприменяем последний fit маршрута.
+function fitMapAboveSheet() {
   const map = document.getElementById("map");
   const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
-  if (!map || !sheet) return Math.round(window.innerHeight * 0.4);
-  const mapRect = map.getBoundingClientRect();
-  const sheetRect = sheet.getBoundingClientRect();
-  // Насколько верх шторки перекрывает нижнюю часть карты.
-  const overlap = mapRect.bottom - sheetRect.top;
-  if (overlap <= 0) return 0;
-  // Не даём отступу «съесть» карту: маршруту нужно место для вписывания.
-  return Math.min(Math.round(overlap) + 12, Math.round(mapRect.height * 0.55));
+  if (!map) return;
+
+  if (!sheet) {
+    map.style.height = "";
+    return;
+  }
+  // Верх шторки в координатах вьюпорта = сколько места остаётся сверху карте.
+  const sheetTop = sheet.getBoundingClientRect().top;
+  const desired = Math.max(0, Math.round(sheetTop));
+  // Небольшой нахлёст, чтобы карта уходила под скруглённый верх шторки.
+  const h = desired > 120 ? desired + 24 : Math.round(window.innerHeight * 0.55);
+  map.style.height = `${h}px`;
+
+  // Сообщаем карте, что размер контейнера изменился, и переприменяем маршрут.
+  const w = window as unknown as {
+    myMap?: {
+      container?: { fitToViewport?: () => void };
+      setBounds?: (b: number[][], o?: Record<string, unknown>) => unknown;
+    };
+    __lastBounds?: number[][];
+  };
+  try {
+    w.myMap?.container?.fitToViewport?.();
+    if (w.__lastBounds && typeof w.myMap?.setBounds === "function") {
+      w.myMap.setBounds(w.__lastBounds, { checkZoomRange: true, zoomMargin: [24, 24, 24, 24] });
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 // Маршрут строится MultiRoute с boundsAutoApply — карта сама зовёт setBounds.
-// Оборачиваем myMap.setBounds так, чтобы к каждому вызову добавлялся нижний
-// zoomMargin = высота шторки. Тогда маршрут вписывается в ВЕРХНЮЮ видимую
-// часть экрана над формой, а не прячется под ней.
+// Перехватываем setBounds, запоминаем последний маршрут и ужимаем карту над
+// шторкой, чтобы весь путь был виден над формой.
 function patchMapSetBounds() {
   const w = window as unknown as {
     myMap?: {
       __boundsPatched?: boolean;
       setBounds?: (bounds: number[][], opts?: Record<string, unknown>) => unknown;
-      getGlobalPixelCenter?: () => number[];
-      setGlobalPixelCenter?: (px: number[], opts?: Record<string, unknown>) => unknown;
     };
+    __sheetResizeHooked?: boolean;
   };
   const map = w.myMap;
   if (!map || typeof map.setBounds !== "function") {
@@ -331,55 +353,30 @@ function patchMapSetBounds() {
   map.__boundsPatched = true;
 
   const orig = map.setBounds.bind(map);
-
-  // Поднимаем маршрут в видимую зону над шторкой: сдвигаем центр карты ВВЕРХ
-  // ровно на половину того, что перекрывает шторка. Работает независимо от
-  // того, уважает ли карта zoomMargin (при большом отступе он игнорируется).
-  const liftAboveSheet = () => {
-    const overlap = orderSheetHeight();
-    if (overlap <= 0) return;
-    if (typeof map.getGlobalPixelCenter !== "function" || typeof map.setGlobalPixelCenter !== "function") return;
-    try {
-      const c = map.getGlobalPixelCenter();
-      if (!Array.isArray(c) || c.length < 2) return;
-      // +Y в глобальных пикселях — вниз; чтобы поднять маршрут, увеличиваем Y
-      // центра (карта смещается вниз, содержимое — вверх).
-      map.setGlobalPixelCenter([c[0], c[1] + overlap / 2], { duration: 0, checkZoomRange: false });
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const applyBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
-    // Вписываем маршрут в контейнер с равномерными полями — карта точно
-    // покажет весь путь. Затем поднимаем его над шторкой.
-    const merged: Record<string, unknown> = {
-      checkZoomRange: true,
-      ...(opts || {}),
-      zoomMargin: [24, 24, 24, 24],
-    };
-    const res = orig(bounds, merged);
-    if (res && typeof (res as Promise<unknown>).then === "function") {
-      (res as Promise<unknown>).then(liftAboveSheet, () => {});
-    } else {
-      setTimeout(liftAboveSheet, 0);
-    }
-    return res;
-  };
   map.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
-    // Запоминаем маршрут, чтобы переприменить fit после отрисовки шторки.
+    // Запоминаем маршрут, чтобы переприменять fit при изменении размеров.
     (w as { __lastBounds?: number[][] }).__lastBounds = bounds;
-    const res = applyBounds(bounds, opts);
-    // Повторно вписываем: в момент первого вызова высота шторки может быть 0
-    // (форма ещё не отрисовалась) — тогда маршрут центрируется по всему экрану.
-    [120, 400, 900, 1500].forEach((ms) =>
-      setTimeout(() => {
-        const b = (w as { __lastBounds?: number[][] }).__lastBounds;
-        if (b) applyBounds(b, opts);
-      }, ms)
-    );
+    const merged: Record<string, unknown> = { checkZoomRange: true, ...(opts || {}), zoomMargin: [24, 24, 24, 24] };
+    const res = orig(bounds, merged);
+    // Карта ещё во весь экран — ужимаем над шторкой и вписываем повторно.
+    [0, 150, 500, 1000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
     return res;
   };
+
+  // Следим за размером шторки (раскрытие/сворачивание) и экрана.
+  if (!w.__sheetResizeHooked) {
+    w.__sheetResizeHooked = true;
+    const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+    if (sheet && typeof ResizeObserver !== "undefined") {
+      let t = 0;
+      const ro = new ResizeObserver(() => {
+        window.clearTimeout(t);
+        t = window.setTimeout(fitMapAboveSheet, 120);
+      });
+      ro.observe(sheet);
+    }
+    window.addEventListener("resize", () => setTimeout(fitMapAboveSheet, 120));
+  }
 }
 
 export default function useTariffCalc(ready: boolean) {
