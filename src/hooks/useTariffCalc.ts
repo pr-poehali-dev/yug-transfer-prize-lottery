@@ -293,12 +293,20 @@ function installCalcInterceptor() {
   };
 }
 
-// Высота, которую перекрывает шторка заказа снизу карты (в пикселях).
+// Высота, которую шторка заказа реально перекрывает снизу карты (в пикселях).
+// Берём не всю высоту шторки, а насколько её ВЕРХ заходит на карту снизу:
+// шторка может частично уходить за нижний край экрана.
 function orderSheetHeight(): number {
+  const map = document.getElementById("map");
   const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
-  const h = sheet ? sheet.getBoundingClientRect().height : 0;
-  if (h > 0) return Math.min(h + 12, Math.round(window.innerHeight * 0.62));
-  return Math.round(window.innerHeight * 0.45);
+  if (!map || !sheet) return Math.round(window.innerHeight * 0.4);
+  const mapRect = map.getBoundingClientRect();
+  const sheetRect = sheet.getBoundingClientRect();
+  // Насколько верх шторки перекрывает нижнюю часть карты.
+  const overlap = mapRect.bottom - sheetRect.top;
+  if (overlap <= 0) return 0;
+  // Не даём отступу «съесть» карту: маршруту нужно место для вписывания.
+  return Math.min(Math.round(overlap) + 12, Math.round(mapRect.height * 0.55));
 }
 
 // Маршрут строится MultiRoute с boundsAutoApply — карта сама зовёт setBounds.
@@ -310,6 +318,7 @@ function patchMapSetBounds() {
     myMap?: {
       __boundsPatched?: boolean;
       setBounds?: (bounds: number[][], opts?: Record<string, unknown>) => unknown;
+      panBy?: (offset: number[], opts?: Record<string, unknown>) => unknown;
     };
   };
   const map = w.myMap;
@@ -329,7 +338,27 @@ function patchMapSetBounds() {
       // [верх, право, низ, лево] — резервируем место под шторкой снизу.
       zoomMargin: [24, 24, bottom, 24],
     };
-    return orig(bounds, merged);
+    const result = orig(bounds, merged);
+    // Подстраховка: если карта проигнорировала нижний zoomMargin (отступ
+    // слишком большой для контейнера) и вписала маршрут по центру всего экрана,
+    // он уходит под шторку. Доводим — сдвигаем карту вверх на половину
+    // перекрытия, чтобы маршрут поднялся в видимую зону над формой.
+    if (bottom > 0 && typeof map.panBy === "function") {
+      const shift = () => {
+        try {
+          map.panBy?.([0, Math.round(bottom / 2)], { duration: 0, checkZoomRange: false });
+        } catch {
+          /* ignore */
+        }
+      };
+      // panBy сработает после того, как вписывание применится к карте.
+      if (result && typeof (result as Promise<unknown>).then === "function") {
+        (result as Promise<unknown>).then(shift, () => {});
+      } else {
+        setTimeout(shift, 0);
+      }
+    }
+    return result;
   };
   map.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
     // Запоминаем маршрут, чтобы переприменить fit после отрисовки шторки.
