@@ -48,7 +48,7 @@ export default function CabinetDesktop({
 
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white">
-      <SiteHeader />
+      <SiteHeader clientName={name || "Клиент"} clientPhone={phone} />
 
       <div className="mx-auto w-full max-w-6xl px-6 py-8 grid grid-cols-[300px_1fr] gap-6 items-start">
         {/* ---------- LEFT: profile + menu ---------- */}
