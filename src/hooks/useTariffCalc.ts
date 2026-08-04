@@ -318,6 +318,8 @@ function patchMapSetBounds() {
     myMap?: {
       __boundsPatched?: boolean;
       setBounds?: (bounds: number[][], opts?: Record<string, unknown>) => unknown;
+      getGlobalPixelCenter?: () => number[];
+      setGlobalPixelCenter?: (px: number[], opts?: Record<string, unknown>) => unknown;
     };
   };
   const map = w.myMap;
@@ -329,15 +331,40 @@ function patchMapSetBounds() {
   map.__boundsPatched = true;
 
   const orig = map.setBounds.bind(map);
+
+  // Поднимаем маршрут в видимую зону над шторкой: сдвигаем центр карты ВВЕРХ
+  // ровно на половину того, что перекрывает шторка. Работает независимо от
+  // того, уважает ли карта zoomMargin (при большом отступе он игнорируется).
+  const liftAboveSheet = () => {
+    const overlap = orderSheetHeight();
+    if (overlap <= 0) return;
+    if (typeof map.getGlobalPixelCenter !== "function" || typeof map.setGlobalPixelCenter !== "function") return;
+    try {
+      const c = map.getGlobalPixelCenter();
+      if (!Array.isArray(c) || c.length < 2) return;
+      // +Y в глобальных пикселях — вниз; чтобы поднять маршрут, увеличиваем Y
+      // центра (карта смещается вниз, содержимое — вверх).
+      map.setGlobalPixelCenter([c[0], c[1] + overlap / 2], { duration: 0, checkZoomRange: false });
+    } catch {
+      /* ignore */
+    }
+  };
+
   const applyBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
-    const bottom = orderSheetHeight();
+    // Вписываем маршрут в контейнер с равномерными полями — карта точно
+    // покажет весь путь. Затем поднимаем его над шторкой.
     const merged: Record<string, unknown> = {
       checkZoomRange: true,
       ...(opts || {}),
-      // [верх, право, низ, лево] — резервируем место под шторкой снизу.
-      zoomMargin: [24, 24, bottom, 24],
+      zoomMargin: [24, 24, 24, 24],
     };
-    return orig(bounds, merged);
+    const res = orig(bounds, merged);
+    if (res && typeof (res as Promise<unknown>).then === "function") {
+      (res as Promise<unknown>).then(liftAboveSheet, () => {});
+    } else {
+      setTimeout(liftAboveSheet, 0);
+    }
+    return res;
   };
   map.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
     // Запоминаем маршрут, чтобы переприменить fit после отрисовки шторки.
@@ -345,7 +372,7 @@ function patchMapSetBounds() {
     const res = applyBounds(bounds, opts);
     // Повторно вписываем: в момент первого вызова высота шторки может быть 0
     // (форма ещё не отрисовалась) — тогда маршрут центрируется по всему экрану.
-    [120, 400, 900].forEach((ms) =>
+    [120, 400, 900, 1500].forEach((ms) =>
       setTimeout(() => {
         const b = (w as { __lastBounds?: number[][] }).__lastBounds;
         if (b) applyBounds(b, opts);
