@@ -3,21 +3,44 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ComponentType } from "react";
 
-const Index = lazy(() => import("./pages/Index"));
-const Hub = lazy(() => import("./pages/Hub"));
-const Posts = lazy(() => import("./pages/Posts"));
-const Cabinet = lazy(() => import("./pages/Cabinet"));
-const Privacy = lazy(() => import("./pages/Privacy"));
-const Offer = lazy(() => import("./pages/Offer"));
-const Directions = lazy(() => import("./pages/RoutesPage"));
-const RouteDetail = lazy(() => import("./pages/RouteDetailPage"));
-const Tariffs = lazy(() => import("./pages/TariffsPage"));
-const TariffDetail = lazy(() => import("./pages/TariffDetailPage"));
-const Contacts = lazy(() => import("./pages/ContactsPage"));
-const Bridge = lazy(() => import("./pages/BridgePage"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+// Устойчивая ленивая загрузка страниц. Иногда браузер не может подгрузить
+// модуль страницы (обрыв сети, обновившийся деплой, устаревший кэш) — тогда
+// падает "Failed to fetch dynamically imported module" и появляется белый
+// экран. В этом случае один раз перезагружаем страницу (защита от цикла через
+// sessionStorage), чтобы подтянуть свежие файлы.
+function lazyWithReload<T extends ComponentType<unknown>>(factory: () => Promise<{ default: T }>) {
+  return lazy(async () => {
+    try {
+      const mod = await factory();
+      sessionStorage.removeItem("chunk-reloaded");
+      return mod;
+    } catch (e) {
+      if (!sessionStorage.getItem("chunk-reloaded")) {
+        sessionStorage.setItem("chunk-reloaded", "1");
+        window.location.reload();
+        // Возвращаем пустышку, пока идёт перезагрузка.
+        return { default: (() => null) as unknown as T };
+      }
+      throw e;
+    }
+  });
+}
+
+const Index = lazyWithReload(() => import("./pages/Index"));
+const Hub = lazyWithReload(() => import("./pages/Hub"));
+const Posts = lazyWithReload(() => import("./pages/Posts"));
+const Cabinet = lazyWithReload(() => import("./pages/Cabinet"));
+const Privacy = lazyWithReload(() => import("./pages/Privacy"));
+const Offer = lazyWithReload(() => import("./pages/Offer"));
+const Directions = lazyWithReload(() => import("./pages/RoutesPage"));
+const RouteDetail = lazyWithReload(() => import("./pages/RouteDetailPage"));
+const Tariffs = lazyWithReload(() => import("./pages/TariffsPage"));
+const TariffDetail = lazyWithReload(() => import("./pages/TariffDetailPage"));
+const Contacts = lazyWithReload(() => import("./pages/ContactsPage"));
+const Bridge = lazyWithReload(() => import("./pages/BridgePage"));
+const NotFound = lazyWithReload(() => import("./pages/NotFound"));
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
