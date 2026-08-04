@@ -320,8 +320,6 @@ function fitMapAboveSheet() {
     myMap?: {
       container?: { fitToViewport?: () => void };
       setBounds?: (b: number[][], o?: Record<string, unknown>) => Promise<unknown> | unknown;
-      getGlobalPixelCenter?: () => number[];
-      setGlobalPixelCenter?: (px: number[], o?: Record<string, unknown>) => unknown;
     };
     __lastBounds?: number[][];
   };
@@ -329,19 +327,10 @@ function fitMapAboveSheet() {
   if (!myMap || !w.__lastBounds || typeof myMap.setBounds !== "function") return;
   try {
     myMap.container?.fitToViewport?.();
-    // Вписываем весь маршрут с небольшими равными полями (карта его не сбросит).
-    const res = myMap.setBounds(w.__lastBounds, { checkZoomRange: true, zoomMargin: [24, 24, 24, 24] });
-    // Затем поднимаем маршрут в верхнюю часть карты: сдвигаем центр карты вниз
-    // (в глобальных пикселях +Y = вниз → содержимое едет ВВЕРХ) на ~30% высоты.
-    const lift = () => {
-      if (typeof myMap.getGlobalPixelCenter !== "function" || typeof myMap.setGlobalPixelCenter !== "function") return;
-      const c = myMap.getGlobalPixelCenter();
-      if (!Array.isArray(c) || c.length < 2) return;
-      const shift = Math.round(h * 0.3);
-      myMap.setGlobalPixelCenter([c[0], c[1] + shift], { duration: 0, checkZoomRange: false });
-    };
-    if (res && typeof (res as Promise<unknown>).then === "function") (res as Promise<unknown>).then(lift, () => {});
-    else setTimeout(lift, 60);
+    // Вписываем весь маршрут в свободную над формой зону: сверху резервируем
+    // место под шапку (лого/телефон), снизу и по бокам — небольшие поля. Так
+    // маршрут центрируется ровно по видимой части карты над формой.
+    myMap.setBounds(w.__lastBounds, { checkZoomRange: true, zoomMargin: [96, 24, 32, 24] });
   } catch {
     /* ignore */
   }
