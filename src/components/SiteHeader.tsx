@@ -88,6 +88,24 @@ export default function SiteHeader() {
           </Link>
 
           <a
+            href="https://max.ru/u/f9LHodD0cOIMaVYO_Z-nUVm8RnfeFCYBL1plEAksXVd6OihrEdaQR7wxrpU"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="MAX"
+            className="md:hidden flex w-8 h-8 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] items-center justify-center shrink-0"
+          >
+            <span className="text-white text-[10px] font-bold leading-none">MAX</span>
+          </a>
+          <a
+            href="https://t.me/Dispether82"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Telegram"
+            className="md:hidden flex w-8 h-8 rounded-full bg-[#2AABEE] items-center justify-center shrink-0"
+          >
+            <Icon name="Send" size={15} className="text-white" />
+          </a>
+          <a
             href={`tel:${PHONE_TEL}`}
             aria-label="Позвонить"
             className="md:hidden flex items-center gap-1 text-white font-semibold text-xs whitespace-nowrap"
