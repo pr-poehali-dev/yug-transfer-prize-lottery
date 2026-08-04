@@ -314,7 +314,10 @@ function fitMapAboveSheet() {
     };
   };
   const myMap = w.myMap;
-  if (!myMap || typeof myMap.setBounds !== "function") return;
+  if (!myMap || typeof myMap.setBounds !== "function") {
+    console.log("[FIT] no map/setBounds", !!myMap, typeof myMap?.setBounds);
+    return;
+  }
 
   // Границы маршрута (и всех объектов). Пока маршрута нет — getBounds вернёт null.
   let bounds: number[][] | null = null;
@@ -323,6 +326,7 @@ function fitMapAboveSheet() {
   } catch {
     bounds = null;
   }
+  console.log("[FIT] bounds=", JSON.stringify(bounds), "hasMargin=", typeof myMap.margin?.setDefaultMargin);
   if (!bounds) return;
 
   const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
@@ -338,6 +342,7 @@ function fitMapAboveSheet() {
     // под форму, сдвигая видимый центр карты вверх. setBounds с margin-mode
     // сам учитывает этот отступ — поэтому zoomMargin делаем маленьким, иначе
     // отступ снизу задваивается и маршрут не влезает.
+    console.log("[FIT] applying setBounds, bottomMargin=", bottomMargin, "vh=", vh, "sheetTop=", sheetTop);
     myMap.margin?.setDefaultMargin?.([TOP, SIDE, bottomMargin, SIDE]);
     myMap.container?.fitToViewport?.();
     myMap.setBounds(bounds, {
@@ -345,8 +350,8 @@ function fitMapAboveSheet() {
       useMapMargin: true,
       zoomMargin: 12,
     });
-  } catch {
-    /* ignore */
+  } catch (e) {
+    console.log("[FIT] setBounds error", e);
   }
 }
 
