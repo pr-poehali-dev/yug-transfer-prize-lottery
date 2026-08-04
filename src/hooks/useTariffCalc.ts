@@ -329,19 +329,21 @@ function fitMapAboveSheet() {
   const vh = window.innerHeight;
   // Высота формы (видимая часть шторки над низом экрана).
   const sheetTop = sheet ? Math.round(sheet.getBoundingClientRect().top) : Math.round(vh * 0.55);
-  const bottomMargin = Math.max(120, vh - sheetTop + 24); // резерв под форму
-  const TOP = 96;  // под шапку (лого/телефон)
+  const bottomMargin = Math.max(120, vh - sheetTop + 32); // резерв под форму
+  const TOP = 90;  // под шапку (лого/телефон)
   const SIDE = 28; // боковые поля
 
   try {
-    // Официальный механизм «карта под панелью»: margin сдвигает видимый центр
-    // карты вверх на высоту формы. setBounds после этого центрирует маршрут
-    // именно по свободной зоне над формой.
+    // Официальный механизм «карта под панелью»: margin резервирует нижнюю зону
+    // под форму, сдвигая видимый центр карты вверх. setBounds с margin-mode
+    // сам учитывает этот отступ — поэтому zoomMargin делаем маленьким, иначе
+    // отступ снизу задваивается и маршрут не влезает.
     myMap.margin?.setDefaultMargin?.([TOP, SIDE, bottomMargin, SIDE]);
     myMap.container?.fitToViewport?.();
     myMap.setBounds(bounds, {
       checkZoomRange: true,
-      zoomMargin: [TOP, SIDE, bottomMargin, SIDE],
+      useMapMargin: true,
+      zoomMargin: 12,
     });
   } catch {
     /* ignore */
