@@ -327,10 +327,14 @@ function fitMapAboveSheet() {
   if (!myMap || !w.__lastBounds || typeof myMap.setBounds !== "function") return;
   try {
     myMap.container?.fitToViewport?.();
-    // Вписываем весь маршрут в свободную над формой зону: сверху резервируем
-    // место под шапку (лого/телефон), снизу и по бокам — небольшие поля. Так
-    // маршрут центрируется ровно по видимой части карты над формой.
-    myMap.setBounds(w.__lastBounds, { checkZoomRange: true, zoomMargin: [96, 24, 32, 24] });
+    // Вписываем весь маршрут в свободную над формой зону.
+    // [верх, право, низ, лево]: сверху резервируем место под шапку
+    // (лого/телефон), по бокам и снизу — равные небольшие поля. Так маршрут
+    // центрируется ровно по видимой части карты над формой.
+    const TOP = 96;   // под шапку
+    const SIDE = 24;  // боковые поля
+    const BOTTOM = 32; // небольшой отступ от края формы
+    myMap.setBounds(w.__lastBounds, { checkZoomRange: true, zoomMargin: [TOP, SIDE, BOTTOM, SIDE] });
   } catch {
     /* ignore */
   }
