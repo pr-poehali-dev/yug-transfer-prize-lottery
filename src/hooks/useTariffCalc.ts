@@ -325,26 +325,11 @@ function fitMapAboveSheet() {
   }
   if (!bounds) return;
 
-  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
-  const vh = window.innerHeight;
-  // Высота формы (видимая часть шторки над низом экрана).
-  const sheetTop = sheet ? Math.round(sheet.getBoundingClientRect().top) : Math.round(vh * 0.55);
-  const bottomMargin = Math.max(120, vh - sheetTop + 32); // резерв под форму
-  const TOP = 90;  // под шапку (лого/телефон)
-  const SIDE = 28; // боковые поля
-
   try {
-    // Официальный механизм «карта под панелью»: margin резервирует нижнюю зону
-    // под форму, сдвигая видимый центр карты вверх. setBounds с margin-mode
-    // сам учитывает этот отступ — поэтому zoomMargin делаем маленьким, иначе
-    // отступ снизу задваивается и маршрут не влезает.
-    myMap.margin?.setDefaultMargin?.([TOP, SIDE, bottomMargin, SIDE]);
+    // setBounds уже перехвачен (patchSetBounds) и сам добавит нижний отступ
+    // под форму — просто передаём границы маршрута.
     myMap.container?.fitToViewport?.();
-    myMap.setBounds(bounds, {
-      checkZoomRange: true,
-      useMapMargin: true,
-      zoomMargin: 12,
-    });
+    myMap.setBounds(bounds, {});
   } catch {
     /* ignore */
   }
@@ -378,18 +363,53 @@ function applyMapMargin() {
   }
 }
 
+// Высота видимой зоны под форму (нижний отступ, который надо резервировать).
+function bottomReserve(): number {
+  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+  const vh = window.innerHeight;
+  const sheetTop = sheet ? Math.round(sheet.getBoundingClientRect().top) : Math.round(vh * 0.55);
+  return Math.max(140, vh - sheetTop + 32);
+}
+
+// САМОЕ НАДЁЖНОЕ: перехватываем myMap.setBounds. Кто бы ни вписывал маршрут —
+// сам скрипт (boundsAutoApply) или мы — принудительно добавляем нижний отступ
+// под форму. Так исчезает «гонка»: результат ВСЕГДА над формой.
+function patchSetBounds() {
+  const w = window as unknown as {
+    myMap?: {
+      setBounds?: (b: number[][], o?: Record<string, unknown>) => unknown;
+      __sbPatched?: boolean;
+    };
+  };
+  const myMap = w.myMap;
+  if (!myMap || typeof myMap.setBounds !== "function" || myMap.__sbPatched) return;
+  const orig = myMap.setBounds.bind(myMap);
+  myMap.__sbPatched = true;
+  myMap.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
+    const reserve = bottomReserve();
+    const merged: Record<string, unknown> = {
+      checkZoomRange: true,
+      ...(opts || {}),
+      // Нижний отступ = высота формы, верх/бока — небольшие поля.
+      zoomMargin: [90, 28, reserve, 28],
+    };
+    return orig(bounds, merged);
+  };
+}
+
 function keepMapAboveSheet() {
   const w = window as unknown as { __sheetGuardHooked?: boolean };
   if (w.__sheetGuardHooked) return;
   w.__sheetGuardHooked = true;
 
-  // Ставим постоянный margin сразу и переустанавливаем при изменениях —
-  // это заставляет и наш setBounds, и штатный boundsAutoApply вписывать
-  // маршрут в зону НАД формой.
+  // Перехватываем setBounds как можно раньше и несколько раз (карта могла
+  // ещё не создаться в момент первого вызова).
+  [0, 200, 500, 900, 1500].forEach((ms) => setTimeout(patchSetBounds, ms));
   [0, 300, 700, 1200, 2000, 3000].forEach((ms) => setTimeout(applyMapMargin, ms));
   [300, 700, 1200, 2000, 3000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
 
   const refit = () => {
+    patchSetBounds();
     applyMapMargin();
     fitMapAboveSheet();
   };
@@ -459,8 +479,9 @@ export default function useTariffCalc(ready: boolean) {
             if (w.ymaps && typeof w.ymaps.ready === "function") {
               w.ymaps.ready(() => {
                 if (typeof w.initMap === "function") w.initMap();
-                // Держим карту ужатой до верха формы, чтобы маршрут вписывался
-                // в видимую часть над шторкой заказа.
+                // Сразу перехватываем setBounds, чтобы ЛЮБОЕ вписывание маршрута
+                // резервировало место под формой и показывало путь над ней.
+                patchSetBounds();
                 keepMapAboveSheet();
               });
             }
