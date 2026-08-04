@@ -20,8 +20,8 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
   } = state;
 
   return (
-    <div className="uc-tariffCalc absolute z-10 inset-x-0 bottom-0 h-[54dvh] max-h-[54dvh] flex flex-col">
-      <div className="bg-[#141414] rounded-t-[28px] md:rounded-[28px] border-t md:border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)] flex flex-col h-full max-h-full min-h-0">
+    <div className="uc-tariffCalc absolute z-10 inset-x-0 bottom-0 max-h-[calc(100dvh-72px)] flex flex-col">
+      <div className="bg-[#141414] rounded-t-[28px] md:rounded-[28px] border-t md:border border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.5)] flex flex-col max-h-[calc(100dvh-72px)] min-h-0">
         <form ref={formRef} className="flex flex-col min-h-0">
           {/* «ручка» шторки */}
           <div className="pt-2 pb-0.5 flex justify-center md:hidden">
@@ -40,8 +40,8 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
             </button>
           )}
 
-          {/* Область с панелями (без прокрутки — форма фиксированной высоты) */}
-          <div className="flex-1 overflow-hidden min-h-0">
+          {/* Прокручиваемая область с панелями (кнопки внизу остаются видимыми) */}
+          <div className="flex-1 overflow-y-auto min-h-0">
           {/* ПАНЕЛЬ: ГЛАВНАЯ */}
           <div className={"px-5 pt-2 pb-1 space-y-2 " + (panel === "main" ? "" : "hidden")}>
             <div className="relative">
