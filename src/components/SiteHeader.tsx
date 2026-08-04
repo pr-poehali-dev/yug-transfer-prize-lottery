@@ -76,9 +76,9 @@ export default function SiteHeader() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="MAX"
-            className="hidden md:flex w-8 h-8 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] hover:opacity-90 items-center justify-center transition-opacity shrink-0"
+            className="hidden md:flex w-8 h-8 rounded-full overflow-hidden hover:opacity-90 items-center justify-center transition-opacity shrink-0"
           >
-            <span className="text-white text-[10px] font-bold leading-none">MAX</span>
+            <img src="/max-logo.jpeg" alt="MAX" className="w-full h-full object-cover" />
           </a>
           <Link to="/cabinet" className="hidden md:block">
             <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
@@ -92,9 +92,9 @@ export default function SiteHeader() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="MAX"
-            className="md:hidden flex w-8 h-8 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] items-center justify-center shrink-0"
+            className="md:hidden flex w-8 h-8 rounded-full overflow-hidden items-center justify-center shrink-0"
           >
-            <span className="text-white text-[10px] font-bold leading-none">MAX</span>
+            <img src="/max-logo.jpeg" alt="MAX" className="w-full h-full object-cover" />
           </a>
           <a
             href="https://t.me/Dispether82"
@@ -181,9 +181,9 @@ export default function SiteHeader() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="MAX"
-                className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] flex items-center justify-center"
+                className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center"
               >
-                <span className="text-white text-xs font-bold leading-none">MAX</span>
+                <img src="/max-logo.jpeg" alt="MAX" className="w-full h-full object-cover" />
               </a>
             </div>
             <div className="space-y-1 text-white/60 text-sm">

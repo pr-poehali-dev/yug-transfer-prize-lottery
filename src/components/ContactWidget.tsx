@@ -26,9 +26,9 @@ const ContactWidget = () => {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="MAX"
-            className="w-9 h-9 rounded-full bg-gradient-to-br from-[#7C4DFF] to-[#4D7CFF] hover:opacity-90 flex items-center justify-center transition-opacity"
+            className="w-9 h-9 rounded-full overflow-hidden hover:opacity-90 flex items-center justify-center transition-opacity"
           >
-            <span className="text-white text-xs font-bold leading-none">MAX</span>
+            <img src="/max-logo.jpeg" alt="MAX" className="w-full h-full object-cover" />
           </a>
           <a
             href={`tel:${PHONE_TEL}`}
