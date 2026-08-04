@@ -318,7 +318,6 @@ function patchMapSetBounds() {
     myMap?: {
       __boundsPatched?: boolean;
       setBounds?: (bounds: number[][], opts?: Record<string, unknown>) => unknown;
-      panBy?: (offset: number[], opts?: Record<string, unknown>) => unknown;
     };
   };
   const map = w.myMap;
@@ -338,27 +337,7 @@ function patchMapSetBounds() {
       // [верх, право, низ, лево] — резервируем место под шторкой снизу.
       zoomMargin: [24, 24, bottom, 24],
     };
-    const result = orig(bounds, merged);
-    // Подстраховка: если карта проигнорировала нижний zoomMargin (отступ
-    // слишком большой для контейнера) и вписала маршрут по центру всего экрана,
-    // он уходит под шторку. Доводим — сдвигаем карту вверх на половину
-    // перекрытия, чтобы маршрут поднялся в видимую зону над формой.
-    if (bottom > 0 && typeof map.panBy === "function") {
-      const shift = () => {
-        try {
-          map.panBy?.([0, Math.round(bottom / 2)], { duration: 0, checkZoomRange: false });
-        } catch {
-          /* ignore */
-        }
-      };
-      // panBy сработает после того, как вписывание применится к карте.
-      if (result && typeof (result as Promise<unknown>).then === "function") {
-        (result as Promise<unknown>).then(shift, () => {});
-      } else {
-        setTimeout(shift, 0);
-      }
-    }
-    return result;
+    return orig(bounds, merged);
   };
   map.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
     // Запоминаем маршрут, чтобы переприменить fit после отрисовки шторки.
