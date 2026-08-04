@@ -40,8 +40,8 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
             </button>
           )}
 
-          {/* Прокручиваемая область с панелями (кнопки внизу остаются видимыми) */}
-          <div className="flex-1 overflow-y-auto min-h-0">
+          {/* Область с панелями (без прокрутки — форма фиксированной высоты) */}
+          <div className="flex-1 overflow-hidden min-h-0">
           {/* ПАНЕЛЬ: ГЛАВНАЯ */}
           <div className={"px-5 pt-2 pb-1 space-y-2 " + (panel === "main" ? "" : "hidden")}>
             <div className="relative">
