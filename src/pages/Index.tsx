@@ -66,9 +66,25 @@ const Index = () => {
       className="h-screen [height:100dvh] overflow-hidden bg-cover bg-center relative"
       style={{ backgroundImage: `url(${BG})` }}
     >
-      {/* Карта маршрута (скрипт калькулятора рисует маршрут в #map) */}
-      <div id="map" className="absolute inset-0 z-0" />
-      <div className="absolute inset-0 bg-black/50 z-[1] pointer-events-none" />
+      {/* Карта маршрута (скрипт калькулятора рисует маршрут в #map).
+          На мобильном карта занимает ТОЛЬКО верхнюю зону экрана — тогда маршрут
+          вписывается в неё и центрируется сам, не уходя под форму.
+          На десктопе карта — на весь экран (форма сбоку). */}
+      <div
+        id="map"
+        className={
+          isMobile
+            ? "absolute inset-x-0 top-0 h-[56dvh] z-0"
+            : "absolute inset-0 z-0"
+        }
+      />
+      <div
+        className={
+          isMobile
+            ? "absolute inset-x-0 top-0 h-[56dvh] bg-black/40 z-[1] pointer-events-none"
+            : "absolute inset-0 bg-black/50 z-[1] pointer-events-none"
+        }
+      />
 
       <SiteHeader />
 

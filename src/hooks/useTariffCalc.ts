@@ -293,6 +293,157 @@ function installCalcInterceptor() {
   };
 }
 
+// Ключевая проблема: контейнер #map — во весь экран (inset-0), его низ уходит
+// ПОД шторку заказа, а скрипт вписывает маршрут в ПОЛНУЮ высоту карты — поэтому
+// центр маршрута оказывается под формой.
+// Надёжное решение через нативный API Яндекса: берём географические границы
+// ВСЕХ объектов карты (маршрут) — myMap.geoObjects.getBounds() — и вписываем их
+// сами через myMap.setBounds с большим НИЖНИМ отступом (zoomMargin), равным
+// высоте формы + запас. Так маршрут центрируется строго в зоне НАД формой.
+// [верх, право, низ, лево].
+function fitMapAboveSheet() {
+  const map = document.getElementById("map");
+  if (!map) return;
+
+  const w = window as unknown as {
+    myMap?: {
+      geoObjects?: { getBounds?: () => number[][] | null };
+      setBounds?: (b: number[][], o?: Record<string, unknown>) => unknown;
+      container?: { fitToViewport?: () => void };
+      margin?: { setDefaultMargin?: (m: number[]) => void };
+    };
+  };
+  const myMap = w.myMap;
+  if (!myMap || typeof myMap.setBounds !== "function") return;
+
+  // Границы маршрута (и всех объектов). Пока маршрута нет — getBounds вернёт null.
+  let bounds: number[][] | null = null;
+  try {
+    bounds = myMap.geoObjects?.getBounds?.() || null;
+  } catch {
+    bounds = null;
+  }
+  if (!bounds) return;
+
+  try {
+    // setBounds уже перехвачен (patchSetBounds) и сам добавит нижний отступ
+    // под форму — просто передаём границы маршрута.
+    myMap.container?.fitToViewport?.();
+    myMap.setBounds(bounds, {});
+  } catch {
+    /* ignore */
+  }
+}
+
+// Маршрут появляется/перестраивается асинхронно. Держим его вписанным в зону
+// над формой: реагируем на изменения размеров формы/экрана и на изменения DOM
+// карты (появление линии маршрута), и переприменяем fit несколько раз.
+// Задаёт карте ПОСТОЯННЫЙ нижний margin под форму. Тогда любое вписывание
+// маршрута (в т.ч. штатный boundsAutoApply самого скрипта) автоматически
+// оставляет место под шторкой и центрирует путь в видимой зоне над ней.
+function applyMapMargin() {
+  const w = window as unknown as {
+    myMap?: {
+      margin?: {
+        setDefaultMargin?: (m: number[]) => void;
+        addArea?: (o: Record<string, unknown>) => unknown;
+      };
+    };
+  };
+  const m = w.myMap?.margin;
+  if (!m) return;
+  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+  const vh = window.innerHeight;
+  const sheetTop = sheet ? Math.round(sheet.getBoundingClientRect().top) : Math.round(vh * 0.55);
+  const bottomMargin = Math.max(140, vh - sheetTop + 32);
+  try {
+    m.setDefaultMargin?.([90, 28, bottomMargin, 28]);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Нижний отступ карты, который надо зарезервировать при вписывании маршрута.
+// Карта на мобильном чуть выше формы (её низ уходит ПОД форму, чтобы спрятать
+// плашку Яндекса). Резервируем только СКРЫТУЮ формой часть карты + небольшой
+// запас, иначе маршрут ужимается сильнее нужного.
+function bottomReserve(): number {
+  const map = document.getElementById("map");
+  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+  if (!map || !sheet) return 24;
+  const mapBottom = map.getBoundingClientRect().bottom;
+  const sheetTop = sheet.getBoundingClientRect().top;
+  const overlap = Math.max(0, Math.round(mapBottom - sheetTop));
+  return overlap + 28;
+}
+
+// САМОЕ НАДЁЖНОЕ: перехватываем myMap.setBounds. Кто бы ни вписывал маршрут —
+// сам скрипт (boundsAutoApply) или мы — принудительно добавляем нижний отступ
+// под форму. Так исчезает «гонка»: результат ВСЕГДА над формой.
+function patchSetBounds() {
+  const w = window as unknown as {
+    myMap?: {
+      setBounds?: (b: number[][], o?: Record<string, unknown>) => unknown;
+      __sbPatched?: boolean;
+    };
+  };
+  const myMap = w.myMap;
+  if (!myMap || typeof myMap.setBounds !== "function" || myMap.__sbPatched) return;
+  const orig = myMap.setBounds.bind(myMap);
+  myMap.__sbPatched = true;
+  myMap.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
+    const reserve = bottomReserve();
+    const merged: Record<string, unknown> = {
+      checkZoomRange: true,
+      ...(opts || {}),
+      // Нижний отступ = высота формы, верх/бока — небольшие поля.
+      zoomMargin: [90, 28, reserve, 28],
+    };
+    return orig(bounds, merged);
+  };
+}
+
+function keepMapAboveSheet() {
+  const w = window as unknown as { __sheetGuardHooked?: boolean };
+  if (w.__sheetGuardHooked) return;
+  w.__sheetGuardHooked = true;
+
+  // Перехватываем setBounds как можно раньше и несколько раз (карта могла
+  // ещё не создаться в момент первого вызова).
+  [0, 200, 500, 900, 1500].forEach((ms) => setTimeout(patchSetBounds, ms));
+  [0, 300, 700, 1200, 2000, 3000].forEach((ms) => setTimeout(applyMapMargin, ms));
+  [300, 700, 1200, 2000, 3000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
+
+  const refit = () => {
+    patchSetBounds();
+    applyMapMargin();
+    fitMapAboveSheet();
+  };
+
+  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+  if (sheet && typeof ResizeObserver !== "undefined") {
+    let t = 0;
+    const ro = new ResizeObserver(() => {
+      window.clearTimeout(t);
+      t = window.setTimeout(refit, 120);
+    });
+    ro.observe(sheet);
+  }
+
+  const map = document.getElementById("map");
+  if (map && typeof MutationObserver !== "undefined") {
+    let mt = 0;
+    const mo = new MutationObserver(() => {
+      window.clearTimeout(mt);
+      mt = window.setTimeout(refit, 150);
+    });
+    mo.observe(map, { childList: true, subtree: true });
+  }
+
+  window.addEventListener("resize", () => setTimeout(refit, 120));
+  window.addEventListener("orientationchange", () => setTimeout(refit, 250));
+}
+
 export default function useTariffCalc(ready: boolean) {
   useEffect(() => {
     if (!ready) return;
@@ -334,6 +485,10 @@ export default function useTariffCalc(ready: boolean) {
             if (w.ymaps && typeof w.ymaps.ready === "function") {
               w.ymaps.ready(() => {
                 if (typeof w.initMap === "function") w.initMap();
+                // Сразу перехватываем setBounds, чтобы ЛЮБОЕ вписывание маршрута
+                // резервировало место под формой и показывало путь над ней.
+                patchSetBounds();
+                keepMapAboveSheet();
               });
             }
           } catch (err) {
