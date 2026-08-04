@@ -326,11 +326,20 @@ function fitMapAboveSheet() {
   try {
     w.myMap?.container?.fitToViewport?.();
     if (w.__lastBounds && typeof w.myMap?.setBounds === "function") {
-      w.myMap.setBounds(w.__lastBounds, { checkZoomRange: true, zoomMargin: [24, 24, 24, 24] });
+      w.myMap.setBounds(w.__lastBounds, { checkZoomRange: true, zoomMargin: routeZoomMargin(h) });
     }
   } catch {
     /* ignore */
   }
+}
+
+// Отступы вписывания маршрута [верх, право, низ, лево]. Сверху оставляем место
+// под шапку (лого/телефон), снизу задаём БОЛЬШОЙ отступ — так маршрут смещается
+// в ВЕРХНЮЮ часть видимой карты, а не липнет к нижнему краю у формы.
+function routeZoomMargin(mapHeight: number): number[] {
+  const top = 88;
+  const bottom = Math.max(48, Math.round(mapHeight * 0.42));
+  return [top, 28, bottom, 28];
 }
 
 // Маршрут строится MultiRoute с boundsAutoApply — карта сама зовёт setBounds.
@@ -356,7 +365,9 @@ function patchMapSetBounds() {
   map.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
     // Запоминаем маршрут, чтобы переприменять fit при изменении размеров.
     (w as { __lastBounds?: number[][] }).__lastBounds = bounds;
-    const merged: Record<string, unknown> = { checkZoomRange: true, ...(opts || {}), zoomMargin: [24, 24, 24, 24] };
+    const mapEl = document.getElementById("map");
+    const mh = mapEl ? mapEl.getBoundingClientRect().height : Math.round(window.innerHeight * 0.55);
+    const merged: Record<string, unknown> = { checkZoomRange: true, ...(opts || {}), zoomMargin: routeZoomMargin(mh) };
     const res = orig(bounds, merged);
     // Карта ещё во весь экран — ужимаем над шторкой и вписываем повторно.
     [0, 150, 500, 1000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
