@@ -320,6 +320,9 @@ function fitMapAboveSheet() {
   map.style.bottom = "auto";
   map.style.height = `${h}px`;
 
+  const realH = map.getBoundingClientRect().height;
+  console.log("[MAP FIT] sheetTop=", sheetTop, "targetH=", h, "realMapH=", Math.round(realH), "innerH=", window.innerHeight);
+
   // Сообщаем карте, что размер контейнера изменился, и переприменяем маршрут.
   const w = window as unknown as {
     myMap?: {
@@ -329,6 +332,7 @@ function fitMapAboveSheet() {
     __lastBounds?: number[][];
   };
   const myMap = w.myMap;
+  console.log("[MAP FIT] hasMap=", !!myMap, "hasBounds=", !!w.__lastBounds, "hasSetBounds=", typeof myMap?.setBounds);
   if (!myMap || !w.__lastBounds || typeof myMap.setBounds !== "function") return;
   try {
     myMap.container?.fitToViewport?.();
