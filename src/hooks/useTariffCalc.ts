@@ -338,7 +338,7 @@ function fitMapAboveSheet() {
 // в ВЕРХНЮЮ часть видимой карты, а не липнет к нижнему краю у формы.
 function routeZoomMargin(mapHeight: number): number[] {
   const top = 88;
-  const bottom = Math.max(48, Math.round(mapHeight * 0.42));
+  const bottom = Math.max(48, Math.round(mapHeight * 0.67));
   return [top, 28, bottom, 28];
 }
 
