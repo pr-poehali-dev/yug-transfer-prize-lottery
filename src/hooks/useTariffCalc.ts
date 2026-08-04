@@ -303,7 +303,7 @@ function patchMapSetBounds() {
   map.__boundsPatched = true;
 
   const orig = map.setBounds.bind(map);
-  map.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
+  const applyBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
     const bottom = orderSheetHeight();
     const merged: Record<string, unknown> = {
       checkZoomRange: true,
@@ -312,6 +312,20 @@ function patchMapSetBounds() {
       zoomMargin: [24, 24, bottom, 24],
     };
     return orig(bounds, merged);
+  };
+  map.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
+    // Запоминаем маршрут, чтобы переприменить fit после отрисовки шторки.
+    (w as { __lastBounds?: number[][] }).__lastBounds = bounds;
+    const res = applyBounds(bounds, opts);
+    // Повторно вписываем: в момент первого вызова высота шторки может быть 0
+    // (форма ещё не отрисовалась) — тогда маршрут центрируется по всему экрану.
+    [120, 400, 900].forEach((ms) =>
+      setTimeout(() => {
+        const b = (w as { __lastBounds?: number[][] }).__lastBounds;
+        if (b) applyBounds(b, opts);
+      }, ms)
+    );
+    return res;
   };
 }
 
