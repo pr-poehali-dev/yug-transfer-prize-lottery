@@ -313,86 +313,57 @@ function fitMapAboveSheet() {
   const sheetTop = sheet.getBoundingClientRect().top;
   const desired = Math.max(0, Math.round(sheetTop));
   // Небольшой нахлёст, чтобы карта уходила под скруглённый верх шторки.
-  const h = desired > 120 ? desired + 24 : Math.round(window.innerHeight * 0.55);
-  // ВАЖНО: контейнер #map — absolute inset-0 (top:0 И bottom:0), поэтому просто
-  // height игнорируется. Снимаем bottom, чтобы высота реально применилась и
-  // карта ужалась до верха шторки.
-  map.style.bottom = "auto";
-  map.style.height = `${h}px`;
+  // #map — absolute inset-0 (top:0 И bottom:0) → одной height мало, снимаем
+  // bottom, чтобы высота реально применилась и карта ужалась до верха шторки.
+  const h = desired > 120 ? desired : Math.round(window.innerHeight * 0.55);
+  const target = `${h}px`;
 
-  const realH = map.getBoundingClientRect().height;
-  console.log("[MAP FIT] sheetTop=", sheetTop, "targetH=", h, "realMapH=", Math.round(realH), "innerH=", window.innerHeight);
-
-  // Сообщаем карте, что размер контейнера изменился, и переприменяем маршрут.
   const w = window as unknown as {
-    myMap?: {
-      container?: { fitToViewport?: () => void };
-      setBounds?: (b: number[][], o?: Record<string, unknown>) => Promise<unknown> | unknown;
-    };
-    __lastBounds?: number[][];
+    myMap?: { container?: { fitToViewport?: () => void } };
   };
-  const myMap = w.myMap;
-  console.log("[MAP FIT] hasMap=", !!myMap, "hasBounds=", !!w.__lastBounds, "hasSetBounds=", typeof myMap?.setBounds);
-  if (!myMap || !w.__lastBounds || typeof myMap.setBounds !== "function") return;
-  try {
-    myMap.container?.fitToViewport?.();
-    // Вписываем весь маршрут в свободную над формой зону.
-    // [верх, право, низ, лево]: сверху резервируем место под шапку
-    // (лого/телефон), по бокам и снизу — равные небольшие поля. Так маршрут
-    // центрируется ровно по видимой части карты над формой.
-    const TOP = 96;   // под шапку
-    const SIDE = 24;  // боковые поля
-    const BOTTOM = 32; // небольшой отступ от края формы
-    myMap.setBounds(w.__lastBounds, { checkZoomRange: true, zoomMargin: [TOP, SIDE, BOTTOM, SIDE] });
-  } catch {
-    /* ignore */
+
+  if (map.style.height !== target || map.style.bottom !== "auto") {
+    map.style.bottom = "auto";
+    map.style.height = target;
+    // Контейнер стал меньше — карта пересчитает bounds и (при активном
+    // маршруте boundsAutoApply) перевпишет его в новую высоту над формой.
+    w.myMap?.container?.fitToViewport?.();
   }
 }
 
-// Маршрут строится MultiRoute с boundsAutoApply — карта сама зовёт setBounds.
-// Перехватываем setBounds, запоминаем последний маршрут и ужимаем карту над
-// шторкой, чтобы весь путь был виден над формой.
-function patchMapSetBounds() {
-  const w = window as unknown as {
-    myMap?: {
-      __boundsPatched?: boolean;
-      setBounds?: (bounds: number[][], opts?: Record<string, unknown>) => unknown;
-    };
-    __sheetResizeHooked?: boolean;
-  };
-  const map = w.myMap;
-  if (!map || typeof map.setBounds !== "function") {
-    setTimeout(patchMapSetBounds, 400);
-    return;
-  }
-  if (map.__boundsPatched) return;
-  map.__boundsPatched = true;
+// Держим карту ужатой ПОСТОЯННО, не завися от того, зовёт ли скрипт setBounds
+// (MultiRoute вписывает маршрут своим кодом). Реагируем на изменения размеров
+// шторки/экрана и на любые изменения DOM карты (появление/перестроение линии
+// маршрута) — тогда boundsAutoApply вписывает путь уже в укороченную высоту.
+function keepMapAboveSheet() {
+  const w = window as unknown as { __sheetGuardHooked?: boolean };
+  if (w.__sheetGuardHooked) return;
+  w.__sheetGuardHooked = true;
 
-  const orig = map.setBounds.bind(map);
-  map.setBounds = (bounds: number[][], opts?: Record<string, unknown>) => {
-    // Запоминаем маршрут, чтобы переприменять fit при изменении размеров.
-    (w as { __lastBounds?: number[][] }).__lastBounds = bounds;
-    const merged: Record<string, unknown> = { checkZoomRange: true, ...(opts || {}), zoomMargin: [24, 24, 24, 24] };
-    const res = orig(bounds, merged);
-    // Карта ещё во весь экран — ужимаем над шторкой и вписываем повторно.
-    [0, 150, 500, 1000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
-    return res;
-  };
+  [0, 200, 500, 1000, 2000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
 
-  // Следим за размером шторки (раскрытие/сворачивание) и экрана.
-  if (!w.__sheetResizeHooked) {
-    w.__sheetResizeHooked = true;
-    const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
-    if (sheet && typeof ResizeObserver !== "undefined") {
-      let t = 0;
-      const ro = new ResizeObserver(() => {
-        window.clearTimeout(t);
-        t = window.setTimeout(fitMapAboveSheet, 120);
-      });
-      ro.observe(sheet);
-    }
-    window.addEventListener("resize", () => setTimeout(fitMapAboveSheet, 120));
+  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+  if (sheet && typeof ResizeObserver !== "undefined") {
+    let t = 0;
+    const ro = new ResizeObserver(() => {
+      window.clearTimeout(t);
+      t = window.setTimeout(fitMapAboveSheet, 80);
+    });
+    ro.observe(sheet);
   }
+
+  const map = document.getElementById("map");
+  if (map && typeof MutationObserver !== "undefined") {
+    let mt = 0;
+    const mo = new MutationObserver(() => {
+      window.clearTimeout(mt);
+      mt = window.setTimeout(fitMapAboveSheet, 80);
+    });
+    mo.observe(map, { childList: true, subtree: true });
+  }
+
+  window.addEventListener("resize", () => setTimeout(fitMapAboveSheet, 80));
+  window.addEventListener("orientationchange", () => setTimeout(fitMapAboveSheet, 200));
 }
 
 export default function useTariffCalc(ready: boolean) {
@@ -436,9 +407,9 @@ export default function useTariffCalc(ready: boolean) {
             if (w.ymaps && typeof w.ymaps.ready === "function") {
               w.ymaps.ready(() => {
                 if (typeof w.initMap === "function") w.initMap();
-                // Маршрут должен вписываться в верхнюю видимую часть экрана над
-                // шторкой заказа — патчим setBounds, добавляя нижний отступ.
-                patchMapSetBounds();
+                // Держим карту ужатой до верха формы, чтобы маршрут вписывался
+                // в видимую часть над шторкой заказа.
+                keepMapAboveSheet();
               });
             }
           } catch (err) {
