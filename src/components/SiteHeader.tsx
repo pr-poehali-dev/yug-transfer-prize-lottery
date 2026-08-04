@@ -32,7 +32,7 @@ export default function SiteHeader() {
   return (
     <header ref={headerRef} className="sticky top-0 z-20 w-full">
       <div className="flex items-center justify-between gap-3 px-5 py-3.5 md:bg-white/10 md:border-b md:border-white/20 md:backdrop-blur-md md:shadow-lg">
-        <Link to="/" onClick={() => setOpen(false)} className="flex items-center gap-2 shrink-0">
+        <a href="/" className="flex items-center gap-2 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0">
             <img
               src="https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/bucket/64907c55-9fa4-41c3-8060-94e8e73046d4.jpg"
@@ -41,7 +41,7 @@ export default function SiteHeader() {
             />
           </div>
           <span className="hidden md:inline font-bold text-white text-base md:text-lg">Мой Трансфер</span>
-        </Link>
+        </a>
 
         <nav className="hidden md:flex items-center gap-1">
           {NAV.filter((n) => n.to !== "/bridge").map((n) => (
