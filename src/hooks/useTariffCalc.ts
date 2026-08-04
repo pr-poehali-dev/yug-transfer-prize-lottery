@@ -306,6 +306,7 @@ function fitMapAboveSheet() {
 
   if (!sheet) {
     map.style.height = "";
+    map.style.bottom = "";
     return;
   }
   // Верх шторки в координатах вьюпорта = сколько места остаётся сверху карте.
@@ -313,6 +314,10 @@ function fitMapAboveSheet() {
   const desired = Math.max(0, Math.round(sheetTop));
   // Небольшой нахлёст, чтобы карта уходила под скруглённый верх шторки.
   const h = desired > 120 ? desired + 24 : Math.round(window.innerHeight * 0.55);
+  // ВАЖНО: контейнер #map — absolute inset-0 (top:0 И bottom:0), поэтому просто
+  // height игнорируется. Снимаем bottom, чтобы высота реально применилась и
+  // карта ужалась до верха шторки.
+  map.style.bottom = "auto";
   map.style.height = `${h}px`;
 
   // Сообщаем карте, что размер контейнера изменился, и переприменяем маршрут.
