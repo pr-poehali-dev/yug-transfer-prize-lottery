@@ -293,61 +293,77 @@ function installCalcInterceptor() {
   };
 }
 
-// Ключевая проблема: контейнер #map занимает ВЕСЬ экран (inset-0), его низ
-// уходит ПОД шторку заказа. Скрипт вписывает маршрут в полную высоту карты
-// (boundsAutoApply), поэтому центр маршрута оказывается под формой.
-// Решение: физически ужимаем высоту #map до верха шторки — тогда весь маршрут
-// вписывается в видимую область НАД формой. Пересчитываем при изменении
-// размеров шторки/экрана и переприменяем последний fit маршрута.
+// Ключевая проблема: контейнер #map — во весь экран (inset-0), его низ уходит
+// ПОД шторку заказа, а скрипт вписывает маршрут в ПОЛНУЮ высоту карты — поэтому
+// центр маршрута оказывается под формой.
+// Надёжное решение через нативный API Яндекса: берём географические границы
+// ВСЕХ объектов карты (маршрут) — myMap.geoObjects.getBounds() — и вписываем их
+// сами через myMap.setBounds с большим НИЖНИМ отступом (zoomMargin), равным
+// высоте формы + запас. Так маршрут центрируется строго в зоне НАД формой.
+// [верх, право, низ, лево].
 function fitMapAboveSheet() {
   const map = document.getElementById("map");
-  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
   if (!map) return;
 
-  if (!sheet) {
-    map.style.height = "";
-    map.style.bottom = "";
-    return;
-  }
-  // Верх шторки в координатах вьюпорта = сколько места остаётся сверху карте.
-  const sheetTop = sheet.getBoundingClientRect().top;
-  const desired = Math.max(0, Math.round(sheetTop));
-  // Небольшой нахлёст, чтобы карта уходила под скруглённый верх шторки.
-  // #map — absolute inset-0 (top:0 И bottom:0) → одной height мало, снимаем
-  // bottom, чтобы высота реально применилась и карта ужалась до верха шторки.
-  const h = desired > 120 ? desired : Math.round(window.innerHeight * 0.55);
-  const target = `${h}px`;
-
   const w = window as unknown as {
-    myMap?: { container?: { fitToViewport?: () => void } };
+    myMap?: {
+      geoObjects?: { getBounds?: () => number[][] | null };
+      setBounds?: (b: number[][], o?: Record<string, unknown>) => unknown;
+      container?: { fitToViewport?: () => void };
+      margin?: { setDefaultMargin?: (m: number[]) => void };
+    };
   };
+  const myMap = w.myMap;
+  if (!myMap || typeof myMap.setBounds !== "function") return;
 
-  if (map.style.height !== target || map.style.bottom !== "auto") {
-    map.style.bottom = "auto";
-    map.style.height = target;
-    // Контейнер стал меньше — карта пересчитает bounds и (при активном
-    // маршруте boundsAutoApply) перевпишет его в новую высоту над формой.
-    w.myMap?.container?.fitToViewport?.();
+  // Границы маршрута (и всех объектов). Пока маршрута нет — getBounds вернёт null.
+  let bounds: number[][] | null = null;
+  try {
+    bounds = myMap.geoObjects?.getBounds?.() || null;
+  } catch {
+    bounds = null;
+  }
+  if (!bounds) return;
+
+  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+  const vh = window.innerHeight;
+  // Высота формы (видимая часть шторки над низом экрана).
+  const sheetTop = sheet ? Math.round(sheet.getBoundingClientRect().top) : Math.round(vh * 0.55);
+  const bottomMargin = Math.max(120, vh - sheetTop + 24); // резерв под форму
+  const TOP = 96;  // под шапку (лого/телефон)
+  const SIDE = 28; // боковые поля
+
+  try {
+    // Официальный механизм «карта под панелью»: margin сдвигает видимый центр
+    // карты вверх на высоту формы. setBounds после этого центрирует маршрут
+    // именно по свободной зоне над формой.
+    myMap.margin?.setDefaultMargin?.([TOP, SIDE, bottomMargin, SIDE]);
+    myMap.container?.fitToViewport?.();
+    myMap.setBounds(bounds, {
+      checkZoomRange: true,
+      zoomMargin: [TOP, SIDE, bottomMargin, SIDE],
+    });
+  } catch {
+    /* ignore */
   }
 }
 
-// Держим карту ужатой ПОСТОЯННО, не завися от того, зовёт ли скрипт setBounds
-// (MultiRoute вписывает маршрут своим кодом). Реагируем на изменения размеров
-// шторки/экрана и на любые изменения DOM карты (появление/перестроение линии
-// маршрута) — тогда boundsAutoApply вписывает путь уже в укороченную высоту.
+// Маршрут появляется/перестраивается асинхронно. Держим его вписанным в зону
+// над формой: реагируем на изменения размеров формы/экрана и на изменения DOM
+// карты (появление линии маршрута), и переприменяем fit несколько раз.
 function keepMapAboveSheet() {
   const w = window as unknown as { __sheetGuardHooked?: boolean };
   if (w.__sheetGuardHooked) return;
   w.__sheetGuardHooked = true;
 
-  [0, 200, 500, 1000, 2000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
+  [300, 700, 1200, 2000, 3000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
 
   const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
   if (sheet && typeof ResizeObserver !== "undefined") {
     let t = 0;
     const ro = new ResizeObserver(() => {
       window.clearTimeout(t);
-      t = window.setTimeout(fitMapAboveSheet, 80);
+      t = window.setTimeout(fitMapAboveSheet, 120);
     });
     ro.observe(sheet);
   }
@@ -357,13 +373,13 @@ function keepMapAboveSheet() {
     let mt = 0;
     const mo = new MutationObserver(() => {
       window.clearTimeout(mt);
-      mt = window.setTimeout(fitMapAboveSheet, 80);
+      mt = window.setTimeout(fitMapAboveSheet, 150);
     });
     mo.observe(map, { childList: true, subtree: true });
   }
 
-  window.addEventListener("resize", () => setTimeout(fitMapAboveSheet, 80));
-  window.addEventListener("orientationchange", () => setTimeout(fitMapAboveSheet, 200));
+  window.addEventListener("resize", () => setTimeout(fitMapAboveSheet, 120));
+  window.addEventListener("orientationchange", () => setTimeout(fitMapAboveSheet, 250));
 }
 
 export default function useTariffCalc(ready: boolean) {
