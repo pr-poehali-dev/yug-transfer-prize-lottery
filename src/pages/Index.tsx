@@ -74,14 +74,14 @@ const Index = () => {
         id="map"
         className={
           isMobile
-            ? "absolute inset-x-0 top-0 h-[46dvh] z-0"
+            ? "absolute inset-x-0 top-0 h-[56dvh] z-0"
             : "absolute inset-0 z-0"
         }
       />
       <div
         className={
           isMobile
-            ? "absolute inset-x-0 top-0 h-[46dvh] bg-black/40 z-[1] pointer-events-none"
+            ? "absolute inset-x-0 top-0 h-[56dvh] bg-black/40 z-[1] pointer-events-none"
             : "absolute inset-0 bg-black/50 z-[1] pointer-events-none"
         }
       />

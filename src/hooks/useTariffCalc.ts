@@ -363,12 +363,18 @@ function applyMapMargin() {
   }
 }
 
-// Высота видимой зоны под форму (нижний отступ, который надо резервировать).
+// Нижний отступ карты, который надо зарезервировать при вписывании маршрута.
+// Карта на мобильном чуть выше формы (её низ уходит ПОД форму, чтобы спрятать
+// плашку Яндекса). Резервируем только СКРЫТУЮ формой часть карты + небольшой
+// запас, иначе маршрут ужимается сильнее нужного.
 function bottomReserve(): number {
+  const map = document.getElementById("map");
   const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
-  const vh = window.innerHeight;
-  const sheetTop = sheet ? Math.round(sheet.getBoundingClientRect().top) : Math.round(vh * 0.55);
-  return Math.max(140, vh - sheetTop + 32);
+  if (!map || !sheet) return 24;
+  const mapBottom = map.getBoundingClientRect().bottom;
+  const sheetTop = sheet.getBoundingClientRect().top;
+  const overlap = Math.max(0, Math.round(mapBottom - sheetTop));
+  return overlap + 28;
 }
 
 // САМОЕ НАДЁЖНОЕ: перехватываем myMap.setBounds. Кто бы ни вписывал маршрут —
