@@ -33,14 +33,29 @@ function loadScript(src: string, id: string): Promise<void> {
 // от внутренней логики скрипта — цены появляются сразу на всех тарифах.
 function applyAllTariffPrices(costAll: Record<string, number> | null | undefined) {
   if (!costAll) return;
+  // Скрипт для одного маршрута шлёт НЕСКОЛЬКО параллельных расчётов (Яндекс
+  // отдаёт до 3 альтернативных маршрутов разной длины). Ответы приходят
+  // вразнобой, и без фиксации цена «прыгает» — какой ответ пришёл последним.
+  // Стабилизируем: в рамках одной серии расчёта (до смены маршрута) держим по
+  // каждому тарифу максимальную цену = самый полный, реальный маршрут, а не
+  // «срезанную» альтернативу. Серию сбрасывает clearTariffPriceCache().
+  const win = window as unknown as { __tariffPrices?: Record<string, number> };
+  const prev = win.__tariffPrices || {};
+  const merged: Record<string, number> = { ...prev };
+  Object.keys(costAll).forEach((k) => {
+    const v = costAll[k];
+    if (typeof v === "number" && v > 0) {
+      merged[k] = Math.max(merged[k] ?? 0, v);
+    }
+  });
   // Кэшируем цены всех тарифов, чтобы при клике подставлять без пересчёта.
-  (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices = costAll;
+  win.__tariffPrices = merged;
   const cards = document.querySelectorAll<HTMLElement>(".calc__form__tarif__item");
   cards.forEach((card) => {
     const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
     const priceEl = card.querySelector<HTMLElement>(".calc__form__tarif__item__price");
     if (!priceEl) return;
-    const cost = costAll[title];
+    const cost = merged[title];
     if (typeof cost === "number" && cost > 0) {
       priceEl.textContent = new Intl.NumberFormat("ru-RU").format(cost) + " \u20BD";
       card.dataset.hasPrice = "1";
