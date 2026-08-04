@@ -314,10 +314,7 @@ function fitMapAboveSheet() {
     };
   };
   const myMap = w.myMap;
-  if (!myMap || typeof myMap.setBounds !== "function") {
-    console.log("[FIT] no map/setBounds", !!myMap, typeof myMap?.setBounds);
-    return;
-  }
+  if (!myMap || typeof myMap.setBounds !== "function") return;
 
   // Границы маршрута (и всех объектов). Пока маршрута нет — getBounds вернёт null.
   let bounds: number[][] | null = null;
@@ -326,7 +323,6 @@ function fitMapAboveSheet() {
   } catch {
     bounds = null;
   }
-  console.log("[FIT] bounds=", JSON.stringify(bounds), "hasMargin=", typeof myMap.margin?.setDefaultMargin);
   if (!bounds) return;
 
   const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
@@ -342,7 +338,6 @@ function fitMapAboveSheet() {
     // под форму, сдвигая видимый центр карты вверх. setBounds с margin-mode
     // сам учитывает этот отступ — поэтому zoomMargin делаем маленьким, иначе
     // отступ снизу задваивается и маршрут не влезает.
-    console.log("[FIT] applying setBounds, bottomMargin=", bottomMargin, "vh=", vh, "sheetTop=", sheetTop);
     myMap.margin?.setDefaultMargin?.([TOP, SIDE, bottomMargin, SIDE]);
     myMap.container?.fitToViewport?.();
     myMap.setBounds(bounds, {
@@ -350,27 +345,61 @@ function fitMapAboveSheet() {
       useMapMargin: true,
       zoomMargin: 12,
     });
-  } catch (e) {
-    console.log("[FIT] setBounds error", e);
+  } catch {
+    /* ignore */
   }
 }
 
 // Маршрут появляется/перестраивается асинхронно. Держим его вписанным в зону
 // над формой: реагируем на изменения размеров формы/экрана и на изменения DOM
 // карты (появление линии маршрута), и переприменяем fit несколько раз.
+// Задаёт карте ПОСТОЯННЫЙ нижний margin под форму. Тогда любое вписывание
+// маршрута (в т.ч. штатный boundsAutoApply самого скрипта) автоматически
+// оставляет место под шторкой и центрирует путь в видимой зоне над ней.
+function applyMapMargin() {
+  const w = window as unknown as {
+    myMap?: {
+      margin?: {
+        setDefaultMargin?: (m: number[]) => void;
+        addArea?: (o: Record<string, unknown>) => unknown;
+      };
+    };
+  };
+  const m = w.myMap?.margin;
+  if (!m) return;
+  const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
+  const vh = window.innerHeight;
+  const sheetTop = sheet ? Math.round(sheet.getBoundingClientRect().top) : Math.round(vh * 0.55);
+  const bottomMargin = Math.max(140, vh - sheetTop + 32);
+  try {
+    m.setDefaultMargin?.([90, 28, bottomMargin, 28]);
+  } catch {
+    /* ignore */
+  }
+}
+
 function keepMapAboveSheet() {
   const w = window as unknown as { __sheetGuardHooked?: boolean };
   if (w.__sheetGuardHooked) return;
   w.__sheetGuardHooked = true;
 
+  // Ставим постоянный margin сразу и переустанавливаем при изменениях —
+  // это заставляет и наш setBounds, и штатный boundsAutoApply вписывать
+  // маршрут в зону НАД формой.
+  [0, 300, 700, 1200, 2000, 3000].forEach((ms) => setTimeout(applyMapMargin, ms));
   [300, 700, 1200, 2000, 3000].forEach((ms) => setTimeout(fitMapAboveSheet, ms));
+
+  const refit = () => {
+    applyMapMargin();
+    fitMapAboveSheet();
+  };
 
   const sheet = document.querySelector<HTMLElement>(".uc-tariffCalc");
   if (sheet && typeof ResizeObserver !== "undefined") {
     let t = 0;
     const ro = new ResizeObserver(() => {
       window.clearTimeout(t);
-      t = window.setTimeout(fitMapAboveSheet, 120);
+      t = window.setTimeout(refit, 120);
     });
     ro.observe(sheet);
   }
@@ -380,13 +409,13 @@ function keepMapAboveSheet() {
     let mt = 0;
     const mo = new MutationObserver(() => {
       window.clearTimeout(mt);
-      mt = window.setTimeout(fitMapAboveSheet, 150);
+      mt = window.setTimeout(refit, 150);
     });
     mo.observe(map, { childList: true, subtree: true });
   }
 
-  window.addEventListener("resize", () => setTimeout(fitMapAboveSheet, 120));
-  window.addEventListener("orientationchange", () => setTimeout(fitMapAboveSheet, 250));
+  window.addEventListener("resize", () => setTimeout(refit, 120));
+  window.addEventListener("orientationchange", () => setTimeout(refit, 250));
 }
 
 export default function useTariffCalc(ready: boolean) {
