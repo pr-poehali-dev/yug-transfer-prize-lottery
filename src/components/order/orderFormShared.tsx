@@ -84,6 +84,9 @@ export function useOrderForm(): OrderFormState {
   const isMobile = useIsMobile();
 
   const [tariff, setTariff] = useState(TARIFFS[0]);
+  // Актуальный выбранный тариф для слушателей без пересоздания эффектов.
+  const tariffRef = useRef(tariff);
+  tariffRef.current = tariff;
   // Активная панель нижней шторки: главная / доп. опции / оплата.
   const [panel, setPanel] = useState<"main" | "extra" | "pay">("main");
   // Способ оплаты (радио-логика): Наличные / Перевод / По номеру счёта.
@@ -240,6 +243,13 @@ export function useOrderForm(): OrderFormState {
     };
     window.addEventListener("orderFormReset", onReset);
 
+    // Скрипт пересчитал цены — синхронизируем кнопку с выбранным тарифом,
+    // иначе на кнопке останется цена другого (дефолтного) тарифа.
+    const onPricesUpdated = () => {
+      applySelectedTariffFromCache(tariffRef.current);
+    };
+    window.addEventListener("tariffPricesUpdated", onPricesUpdated);
+
     return () => {
       window.alert = nativeAlert;
       form.removeEventListener("submit", onSubmitCapture, true);
@@ -247,6 +257,7 @@ export function useOrderForm(): OrderFormState {
       form.removeEventListener("input", onRouteChange, true);
       form.removeEventListener("change", onRouteChange, true);
       window.removeEventListener("orderFormReset", onReset);
+      window.removeEventListener("tariffPricesUpdated", onPricesUpdated);
     };
   }, []);
 
