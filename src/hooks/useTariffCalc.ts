@@ -52,21 +52,46 @@ function applyAllTariffPrices(costAll: Record<string, number> | null | undefined
     }
   });
   // Кэшируем цены всех тарифов, чтобы при клике подставлять без пересчёта.
+  // В кэше — БАЗОВАЯ цена поездки, без доплат за опции.
   win.__tariffPrices = merged;
-  const cards = document.querySelectorAll<HTMLElement>(".calc__form__tarif__item");
-  cards.forEach((card) => {
-    const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
-    const priceEl = card.querySelector<HTMLElement>(".calc__form__tarif__item__price");
-    if (!priceEl) return;
-    const cost = merged[title];
-    if (typeof cost === "number" && cost > 0) {
-      priceEl.textContent = new Intl.NumberFormat("ru-RU").format(cost) + " \u20BD";
-      card.dataset.hasPrice = "1";
-    }
-  });
+  renderTariffCards();
   // Цены пересчитались — просим компонент пересинхронизировать кнопку с
   // текущим выбранным тарифом (иначе скрипт оставит цену своего тарифа).
   window.dispatchEvent(new CustomEvent("tariffPricesUpdated"));
+}
+
+// Доплаты за дополнительные опции (руб.).
+const EXTRA_PRICES: Record<string, number> = {
+  orderBabyChair: 800,
+  orderBuster: 500,
+  orderPet: 1000,
+};
+
+// Сумма доплат по включённым опциям в форме.
+export function extrasTotal(): number {
+  let sum = 0;
+  Object.keys(EXTRA_PRICES).forEach((name) => {
+    const el = document.querySelector<HTMLInputElement>(`.uc-tariffCalc [name="${name}"]`);
+    if (el && el.checked) sum += EXTRA_PRICES[name];
+  });
+  return sum;
+}
+
+// Рисуем цены на карточках тарифов: базовая цена из кэша + доплаты за опции.
+export function renderTariffCards() {
+  const cache = (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices;
+  if (!cache) return;
+  const extras = extrasTotal();
+  document.querySelectorAll<HTMLElement>(".calc__form__tarif__item").forEach((card) => {
+    const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
+    const priceEl = card.querySelector<HTMLElement>(".calc__form__tarif__item__price");
+    if (!priceEl) return;
+    const base = cache[title];
+    if (typeof base === "number" && base > 0) {
+      priceEl.textContent = new Intl.NumberFormat("ru-RU").format(base + extras) + " \u20BD";
+      card.dataset.hasPrice = "1";
+    }
+  });
 }
 
 // Сбросить кэш цен (маршрут/параметры изменились — старые цены неактуальны).
@@ -99,10 +124,14 @@ export function applySelectedTariffFromCache(tariff: string): boolean {
 
   if (!cost || cost <= 0) return false;
 
+  // Итог = базовая цена тарифа + доплаты за детское кресло/бустер/животное.
+  // Если цена взята с карточки, доплаты в ней уже учтены (renderTariffCards).
+  const total = cache?.[tariff] ? cost + extrasTotal() : cost;
+
   const btn = document.querySelector<HTMLElement>(".uc-tariffCalc button[type=submit]");
-  if (btn) btn.textContent = new Intl.NumberFormat("ru-RU").format(cost) + " \u0440\u0443\u0431. \u0417\u0430\u043A\u0430\u0437\u0430\u0442\u044C";
+  if (btn) btn.textContent = new Intl.NumberFormat("ru-RU").format(total) + " \u0440\u0443\u0431. \u0417\u0430\u043A\u0430\u0437\u0430\u0442\u044C";
   const orderPrice = document.querySelector<HTMLInputElement>("input[name=order_price]");
-  if (orderPrice) orderPrice.value = String(cost);
+  if (orderPrice) orderPrice.value = String(total);
   return true;
 }
 
