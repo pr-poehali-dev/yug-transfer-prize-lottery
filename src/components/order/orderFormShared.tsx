@@ -171,11 +171,23 @@ export function useOrderForm(): OrderFormState {
         const field = form.querySelector<HTMLInputElement>(`[name="${n}"]`);
         if (field && !field.value.trim()) missing.push(field);
       }
+      // Телефон — отдельная строгая проверка: нужен реальный номер,
+      // минимум 10 цифр. Иначе заявка уходит без связи с клиентом.
+      const phoneEl = form.querySelector<HTMLInputElement>('[name="Phone"]');
+      if (phoneEl && !missing.includes(phoneEl)) {
+        const digits = (phoneEl.value.match(/\d/g) || []).length;
+        if (digits < 10) missing.push(phoneEl);
+      }
       if (missing.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
+        // Поля живут на главной панели — покажем её, иначе ошибка не видна.
+        setPanel("main");
         missing.forEach((f) => f.classList.add("!border-red-500"));
-        missing[0].focus();
+        window.setTimeout(() => {
+          missing[0].focus();
+          missing[0].scrollIntoView({ block: "center", behavior: "smooth" });
+        }, 50);
         return;
       }
       // Промежуточные адреса дописываем в комментарий (скрипт их не читает).
