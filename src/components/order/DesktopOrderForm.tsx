@@ -1,5 +1,5 @@
 import Icon from "@/components/ui/icon";
-import { TARIFFS, TARIFF_ICONS, COUNTS, inputCls, OrderFormState } from "./orderFormShared";
+import { TARIFFS, TARIFF_ICONS, COUNTS, inputCls, PhoneInput, OrderFormState } from "./orderFormShared";
 
 // ДЕСКТОПНАЯ ВЕРСИЯ: прежняя форма «Оставить заявку»
 const DesktopOrderForm = ({ state }: { state: OrderFormState }) => {
@@ -121,7 +121,7 @@ const DesktopOrderForm = ({ state }: { state: OrderFormState }) => {
 
             <div className="grid grid-cols-2 gap-3">
               <input name="name" placeholder="Как вас зовут" className={inputCls} />
-              <input name="Phone" placeholder="+7 (987) 777-77-77" type="tel" className={inputCls} />
+              <PhoneInput className={inputCls} />
             </div>
 
             <textarea name="comment" defaultValue={prefillComment} placeholder="Комментарий (необязательно)" rows={2} className={inputCls} />

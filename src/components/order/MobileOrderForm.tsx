@@ -1,5 +1,5 @@
 import Icon from "@/components/ui/icon";
-import { TARIFFS, TARIFF_ICONS, COUNTS, inputCls, Toggle, PayToggle, OrderFormState } from "./orderFormShared";
+import { TARIFFS, TARIFF_ICONS, COUNTS, inputCls, Toggle, PayToggle, PhoneInput, OrderFormState } from "./orderFormShared";
 
 // МОБИЛЬНАЯ ВЕРСИЯ: нижняя шторка с панелями
 const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
@@ -70,7 +70,7 @@ const MobileOrderForm = ({ state }: { state: OrderFormState }) => {
 
             <div className="grid grid-cols-2 gap-2.5">
               <input name="name" placeholder="Ваше имя" className={inputCls} />
-              <input name="Phone" placeholder="Номер телефона" type="tel" className={inputCls} />
+              <PhoneInput className={inputCls} />
             </div>
 
             {/* Скрытый select — его читает скрипт калькулятора */}

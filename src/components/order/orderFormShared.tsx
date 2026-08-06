@@ -42,6 +42,48 @@ export function Toggle({ name, label }: { name: string; label: string }) {
   );
 }
 
+// Приводим ввод к маске +7 (999) 999-99-99.
+// Берём только цифры; ведущие 8/7 считаем кодом страны и заменяем на +7.
+export function formatPhone(raw: string): string {
+  let d = (raw.match(/\d/g) || []).join("");
+  if (d.startsWith("8")) d = "7" + d.slice(1);
+  if (!d.startsWith("7")) d = "7" + d;
+  d = d.slice(0, 11);
+  const n = d.slice(1);
+  let out = "+7";
+  if (n.length > 0) out += " (" + n.slice(0, 3);
+  if (n.length >= 3) out += ")";
+  if (n.length > 3) out += " " + n.slice(3, 6);
+  if (n.length > 6) out += "-" + n.slice(6, 8);
+  if (n.length > 8) out += "-" + n.slice(8, 10);
+  return out;
+}
+
+// Поле телефона с автоформатом. name="Phone" — его читает скрипт калькулятора.
+export function PhoneInput({ className }: { className?: string }) {
+  const [value, setValue] = useState("");
+  // После успешной отправки форма очищается — чистим и поле телефона.
+  useEffect(() => {
+    const onReset = () => setValue("");
+    window.addEventListener("orderFormReset", onReset);
+    return () => window.removeEventListener("orderFormReset", onReset);
+  }, []);
+  return (
+    <input
+      name="Phone"
+      type="tel"
+      inputMode="tel"
+      autoComplete="tel"
+      placeholder="+7 (987) 777-77-77"
+      className={className}
+      value={value}
+      onChange={(e) => setValue(e.target.value.trim() === "" ? "" : formatPhone(e.target.value))}
+      onFocus={() => setValue((v) => (v ? v : "+7 "))}
+      onBlur={() => setValue((v) => (v.replace(/\D/g, "").length <= 1 ? "" : v))}
+    />
+  );
+}
+
 // Тумблер выбора способа оплаты (радио-логика управляется извне).
 export function PayToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
