@@ -291,6 +291,21 @@ function appendPriceToFormData(fd: FormData) {
   if (price > 0) fd.set("orderPrice", String(price));
 }
 
+// Телефон клиента обязателен в заявке. Если скрипт по какой-то причине не
+// положил его в FormData (или положил пустым) — берём значение прямо из поля.
+function appendPhoneToFormData(fd: FormData) {
+  const el = document.querySelector<HTMLInputElement>('.uc-tariffCalc [name="Phone"]');
+  const value = (el?.value || "").trim();
+  const digits = (value.match(/\d/g) || []).length;
+  if (digits < 10) return;
+  const keys = ["Phone", "phone", "orderPhone"];
+  keys.forEach((k) => {
+    const cur = fd.get(k);
+    const curDigits = typeof cur === "string" ? (cur.match(/\d/g) || []).length : 0;
+    if (curDigits < 10) fd.set(k, value);
+  });
+}
+
 // Перехватываем ответ расчёта calc_old.php и отправку заявки (XHR) один раз.
 function installCalcInterceptor() {
   const w = window as unknown as { __calcFetchPatched?: boolean };
@@ -314,7 +329,8 @@ function installCalcInterceptor() {
         const btnTxt = document.querySelector<HTMLElement>(".uc-tariffCalc button[type=submit]")?.textContent;
         console.log("[ORDER] before append: orderPrice(FormData)=", body.get("orderPrice"), "| field order_price=", fieldVal, "| button=", btnTxt);
         appendPriceToFormData(body);
-        console.log("[ORDER] after append: orderPrice(FormData)=", body.get("orderPrice"));
+        appendPhoneToFormData(body);
+        console.log("[ORDER] after append: orderPrice(FormData)=", body.get("orderPrice"), "| Phone=", body.get("Phone"));
         // После успешной отправки — очищаем все поля формы.
         this.addEventListener("load", () => {
           if (this.status >= 200 && this.status < 300) {
