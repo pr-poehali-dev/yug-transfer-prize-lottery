@@ -78,20 +78,47 @@ export function extrasTotal(): number {
 }
 
 // Рисуем цены на карточках тарифов: базовая цена из кэша + доплаты за опции.
+// Базовую цену дублируем в data-атрибут карточки — тогда доплату можно
+// пересчитать в любой момент, даже если кэш успели сбросить.
 export function renderTariffCards() {
   const cache = (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices;
-  if (!cache) return;
   const extras = extrasTotal();
   document.querySelectorAll<HTMLElement>(".calc__form__tarif__item").forEach((card) => {
     const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
     const priceEl = card.querySelector<HTMLElement>(".calc__form__tarif__item__price");
     if (!priceEl) return;
-    const base = cache[title];
+    const base = cache?.[title] ?? Number(card.dataset.basePrice || 0);
     if (typeof base === "number" && base > 0) {
+      card.dataset.basePrice = String(base);
       priceEl.textContent = new Intl.NumberFormat("ru-RU").format(base + extras) + " \u20BD";
       card.dataset.hasPrice = "1";
     }
   });
+}
+
+// Базовая цена тарифа (без доплат): из кэша или из data-атрибута карточки.
+function baseTariffPrice(tariff: string): number {
+  const cache = (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices;
+  const fromCache = cache?.[tariff] ?? 0;
+  if (fromCache > 0) return fromCache;
+  let base = 0;
+  document.querySelectorAll<HTMLElement>(".calc__form__tarif__item").forEach((card) => {
+    const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
+    if (title === tariff) base = Number(card.dataset.basePrice || 0);
+  });
+  return base;
+}
+
+// Пересчитать итог (база + доплаты) и обновить карточки, кнопку и поле цены.
+// Штатный скрипт после смены опций асинхронно перезаписывает цену своей,
+// без доплат — поэтому повторяем синхронизацию несколько раз.
+export function refreshPriceWithExtras(tariff: string) {
+  const apply = () => {
+    renderTariffCards();
+    applySelectedTariffFromCache(tariff);
+  };
+  apply();
+  [150, 400, 900, 1600, 2500].forEach((ms) => window.setTimeout(apply, ms));
 }
 
 // Сбросить кэш цен (маршрут/параметры изменились — старые цены неактуальны).
@@ -109,24 +136,26 @@ function parsePrice(text: string): number {
 // Берём цену из кэша, а если его нет — прямо с карточки тарифа (её уже
 // отрисовал скрипт). Возвращает true, если цена найдена.
 export function applySelectedTariffFromCache(tariff: string): boolean {
-  const cache = (window as unknown as { __tariffPrices?: Record<string, number> }).__tariffPrices;
-  let cost = cache?.[tariff] ?? 0;
+  const extras = extrasTotal();
+  let base = baseTariffPrice(tariff);
 
-  if (!cost) {
+  if (!base) {
+    // Базовой цены нигде нет — берём то, что показано на карточке.
+    // Если доплаты уже учтены в этой цифре, вычитаем их, чтобы не удвоить.
     const cards = document.querySelectorAll<HTMLElement>(".calc__form__tarif__item");
     cards.forEach((card) => {
       const title = (card.querySelector(".calc__form__tarif__item__title")?.textContent || "").trim();
       if (title === tariff) {
-        cost = parsePrice(card.querySelector(".calc__form__tarif__item__price")?.textContent || "");
+        const shown = parsePrice(card.querySelector(".calc__form__tarif__item__price")?.textContent || "");
+        base = card.dataset.hasPrice === "1" && shown > extras ? shown - extras : shown;
       }
     });
   }
 
-  if (!cost || cost <= 0) return false;
+  if (!base || base <= 0) return false;
 
   // Итог = базовая цена тарифа + доплаты за детское кресло/бустер/животное.
-  // Если цена взята с карточки, доплаты в ней уже учтены (renderTariffCards).
-  const total = cache?.[tariff] ? cost + extrasTotal() : cost;
+  const total = base + extras;
 
   const btn = document.querySelector<HTMLElement>(".uc-tariffCalc button[type=submit]");
   if (btn) btn.textContent = new Intl.NumberFormat("ru-RU").format(total) + " \u0440\u0443\u0431. \u0417\u0430\u043A\u0430\u0437\u0430\u0442\u044C";
@@ -244,6 +273,8 @@ function currentSelectedPrice(): number {
 // Синхронно записать цену выбранного тарифа в поле order_price ПЕРЕД отправкой,
 // чтобы штатный скрипт прочитал её и добавил в заявку (orderPrice).
 export function syncOrderPriceField() {
+  // Цена на активной карточке уже включает доплаты за опции (renderTariffCards),
+  // поэтому её и отправляем — она же показана клиенту на кнопке.
   const price = currentSelectedPrice();
   const field = document.querySelector<HTMLInputElement>("input[name=order_price]");
   if (field && price > 0) field.value = String(price);
