@@ -262,28 +262,63 @@ def parse_chats(value) -> list:
     return ['main', 'vip']
 
 
+def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: list) -> dict:
+    """Копирует уже опубликованные сообщения в другой чат.
+    Быстро: Telegram переиспользует загруженные медиа, ничего не качаем заново."""
+    copied = []
+    errors = []
+    for mid in message_ids:
+        res = tg_request(bot_token, 'copyMessage', {
+            'chat_id': to_chat, 'from_chat_id': from_chat, 'message_id': mid,
+        })
+        if res.get('ok'):
+            copied.append(res.get('result', {}).get('message_id'))
+        else:
+            errors.append(res.get('description', 'ошибка копирования'))
+    return {'ok': bool(copied), 'message_ids': [c for c in copied if c], 'errors': errors}
+
+
 def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) -> dict:
-    """Публикует пост во все выбранные площадки.
+    """Публикует пост в основной канал, затем копирует его в остальные группы.
     Возвращает {ok, message_id, message_ids, per_chat, errors}."""
     per_chat = {}
     all_ids = []
     errors = []
     main_msg_id = None
+
+    primary_key = 'main' if 'main' in chats else (chats[0] if chats else 'main')
+    primary_chat = channels.get(primary_key)
+    if not primary_chat:
+        return {'ok': False, 'message_id': None, 'message_ids': [], 'per_chat': {},
+                'errors': [f'{primary_key}: канал не настроен']}
+
+    res = publish_post(bot_token, primary_chat, post)
+    print(f"[POSTS] publish to {primary_key} ({primary_chat}): {res}")
+    if not res.get('ok'):
+        return {'ok': False, 'message_id': None, 'message_ids': [], 'per_chat': {},
+                'errors': [f"{primary_key}: {res.get('error', 'ошибка Telegram')}"]}
+
+    primary_ids = res.get('message_ids') or ([res.get('message_id')] if res.get('message_id') else [])
+    per_chat[primary_key] = primary_ids
+    all_ids.extend(primary_ids)
+    main_msg_id = res.get('message_id')
+
+    # Остальные площадки — быстрым копированием исходных сообщений.
     for key in chats:
-        channel_id = channels.get(key)
-        if not channel_id:
+        if key == primary_key:
+            continue
+        target = channels.get(key)
+        if not target:
             errors.append(f'{key}: канал не настроен')
             continue
-        res = publish_post(bot_token, channel_id, post)
-        print(f"[POSTS] publish to {key} ({channel_id}): {res}")
-        if res.get('ok'):
-            ids = res.get('message_ids') or ([res.get('message_id')] if res.get('message_id') else [])
-            per_chat[key] = ids
-            all_ids.extend(ids)
-            if key == 'main' or main_msg_id is None:
-                main_msg_id = res.get('message_id')
+        cp = copy_messages(bot_token, primary_chat, target, primary_ids)
+        print(f"[POSTS] copy to {key} ({target}): {cp}")
+        if cp['ok']:
+            per_chat[key] = cp['message_ids']
+            all_ids.extend(cp['message_ids'])
         else:
-            errors.append(f"{key}: {res.get('error', 'ошибка Telegram')}")
+            errors.append(f"{key}: {'; '.join(cp['errors']) or 'не удалось скопировать'}")
+
     return {
         'ok': bool(all_ids),
         'message_id': main_msg_id,
