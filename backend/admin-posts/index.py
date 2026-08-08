@@ -258,13 +258,8 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
 
 
 def parse_chats(value) -> list:
-    """Строка вида 'main,vip' -> ['main', 'vip']. Пусто -> ['main']."""
-    if isinstance(value, list):
-        items = [str(v).strip() for v in value]
-    else:
-        items = [p.strip() for p in str(value or '').split(',')]
-    items = [i for i in items if i in ('main', 'vip')]
-    return items or ['main']
+    """Площадки публикации. По умолчанию пост идёт сразу в обе группы."""
+    return ['main', 'vip']
 
 
 def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) -> dict:

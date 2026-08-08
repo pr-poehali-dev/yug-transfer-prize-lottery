@@ -286,33 +286,14 @@ export function PostForm({
           )}
         </div>
 
-        {/* Куда публиковать */}
+        {/* Куда публиковать — всегда обе площадки */}
         <div className="rounded-xl bg-sky-500/5 border border-sky-500/15 p-2">
-          <p className="text-[11px] text-sky-300 flex items-center gap-1 font-medium mb-1.5">
-            <Icon name="Send" size={12} /> Куда опубликовать
+          <p className="text-[11px] text-sky-300 flex items-center gap-1 font-medium">
+            <Icon name="Send" size={12} /> Пост уйдёт сразу в обе группы
           </p>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {CHAT_OPTIONS.map(({ key, label }) => {
-              const selected = (form.chats || "main").split(",").map((s) => s.trim()).filter(Boolean);
-              const active = selected.includes(key);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    const next = active ? selected.filter((s) => s !== key) : [...selected, key];
-                    onFormChange({ chats: (next.length ? next : ["main"]).join(",") });
-                  }}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1 ${
-                    active ? "bg-sky-500 text-white" : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <Icon name={active ? "Check" : "Circle"} size={11} />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          <p className="text-[11px] text-white/40 mt-1">
+            {CHAT_OPTIONS.map((c) => c.label).join(" · ")}
+          </p>
         </div>
 
         {/* Автоудаление */}
