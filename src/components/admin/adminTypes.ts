@@ -43,4 +43,5 @@ export interface Post {
   auto_expire_at?: string | null;
   expired_at?: string | null;
   message_ids?: number[];
+  chats?: string;
 }

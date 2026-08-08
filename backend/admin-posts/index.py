@@ -257,6 +257,47 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     return {'ok': False, 'error': result.get('description', 'Unknown error')}
 
 
+def parse_chats(value) -> list:
+    """Строка вида 'main,vip' -> ['main', 'vip']. Пусто -> ['main']."""
+    if isinstance(value, list):
+        items = [str(v).strip() for v in value]
+    else:
+        items = [p.strip() for p in str(value or '').split(',')]
+    items = [i for i in items if i in ('main', 'vip')]
+    return items or ['main']
+
+
+def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) -> dict:
+    """Публикует пост во все выбранные площадки.
+    Возвращает {ok, message_id, message_ids, per_chat, errors}."""
+    per_chat = {}
+    all_ids = []
+    errors = []
+    main_msg_id = None
+    for key in chats:
+        channel_id = channels.get(key)
+        if not channel_id:
+            errors.append(f'{key}: канал не настроен')
+            continue
+        res = publish_post(bot_token, channel_id, post)
+        print(f"[POSTS] publish to {key} ({channel_id}): {res}")
+        if res.get('ok'):
+            ids = res.get('message_ids') or ([res.get('message_id')] if res.get('message_id') else [])
+            per_chat[key] = ids
+            all_ids.extend(ids)
+            if key == 'main' or main_msg_id is None:
+                main_msg_id = res.get('message_id')
+        else:
+            errors.append(f"{key}: {res.get('error', 'ошибка Telegram')}")
+    return {
+        'ok': bool(all_ids),
+        'message_id': main_msg_id,
+        'message_ids': all_ids,
+        'per_chat': per_chat,
+        'errors': errors,
+    }
+
+
 def tg_delete_messages(bot_token: str, channel_id: str, message_ids: list) -> None:
     """Удаляет сообщения поста из Telegram-канала."""
     for mid in message_ids:
@@ -306,6 +347,8 @@ def row_to_post(r) -> dict:
         'auto_expire_at': r[15].isoformat() if len(r) > 15 and r[15] else None,
         'message_ids': list(r[16]) if len(r) > 16 and r[16] else [],
         'expired_at': r[17].isoformat() if len(r) > 17 and r[17] else None,
+        'chats': (r[18] if len(r) > 18 and r[18] else 'main'),
+        'chat_messages': (r[19] if len(r) > 19 and r[19] else {}),
     }
 
 
@@ -323,6 +366,7 @@ def handler(event: dict, context) -> dict:
 
     bot_token = os.environ.get('UG_INFO_BOT_TOKEN_NEW', '') or os.environ.get('UG_INFO_BOT_TOKEN', '') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
     channel_main = os.environ.get('UG_DRIVER_CHANNEL_ID', '') or os.environ.get('TELEGRAM_CHANNEL_ID', '')
+    channel_vip = os.environ.get('POSTS_CHAT_VIP_ID', '') or os.environ.get('DISPATCH_CHAT_ID', '')
 
     # ── GET — список постов ─────────────────────────────────────────────────
     if method == 'GET':
@@ -346,7 +390,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT id, title, text, photo_url, button_text, button_url,
                        status, scheduled_at, published_at, telegram_message_id, created_at, updated_at,
-                       video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at
+                       video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at, chats, chat_messages
                 FROM {SCHEMA}.posts {where}
                 ORDER BY created_at DESC LIMIT %s OFFSET %s""",
             args + [limit, offset]
@@ -426,16 +470,13 @@ def handler(event: dict, context) -> dict:
     if method == 'POST' and action == 'publish':
         body = json.loads(event.get('body') or '{}')
         post_id = body.get('post_id')
-        chat = 'main'
         if not post_id:
             return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'post_id обязателен'})}
-
-        channel_id = channel_main
 
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at FROM {SCHEMA}.posts WHERE id = %s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at, chats, chat_messages FROM {SCHEMA}.posts WHERE id = %s",
             (post_id,)
         )
         row = cur.fetchone()
@@ -444,17 +485,20 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 404, 'headers': CORS, 'body': json.dumps({'error': 'Пост не найден'})}
 
         post = row_to_post(row)
+        channels = {'main': channel_main, 'vip': channel_vip}
+        chats = parse_chats(body.get('chats') or post.get('chats'))
 
-        if not bot_token or not channel_id:
+        if not bot_token:
             cur.close(); conn.close()
-            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Бот или канал не настроен'})}
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Бот не настроен'})}
 
-        print(f"[POSTS] publishing post {post_id} to channel={channel_id}, chat={chat}")
-        result = publish_post(bot_token, channel_id, post)
+        print(f"[POSTS] publishing post {post_id} to chats={chats}")
+        result = publish_to_chats(bot_token, chats, channels, post)
         print(f"[POSTS] publish result: {result}")
         if not result['ok']:
             cur.close(); conn.close()
-            return {'statusCode': 500, 'headers': CORS, 'body': json.dumps({'error': result.get('error', 'Ошибка Telegram')})}
+            err = '; '.join(result.get('errors') or []) or 'Ошибка Telegram'
+            return {'statusCode': 500, 'headers': CORS, 'body': json.dumps({'error': err})}
 
         now = datetime.now(timezone.utc)
         # Срок автоудаления: из тела запроса (expire_hours) или из сохранённого auto_expire_at
@@ -476,13 +520,18 @@ def handler(event: dict, context) -> dict:
 
         msg_ids = result.get('message_ids') or ([result.get('message_id')] if result.get('message_id') else [])
         cur.execute(
-            f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, message_ids=%s, auto_expire_at=%s, updated_at=%s WHERE id=%s",
-            (now, result.get('message_id'), msg_ids, expire_at, now, post_id)
+            f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, message_ids=%s, "
+            f"chats=%s, chat_messages=%s, auto_expire_at=%s, updated_at=%s WHERE id=%s",
+            (now, result.get('message_id'), msg_ids, ','.join(chats),
+             json.dumps(result.get('per_chat') or {}), expire_at, now, post_id)
         )
         conn.commit()
         cur.close(); conn.close()
         print(f"[POSTS] published post {post_id}, msg_ids={msg_ids}, expire_at={expire_at}")
-        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'message_id': result.get('message_id')})}
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
+            'ok': True, 'message_id': result.get('message_id'),
+            'chats': chats, 'errors': result.get('errors') or []
+        })}
 
     # ── POST ?action=check_scheduled — авто-публикация запланированных ──────
     if method == 'POST' and action == 'check_scheduled':
@@ -490,7 +539,7 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         now = datetime.now(timezone.utc)
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at FROM {SCHEMA}.posts WHERE status='scheduled' AND scheduled_at <= %s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at, chats, chat_messages FROM {SCHEMA}.posts WHERE status='scheduled' AND scheduled_at <= %s",
             (now,)
         )
         rows = cur.fetchall()
@@ -500,17 +549,21 @@ def handler(event: dict, context) -> dict:
             any_ok = False
             last_msg_id = None
             msg_ids = []
-            if bot_token and channel_main:
-                result = publish_post(bot_token, channel_main, post)
+            per_chat = {}
+            chats = parse_chats(post.get('chats'))
+            if bot_token:
+                channels = {'main': channel_main, 'vip': channel_vip}
+                result = publish_to_chats(bot_token, chats, channels, post)
                 if result['ok']:
                     any_ok = True
                     last_msg_id = result.get('message_id')
                     msg_ids = result.get('message_ids') or ([last_msg_id] if last_msg_id else [])
-                    print(f"[POSTS] auto-published post {post['id']} to main")
+                    per_chat = result.get('per_chat') or {}
+                    print(f"[POSTS] auto-published post {post['id']} to {chats}")
             if any_ok:
                 cur.execute(
-                    f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, message_ids=%s, updated_at=%s WHERE id=%s",
-                    (now, last_msg_id, msg_ids, now, post['id'])
+                    f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, message_ids=%s, chat_messages=%s, updated_at=%s WHERE id=%s",
+                    (now, last_msg_id, msg_ids, json.dumps(per_chat), now, post['id'])
                 )
                 published.append(post['id'])
             else:
@@ -522,16 +575,23 @@ def handler(event: dict, context) -> dict:
         # ── Автоудаление истёкших постов ────────────────────────────────────
         removed = []
         cur.execute(
-            f"SELECT id, telegram_message_id, message_ids FROM {SCHEMA}.posts "
+            f"SELECT id, telegram_message_id, message_ids, chats, chat_messages FROM {SCHEMA}.posts "
             f"WHERE status='published' AND auto_expire_at IS NOT NULL AND auto_expire_at <= %s AND expired_at IS NULL",
             (now,)
         )
         exp_rows = cur.fetchall()
         for exp in exp_rows:
             pid, single_id, ids = exp[0], exp[1], exp[2]
+            post_chats = parse_chats(exp[3])
+            per_chat = exp[4] or {}
             to_delete = list(ids) if ids else ([single_id] if single_id else [])
-            if bot_token and channel_main and to_delete:
-                tg_delete_messages(bot_token, channel_main, to_delete)
+            channels = {'main': channel_main, 'vip': channel_vip}
+            if bot_token and to_delete:
+                for key in post_chats:
+                    ch = channels.get(key)
+                    chat_ids = per_chat.get(key) or (to_delete if key == 'main' else [])
+                    if ch and chat_ids:
+                        tg_delete_messages(bot_token, ch, chat_ids)
             cur.execute(
                 f"UPDATE {SCHEMA}.posts SET status='expired', expired_at=%s, updated_at=%s WHERE id=%s",
                 (now, now, pid)
@@ -580,15 +640,16 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(
-            f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, scheduled_at, auto_expire_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at)
+            f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, scheduled_at, auto_expire_at, chats)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at,
+             ','.join(parse_chats(body.get('chats'))))
         )
         new_id = cur.fetchone()[0]
         conn.commit()
 
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at FROM {SCHEMA}.posts WHERE id=%s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at, chats, chat_messages FROM {SCHEMA}.posts WHERE id=%s",
             (new_id,)
         )
         post = row_to_post(cur.fetchone())
@@ -646,14 +707,15 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""UPDATE {SCHEMA}.posts
                 SET title=%s, text=%s, photo_url=%s, video_note_url=%s, button_text=%s, button_url=%s,
-                    button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, auto_expire_at=%s, updated_at=%s
+                    button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, auto_expire_at=%s, chats=%s, updated_at=%s
                 WHERE id=%s""",
-            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at, now, post_id)
+            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at,
+             ','.join(parse_chats(body.get('chats'))), now, post_id)
         )
         conn.commit()
 
         cur.execute(
-            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at FROM {SCHEMA}.posts WHERE id=%s",
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at, chats, chat_messages FROM {SCHEMA}.posts WHERE id=%s",
             (post_id,)
         )
         post = row_to_post(cur.fetchone())
@@ -670,15 +732,20 @@ def handler(event: dict, context) -> dict:
 
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
-        cur.execute(f"SELECT telegram_message_id, status, message_ids FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+        cur.execute(f"SELECT telegram_message_id, status, message_ids, chats, chat_messages FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
         row = cur.fetchone()
         tg_deleted = False
-        if row and row[1] in ('published', 'expired') and bot_token and channel_main:
+        if row and row[1] in ('published', 'expired') and bot_token:
             to_delete = list(row[2]) if row[2] else ([row[0]] if row[0] else [])
-            if to_delete:
-                tg_delete_messages(bot_token, channel_main, to_delete)
-                print(f"[POSTS] deleteMessage chat=main ids={to_delete}")
-                tg_deleted = True
+            per_chat = row[4] or {}
+            channels = {'main': channel_main, 'vip': channel_vip}
+            for key in parse_chats(row[3]):
+                ch = channels.get(key)
+                chat_ids = per_chat.get(key) or (to_delete if key == 'main' else [])
+                if ch and chat_ids:
+                    tg_delete_messages(bot_token, ch, chat_ids)
+                    print(f"[POSTS] deleteMessage chat={key} ids={chat_ids}")
+                    tg_deleted = True
 
         cur.execute(f"DELETE FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
         conn.commit()

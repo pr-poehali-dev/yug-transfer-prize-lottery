@@ -24,7 +24,7 @@ function toLocalInput(iso: string | null | undefined) {
 const EMPTY: PostFormData = {
   title: "", text: "", photo_url: "", video_note_url: "", button_text: "", button_url: "",
   button2_text: "", button2_url: "",
-  status: "draft", scheduled_at: null,
+  status: "draft", scheduled_at: null, chats: "main",
 };
 
 export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpanded, onToggle }: AdminPostsTabProps) {
@@ -215,6 +215,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       button_text: post.button_text, button_url: post.button_url,
       button2_text: post.button2_text ?? "", button2_url: post.button2_url ?? "",
       status: post.status, scheduled_at: post.scheduled_at,
+      chats: post.chats || "main",
     };
     setEditId(post.id);
     setForm(newForm);
@@ -317,7 +318,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       const pubRes = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ post_id: postId, expire_hours: expireHours || 0 }),
+        body: JSON.stringify({ post_id: postId, expire_hours: expireHours || 0, chats: form.chats || "main" }),
       });
       const pubData = await pubRes.json();
       if (!pubData.ok) throw new Error(pubData.error || "Ошибка публикации");
