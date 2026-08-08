@@ -148,6 +148,18 @@ def normalize_button_url(url: str) -> str:
     return 'https://' + u
 
 
+def build_reply_markup(post: dict):
+    """Собирает inline-кнопки поста (до двух в ряд)."""
+    row = []
+    b1t, b1u = post.get('button_text', ''), normalize_button_url(post.get('button_url', ''))
+    b2t, b2u = post.get('button2_text', ''), normalize_button_url(post.get('button2_url', ''))
+    if b1t and b1u:
+        row.append({'text': b1t, 'url': b1u})
+    if b2t and b2u:
+        row.append({'text': b2t, 'url': b2u})
+    return {'inline_keyboard': [row]} if row else None
+
+
 def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     """Публикует пост в Telegram, возвращает {ok, message_id}"""
     text = build_text_with_title(post)
@@ -262,15 +274,18 @@ def parse_chats(value) -> list:
     return ['main', 'vip']
 
 
-def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: list) -> dict:
+def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: list, reply_markup=None) -> dict:
     """Копирует уже опубликованные сообщения в другой чат.
-    Быстро: Telegram переиспользует загруженные медиа, ничего не качаем заново."""
+    Быстро: Telegram переиспользует загруженные медиа, ничего не качаем заново.
+    Кнопки при копировании теряются, поэтому передаём их явно."""
     copied = []
     errors = []
-    for mid in message_ids:
-        res = tg_request(bot_token, 'copyMessage', {
-            'chat_id': to_chat, 'from_chat_id': from_chat, 'message_id': mid,
-        })
+    for idx, mid in enumerate(message_ids):
+        payload = {'chat_id': to_chat, 'from_chat_id': from_chat, 'message_id': mid}
+        # Кнопки вешаем на последнее сообщение — там же, где они в оригинале.
+        if reply_markup and idx == len(message_ids) - 1:
+            payload['reply_markup'] = reply_markup
+        res = tg_request(bot_token, 'copyMessage', payload)
         if res.get('ok'):
             copied.append(res.get('result', {}).get('message_id'))
         else:
@@ -311,8 +326,14 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) ->
         if not target:
             errors.append(f'{key}: канал не настроен')
             continue
-        cp = copy_messages(bot_token, primary_chat, target, primary_ids)
+        cp = copy_messages(bot_token, primary_chat, target, primary_ids, build_reply_markup(post))
         print(f"[POSTS] copy to {key} ({target}): {cp}")
+        if not cp['ok']:
+            # Копирование не прошло — публикуем в группу напрямую.
+            direct = publish_post(bot_token, target, post)
+            print(f"[POSTS] direct publish to {key} ({target}): {direct}")
+            if direct.get('ok'):
+                cp = {'ok': True, 'message_ids': direct.get('message_ids') or [direct.get('message_id')], 'errors': []}
         if cp['ok']:
             per_chat[key] = cp['message_ids']
             all_ids.extend(cp['message_ids'])
