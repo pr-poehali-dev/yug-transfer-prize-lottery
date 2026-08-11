@@ -89,15 +89,21 @@ def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
         return {'ok': False, 'description': str(e)}
 
 
-def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 6) -> dict:
-    """Запрос к Telegram с коротким таймаутом, чтобы уложиться в лимит функции."""
+def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 0) -> dict:
+    """Запрос к Telegram. Telegram отвечает нестабильно, поэтому ждём с нарастающим
+    таймаутом: быстрая попытка, затем более терпеливые."""
     url = f"https://api.telegram.org/bot{bot_token}/{method}"
     data = json.dumps(payload).encode()
     last_err = 'timeout'
-    for attempt in range(attempts):
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
+    waits = [timeout] * attempts if timeout else [5, 10, 14][:attempts]
+    for wait in waits:
+        req = urllib.request.Request(
+            url, data=data,
+            headers={'Content-Type': 'application/json', 'Connection': 'close'},
+            method='POST',
+        )
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=wait) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             # Ошибка от самого Telegram (например, неверный parse_mode) — повтор не поможет.
@@ -295,7 +301,7 @@ def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: lis
         # Кнопки вешаем на последнее сообщение — там же, где они в оригинале.
         if reply_markup and idx == len(message_ids) - 1:
             payload['reply_markup'] = reply_markup
-        res = tg_request(bot_token, 'copyMessage', payload, attempts=1, timeout=5)
+        res = tg_request(bot_token, 'copyMessage', payload, attempts=1, timeout=8)
         if res.get('ok'):
             copied.append(res.get('result', {}).get('message_id'))
         else:
