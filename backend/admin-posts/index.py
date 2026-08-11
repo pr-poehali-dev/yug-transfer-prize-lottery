@@ -45,12 +45,12 @@ def verify_token(token: str) -> bool:
     return token == admin_tok or (bool(posts_login) and token == posts_tok)
 
 
-def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 3, timeout: int = 0) -> dict:
-    """Запрос к Telegram. Логика 1-в-1 как в sait-bot-daily, которая публикует стабильно:
-    длинное ожидание (25 с) и пауза между попытками — из облака Telegram отвечает не сразу."""
+def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 0) -> dict:
+    """Запрос к Telegram. Ожидание длинное — из облака Telegram отвечает не сразу.
+    Повторы ограничены, т.к. функция ограничена по времени; доповторяет фронтенд."""
     url = f"https://api.telegram.org/bot{bot_token}/{method}"
     data = json.dumps(payload).encode()
-    wait = timeout or 25
+    wait = timeout or 12
     last_err = 'fail'
     for attempt in range(attempts):
         req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
@@ -68,7 +68,7 @@ def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 3, ti
             last_err = f'{type(e).__name__}: {str(e)[:200]}'
             print(f'[POSTS] tg {method} attempt {attempt + 1}/{attempts} failed: {last_err}')
             if attempt < attempts - 1:
-                time.sleep(3)
+                time.sleep(1)
     return {'ok': False, 'description': last_err, 'network_error': True}
 
 

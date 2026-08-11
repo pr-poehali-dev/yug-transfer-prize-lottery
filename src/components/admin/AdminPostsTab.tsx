@@ -183,6 +183,41 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     }
   };
 
+  // ── публикация с автоповтором: облако иногда обрывает запрос по таймауту,
+  // при этом пост мог уже уйти — поэтому перед повтором проверяем статус поста.
+  const publishWithRetry = async (postId: number, extra: Record<string, unknown> = {}) => {
+    const isPublished = async () => {
+      try {
+        const r = await fetch(`${ADMIN_POSTS_URL}?page=1&limit=50`, {
+          headers: { "X-Admin-Token": token },
+        });
+        const d = await r.json();
+        return (d.posts || []).some((p: Post) => p.id === postId && p.status === "published");
+      } catch {
+        return false;
+      }
+    };
+
+    let lastError = "Ошибка публикации";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+          body: JSON.stringify({ post_id: postId, chats: "main,vip", ...extra }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.ok) return data;
+        lastError = data.error || `Сервер вернул ${res.status}`;
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : "Нет связи с сервером";
+      }
+      if (await isPublished()) return { ok: true };
+      if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+    }
+    throw new Error(lastError);
+  };
+
   // ── опубликовать сейчас из формы ──
   const handlePublishNow = async () => {
     if (!form.text.trim()) { setFormError("Введите текст поста"); return; }
@@ -201,13 +236,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       if (!saveData.ok) throw new Error(saveData.error || "Ошибка сохранения");
       const postId = saveData.post.id;
 
-      const pubRes = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ post_id: postId, expire_hours: expireHours || 0, chats: "main,vip" }),
-      });
-      const pubData = await pubRes.json();
-      if (!pubData.ok) throw new Error(pubData.error || "Ошибка публикации");
+      const pubData = await publishWithRetry(postId, { expire_hours: expireHours || 0 });
 
       setFormSuccess("✅ Пост опубликован!");
       const updatedPost = { ...saveData.post, status: "published" as const, published_at: new Date().toISOString(), telegram_message_id: pubData.message_id };
@@ -225,19 +254,12 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const handlePublishFromList = async (post: Post) => {
     setPublishingId(post.id);
     try {
-      const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ post_id: post.id, chats: "main,vip" }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setPosts(prev => prev.map(p => p.id === post.id
-          ? { ...p, status: "published", published_at: new Date().toISOString() }
-          : p));
-      } else {
-        alert("Ошибка: " + (data.error || "?"));
-      }
+      await publishWithRetry(post.id);
+      setPosts(prev => prev.map(p => p.id === post.id
+        ? { ...p, status: "published", published_at: new Date().toISOString() }
+        : p));
+    } catch (e) {
+      alert("Ошибка: " + (e instanceof Error ? e.message : "?"));
     } finally { setPublishingId(null); }
   };
 
