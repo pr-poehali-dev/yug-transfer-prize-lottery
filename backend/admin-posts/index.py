@@ -16,6 +16,8 @@ import base64
 import uuid
 import io
 import psycopg2
+import ssl
+import http.client
 import urllib.request
 import urllib.parse
 import boto3
@@ -45,30 +47,51 @@ def verify_token(token: str) -> bool:
     return token == admin_tok or (bool(posts_login) and token == posts_tok)
 
 
-def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 0) -> dict:
-    """Запрос к Telegram. Ожидание длинное — из облака Telegram отвечает не сразу.
-    Повторы ограничены, т.к. функция ограничена по времени; доповторяет фронтенд."""
-    url = f"https://api.telegram.org/bot{bot_token}/{method}"
-    data = json.dumps(payload).encode()
-    wait = timeout or 12
-    last_err = 'fail'
-    for attempt in range(attempts):
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
-        try:
-            with urllib.request.urlopen(req, timeout=wait) as resp:
-                return json.loads(resp.read())
-        except urllib.error.HTTPError as e:
-            # Отказ самого Telegram (400/403 и т.п.) — повтор не поможет.
+# Telegram отвечает по нескольким IP; часть из них из облака недоступна.
+# Ходим по каждому адресу напрямую, подставляя правильный Host/SNI.
+TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
+
+
+def _tg_call(host: str, bot_token: str, method: str, data: bytes, wait: int) -> dict:
+    """Соединяемся с конкретным адресом Telegram, но проверяем сертификат по домену."""
+    ctx = ssl.create_default_context()
+    if host != 'api.telegram.org':
+        # Идём на конкретный IP — сертификат по нему не сверить, проверяем сам канал шифрования.
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    conn = http.client.HTTPSConnection(host, 443, timeout=wait, context=ctx)
+    try:
+        conn.request(
+            'POST', f'/bot{bot_token}/{method}', body=data,
+            headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'},
+        )
+        resp = conn.getresponse()
+        raw = resp.read()
+        if resp.status >= 400:
             try:
-                body = json.loads(e.read())
-                return {'ok': False, 'description': f"HTTP {e.code}: {body.get('description', str(body))[:300]}"}
+                body = json.loads(raw)
+                return {'ok': False, 'description': f"HTTP {resp.status}: {body.get('description', '')[:300]}"}
             except Exception:
-                return {'ok': False, 'description': f'HTTP {e.code}'}
+                return {'ok': False, 'description': f'HTTP {resp.status}'}
+        return json.loads(raw)
+    finally:
+        conn.close()
+
+
+def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 0) -> dict:
+    """Запрос к Telegram с перебором рабочих адресов: из облака часть IP недоступна."""
+    data = json.dumps(payload).encode()
+    wait = timeout or 8
+    last_err = 'fail'
+    for host in TG_HOSTS:
+        try:
+            res = _tg_call(host, bot_token, method, data, wait)
+            # Ответ получен — отказ Telegram другим адресом не исправить.
+            return res
         except Exception as e:
-            last_err = f'{type(e).__name__}: {str(e)[:200]}'
-            print(f'[POSTS] tg {method} attempt {attempt + 1}/{attempts} failed: {last_err}')
-            if attempt < attempts - 1:
-                time.sleep(1)
+            last_err = f'{type(e).__name__}: {str(e)[:150]}'
+            print(f'[POSTS] tg {method} via {host} failed: {last_err}')
+            continue
     return {'ok': False, 'description': last_err, 'network_error': True}
 
 
