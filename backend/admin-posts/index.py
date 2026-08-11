@@ -9,6 +9,7 @@ POST ?action=upload_photo — загрузить фото в S3, вернуть 
 POST ?action=check_scheduled — проверить и опубликовать запланированные посты (cron-like).
 """
 import os
+import time
 import json
 import hashlib
 import base64
@@ -45,7 +46,7 @@ def verify_token(token: str) -> bool:
 def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
     """Скачивает видео и отправляет как video_note через multipart."""
     try:
-        with urllib.request.urlopen(video_url, timeout=30) as r:
+        with urllib.request.urlopen(video_url, timeout=8) as r:
             video_bytes = r.read()
     except Exception as e:
         print(f"[POSTS] failed to download video: {e}")
@@ -76,7 +77,7 @@ def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
     url = f"https://api.telegram.org/bot{bot_token}/sendVideoNote"
     req = urllib.request.Request(url, data=body, headers={'Content-Type': ctype}, method='POST')
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         try:
@@ -88,14 +89,15 @@ def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
         return {'ok': False, 'description': str(e)}
 
 
-def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2) -> dict:
+def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 6) -> dict:
+    """Запрос к Telegram с коротким таймаутом, чтобы уложиться в лимит функции."""
     url = f"https://api.telegram.org/bot{bot_token}/{method}"
     data = json.dumps(payload).encode()
     last_err = 'timeout'
     for attempt in range(attempts):
         req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             # Ошибка от самого Telegram (например, неверный parse_mode) — повтор не поможет.
@@ -108,7 +110,15 @@ def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2) ->
             # Таймаут/сетевая ошибка — пробуем ещё раз.
             last_err = str(e)
             continue
-    return {'ok': False, 'description': last_err}
+    return {'ok': False, 'description': last_err, 'network_error': True}
+
+
+def is_network_error(res: dict) -> bool:
+    """Отличает обрыв связи от отказа Telegram — повторять разметку смысла нет."""
+    if res.get('network_error'):
+        return True
+    d = str(res.get('description', '')).lower()
+    return 'timed out' in d or 'urlopen error' in d
 
 
 def build_text_with_title(post: dict) -> str:
@@ -231,7 +241,7 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
             return tg_request(bot_token, 'sendMessage', payload)
 
         text_res = try_send_text('HTML')
-        if not text_res.get('ok'):
+        if not text_res.get('ok') and not is_network_error(text_res):
             print(f"[POSTS] HTML parse failed: {text_res.get('description')}, retrying without parse_mode")
             text_res = try_send_text(None)
 
@@ -259,7 +269,7 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
             return tg_request(bot_token, 'sendMessage', payload)
 
     result = try_send('HTML')
-    if not result.get('ok'):
+    if not result.get('ok') and not is_network_error(result):
         print(f"[POSTS] HTML parse failed: {result.get('description')}, retrying without parse_mode")
         result = try_send(None)
 
@@ -285,7 +295,7 @@ def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: lis
         # Кнопки вешаем на последнее сообщение — там же, где они в оригинале.
         if reply_markup and idx == len(message_ids) - 1:
             payload['reply_markup'] = reply_markup
-        res = tg_request(bot_token, 'copyMessage', payload)
+        res = tg_request(bot_token, 'copyMessage', payload, attempts=1, timeout=5)
         if res.get('ok'):
             copied.append(res.get('result', {}).get('message_id'))
         else:
@@ -296,6 +306,7 @@ def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: lis
 def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) -> dict:
     """Публикует пост в основной канал, затем копирует его в остальные группы.
     Возвращает {ok, message_id, message_ids, per_chat, errors}."""
+    started = time.monotonic()
     per_chat = {}
     all_ids = []
     errors = []
@@ -328,8 +339,8 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) ->
             continue
         cp = copy_messages(bot_token, primary_chat, target, primary_ids, build_reply_markup(post))
         print(f"[POSTS] copy to {key} ({target}): {cp}")
-        if not cp['ok']:
-            # Копирование не прошло — публикуем в группу напрямую.
+        if not cp['ok'] and time.monotonic() - started < 18:
+            # Копирование не прошло и время ещё есть — публикуем в группу напрямую.
             direct = publish_post(bot_token, target, post)
             print(f"[POSTS] direct publish to {key} ({target}): {direct}")
             if direct.get('ok'):
