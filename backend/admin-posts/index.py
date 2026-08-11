@@ -11,6 +11,7 @@ POST ?action=check_scheduled — проверить и опубликовать 
 import os
 import time
 import socket
+import requests
 import json
 import hashlib
 import base64
@@ -31,8 +32,8 @@ CORS = {
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 
-# В облаке IPv6-маршрут до Telegram часто "чёрная дыра": соединение висит до таймаута.
-# Заставляем все исходящие запросы идти по IPv4.
+# В облаке IPv6-маршрут до Telegram — "чёрная дыра": соединение висит до таймаута.
+# Заставляем исходящие запросы идти по IPv4.
 _orig_getaddrinfo = socket.getaddrinfo
 
 
@@ -56,77 +57,49 @@ def verify_token(token: str) -> bool:
 
 
 def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
-    """Скачивает видео и отправляет как video_note через multipart."""
+    """Скачивает видео и отправляет как video_note (кружок)."""
     try:
-        with urllib.request.urlopen(video_url, timeout=8) as r:
-            video_bytes = r.read()
+        r = requests.get(video_url, timeout=20)
+        video_bytes = r.content
     except Exception as e:
         print(f"[POSTS] failed to download video: {e}")
         return {'ok': False, 'description': f'Не удалось скачать видео: {e}'}
 
     print(f"[POSTS] downloaded video: {len(video_bytes)} bytes")
 
-    # Multipart form-data
-    boundary = uuid.uuid4().hex
-    ctype = f'multipart/form-data; boundary={boundary}'
-
-    def field(name, value):
-        return (
-            f'--{boundary}\r\n'
-            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
-            f'{value}\r\n'
-        ).encode()
-
-    body = (
-        field('chat_id', str(channel_id)) +
-        f'--{boundary}\r\n'
-        f'Content-Disposition: form-data; name="video_note"; filename="video.mp4"\r\n'
-        f'Content-Type: video/mp4\r\n\r\n'.encode() +
-        video_bytes +
-        f'\r\n--{boundary}--\r\n'.encode()
-    )
-
     url = f"https://api.telegram.org/bot{bot_token}/sendVideoNote"
-    req = urllib.request.Request(url, data=body, headers={'Content-Type': ctype}, method='POST')
     try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        try:
-            body_err = json.loads(e.read())
-            return {'ok': False, 'description': body_err.get('description', str(e))}
-        except Exception:
-            return {'ok': False, 'description': str(e)}
-    except Exception as e:
-        return {'ok': False, 'description': str(e)}
-
-
-def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 0) -> dict:
-    """Запрос к Telegram. Telegram отвечает нестабильно, поэтому ждём с нарастающим
-    таймаутом: быстрая попытка, затем более терпеливые."""
-    url = f"https://api.telegram.org/bot{bot_token}/{method}"
-    data = json.dumps(payload).encode()
-    last_err = 'timeout'
-    waits = [timeout] * attempts if timeout else [5, 10, 14][:attempts]
-    for wait in waits:
-        req = urllib.request.Request(
-            url, data=data,
-            headers={'Content-Type': 'application/json', 'Connection': 'close'},
-            method='POST',
+        resp = requests.post(
+            url,
+            data={'chat_id': str(channel_id)},
+            files={'video_note': ('video.mp4', video_bytes, 'video/mp4')},
+            timeout=25,
         )
+        return resp.json()
+    except Exception as e:
+        return {'ok': False, 'description': f'{type(e).__name__}: {str(e)[:200]}'}
+
+
+def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 3, timeout: int = 0) -> dict:
+    """Запрос к Telegram через requests — тот же транспорт, что в рабочих функциях проекта.
+    Логируем каждую попытку, чтобы причина сбоя была видна в логах."""
+    url = f"https://api.telegram.org/bot{bot_token}/{method}"
+    wait = timeout or 20
+    last_err = 'fail'
+    for attempt in range(attempts):
         try:
-            with urllib.request.urlopen(req, timeout=wait) as resp:
-                return json.loads(resp.read())
-        except urllib.error.HTTPError as e:
-            # Ошибка от самого Telegram (например, неверный parse_mode) — повтор не поможет.
+            resp = requests.post(url, json=payload, timeout=wait)
             try:
-                body = json.loads(e.read())
-                return {'ok': False, 'description': body.get('description', str(e))}
+                data = resp.json()
             except Exception:
-                return {'ok': False, 'description': str(e)}
+                data = {'ok': False, 'description': f'HTTP {resp.status_code}: {resp.text[:200]}'}
+            if resp.status_code >= 400 and 'description' not in data:
+                data = {'ok': False, 'description': f'HTTP {resp.status_code}'}
+            # Ответ Telegram получен — повторять нет смысла даже при отказе.
+            return data
         except Exception as e:
-            # Таймаут/сетевая ошибка — пробуем ещё раз.
-            last_err = str(e)
+            last_err = f'{type(e).__name__}: {str(e)[:200]}'
+            print(f'[POSTS] tg {method} attempt {attempt + 1}/{attempts} failed: {last_err}')
             continue
     return {'ok': False, 'description': last_err, 'network_error': True}
 
@@ -313,7 +286,7 @@ def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: lis
         # Кнопки вешаем на последнее сообщение — там же, где они в оригинале.
         if reply_markup and idx == len(message_ids) - 1:
             payload['reply_markup'] = reply_markup
-        res = tg_request(bot_token, 'copyMessage', payload, attempts=1, timeout=8)
+        res = tg_request(bot_token, 'copyMessage', payload, attempts=2)
         if res.get('ok'):
             copied.append(res.get('result', {}).get('message_id'))
         else:
@@ -357,8 +330,8 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) ->
             continue
         cp = copy_messages(bot_token, primary_chat, target, primary_ids, build_reply_markup(post))
         print(f"[POSTS] copy to {key} ({target}): {cp}")
-        if not cp['ok'] and time.monotonic() - started < 18:
-            # Копирование не прошло и время ещё есть — публикуем в группу напрямую.
+        if not cp['ok']:
+            # Копирование не прошло — публикуем в группу напрямую.
             direct = publish_post(bot_token, target, post)
             print(f"[POSTS] direct publish to {key} ({target}): {direct}")
             if direct.get('ok'):
@@ -447,6 +420,15 @@ def handler(event: dict, context) -> dict:
     bot_token = os.environ.get('UG_INFO_BOT_TOKEN_NEW', '') or os.environ.get('UG_INFO_BOT_TOKEN', '') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
     channel_main = os.environ.get('UG_DRIVER_CHANNEL_ID', '') or os.environ.get('TELEGRAM_CHANNEL_ID', '')
     channel_vip = os.environ.get('POSTS_CHAT_VIP_ID', '') or os.environ.get('DISPATCH_CHAT_ID', '')
+
+    # ── GET ?action=diag — проверка связи с Telegram ────────────────────────
+    if method == 'GET' and action == 'diag':
+        res = tg_request(bot_token, 'getMe', {}, attempts=1, timeout=15)
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
+            'token_set': bool(bot_token),
+            'channel_main': channel_main,
+            'telegram': res,
+        }, ensure_ascii=False)}
 
     # ── GET — список постов ─────────────────────────────────────────────────
     if method == 'GET':
