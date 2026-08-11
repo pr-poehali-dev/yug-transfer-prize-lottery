@@ -57,10 +57,10 @@ def verify_token(token: str) -> bool:
 
 
 def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 3, timeout: int = 0) -> dict:
-    """Запрос к Telegram через requests — тот же транспорт, что в рабочих функциях проекта.
-    Логируем каждую попытку, чтобы причина сбоя была видна в логах."""
+    """Запрос к Telegram. Логика 1-в-1 как в sait-bot-daily, которая публикует стабильно:
+    длинное ожидание (25 с) и пауза между попытками — из облака Telegram отвечает не сразу."""
     url = f"https://api.telegram.org/bot{bot_token}/{method}"
-    wait = timeout or 20
+    wait = timeout or 25
     last_err = 'fail'
     for attempt in range(attempts):
         try:
@@ -76,7 +76,8 @@ def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 3, ti
         except Exception as e:
             last_err = f'{type(e).__name__}: {str(e)[:200]}'
             print(f'[POSTS] tg {method} attempt {attempt + 1}/{attempts} failed: {last_err}')
-            continue
+            if attempt < attempts - 1:
+                time.sleep(3)
     return {'ok': False, 'description': last_err, 'network_error': True}
 
 
