@@ -10,8 +10,6 @@ POST ?action=check_scheduled — проверить и опубликовать 
 """
 import os
 import time
-import socket
-import requests
 import json
 import hashlib
 import base64
@@ -32,16 +30,7 @@ CORS = {
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 
-# В облаке IPv6-маршрут до Telegram — "чёрная дыра": соединение висит до таймаута.
-# Заставляем исходящие запросы идти по IPv4.
-_orig_getaddrinfo = socket.getaddrinfo
 
-
-def _ipv4_only_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-    return _orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
-
-
-socket.getaddrinfo = _ipv4_only_getaddrinfo
 
 
 def verify_token(token: str) -> bool:
@@ -60,19 +49,21 @@ def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 3, ti
     """Запрос к Telegram. Логика 1-в-1 как в sait-bot-daily, которая публикует стабильно:
     длинное ожидание (25 с) и пауза между попытками — из облака Telegram отвечает не сразу."""
     url = f"https://api.telegram.org/bot{bot_token}/{method}"
+    data = json.dumps(payload).encode()
     wait = timeout or 25
     last_err = 'fail'
     for attempt in range(attempts):
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
         try:
-            resp = requests.post(url, json=payload, timeout=wait)
+            with urllib.request.urlopen(req, timeout=wait) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            # Отказ самого Telegram (400/403 и т.п.) — повтор не поможет.
             try:
-                data = resp.json()
+                body = json.loads(e.read())
+                return {'ok': False, 'description': f"HTTP {e.code}: {body.get('description', str(body))[:300]}"}
             except Exception:
-                data = {'ok': False, 'description': f'HTTP {resp.status_code}: {resp.text[:200]}'}
-            if resp.status_code >= 400 and 'description' not in data:
-                data = {'ok': False, 'description': f'HTTP {resp.status_code}'}
-            # Ответ Telegram получен — повторять нет смысла даже при отказе.
-            return data
+                return {'ok': False, 'description': f'HTTP {e.code}'}
         except Exception as e:
             last_err = f'{type(e).__name__}: {str(e)[:200]}'
             print(f'[POSTS] tg {method} attempt {attempt + 1}/{attempts} failed: {last_err}')
