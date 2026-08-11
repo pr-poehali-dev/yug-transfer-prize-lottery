@@ -6,7 +6,6 @@ export interface PostFormData {
   title: string;
   text: string;
   photo_url: string;
-  video_note_url: string;
   button_text: string;
   button_url: string;
   button2_text: string;
@@ -22,11 +21,6 @@ export const CHAT_OPTIONS = [
   { key: "vip", label: "Группа Transfer_Zone_VIP" },
 ] as const;
 
-interface VideoProgress {
-  phase: "loading" | "converting" | "encoding";
-  percent: number;
-}
-
 interface PostFormProps {
   form: PostFormData;
   editId: number | null;
@@ -36,8 +30,6 @@ interface PostFormProps {
   saving: boolean;
   publishing: boolean;
   uploading: boolean;
-  uploadingVideo: boolean;
-  videoProgress: VideoProgress | null;
   formError: string;
   formSuccess: string;
   editingPublished: boolean;
@@ -46,21 +38,18 @@ interface PostFormProps {
   onExpireHoursChange: (v: number) => void;
   onEditInTgToggle: () => void;
   onPhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onVideoNoteUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSave: (status: "draft" | "scheduled") => void;
   onPublishNow: () => void;
   onReset: () => void;
 }
 
 export function PostForm({
-  form, editId, scheduledAt, expireHours, editInTg, saving, publishing, uploading, uploadingVideo, videoProgress,
+  form, editId, scheduledAt, expireHours, editInTg, saving, publishing, uploading,
   formError, formSuccess, editingPublished,
   onFormChange, onScheduledAtChange, onExpireHoursChange, onEditInTgToggle,
-  onPhotoUpload, onVideoNoteUpload, onSave, onPublishNow, onReset,
+  onPhotoUpload, onSave, onPublishNow, onReset,
 }: PostFormProps) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLInputElement>(null);
-  const videoCaptureRef = useRef<HTMLInputElement>(null);
   const [showButton2, setShowButton2] = useState(!!(form.button2_text || form.button2_url));
 
   useEffect(() => {
@@ -96,14 +85,14 @@ export function PostForm({
         {/* Текст */}
         <div>
           {(() => {
-            const captionMode = !!form.photo_url && !form.video_note_url;
+            const captionMode = !!form.photo_url;
             const limit = captionMode ? 1024 : 4096;
             const len = form.text.length;
             const over = captionMode && len > 1024;
             return (
               <>
                 <label className="text-[11px] text-white/50 mb-1 flex justify-between">
-                  <span>Текст поста {!form.video_note_url && <span className="text-red-400">*</span>}</span>
+                  <span>Текст поста <span className="text-red-400">*</span></span>
                   <span className={over ? "text-amber-400" : len > limit * 0.9 ? "text-amber-400" : "text-white/20"}>
                     {len}/{limit}
                   </span>
@@ -127,8 +116,7 @@ export function PostForm({
           })()}
         </div>
 
-        {/* Фото + Видео в одну строку на md */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {/* Фото */}
         <div>
           <label className="text-[11px] text-white/50 mb-1 block">Фото <span className="text-white/20">(необязательно)</span></label>
           {form.photo_url ? (
@@ -153,63 +141,6 @@ export function PostForm({
             </button>
           )}
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPhotoUpload} />
-        </div>
-
-        {/* Видео-кружок */}
-        <div>
-          <label className="text-[11px] text-white/50 mb-1 block">Видео-кружок <span className="text-white/20">(mp4 до 150 МБ)</span></label>
-          {form.video_note_url ? (
-            <div className="relative flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-2">
-              <div className="w-10 h-10 rounded-full overflow-hidden bg-black shrink-0">
-                <video src={form.video_note_url} className="w-full h-full object-cover" muted />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-green-400 font-medium">Видео загружено ✓</p>
-                <p className="text-[10px] text-white/30 truncate">{form.video_note_url.split('/').pop()}</p>
-              </div>
-              <button
-                onClick={() => onFormChange({ video_note_url: "" })}
-                className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white/60 hover:text-white transition-colors shrink-0"
-              >
-                <Icon name="X" size={12} />
-              </button>
-            </div>
-          ) : uploadingVideo ? (
-            <div className="w-full rounded-lg border-2 border-dashed border-cyan-500/30 flex flex-col items-center justify-center gap-1.5 text-cyan-400 py-3 px-3">
-              <div className="w-4 h-4 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
-              <span className="text-[11px] font-medium">
-                {videoProgress?.phase === "loading" && "Загрузка..."}
-                {videoProgress?.phase === "converting" && `Кружок ${videoProgress.percent}%`}
-                {videoProgress?.phase === "encoding" && "На сервер..."}
-                {!videoProgress && "Обработка..."}
-              </span>
-              {videoProgress && videoProgress.phase === "converting" && (
-                <div className="w-full max-w-32 h-1 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyan-400 rounded-full transition-all duration-300" style={{ width: `${videoProgress.percent}%` }} />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                onClick={() => videoCaptureRef.current?.click()}
-                className="h-11 rounded-lg border-2 border-dashed border-cyan-500/30 hover:border-cyan-500/70 bg-cyan-500/5 hover:bg-cyan-500/10 flex items-center justify-center gap-1.5 text-cyan-400 hover:text-cyan-300 transition-colors"
-              >
-                <Icon name="Camera" size={15} />
-                <span className="text-xs font-medium">Записать</span>
-              </button>
-              <button
-                onClick={() => videoRef.current?.click()}
-                className="h-11 rounded-lg border-2 border-dashed border-white/10 hover:border-white/30 flex items-center justify-center gap-1.5 text-white/40 hover:text-white/70 transition-colors"
-              >
-                <Icon name="FolderOpen" size={15} />
-                <span className="text-xs">Файл</span>
-              </button>
-            </div>
-          )}
-          <input ref={videoRef} type="file" accept="video/mp4,video/mov,video/avi,video/*" className="hidden" onChange={onVideoNoteUpload} />
-          <input ref={videoCaptureRef} type="file" accept="video/*" capture="user" className="hidden" onChange={onVideoNoteUpload} />
-        </div>
         </div>
 
         {/* Кнопки */}
@@ -367,7 +298,6 @@ export function PostForm({
           title={form.title}
           text={form.text}
           photo_url={form.photo_url}
-          video_note_url={form.video_note_url}
           button_text={form.button_text}
           button_url={form.button_url}
           button2_text={form.button2_text}

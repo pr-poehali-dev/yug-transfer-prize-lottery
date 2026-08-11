@@ -5,7 +5,6 @@ export const POSTS_SESSION_KEY = "posts_token";
 export const ADMIN_POSTS_URL = "https://functions.poehali.dev/0813e498-5f2e-4090-b643-15c885d057c8";
 export const ADMIN_BOT_POSTS_URL = "https://functions.poehali.dev/9578d639-08e5-479c-938a-de950926d149";
 export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21";
-export const UPLOAD_VIDEO_URL = "https://functions.poehali.dev/f6d6a065-4281-4091-ac9e-9e3121bf2571";
 export const TG_ACCOUNTS_URL = "https://functions.poehali.dev/c23d251a-47cc-43e5-bd98-f9e0ebee8f2a";
 export const CLIENT_CABINET_URL = "https://functions.poehali.dev/ad9f9612-b556-400b-b85c-f33e0f8b0b45";
 
@@ -29,7 +28,6 @@ export interface Post {
   title: string;
   text: string;
   photo_url: string;
-  video_note_url: string;
   button_text: string;
   button_url: string;
   button2_text: string;

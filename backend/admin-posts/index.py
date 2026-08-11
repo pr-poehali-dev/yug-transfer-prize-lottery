@@ -56,30 +56,6 @@ def verify_token(token: str) -> bool:
     return token == admin_tok or (bool(posts_login) and token == posts_tok)
 
 
-def tg_send_video_note(bot_token: str, channel_id: str, video_url: str) -> dict:
-    """Скачивает видео и отправляет как video_note (кружок)."""
-    try:
-        r = requests.get(video_url, timeout=20)
-        video_bytes = r.content
-    except Exception as e:
-        print(f"[POSTS] failed to download video: {e}")
-        return {'ok': False, 'description': f'Не удалось скачать видео: {e}'}
-
-    print(f"[POSTS] downloaded video: {len(video_bytes)} bytes")
-
-    url = f"https://api.telegram.org/bot{bot_token}/sendVideoNote"
-    try:
-        resp = requests.post(
-            url,
-            data={'chat_id': str(channel_id)},
-            files={'video_note': ('video.mp4', video_bytes, 'video/mp4')},
-            timeout=25,
-        )
-        return resp.json()
-    except Exception as e:
-        return {'ok': False, 'description': f'{type(e).__name__}: {str(e)[:200]}'}
-
-
 def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 3, timeout: int = 0) -> dict:
     """Запрос к Telegram через requests — тот же транспорт, что в рабочих функциях проекта.
     Логируем каждую попытку, чтобы причина сбоя была видна в логах."""
@@ -165,7 +141,6 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     """Публикует пост в Telegram, возвращает {ok, message_id}"""
     text = build_text_with_title(post)
     photo_url = post.get('photo_url', '')
-    video_note_url = post.get('video_note_url', '')
     button_text = post.get('button_text', '')
     button_url = post.get('button_url', '')
     button2_text = post.get('button2_text', '')
@@ -182,36 +157,6 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
         buttons_row.append({'text': button2_text, 'url': button2_url})
     if buttons_row:
         reply_markup = {'inline_keyboard': [buttons_row]}
-
-    # Если есть видео-кружок — сначала отправляем его, потом текст+кнопку
-    if video_note_url:
-        video_result = tg_send_video_note(bot_token, channel_id, video_note_url)
-        print(f"[POSTS] sendVideoNote result: {video_result}")
-        video_msg_id = video_result.get('result', {}).get('message_id') if video_result.get('ok') else None
-
-        if text.strip() or reply_markup:
-            btn_text = text.strip() if text.strip() else '\u200B'
-            def try_send_text(parse_mode=None):
-                payload = {'chat_id': channel_id, 'text': btn_text}
-                if parse_mode and text.strip():
-                    payload['parse_mode'] = parse_mode
-                if reply_markup:
-                    payload['reply_markup'] = reply_markup
-                return tg_request(bot_token, 'sendMessage', payload)
-
-            text_result = try_send_text('HTML')
-            if not text_result.get('ok'):
-                text_result = try_send_text(None)
-            text_msg_id = text_result.get('result', {}).get('message_id') if text_result.get('ok') else None
-            msg_id = text_msg_id or video_msg_id
-        else:
-            msg_id = video_msg_id
-            text_msg_id = None
-
-        all_ids = [m for m in (video_msg_id, text_msg_id) if m]
-        if msg_id:
-            return {'ok': True, 'message_id': msg_id, 'message_ids': all_ids}
-        return {'ok': False, 'error': video_result.get('description', 'Ошибка отправки видео-кружка')}
 
     # Telegram: подпись к фото ограничена 1024 символами, текст сообщения — 4096.
     # Если фото есть, но текст длиннее лимита подписи — шлём фото отдельно,
@@ -394,7 +339,6 @@ def row_to_post(r) -> dict:
         'telegram_message_id': r[9],
         'created_at': r[10].isoformat() if r[10] else None,
         'updated_at': r[11].isoformat() if r[11] else None,
-        'video_note_url': r[12] or '',
         'button2_text': r[13] or '',
         'button2_url': r[14] or '',
         'auto_expire_at': r[15].isoformat() if len(r) > 15 and r[15] else None,
@@ -500,32 +444,6 @@ def handler(event: dict, context) -> dict:
         s3.put_object(Bucket='files', Key=key, Body=image_bytes, ContentType=content_type)
         cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
         print(f"[POSTS] uploaded photo: {cdn_url}")
-        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'url': cdn_url})}
-
-    # ── POST ?action=upload_video — загрузка видео-кружка в S3 ──────────────
-    if method == 'POST' and action == 'upload_video':
-        body = json.loads(event.get('body') or '{}')
-        data_url = body.get('video', '')
-        if not data_url:
-            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'video обязателен'})}
-
-        if ',' in data_url:
-            _, encoded = data_url.split(',', 1)
-        else:
-            encoded = data_url
-
-        video_bytes = base64.b64decode(encoded)
-        key = f"posts/video_{uuid.uuid4()}.mp4"
-
-        s3 = boto3.client(
-            's3',
-            endpoint_url='https://bucket.poehali.dev',
-            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-        )
-        s3.put_object(Bucket='files', Key=key, Body=video_bytes, ContentType='video/mp4')
-        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
-        print(f"[POSTS] uploaded video note: {cdn_url}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'url': cdn_url})}
 
     # ── POST ?action=publish — немедленная публикация ───────────────────────
@@ -674,7 +592,6 @@ def handler(event: dict, context) -> dict:
 
         title = body.get('title', '').strip()
         photo_url = body.get('photo_url', '')
-        video_note_url = body.get('video_note_url', '')
         button_text = body.get('button_text', '')
         button_url = body.get('button_url', '')
         button2_text = body.get('button2_text', '')
@@ -704,7 +621,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""INSERT INTO {SCHEMA}.posts (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, scheduled_at, auto_expire_at, chats)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at,
+            (title, text, photo_url, '', button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at,
              ','.join(parse_chats(body.get('chats'))))
         )
         new_id = cur.fetchone()[0]
@@ -729,7 +646,6 @@ def handler(event: dict, context) -> dict:
         title = body.get('title', '')
         text = body.get('text', '').strip()
         photo_url = body.get('photo_url', '')
-        video_note_url = body.get('video_note_url', '')
         button_text = body.get('button_text', '')
         button_url = body.get('button_url', '')
         button2_text = body.get('button2_text', '')
@@ -771,7 +687,7 @@ def handler(event: dict, context) -> dict:
                 SET title=%s, text=%s, photo_url=%s, video_note_url=%s, button_text=%s, button_url=%s,
                     button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, auto_expire_at=%s, chats=%s, updated_at=%s
                 WHERE id=%s""",
-            (title, text, photo_url, video_note_url, button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at,
+            (title, text, photo_url, '', button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at,
              ','.join(parse_chats(body.get('chats'))), now, post_id)
         )
         conn.commit()
