@@ -20,6 +20,7 @@ export const CHAT_OPTIONS = [
   { key: "main", label: "Канал @UG_DRIVER" },
   { key: "vip", label: "Группа Transfer_Zone_VIP" },
   { key: "horse", label: "Группа Golden_Horse_online" },
+  { key: "chat4", label: "Группа Марриот трансфер" },
 ] as const;
 
 interface PostFormProps {
@@ -221,7 +222,7 @@ export function PostForm({
         {/* Куда публиковать — всегда обе площадки */}
         <div className="rounded-xl bg-sky-500/5 border border-sky-500/15 p-2">
           <p className="text-[11px] text-sky-300 flex items-center gap-1 font-medium">
-            <Icon name="Send" size={12} /> Пост уйдёт сразу во все три группы
+            <Icon name="Send" size={12} /> Пост уйдёт сразу во все группы
           </p>
           <p className="text-[11px] text-white/40 mt-1">
             {CHAT_OPTIONS.map((c) => c.label).join(" · ")}
