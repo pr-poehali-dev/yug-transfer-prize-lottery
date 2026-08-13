@@ -95,6 +95,71 @@ def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, ti
     return {'ok': False, 'description': last_err, 'network_error': True}
 
 
+def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
+    """Запасной путь: Telegram не может скачать фото по ссылке (наш CDN ему недоступен),
+    поэтому скачиваем файл сами и отправляем его напрямую."""
+    try:
+        with urllib.request.urlopen(photo_url, timeout=20) as r:
+            photo_bytes = r.read()
+    except Exception as e:
+        return {'ok': False, 'description': f'photo download failed: {type(e).__name__}'}
+
+    boundary = '----tgboundary' + uuid.uuid4().hex
+    parts = []
+    for key, value in payload.items():
+        if key == 'photo':
+            continue
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value)
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode()
+        )
+    parts.append(
+        f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\n'
+        f'Content-Type: image/jpeg\r\n\r\n'.encode()
+    )
+    parts.append(photo_bytes)
+    parts.append(f'\r\n--{boundary}--\r\n'.encode())
+    body = b''.join(parts)
+
+    last_err = 'fail'
+    for host in TG_HOSTS:
+        ctx = ssl.create_default_context()
+        if host != 'api.telegram.org':
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        conn = http.client.HTTPSConnection(host, 443, timeout=30, context=ctx)
+        try:
+            conn.request(
+                'POST', f'/bot{bot_token}/sendPhoto', body=body,
+                headers={
+                    'Content-Type': f'multipart/form-data; boundary={boundary}',
+                    'Host': 'api.telegram.org',
+                },
+            )
+            raw = conn.getresponse().read()
+            return json.loads(raw)
+        except Exception as e:
+            last_err = f'{type(e).__name__}: {str(e)[:150]}'
+            print(f'[POSTS] tg sendPhoto(file) via {host} failed: {last_err}')
+        finally:
+            conn.close()
+    return {'ok': False, 'description': last_err, 'network_error': True}
+
+
+def send_photo_smart(bot_token: str, payload: dict) -> dict:
+    """Сначала пробуем отдать ссылку (быстро), при отказе — заливаем файл сами."""
+    res = tg_request(bot_token, 'sendPhoto', payload)
+    desc = str(res.get('description', '')).lower()
+    if not res.get('ok') and any(
+        s in desc for s in ('wrong type of the web page', 'failed to get http url', 'webpage_curl_failed',
+                            'wrong file identifier', 'image_process_failed', 'wrong remote file')
+    ):
+        print('[POSTS] photo by URL rejected, uploading file directly')
+        return tg_send_photo_file(bot_token, payload, payload.get('photo', ''))
+    return res
+
+
 def is_network_error(res: dict) -> bool:
     """Отличает обрыв связи от отказа Telegram — повторять разметку смысла нет."""
     if res.get('network_error'):
@@ -180,7 +245,7 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     long_with_photo = bool(photo_url) and len(text) > CAPTION_LIMIT
 
     if long_with_photo:
-        photo_res = tg_request(bot_token, 'sendPhoto', {'chat_id': channel_id, 'photo': photo_url})
+        photo_res = send_photo_smart(bot_token, {'chat_id': channel_id, 'photo': photo_url})
         photo_msg_id = photo_res.get('result', {}).get('message_id') if photo_res.get('ok') else None
 
         def try_send_text(parse_mode=None):
@@ -210,7 +275,7 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
                 payload['parse_mode'] = parse_mode
             if reply_markup:
                 payload['reply_markup'] = reply_markup
-            return tg_request(bot_token, 'sendPhoto', payload)
+            return send_photo_smart(bot_token, payload)
         else:
             payload = {'chat_id': channel_id, 'text': text}
             if parse_mode:
