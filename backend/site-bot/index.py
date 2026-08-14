@@ -5,6 +5,11 @@ import urllib.request
 import psycopg2
 
 SITE_URL = 'https://ug-transfer.online'
+PIN_TEXT = (
+    '🚕 <b>ЮГ-Трансфер — заказ такси</b>\n\n'
+    'Нажмите кнопку ниже, чтобы рассчитать стоимость и оформить поездку.\n'
+    'Работаем по всей России · Трансферы · Межгород'
+)
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
 
 
@@ -133,5 +138,24 @@ def handler(event: dict, context) -> dict:
                 'input_field_placeholder': ' ',
             },
         })
+
+        pinned = tg_api('sendMessage', {
+            'chat_id': chat_id,
+            'text': PIN_TEXT,
+            'parse_mode': 'HTML',
+            'reply_markup': {
+                'inline_keyboard': [
+                    [{'text': '🚕 Заказать такси', 'web_app': {'url': SITE_URL}}],
+                ],
+            },
+        })
+        pin_id = (pinned.get('result') or {}).get('message_id')
+        if pin_id:
+            tg_api('unpinAllChatMessages', {'chat_id': chat_id})
+            tg_api('pinChatMessage', {
+                'chat_id': chat_id,
+                'message_id': pin_id,
+                'disable_notification': True,
+            })
 
     return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
