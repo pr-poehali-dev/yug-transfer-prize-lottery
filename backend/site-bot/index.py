@@ -79,15 +79,21 @@ def greet_business_chat(bm: dict) -> None:
         },
     })
     msg_id = (res.get('result') or {}).get('message_id')
-    pinned = False
-    if msg_id:
-        pin = tg_api('pinChatMessage', {
-            'business_connection_id': conn_id,
-            'chat_id': chat_id,
-            'message_id': msg_id,
-            'disable_notification': True,
-        })
-        pinned = bool(pin.get('ok'))
+    if not msg_id:
+        # Не отправилось — не помечаем чат, попробуем на следующем сообщении клиента.
+        print(f"[SITE-BOT] greet send failed chat={chat_id} err={str(res.get('description'))[:200]}")
+        conn.close()
+        return
+
+    pin = tg_api('pinChatMessage', {
+        'business_connection_id': conn_id,
+        'chat_id': chat_id,
+        'message_id': msg_id,
+        'disable_notification': True,
+    })
+    pinned = bool(pin.get('ok'))
+    if not pinned:
+        print(f"[SITE-BOT] pin failed chat={chat_id} err={str(pin.get('description'))[:200]}")
     print(f'[SITE-BOT] business greet chat={chat_id} msg={msg_id} pinned={pinned}')
 
     try:
