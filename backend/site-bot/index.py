@@ -2,6 +2,8 @@
 import os
 import json
 import urllib.request
+import ssl
+import http.client
 import psycopg2
 
 SITE_URL = 'https://ug-transfer.online'
@@ -17,15 +19,93 @@ def get_bot_token():
     return os.environ.get('TELEGRAM_BOT_TOKEN_2', '')
 
 
+TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
+
+
 def tg_api(method, payload):
-    url = f"https://api.telegram.org/bot{get_bot_token()}/{method}"
+    """Запрос к Telegram: из облака часть адресов недоступна, перебираем рабочие."""
     data = json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
+    for host in TG_HOSTS:
+        ctx = ssl.create_default_context()
+        if host != 'api.telegram.org':
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        conn = http.client.HTTPSConnection(host, 443, timeout=8, context=ctx)
+        try:
+            conn.request('POST', f'/bot{get_bot_token()}/{method}', body=data,
+                         headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
+            return json.loads(conn.getresponse().read())
+        except Exception as e:
+            print(f'[SITE-BOT] {method} via {host} failed: {type(e).__name__}')
+        finally:
+            conn.close()
+    return {}
+
+
+def greet_business_chat(bm: dict) -> None:
+    """Первое обращение клиента в личку @ug_transfer_online — шлём и закрепляем блок заказа."""
+    chat = bm.get('chat') or {}
+    sender = bm.get('from') or {}
+    chat_id = chat.get('id')
+    conn_id = bm.get('business_connection_id', '')
+
+    if not chat_id or chat.get('type') != 'private':
+        return
+    if sender.get('is_bot') or int(sender.get('id') or 0) != int(chat_id):
+        return
+
+    conn = None
     try:
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            return json.loads(resp.read())
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        cur.execute(f"SELECT 1 FROM {SCHEMA}.business_greeted WHERE chat_id = {int(chat_id)}")
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return
+        cur.close()
     except Exception:
-        return {}
+        if conn:
+            conn.close()
+        return
+
+    res = tg_api('sendMessage', {
+        'business_connection_id': conn_id,
+        'chat_id': chat_id,
+        'text': PIN_TEXT,
+        'parse_mode': 'HTML',
+        'reply_markup': {
+            'inline_keyboard': [[{'text': '🚕 Заказать такси', 'url': SITE_URL}]],
+        },
+    })
+    msg_id = (res.get('result') or {}).get('message_id')
+    pinned = False
+    if msg_id:
+        pin = tg_api('pinChatMessage', {
+            'business_connection_id': conn_id,
+            'chat_id': chat_id,
+            'message_id': msg_id,
+            'disable_notification': True,
+        })
+        pinned = bool(pin.get('ok'))
+    print(f'[SITE-BOT] business greet chat={chat_id} msg={msg_id} pinned={pinned}')
+
+    try:
+        cur = conn.cursor()
+        uname = str(sender.get('username') or '').replace("'", "''")
+        fname = str(sender.get('first_name') or '').replace("'", "''")
+        cid = str(conn_id).replace("'", "''")
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.business_greeted (chat_id, connection_id, username, first_name, message_id, pinned) "
+            f"VALUES ({int(chat_id)}, '{cid}', '{uname}', '{fname}', {int(msg_id or 0)}, {pinned}) "
+            f"ON CONFLICT (chat_id) DO NOTHING"
+        )
+        conn.commit()
+        cur.close()
+    except Exception:
+        pass
+    finally:
+        conn.close()
 
 
 def handler(event: dict, context) -> dict:
@@ -55,7 +135,11 @@ def handler(event: dict, context) -> dict:
             func_url = qs.get('url', '')
             if not func_url:
                 return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'error': 'url required'})}
-            result = tg_api('setWebhook', {'url': func_url})
+            result = tg_api('setWebhook', {
+                'url': func_url,
+                'allowed_updates': ['message', 'callback_query', 'business_connection',
+                                    'business_message', 'edited_business_message'],
+            })
             tg_api('setChatMenuButton', {
                 'menu_button': {
                     'type': 'web_app',
@@ -90,6 +174,11 @@ def handler(event: dict, context) -> dict:
             conn.close()
         except Exception:
             pass
+        return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
+
+    bm = body.get('business_message')
+    if bm:
+        greet_business_chat(bm)
         return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
 
     message = body.get('message')
