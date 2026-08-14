@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import useTariffCalc, { applySelectedTariffFromCache, clearTariffPriceCache, refreshPriceWithExtras, syncOrderPriceField } from "@/hooks/useTariffCalc";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { toast } from "@/hooks/use-toast";
 
 export const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ea8c632-dfa9-4e5c-8051-74474ecd91aa.jpg";
 export const TARIFFS = ["Срочный", "Стандарт", "Комфорт", "Минивэн", "Бизнес", "Доставка"];
@@ -80,6 +81,7 @@ export function PhoneInput({ className }: { className?: string }) {
       onChange={(e) => setValue(e.target.value.trim() === "" ? "" : formatPhone(e.target.value))}
       onFocus={() => setValue((v) => (v ? v : "+7 "))}
       onBlur={() => setValue((v) => (v.replace(/\D/g, "").length <= 1 ? "" : v))}
+      required
     />
   );
 }
@@ -137,6 +139,19 @@ export function useOrderForm(): OrderFormState {
 
   // Штатный скрипт: подсказки, расчёт цены и отправка заявки.
   useTariffCalc(true);
+
+  // Заявка не ушла — честно предупреждаем клиента и даём телефон для звонка.
+  useEffect(() => {
+    const onFail = () => {
+      toast({
+        variant: "destructive",
+        title: "Заявка не отправлена",
+        description: "Проверьте интернет и нажмите «Заказать» ещё раз. Или позвоните нам: +7 (988) 258-28-55",
+      });
+    };
+    window.addEventListener("orderSendFailed", onFail);
+    return () => window.removeEventListener("orderSendFailed", onFail);
+  }, []);
 
   // Определение геолокации: координаты -> адрес (Яндекс) -> поле «Откуда?».
   const detectLocation = () => {

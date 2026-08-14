@@ -294,16 +294,46 @@ function appendPriceToFormData(fd: FormData) {
 // Телефон клиента обязателен в заявке. Если скрипт по какой-то причине не
 // положил его в FormData (или положил пустым) — берём значение прямо из поля.
 function appendPhoneToFormData(fd: FormData) {
-  const el = document.querySelector<HTMLInputElement>('.uc-tariffCalc [name="Phone"]');
-  const value = (el?.value || "").trim();
-  const digits = (value.match(/\d/g) || []).length;
-  if (digits < 10) return;
-  const keys = ["Phone", "phone", "orderPhone"];
-  keys.forEach((k) => {
-    const cur = fd.get(k);
-    const curDigits = typeof cur === "string" ? (cur.match(/\d/g) || []).length : 0;
-    if (curDigits < 10) fd.set(k, value);
+  const el =
+    document.querySelector<HTMLInputElement>('.uc-tariffCalc [name="Phone"]') ||
+    document.querySelector<HTMLInputElement>('[name="Phone"]');
+  const fromField = (el?.value || "").trim();
+  // Берём лучший из вариантов: поле формы или то, что уже лежит в заявке.
+  const candidates = [fromField];
+  ["Phone", "phone", "orderPhone"].forEach((k) => {
+    const v = fd.get(k);
+    if (typeof v === "string") candidates.push(v.trim());
   });
+  const best = candidates
+    .filter(Boolean)
+    .sort((a, b) => (b.match(/\d/g) || []).length - (a.match(/\d/g) || []).length)[0];
+  if (!best) {
+    console.error("[ORDER] телефон клиента пустой — заявка уйдёт без связи");
+    return;
+  }
+  // Диспетчерская ждёт номер в формате +7XXXXXXXXXX.
+  let digits = (best.match(/\d/g) || []).join("");
+  if (digits.length === 11 && digits.startsWith("8")) digits = "7" + digits.slice(1);
+  if (digits.length === 10) digits = "7" + digits;
+  const normalized = digits.length === 11 ? "+" + digits : best;
+  ["Phone", "phone", "orderPhone", "client_phone"].forEach((k) => fd.set(k, normalized));
+}
+
+// Заявка не ушла: сохраняем её у клиента в браузере и честно предупреждаем,
+// чтобы человек не считал заказ принятым и мог позвонить.
+function reportOrderFailure(fd: FormData, reason: string) {
+  try {
+    const data: Record<string, string> = {};
+    fd.forEach((v, k) => {
+      if (typeof v === "string") data[k] = v;
+    });
+    const saved = JSON.parse(localStorage.getItem("failedOrders") || "[]");
+    saved.push({ at: new Date().toISOString(), reason, data });
+    localStorage.setItem("failedOrders", JSON.stringify(saved.slice(-20)));
+  } catch {
+    /* хранилище недоступно — не мешаем показать предупреждение */
+  }
+  window.dispatchEvent(new CustomEvent("orderSendFailed", { detail: { reason } }));
 }
 
 // Перехватываем ответ расчёта calc_old.php и отправку заявки (XHR) один раз.
@@ -331,11 +361,22 @@ function installCalcInterceptor() {
         appendPriceToFormData(body);
         appendPhoneToFormData(body);
         console.log("[ORDER] after append: orderPrice(FormData)=", body.get("orderPrice"), "| Phone=", body.get("Phone"));
-        // После успешной отправки — очищаем все поля формы.
+        // Заявка не должна пропадать молча: при сбое сохраняем её и говорим клиенту.
         this.addEventListener("load", () => {
           if (this.status >= 200 && this.status < 300) {
             setTimeout(resetOrderForm, 100);
+          } else {
+            console.error("[ORDER] отправка не удалась:", this.status, this.statusText);
+            reportOrderFailure(body, `сервер ответил ${this.status}`);
           }
+        });
+        this.addEventListener("error", () => {
+          console.error("[ORDER] сетевая ошибка при отправке заявки");
+          reportOrderFailure(body, "нет связи с сервером");
+        });
+        this.addEventListener("timeout", () => {
+          console.error("[ORDER] превышено время ожидания при отправке заявки");
+          reportOrderFailure(body, "сервер не ответил вовремя");
         });
       }
     } catch {
