@@ -36,7 +36,7 @@ CONTACTS = """
 ✈️ <b>Telegram:</b> @ug_transfer_online
 🌐 <b>Сайт:</b> ug-transfer.online
 🤖 <b>Бот заказа:</b> @ug_sait_bot
-🅼 <b>MAX:</b> max.ru/id910238307053_2_bot
+🅼 <b>MAX:</b> <a href="https://max.ru/id910238307053_2_bot">Заказать</a>
 
 ━━━━━━━━━━━━━━━━━━━
 🚖 <i>ЮГ ТРАНСФЕР — ваш надёжный партнёр в дороге!</i>
@@ -46,6 +46,18 @@ CONTACTS = """
 # Бот заказа в MAX — добавляем только в посты MAX, там эта ссылка кликабельна.
 MAX_BOT_LINK = os.environ.get('MAX_BOT_LINK', 'max.ru/id910238307053_2_bot')
 MAX_CONTACT_LINE = f"\n\n🚕 Заказать такси прямо в MAX: {MAX_BOT_LINK}\nНапишите боту — пришлём кнопку заказа."
+MAX_PLAIN_LINE = '🅼 MAX: Заказать'
+
+
+def build_vk_text(html_text: str) -> str:
+    """Для ВК ссылки не кликабельны — показываем полный адрес бота MAX."""
+    return strip_html(html_text).replace(MAX_PLAIN_LINE, f'🅼 MAX: {MAX_BOT_LINK}')
+
+
+def build_max_text(html_text: str) -> str:
+    """В самом MAX ссылку на бота выносим отдельным призывом в конец поста."""
+    text = strip_html(html_text).replace(f'{MAX_PLAIN_LINE}\n', '').replace(MAX_PLAIN_LINE, '')
+    return text + MAX_CONTACT_LINE
 
 
 def get_bot_token():
@@ -488,8 +500,8 @@ def handler(event: dict, context) -> dict:
 
     post_id, photo, greeting, description = row
     tg_text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
-    vk_text = strip_html(f"{greeting}\n\n{description}\n{CONTACTS}")
-    max_text = vk_text.replace(f'🅼 MAX: {MAX_BOT_LINK}\n', '') + MAX_CONTACT_LINE
+    vk_text = build_vk_text(f"{greeting}\n\n{description}\n{CONTACTS}")
+    max_text = build_max_text(f"{greeting}\n\n{description}\n{CONTACTS}")
 
     if target == 'user_wall':
         vk_user = post_to_vk_user_wall(photo, vk_text, debug=True)
