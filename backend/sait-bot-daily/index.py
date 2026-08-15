@@ -6,6 +6,9 @@ import time
 import urllib.request
 import urllib.parse
 import urllib.error
+import ssl
+import uuid
+import http.client
 from datetime import date
 import psycopg2
 
@@ -44,31 +47,76 @@ def get_bot_token():
     return os.environ.get('TELEGRAM_BOT_TOKEN_2', '')
 
 
+TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
+
+
 def tg_api(method, payload):
+    """Запрос к Telegram: из облака обычный адрес часто в таймауте, перебираем рабочие."""
     token = get_bot_token()
     if not token:
         return {'ok': False, 'description': 'TELEGRAM_BOT_TOKEN_2 пустой'}
-    url = f"https://api.telegram.org/bot{token}/{method}"
     data = json.dumps(payload).encode()
     last_err = 'fail'
-    # До 3 попыток: единичные сетевые таймауты Telegram не должны срывать пост.
-    for attempt in range(3):
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
+    for host in TG_HOSTS:
+        ctx = ssl.create_default_context()
+        if host != 'api.telegram.org':
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        conn = http.client.HTTPSConnection(host, 443, timeout=20, context=ctx)
         try:
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                return json.loads(resp.read())
-        except urllib.error.HTTPError as e:
-            # Ошибка от самого Telegram (403, 400 и т.п.) — повтор не поможет.
-            try:
-                body = json.loads(e.read())
-                return {'ok': False, 'description': f"HTTP {e.code}: {body.get('description', str(body))[:300]}"}
-            except Exception:
-                return {'ok': False, 'description': f"HTTP {e.code}"}
+            conn.request('POST', f'/bot{token}/{method}', body=data,
+                         headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
+            return json.loads(conn.getresponse().read())
         except Exception as e:
-            # Сетевой сбой/таймаут — пробуем ещё раз.
-            last_err = f"{type(e).__name__}: {str(e)[:300]}"
-            if attempt < 2:
-                time.sleep(3)
+            last_err = f"{type(e).__name__}: {str(e)[:200]}"
+            print(f'[DAILY] tg {method} via {host} failed: {last_err}')
+        finally:
+            conn.close()
+    return {'ok': False, 'description': last_err}
+
+
+def tg_send_photo_file(payload: dict, photo_url: str) -> dict:
+    """Запасной путь: Telegram не смог скачать фото по ссылке — шлём файл сами."""
+    token = get_bot_token()
+    try:
+        with urllib.request.urlopen(photo_url, timeout=20) as r:
+            photo_bytes = r.read()
+    except Exception as e:
+        return {'ok': False, 'description': f'photo download failed: {type(e).__name__}'}
+
+    boundary = '----tgdaily' + uuid.uuid4().hex
+    parts = []
+    for key, value in payload.items():
+        if key == 'photo':
+            continue
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value)
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode())
+    parts.append(
+        f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\n'
+        f'Content-Type: image/jpeg\r\n\r\n'.encode()
+    )
+    parts.append(photo_bytes)
+    parts.append(f'\r\n--{boundary}--\r\n'.encode())
+    body = b''.join(parts)
+
+    last_err = 'fail'
+    for host in TG_HOSTS:
+        ctx = ssl.create_default_context()
+        if host != 'api.telegram.org':
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        conn = http.client.HTTPSConnection(host, 443, timeout=30, context=ctx)
+        try:
+            conn.request('POST', f'/bot{token}/sendPhoto', body=body,
+                         headers={'Content-Type': f'multipart/form-data; boundary={boundary}',
+                                  'Host': 'api.telegram.org'})
+            return json.loads(conn.getresponse().read())
+        except Exception as e:
+            last_err = f'{type(e).__name__}: {str(e)[:150]}'
+            print(f'[DAILY] tg sendPhoto(file) via {host} failed: {last_err}')
+        finally:
+            conn.close()
     return {'ok': False, 'description': last_err}
 
 
@@ -450,12 +498,25 @@ def handler(event: dict, context) -> dict:
             'ok': max_only.get('ok', False), 'post_id': post_id, 'max': max_only,
         })}
 
-    tg_result = tg_api('sendPhoto', {
+    tg_payload = {
         'chat_id': CHANNEL_ID,
         'photo': photo,
         'caption': tg_text,
         'parse_mode': 'HTML',
-    })
+    }
+    tg_result = tg_api('sendPhoto', tg_payload)
+    if not tg_result.get('ok'):
+        # Telegram не смог забрать фото по ссылке — отправляем файл напрямую.
+        print(f"[DAILY] sendPhoto by url failed: {str(tg_result.get('description'))[:200]}")
+        tg_result = tg_send_photo_file(tg_payload, photo)
+    if not tg_result.get('ok'):
+        # Совсем не вышло с фото — публикуем хотя бы текст, пост не пропадёт.
+        print(f"[DAILY] sendPhoto file failed: {str(tg_result.get('description'))[:200]}")
+        tg_result = tg_api('sendMessage', {
+            'chat_id': CHANNEL_ID,
+            'text': tg_text,
+            'parse_mode': 'HTML',
+        })
 
     vk_result = post_to_vk(photo, vk_text)
     vk_user_result = post_to_vk_user_wall(photo, vk_text)
