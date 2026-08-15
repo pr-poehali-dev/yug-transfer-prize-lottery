@@ -53,6 +53,24 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'ok': False, 'error': 'MAX_BOT_TOKEN не задан', 'diag': diag}, ensure_ascii=False),
         }
 
+    qs = event.get('queryStringParameters') or {}
+    if qs.get('probe') == 'pin':
+        # Проверяем, поддерживает ли MAX закрепление сообщений.
+        chat_id = (qs.get('chat_id') or os.environ.get('MAX_CHAT_ID', '')).strip()
+        url = f"https://platform-api.max.ru/chats/{chat_id}/pin"
+        req = urllib.request.Request(url, data=json.dumps({'message_id': 'probe'}).encode(),
+                                     headers={'Content-Type': 'application/json'}, method='PUT')
+        req.add_header('Authorization', token)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                out = {'status': r.status, 'body': r.read().decode('utf-8')[:400]}
+        except urllib.error.HTTPError as e:
+            out = {'status': e.code, 'body': e.read().decode('utf-8')[:400]}
+        except Exception as e:
+            out = {'error': str(e)[:200]}
+        return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'probe': 'pin', 'result': out}, ensure_ascii=False)}
+
     bases = ['https://platform-api.max.ru', 'https://botapi.max.ru']
     attempts = []
     chats_result = None
