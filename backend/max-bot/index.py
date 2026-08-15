@@ -127,6 +127,10 @@ def handler(event: dict, context) -> dict:
         res = max_api('/subscriptions', {'url': url, 'update_types': ['message_created', 'bot_started']})
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'result': res}, ensure_ascii=False)}
 
+    if qs.get('action') == 'me':
+        res = max_api('/me', None, method='GET')
+        return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'result': res}, ensure_ascii=False)}
+
     if qs.get('action') == 'subscriptions':
         res = max_api('/subscriptions', None, method='GET')
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'result': res}, ensure_ascii=False)}

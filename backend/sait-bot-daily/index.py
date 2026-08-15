@@ -42,6 +42,10 @@ CONTACTS = """
 
 #такси #трансфер #ЮгТрансфер #поездки"""
 
+# Бот заказа в MAX — добавляем только в посты MAX, там эта ссылка кликабельна.
+MAX_BOT_LINK = os.environ.get('MAX_BOT_LINK', 'max.ru/id910238307053_2_bot')
+MAX_CONTACT_LINE = f"\n\n🤖 Заказ такси в MAX: {MAX_BOT_LINK}\nНапишите боту — пришлём кнопку заказа."
+
 
 def get_bot_token():
     return os.environ.get('TELEGRAM_BOT_TOKEN_2', '')
@@ -484,7 +488,7 @@ def handler(event: dict, context) -> dict:
     post_id, photo, greeting, description = row
     tg_text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
     vk_text = strip_html(f"{greeting}\n\n{description}\n{CONTACTS}")
-    max_text = vk_text
+    max_text = vk_text + MAX_CONTACT_LINE
 
     if target == 'user_wall':
         vk_user = post_to_vk_user_wall(photo, vk_text, debug=True)
