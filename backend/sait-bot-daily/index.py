@@ -36,6 +36,7 @@ CONTACTS = """
 ✈️ <b>Telegram:</b> @ug_transfer_online
 🌐 <b>Сайт:</b> ug-transfer.online
 🤖 <b>Бот заказа:</b> @ug_sait_bot
+🅼 <b>MAX:</b> max.ru/id910238307053_2_bot
 
 ━━━━━━━━━━━━━━━━━━━
 🚖 <i>ЮГ ТРАНСФЕР — ваш надёжный партнёр в дороге!</i>
@@ -44,7 +45,7 @@ CONTACTS = """
 
 # Бот заказа в MAX — добавляем только в посты MAX, там эта ссылка кликабельна.
 MAX_BOT_LINK = os.environ.get('MAX_BOT_LINK', 'max.ru/id910238307053_2_bot')
-MAX_CONTACT_LINE = f"\n\n🤖 Заказ такси в MAX: {MAX_BOT_LINK}\nНапишите боту — пришлём кнопку заказа."
+MAX_CONTACT_LINE = f"\n\n🚕 Заказать такси прямо в MAX: {MAX_BOT_LINK}\nНапишите боту — пришлём кнопку заказа."
 
 
 def get_bot_token():
@@ -488,7 +489,7 @@ def handler(event: dict, context) -> dict:
     post_id, photo, greeting, description = row
     tg_text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
     vk_text = strip_html(f"{greeting}\n\n{description}\n{CONTACTS}")
-    max_text = vk_text + MAX_CONTACT_LINE
+    max_text = vk_text.replace(f'🅼 MAX: {MAX_BOT_LINK}\n', '') + MAX_CONTACT_LINE
 
     if target == 'user_wall':
         vk_user = post_to_vk_user_wall(photo, vk_text, debug=True)
