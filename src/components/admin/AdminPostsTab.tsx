@@ -103,7 +103,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       button_text: post.button_text, button_url: post.button_url,
       button2_text: post.button2_text ?? "", button2_url: post.button2_url ?? "",
       status: post.status, scheduled_at: post.scheduled_at,
-      chats: post.chats || ALL_CHAT_KEYS,
+      chats: ALL_CHAT_KEYS,
     };
     setEditId(post.id);
     setForm(newForm);
@@ -206,7 +206,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
         const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ post_id: postId, ...extra }),
+          body: JSON.stringify({ post_id: postId, chats: ALL_CHAT_KEYS, ...extra }),
         });
         const data = await res.json().catch(() => ({}));
         if (data.ok) return data;
