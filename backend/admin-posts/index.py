@@ -295,9 +295,19 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     return {'ok': False, 'error': result.get('description', 'Unknown error')}
 
 
+ALL_CHATS = ['main', 'vip', 'horse', 'chat4', 'chat5']
+
+
 def parse_chats(value) -> list:
-    """Площадки публикации. По умолчанию пост идёт сразу во все три группы."""
-    return ['main', 'vip', 'horse', 'chat4']
+    """Площадки публикации. Если явно не выбраны — пост идёт во все группы."""
+    if isinstance(value, str):
+        picked = [c.strip() for c in value.split(',') if c.strip()]
+    elif isinstance(value, (list, tuple)):
+        picked = [str(c).strip() for c in value if str(c).strip()]
+    else:
+        picked = []
+    picked = [c for c in picked if c in ALL_CHATS]
+    return picked or list(ALL_CHATS)
 
 
 def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: list, reply_markup=None) -> dict:
@@ -446,6 +456,7 @@ def handler(event: dict, context) -> dict:
     channel_vip = os.environ.get('POSTS_CHAT_VIP_ID', '') or os.environ.get('DISPATCH_CHAT_ID', '')
     channel_horse = os.environ.get('POSTS_CHAT_HORSE_ID', '') or '@Golden_Horse_online'
     channel_chat4 = os.environ.get('POSTS_CHAT_4_ID', '') or '-1002324716120'
+    channel_chat5 = os.environ.get('POSTS_CHAT_5_ID', '') or '@ugtransferrr'
 
     # ── GET ?action=diag — проверка связи с Telegram ────────────────────────
     if method == 'GET' and action == 'diag':
@@ -547,7 +558,7 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 404, 'headers': CORS, 'body': json.dumps({'error': 'Пост не найден'})}
 
         post = row_to_post(row)
-        channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4}
+        channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
         chats = parse_chats(body.get('chats') or post.get('chats'))
 
         if not bot_token:
@@ -614,7 +625,7 @@ def handler(event: dict, context) -> dict:
             per_chat = {}
             chats = parse_chats(post.get('chats'))
             if bot_token:
-                channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4}
+                channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
                 result = publish_to_chats(bot_token, chats, channels, post)
                 if result['ok']:
                     any_ok = True
@@ -647,7 +658,7 @@ def handler(event: dict, context) -> dict:
             post_chats = parse_chats(exp[3])
             per_chat = exp[4] or {}
             to_delete = list(ids) if ids else ([single_id] if single_id else [])
-            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4}
+            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
             if bot_token and to_delete:
                 for key in post_chats:
                     ch = channels.get(key)
@@ -798,7 +809,7 @@ def handler(event: dict, context) -> dict:
         if row and row[1] in ('published', 'expired') and bot_token:
             to_delete = list(row[2]) if row[2] else ([row[0]] if row[0] else [])
             per_chat = row[4] or {}
-            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4}
+            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
             for key in parse_chats(row[3]):
                 ch = channels.get(key)
                 chat_ids = per_chat.get(key) or (to_delete if key == 'main' else [])
