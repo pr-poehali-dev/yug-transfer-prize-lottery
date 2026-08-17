@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { ADMIN_POSTS_URL } from "./adminTypes";
 import type { Post } from "./adminTypes";
-import { PostForm } from "./PostForm";
+import { PostForm, CHAT_OPTIONS } from "./PostForm";
 import type { PostFormData } from "./PostForm";
+
+const ALL_CHAT_KEYS = CHAT_OPTIONS.map((c) => c.key).join(",");
 import { PostList } from "./PostList";
 
 interface AdminPostsTabProps {
@@ -23,7 +25,7 @@ function toLocalInput(iso: string | null | undefined) {
 const EMPTY: PostFormData = {
   title: "", text: "", photo_url: "", button_text: "", button_url: "",
   button2_text: "", button2_url: "",
-  status: "draft", scheduled_at: null, chats: "main,vip",
+  status: "draft", scheduled_at: null, chats: ALL_CHAT_KEYS,
 };
 
 export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpanded, onToggle }: AdminPostsTabProps) {
@@ -101,7 +103,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       button_text: post.button_text, button_url: post.button_url,
       button2_text: post.button2_text ?? "", button2_url: post.button2_url ?? "",
       status: post.status, scheduled_at: post.scheduled_at,
-      chats: "main,vip",
+      chats: post.chats || ALL_CHAT_KEYS,
     };
     setEditId(post.id);
     setForm(newForm);
@@ -199,12 +201,12 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     };
 
     let lastError = "Ошибка публикации";
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ post_id: postId, chats: "main,vip", ...extra }),
+          body: JSON.stringify({ post_id: postId, ...extra }),
         });
         const data = await res.json().catch(() => ({}));
         if (data.ok) return data;
@@ -213,7 +215,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
         lastError = e instanceof Error ? e.message : "Нет связи с сервером";
       }
       if (await isPublished()) return { ok: true };
-      if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+      if (attempt < 1) await new Promise(r => setTimeout(r, 1000));
     }
     throw new Error(lastError);
   };

@@ -50,6 +50,15 @@ def verify_token(token: str) -> bool:
 # Telegram отвечает по нескольким IP; часть из них из облака недоступна.
 # Ходим по каждому адресу напрямую, подставляя правильный Host/SNI.
 TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
+BEST_HOST = {'host': ''}
+
+
+def hosts_order() -> list:
+    """Рабочий адрес из прошлого запроса — первым: не ждём таймаута на мёртвых IP."""
+    best = BEST_HOST.get('host')
+    if best and best in TG_HOSTS:
+        return [best] + [h for h in TG_HOSTS if h != best]
+    return list(TG_HOSTS)
 
 
 def _tg_call(host: str, bot_token: str, method: str, data: bytes, wait: int) -> dict:
@@ -81,12 +90,13 @@ def _tg_call(host: str, bot_token: str, method: str, data: bytes, wait: int) -> 
 def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 0) -> dict:
     """Запрос к Telegram с перебором рабочих адресов: из облака часть IP недоступна."""
     data = json.dumps(payload).encode()
-    wait = timeout or 8
+    wait = timeout or 5
     last_err = 'fail'
-    for host in TG_HOSTS:
+    for host in hosts_order():
         try:
             res = _tg_call(host, bot_token, method, data, wait)
             # Ответ получен — отказ Telegram другим адресом не исправить.
+            BEST_HOST['host'] = host
             return res
         except Exception as e:
             last_err = f'{type(e).__name__}: {str(e)[:150]}'
@@ -123,12 +133,12 @@ def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
     body = b''.join(parts)
 
     last_err = 'fail'
-    for host in TG_HOSTS:
+    for host in hosts_order():
         ctx = ssl.create_default_context()
         if host != 'api.telegram.org':
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-        conn = http.client.HTTPSConnection(host, 443, timeout=30, context=ctx)
+        conn = http.client.HTTPSConnection(host, 443, timeout=20, context=ctx)
         try:
             conn.request(
                 'POST', f'/bot{bot_token}/sendPhoto', body=body,
@@ -138,6 +148,7 @@ def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
                 },
             )
             raw = conn.getresponse().read()
+            BEST_HOST['host'] = host
             return json.loads(raw)
         except Exception as e:
             last_err = f'{type(e).__name__}: {str(e)[:150]}'
@@ -147,8 +158,24 @@ def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
     return {'ok': False, 'description': last_err, 'network_error': True}
 
 
+PHOTO_ID_CACHE = {}
+
+
+def extract_file_id(res: dict) -> str:
+    """Telegram отдаёт file_id загруженного фото — по нему повторная отправка мгновенная."""
+    photos = ((res.get('result') or {}).get('photo') or [])
+    return photos[-1].get('file_id', '') if photos else ''
+
+
 def send_photo_smart(bot_token: str, payload: dict) -> dict:
-    """Сначала пробуем отдать ссылку (быстро), при отказе — заливаем файл сами."""
+    """Отправка фото. Один раз заливаем файл, дальше шлём по file_id — мгновенно."""
+    src = payload.get('photo', '')
+    cached = PHOTO_ID_CACHE.get(src)
+    if cached:
+        res = tg_request(bot_token, 'sendPhoto', {**payload, 'photo': cached})
+        if res.get('ok'):
+            return res
+
     res = tg_request(bot_token, 'sendPhoto', payload)
     desc = str(res.get('description', '')).lower()
     if not res.get('ok') and any(
@@ -156,7 +183,11 @@ def send_photo_smart(bot_token: str, payload: dict) -> dict:
                             'wrong file identifier', 'image_process_failed', 'wrong remote file')
     ):
         print('[POSTS] photo by URL rejected, uploading file directly')
-        return tg_send_photo_file(bot_token, payload, payload.get('photo', ''))
+        res = tg_send_photo_file(bot_token, payload, src)
+
+    fid = extract_file_id(res)
+    if fid and src:
+        PHOTO_ID_CACHE[src] = fid
     return res
 
 
@@ -565,9 +596,26 @@ def handler(event: dict, context) -> dict:
             cur.close(); conn.close()
             return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Бот не настроен'})}
 
+        # Фото уже заливали раньше — берём готовый file_id, отправка мгновенная.
+        try:
+            cur.execute(f"SELECT tg_photo_id FROM {SCHEMA}.posts WHERE id = %s", (post_id,))
+            saved_fid = (cur.fetchone() or [None])[0]
+            if saved_fid and post.get('photo_url'):
+                PHOTO_ID_CACHE[post['photo_url']] = saved_fid
+        except Exception:
+            pass
+
         print(f"[POSTS] publishing post {post_id} to chats={chats}")
         result = publish_to_chats(bot_token, chats, channels, post)
         print(f"[POSTS] publish result: {result}")
+
+        try:
+            fid = PHOTO_ID_CACHE.get(post.get('photo_url') or '')
+            if fid:
+                cur.execute(f"UPDATE {SCHEMA}.posts SET tg_photo_id = %s WHERE id = %s", (fid, post_id))
+                conn.commit()
+        except Exception:
+            pass
         if not result['ok']:
             cur.close(); conn.close()
             err = '; '.join(result.get('errors') or []) or 'Ошибка Telegram'
