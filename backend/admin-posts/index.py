@@ -640,11 +640,16 @@ def handler(event: dict, context) -> dict:
                 expire_at = None
 
         msg_ids = result.get('message_ids') or ([result.get('message_id')] if result.get('message_id') else [])
+        # Дополняем историю: если пост доотправляли в другие группы — прежние не теряем.
+        prev_map = post.get('chat_messages') or {}
+        merged_map = {**prev_map, **(result.get('per_chat') or {})}
+        merged_chats = list(dict.fromkeys(list(parse_chats(post.get('chats'))) + chats)) if prev_map else chats
+        merged_ids = list(dict.fromkeys((post.get('message_ids') or []) + msg_ids)) if prev_map else msg_ids
         cur.execute(
             f"UPDATE {SCHEMA}.posts SET status='published', published_at=%s, telegram_message_id=%s, message_ids=%s, "
             f"chats=%s, chat_messages=%s, auto_expire_at=%s, updated_at=%s WHERE id=%s",
-            (now, result.get('message_id'), msg_ids, ','.join(chats),
-             json.dumps(result.get('per_chat') or {}), expire_at, now, post_id)
+            (now, result.get('message_id'), merged_ids, ','.join(merged_chats),
+             json.dumps(merged_map), expire_at, now, post_id)
         )
         conn.commit()
         cur.close(); conn.close()
