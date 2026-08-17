@@ -20,21 +20,25 @@ def get_bot_token():
 
 
 TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
+LAST_OK_HOST = ''
 
 
-def tg_api(method, payload):
+def tg_api(method, payload, timeout=8, hosts=None):
     """Запрос к Telegram: из облака часть адресов недоступна, перебираем рабочие."""
     data = json.dumps(payload).encode()
-    for host in TG_HOSTS:
+    for host in (hosts or TG_HOSTS):
         ctx = ssl.create_default_context()
         if host != 'api.telegram.org':
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-        conn = http.client.HTTPSConnection(host, 443, timeout=8, context=ctx)
+        conn = http.client.HTTPSConnection(host, 443, timeout=timeout, context=ctx)
         try:
             conn.request('POST', f'/bot{get_bot_token()}/{method}', body=data,
                          headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
-            return json.loads(conn.getresponse().read())
+            result = json.loads(conn.getresponse().read())
+            global LAST_OK_HOST
+            LAST_OK_HOST = host
+            return result
         except Exception as e:
             print(f'[SITE-BOT] {method} via {host} failed: {type(e).__name__}')
         finally:
@@ -55,15 +59,23 @@ def greet_business_chat(bm: dict) -> None:
         return
 
     conn = None
+    uname = str(sender.get('username') or '').replace("'", "''")
+    fname = str(sender.get('first_name') or '').replace("'", "''")
+    cid = str(conn_id).replace("'", "''")
     try:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
-        cur.execute(f"SELECT 1 FROM {SCHEMA}.business_greeted WHERE chat_id = {int(chat_id)}")
-        if cur.fetchone():
-            cur.close()
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.business_greeted (chat_id, connection_id, username, first_name, message_id, pinned) "
+            f"VALUES ({int(chat_id)}, '{cid}', '{uname}', '{fname}', 0, false) "
+            f"ON CONFLICT (chat_id) DO NOTHING RETURNING chat_id"
+        )
+        reserved = cur.fetchone()
+        conn.commit()
+        cur.close()
+        if not reserved:
             conn.close()
             return
-        cur.close()
     except Exception:
         if conn:
             conn.close()
@@ -80,8 +92,15 @@ def greet_business_chat(bm: dict) -> None:
     })
     msg_id = (res.get('result') or {}).get('message_id')
     if not msg_id:
-        # Не отправилось — не помечаем чат, попробуем на следующем сообщении клиента.
+        # Не отправилось — снимаем бронь, попробуем на следующем сообщении клиента.
         print(f"[SITE-BOT] greet send failed chat={chat_id} err={str(res.get('description'))[:200]}")
+        try:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM {SCHEMA}.business_greeted WHERE chat_id = {int(chat_id)} AND message_id = 0")
+            conn.commit()
+            cur.close()
+        except Exception:
+            pass
         conn.close()
         return
 
@@ -90,7 +109,7 @@ def greet_business_chat(bm: dict) -> None:
         'chat_id': chat_id,
         'message_id': msg_id,
         'disable_notification': True,
-    })
+    }, timeout=3, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
     pinned = bool(pin.get('ok'))
     if not pinned:
         print(f"[SITE-BOT] pin failed chat={chat_id} err={str(pin.get('description'))[:200]}")
@@ -98,13 +117,9 @@ def greet_business_chat(bm: dict) -> None:
 
     try:
         cur = conn.cursor()
-        uname = str(sender.get('username') or '').replace("'", "''")
-        fname = str(sender.get('first_name') or '').replace("'", "''")
-        cid = str(conn_id).replace("'", "''")
         cur.execute(
-            f"INSERT INTO {SCHEMA}.business_greeted (chat_id, connection_id, username, first_name, message_id, pinned) "
-            f"VALUES ({int(chat_id)}, '{cid}', '{uname}', '{fname}', {int(msg_id or 0)}, {pinned}) "
-            f"ON CONFLICT (chat_id) DO NOTHING"
+            f"UPDATE {SCHEMA}.business_greeted SET message_id = {int(msg_id)}, pinned = {pinned} "
+            f"WHERE chat_id = {int(chat_id)}"
         )
         conn.commit()
         cur.close()
