@@ -1,0 +1,2 @@
+INSERT INTO t_p67171637_yug_transfer_prize_l.posts (title, text, photo_url, status, chats, message_ids, chat_messages, created_at, updated_at)
+VALUES ('cleanup', '', '', 'published', 'chat5', ARRAY[22952,22955], '{"chat5": [22952, 22955]}'::jsonb, NOW(), NOW());
