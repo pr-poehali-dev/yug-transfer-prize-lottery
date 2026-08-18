@@ -200,13 +200,14 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       }
     };
 
+    const runId = `${postId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     let lastError = "Ошибка публикации";
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ post_id: postId, chats: ALL_CHAT_KEYS, ...extra }),
+          body: JSON.stringify({ post_id: postId, chats: ALL_CHAT_KEYS, run_id: runId, ...extra }),
         });
         const data = await res.json().catch(() => ({}));
         if (data.ok) return data;

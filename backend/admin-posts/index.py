@@ -90,7 +90,7 @@ def _tg_call(host: str, bot_token: str, method: str, data: bytes, wait: int) -> 
 def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, timeout: int = 0) -> dict:
     """Запрос к Telegram с перебором рабочих адресов: из облака часть IP недоступна."""
     data = json.dumps(payload).encode()
-    wait = timeout or 5
+    wait = timeout or 4
     last_err = 'fail'
     for host in hosts_order():
         try:
@@ -360,12 +360,17 @@ def copy_messages(bot_token: str, from_chat: str, to_chat: str, message_ids: lis
     return {'ok': bool(copied), 'message_ids': [c for c in copied if c], 'errors': errors}
 
 
-def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) -> dict:
+def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
+                     done: dict = None, on_progress=None) -> dict:
     """Публикует пост в основной канал, затем копирует его в остальные группы.
+    done — уже отправленные группы этого же запуска (при повторе их пропускаем, чтобы не было дублей).
+    on_progress — сохраняем прогресс после каждой группы, чтобы повтор продолжил с места обрыва.
     Возвращает {ok, message_id, message_ids, per_chat, errors}."""
-    started = time.monotonic()
-    per_chat = {}
+    done = done or {}
+    per_chat = dict(done)
     all_ids = []
+    for v in done.values():
+        all_ids.extend(v)
     errors = []
     main_msg_id = None
 
@@ -375,20 +380,27 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) ->
         return {'ok': False, 'message_id': None, 'message_ids': [], 'per_chat': {},
                 'errors': [f'{primary_key}: канал не настроен']}
 
-    res = publish_post(bot_token, primary_chat, post)
-    print(f"[POSTS] publish to {primary_key} ({primary_chat}): {res}")
-    if not res.get('ok'):
-        return {'ok': False, 'message_id': None, 'message_ids': [], 'per_chat': {},
-                'errors': [f"{primary_key}: {res.get('error', 'ошибка Telegram')}"]}
+    if done.get(primary_key):
+        primary_ids = list(done[primary_key])
+        main_msg_id = primary_ids[0] if primary_ids else None
+        print(f"[POSTS] {primary_key} уже отправлен в этом запуске, пропускаем")
+    else:
+        res = publish_post(bot_token, primary_chat, post)
+        print(f"[POSTS] publish to {primary_key} ({primary_chat}): {res}")
+        if not res.get('ok'):
+            return {'ok': False, 'message_id': None, 'message_ids': [], 'per_chat': {},
+                    'errors': [f"{primary_key}: {res.get('error', 'ошибка Telegram')}"]}
 
-    primary_ids = res.get('message_ids') or ([res.get('message_id')] if res.get('message_id') else [])
-    per_chat[primary_key] = primary_ids
-    all_ids.extend(primary_ids)
-    main_msg_id = res.get('message_id')
+        primary_ids = res.get('message_ids') or ([res.get('message_id')] if res.get('message_id') else [])
+        per_chat[primary_key] = primary_ids
+        all_ids.extend(primary_ids)
+        main_msg_id = res.get('message_id')
+        if on_progress:
+            on_progress(per_chat)
 
     # Остальные площадки — быстрым копированием исходных сообщений.
     for key in chats:
-        if key == primary_key:
+        if key == primary_key or done.get(key):
             continue
         target = channels.get(key)
         if not target:
@@ -405,6 +417,8 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict) ->
         if cp['ok']:
             per_chat[key] = cp['message_ids']
             all_ids.extend(cp['message_ids'])
+            if on_progress:
+                on_progress(per_chat)
         else:
             errors.append(f"{key}: {'; '.join(cp['errors']) or 'не удалось скопировать'}")
 
@@ -605,8 +619,39 @@ def handler(event: dict, context) -> dict:
         except Exception:
             pass
 
+        # Ключ запуска: при повторе того же нажатия продолжаем с места обрыва, а не шлём заново.
+        run_id = str(body.get('run_id') or '')
+        done_map = {}
+        if run_id:
+            try:
+                cur.execute(f"SELECT publish_run_id, publish_progress FROM {SCHEMA}.posts WHERE id = %s", (post_id,))
+                prow = cur.fetchone()
+                if prow and prow[0] == run_id and prow[1]:
+                    done_map = prow[1] if isinstance(prow[1], dict) else json.loads(prow[1])
+                    print(f"[POSTS] продолжаем запуск {run_id}, уже отправлено: {list(done_map)}")
+                else:
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.posts SET publish_run_id=%s, publish_progress=%s WHERE id=%s",
+                        (run_id, json.dumps({}), post_id))
+                    conn.commit()
+            except Exception as e:
+                print(f"[POSTS] run_id check failed: {e}")
+                conn.rollback()
+
+        def save_progress(pmap):
+            if not run_id:
+                return
+            try:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.posts SET publish_run_id=%s, publish_progress=%s WHERE id=%s",
+                    (run_id, json.dumps(pmap), post_id))
+                conn.commit()
+            except Exception as e:
+                print(f"[POSTS] save_progress failed: {e}")
+                conn.rollback()
+
         print(f"[POSTS] publishing post {post_id} to chats={chats}")
-        result = publish_to_chats(bot_token, chats, channels, post)
+        result = publish_to_chats(bot_token, chats, channels, post, done_map, save_progress)
         print(f"[POSTS] publish result: {result}")
 
         try:
