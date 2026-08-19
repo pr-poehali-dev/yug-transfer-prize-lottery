@@ -16,6 +16,7 @@ interface PostListProps {
   editId: number | null;
   publishingId: number | null;
   deleting: number | null;
+  deletingChats: number | null;
   editingInTgId: number | null;
   onFilterChange: (sf: string) => void;
   onRefresh: () => void;
@@ -23,14 +24,15 @@ interface PostListProps {
   onEdit: (post: Post) => void;
   onEditInTg: (post: Post) => void;
   onDelete: (post: Post) => void;
+  onDeleteFromChats: (post: Post) => void;
   onResetEdit: () => void;
 }
 
 const strip = (html: string) => html.replace(/<[^>]+>/g, "");
 
 export function PostList({
-  posts, loading, statusFilter, editId, publishingId, deleting, editingInTgId,
-  onFilterChange, onRefresh, onPublish, onEdit, onEditInTg, onDelete, onResetEdit,
+  posts, loading, statusFilter, editId, publishingId, deleting, deletingChats, editingInTgId,
+  onFilterChange, onRefresh, onPublish, onEdit, onEditInTg, onDelete, onDeleteFromChats, onResetEdit,
 }: PostListProps) {
   return (
     <div className="space-y-3">
@@ -172,6 +174,18 @@ export function PostList({
                       ? <div className="w-3 h-3 border border-red-400/30 border-t-red-400 rounded-full animate-spin" />
                       : <Icon name="Trash2" size={13} />}
                   </button>
+                  {post.status === "published" && (
+                    <button
+                      onClick={() => onDeleteFromChats(post)}
+                      disabled={deletingChats === post.id}
+                      title="Удалить из групп"
+                      className="w-8 h-8 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 flex items-center justify-center text-orange-400 transition-colors disabled:opacity-40"
+                    >
+                      {deletingChats === post.id
+                        ? <div className="w-3 h-3 border border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                        : <Icon name="MessageSquareX" size={13} />}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

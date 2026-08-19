@@ -48,6 +48,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [deletingChats, setDeletingChats] = useState<number | null>(null);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [editingInTgId, setEditingInTgId] = useState<number | null>(null);
   const [localExpanded, setLocalExpanded] = useState(false);
@@ -266,26 +267,37 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     } finally { setPublishingId(null); }
   };
 
+  // Обычное удаление: убираем пост из списка (в группах сообщения не трогаем).
   const handleDelete = async (post: Post) => {
-    const msg = post.status === "published"
-      ? "Удалить пост из Telegram и из базы?"
-      : "Удалить пост?";
-    if (!confirm(msg)) return;
+    if (!confirm("Удалить пост из списка? В группах он останется.")) return;
     setDeleting(post.id);
+    try {
+      await fetch(ADMIN_POSTS_URL, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ id: post.id, mode: "db" }),
+      });
+      setPosts(prev => prev.filter(p => p.id !== post.id));
+      setTotal(t => t - 1);
+      if (editId === post.id) resetForm();
+      setFormSuccess("Пост удалён из списка");
+    } finally { setDeleting(null); }
+  };
+
+  // Удалить из групп: сообщения стираются в Telegram, пост остаётся черновиком.
+  const handleDeleteFromChats = async (post: Post) => {
+    if (!confirm("Удалить это сообщение из всех групп? Пост останется в списке.")) return;
+    setDeletingChats(post.id);
     try {
       const res = await fetch(ADMIN_POSTS_URL, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ id: post.id }),
+        body: JSON.stringify({ id: post.id, mode: "tg" }),
       });
       const data = await res.json();
-      setPosts(prev => prev.filter(p => p.id !== post.id));
-      setTotal(t => t - 1);
-      if (editId === post.id) resetForm();
-      if (post.status === "published" && data.tg_deleted) {
-        setFormSuccess("Пост удалён из Telegram и из базы");
-      }
-    } finally { setDeleting(null); }
+      if (data.post) setPosts(prev => prev.map(p => p.id === post.id ? data.post : p));
+      setFormSuccess(data.tg_deleted ? "Пост удалён из всех групп" : "В группах сообщений не найдено");
+    } finally { setDeletingChats(null); }
   };
 
   const handleEditInTg = async (post: Post) => {
@@ -361,6 +373,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             editId={editId}
             publishingId={publishingId}
             deleting={deleting}
+            deletingChats={deletingChats}
             editingInTgId={editingInTgId}
             onFilterChange={sf => setStatusFilter(sf)}
             onRefresh={() => fetchPosts(statusFilter)}
@@ -368,6 +381,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             onEditInTg={handleEditInTg}
             onEdit={post => confirmLeave(() => startEdit(post))}
             onDelete={handleDelete}
+            onDeleteFromChats={handleDeleteFromChats}
             onResetEdit={() => confirmLeave(resetForm)}
           />
         </div>

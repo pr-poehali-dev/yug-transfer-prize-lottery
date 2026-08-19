@@ -899,12 +899,17 @@ def handler(event: dict, context) -> dict:
         if not post_id:
             return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'id обязателен'})}
 
+        # mode: 'all' — из групп и из базы (по умолчанию),
+        #       'db' — только из списка, в группах сообщения остаются,
+        #       'tg' — только из групп, пост остаётся в списке как черновик.
+        mode = body.get('mode') or 'all'
+
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         cur.execute(f"SELECT telegram_message_id, status, message_ids, chats, chat_messages FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
         row = cur.fetchone()
         tg_deleted = False
-        if row and row[1] in ('published', 'expired') and bot_token:
+        if mode != 'db' and row and row[1] in ('published', 'expired') and bot_token:
             to_delete = list(row[2]) if row[2] else ([row[0]] if row[0] else [])
             per_chat = row[4] or {}
             channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
@@ -916,10 +921,28 @@ def handler(event: dict, context) -> dict:
                     print(f"[POSTS] deleteMessage chat={key} ids={chat_ids}")
                     tg_deleted = True
 
+        if mode == 'tg':
+            # Пост остаётся в списке — можно опубликовать заново.
+            cur.execute(
+                f"UPDATE {SCHEMA}.posts SET status='draft', telegram_message_id=NULL, message_ids=NULL, "
+                f"chat_messages='{{}}'::jsonb, published_at=NULL, expired_at=NULL, updated_at=NOW() WHERE id=%s",
+                (post_id,))
+            conn.commit()
+            cur.execute(
+                f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, "
+                f"telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, "
+                f"auto_expire_at, message_ids, expired_at, chats, chat_messages FROM {SCHEMA}.posts WHERE id=%s",
+                (post_id,))
+            updated = row_to_post(cur.fetchone())
+            cur.close(); conn.close()
+            print(f"[POSTS] removed post {post_id} from chats, kept in db")
+            return {'statusCode': 200, 'headers': CORS,
+                    'body': json.dumps({'ok': True, 'tg_deleted': tg_deleted, 'post': updated})}
+
         cur.execute(f"DELETE FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
         conn.commit()
         cur.close(); conn.close()
-        print(f"[POSTS] deleted post {post_id}, tg_deleted={tg_deleted}")
+        print(f"[POSTS] deleted post {post_id}, mode={mode}, tg_deleted={tg_deleted}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'tg_deleted': tg_deleted})}
 
     return {'statusCode': 405, 'headers': CORS, 'body': json.dumps({'error': 'Method not allowed'})}
