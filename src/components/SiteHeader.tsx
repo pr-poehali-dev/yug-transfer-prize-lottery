@@ -13,13 +13,7 @@ const NAV = [
 export const SITE_PHONE = "+7 (978) 109-28-75";
 const PHONE_TEL = "+79781092875";
 
-export default function SiteHeader({
-  clientName,
-  clientPhone,
-}: {
-  clientName?: string;
-  clientPhone?: string;
-} = {}) {
+export default function SiteHeader(_props: { clientName?: string; clientPhone?: string } = {}) {
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
@@ -86,29 +80,14 @@ export default function SiteHeader({
           >
             <img src="/max-logo.jpeg" alt="MAX" className="w-full h-full object-cover" />
           </a>
-          {clientName ? (
-            <Link
-              to="/cabinet"
-              className="hidden md:flex items-center gap-2 h-9 pl-2 pr-3 rounded-full bg-white/15 hover:bg-white/25 border border-white/20 transition-colors"
-            >
-              <span className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center shrink-0">
-                <Icon name="UserRound" size={14} className="text-black" />
-              </span>
-              <span className="flex flex-col leading-tight text-left">
-                <span className="text-white text-xs font-semibold whitespace-nowrap">{clientName}</span>
-                {clientPhone && (
-                  <span className="text-white/60 text-[10px] whitespace-nowrap">{clientPhone}</span>
-                )}
-              </span>
-            </Link>
-          ) : (
-            <Link to="/cabinet" className="hidden md:block">
-              <Button size="sm" variant="secondary" className="gap-1.5 text-xs h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/20">
-                <Icon name="UserRound" size={14} />
-                Личный кабинет
-              </Button>
-            </Link>
-          )}
+          <Link
+            to="/admin"
+            aria-label="Админ-панель"
+            className="hidden md:flex items-center gap-1 h-7 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white/70 hover:text-white text-[11px] font-medium transition-colors"
+          >
+            <Icon name="Shield" size={12} />
+            Админ
+          </Link>
 
           <a
             href="https://max.ru/u/f9LHodD0cOIMaVYO_Z-nUVm8RnfeFCYBL1plEAksXVd6OihrEdaQR7wxrpU"
@@ -180,10 +159,10 @@ export default function SiteHeader({
               <Icon name="Phone" size={20} />
               {SITE_PHONE}
             </a>
-            <Link to="/cabinet" onClick={() => setOpen(false)} className="mt-auto pt-4">
-              <Button className="w-full gap-2 h-12 text-base bg-amber-500 hover:bg-amber-400 text-black font-bold">
-                <Icon name="UserRound" size={18} />
-                Личный кабинет
+            <Link to="/admin" onClick={() => setOpen(false)} className="mt-auto pt-4">
+              <Button size="sm" variant="secondary" className="gap-1.5 h-8 px-3 text-xs bg-white/10 hover:bg-white/20 text-white/80 border border-white/15">
+                <Icon name="Shield" size={13} />
+                Админ
               </Button>
             </Link>
           </nav>
