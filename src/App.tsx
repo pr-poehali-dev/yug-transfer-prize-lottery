@@ -29,7 +29,6 @@ function lazyWithReload<T extends ComponentType<unknown>>(factory: () => Promise
 }
 
 const Index = lazyWithReload(() => import("./pages/Index"));
-const Hub = lazyWithReload(() => import("./pages/Hub"));
 const Posts = lazyWithReload(() => import("./pages/Posts"));
 const Privacy = lazyWithReload(() => import("./pages/Privacy"));
 const Offer = lazyWithReload(() => import("./pages/Offer"));
@@ -53,7 +52,7 @@ const App = () => (
       <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/admin" element={<Hub />} />
+          <Route path="/admin" element={<Posts />} />
           <Route path="/posts" element={<Posts />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/offer" element={<Offer />} />

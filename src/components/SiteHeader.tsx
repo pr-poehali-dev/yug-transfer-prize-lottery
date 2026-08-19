@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
+import AdminLoginModal from "@/components/AdminLoginModal";
+import { POSTS_SESSION_KEY } from "@/components/admin/adminTypes";
 
 const NAV = [
   { to: "/directions", label: "Направления" },
@@ -15,8 +17,16 @@ const PHONE_TEL = "+79781092875";
 
 export default function SiteHeader(_props: { clientName?: string; clientPhone?: string } = {}) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
+
+  // Уже входили в этой сессии — открываем панель сразу, без пароля.
+  const openAdmin = () => {
+    if (sessionStorage.getItem(POSTS_SESSION_KEY)) navigate("/posts");
+    else setAdminOpen(true);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -80,14 +90,15 @@ export default function SiteHeader(_props: { clientName?: string; clientPhone?: 
           >
             <img src="/max-logo.jpeg" alt="MAX" className="w-full h-full object-cover" />
           </a>
-          <Link
-            to="/admin"
+          <button
+            type="button"
+            onClick={openAdmin}
             aria-label="Админ-панель"
             className="hidden md:flex items-center gap-1 h-7 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white/70 hover:text-white text-[11px] font-medium transition-colors"
           >
             <Icon name="Shield" size={12} />
             Админ
-          </Link>
+          </button>
 
           <a
             href="https://max.ru/u/f9LHodD0cOIMaVYO_Z-nUVm8RnfeFCYBL1plEAksXVd6OihrEdaQR7wxrpU"
@@ -159,12 +170,17 @@ export default function SiteHeader(_props: { clientName?: string; clientPhone?: 
               <Icon name="Phone" size={20} />
               {SITE_PHONE}
             </a>
-            <Link to="/admin" onClick={() => setOpen(false)} className="mt-auto pt-4">
-              <Button size="sm" variant="secondary" className="gap-1.5 h-8 px-3 text-xs bg-white/10 hover:bg-white/20 text-white/80 border border-white/15">
+            <div className="mt-auto pt-4">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => { setOpen(false); openAdmin(); }}
+                className="gap-1.5 h-8 px-3 text-xs bg-white/10 hover:bg-white/20 text-white/80 border border-white/15"
+              >
                 <Icon name="Shield" size={13} />
                 Админ
               </Button>
-            </Link>
+            </div>
           </nav>
 
           <footer className="shrink-0 px-6 pt-4 pb-6 border-t border-white/10">
@@ -202,6 +218,8 @@ export default function SiteHeader(_props: { clientName?: string; clientPhone?: 
           </footer>
         </div>
       )}
+
+      <AdminLoginModal open={adminOpen} onOpenChange={setAdminOpen} />
     </header>
   );
 }
