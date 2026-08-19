@@ -160,14 +160,13 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Ошибка");
-      setFormSuccess(saveStatus === "scheduled" ? "Пост запланирован!" : "Черновик сохранён!");
-      setSavedForm({ ...form });
       setPosts(prev => {
         const idx = prev.findIndex(p => p.id === data.post.id);
         return idx >= 0 ? prev.map(p => p.id === data.post.id ? data.post : p) : [data.post, ...prev];
       });
-      if (!editId) { setTotal(t => t + 1); resetForm(); }
-      else setEditId(data.post.id);
+      if (!editId) setTotal(t => t + 1);
+      resetForm();
+      setFormSuccess(saveStatus === "scheduled" ? "Пост запланирован!" : "Черновик сохранён!");
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Ошибка");
     } finally { setSaving(false); }
@@ -241,13 +240,14 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
 
       const pubData = await publishWithRetry(postId, { expire_hours: expireHours || 0 });
 
-      setFormSuccess("✅ Пост опубликован!");
       const updatedPost = { ...saveData.post, status: "published" as const, published_at: new Date().toISOString(), telegram_message_id: pubData.message_id };
       setPosts(prev => {
         const idx = prev.findIndex(p => p.id === postId);
         return idx >= 0 ? prev.map(p => p.id === postId ? updatedPost : p) : [updatedPost, ...prev];
       });
-      if (!editId) { setTotal(t => t + 1); resetForm(); }
+      if (!editId) setTotal(t => t + 1);
+      resetForm();
+      setFormSuccess("✅ Пост опубликован!");
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Ошибка публикации");
     } finally { setPublishing(false); }
