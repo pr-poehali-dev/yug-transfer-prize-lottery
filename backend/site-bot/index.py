@@ -46,6 +46,23 @@ def tg_api(method, payload, timeout=8, hosts=None):
     return {}
 
 
+def delete_pin_service_message(conn_id: str, chat_id, message_id: int) -> bool:
+    """Убирает служебную строку «X закрепил(а) сообщение» из переписки."""
+    res = tg_api('deleteBusinessMessages', {
+        'business_connection_id': conn_id,
+        'message_ids': [message_id],
+    }, timeout=4, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
+    if not res.get('ok'):
+        res = tg_api('deleteMessage', {
+            'business_connection_id': conn_id,
+            'chat_id': chat_id,
+            'message_id': message_id,
+        }, timeout=4, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
+    ok = bool(res.get('ok'))
+    print(f"[SITE-BOT] del pin-service chat={chat_id} msg={message_id} ok={ok} err={str(res.get('description'))[:120]}")
+    return ok
+
+
 def greet_business_chat(bm: dict) -> None:
     """Первое обращение клиента в личку @ug_transfer_online — шлём и закрепляем блок заказа."""
     chat = bm.get('chat') or {}
@@ -114,6 +131,10 @@ def greet_business_chat(bm: dict) -> None:
     if not pinned:
         print(f"[SITE-BOT] pin failed chat={chat_id} err={str(pin.get('description'))[:200]}")
     print(f'[SITE-BOT] business greet chat={chat_id} msg={msg_id} pinned={pinned}')
+
+    # Telegram сам добавляет служебную строку «... закрепил(а) сообщение» — убираем её.
+    if pinned:
+        delete_pin_service_message(conn_id, chat_id, int(msg_id) + 1)
 
     try:
         cur = conn.cursor()
@@ -199,6 +220,14 @@ def handler(event: dict, context) -> dict:
 
     bm = body.get('business_message')
     if bm:
+        # Служебка «закрепил(а) сообщение» приходит отдельным апдейтом — сразу стираем её.
+        if bm.get('pinned_message'):
+            delete_pin_service_message(
+                bm.get('business_connection_id', ''),
+                (bm.get('chat') or {}).get('id'),
+                bm.get('message_id'),
+            )
+            return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
         greet_business_chat(bm)
         return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
 
