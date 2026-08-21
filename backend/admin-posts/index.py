@@ -320,13 +320,25 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
         print(f"[POSTS] HTML parse failed: {result.get('description')}, retrying without parse_mode")
         result = try_send(None)
 
+    # В части групп боту запрещено слать картинки — тогда отправляем текстом со ссылкой на фото.
+    if not result.get('ok') and photo_url and 'rights to send photos' in str(result.get('description', '')):
+        body_text = text if len(text) <= 4096 else text[:4093] + '...'
+        payload = {'chat_id': channel_id, 'text': body_text, 'parse_mode': 'HTML'}
+        if reply_markup:
+            payload['reply_markup'] = reply_markup
+        result = tg_request(bot_token, 'sendMessage', payload)
+        if not result.get('ok') and not is_network_error(result):
+            payload.pop('parse_mode', None)
+            result = tg_request(bot_token, 'sendMessage', payload)
+        print(f"[POSTS] photos forbidden in {channel_id}, sent as text: {result.get('ok')}")
+
     if result.get('ok'):
         msg_id = result.get('result', {}).get('message_id')
         return {'ok': True, 'message_id': msg_id, 'message_ids': [msg_id] if msg_id else []}
     return {'ok': False, 'error': result.get('description', 'Unknown error')}
 
 
-ALL_CHATS = ['main', 'vip', 'horse', 'chat4', 'chat5']
+ALL_CHATS = ['main', 'vip', 'horse', 'chat4', 'chat5', 'chat6']
 
 
 def parse_chats(value) -> list:
@@ -502,9 +514,15 @@ def handler(event: dict, context) -> dict:
     channel_horse = os.environ.get('POSTS_CHAT_HORSE_ID', '') or '@Golden_Horse_online'
     channel_chat4 = os.environ.get('POSTS_CHAT_4_ID', '') or '-1002324716120'
     channel_chat5 = os.environ.get('POSTS_CHAT_5_ID', '') or '@ugtransferrr'
+    channel_chat6 = os.environ.get('POSTS_CHAT_6_ID', '') or '-1001851441423'
 
     # ── GET ?action=diag — проверка связи с Telegram ────────────────────────
     if method == 'GET' and action == 'diag':
+        chat_probe = qs.get('chat', '')
+        if chat_probe:
+            res = tg_request(bot_token, 'getChat', {'chat_id': chat_probe}, attempts=1, timeout=15)
+            return {'statusCode': 200, 'headers': CORS,
+                    'body': json.dumps({'chat': chat_probe, 'telegram': res}, ensure_ascii=False)}
         res = tg_request(bot_token, 'getMe', {}, attempts=1, timeout=15)
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
             'token_set': bool(bot_token),
@@ -603,7 +621,7 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 404, 'headers': CORS, 'body': json.dumps({'error': 'Пост не найден'})}
 
         post = row_to_post(row)
-        channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
+        channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6}
         chats = parse_chats(body.get('chats') or post.get('chats'))
 
         if not bot_token:
@@ -723,7 +741,7 @@ def handler(event: dict, context) -> dict:
             per_chat = {}
             chats = parse_chats(post.get('chats'))
             if bot_token:
-                channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
+                channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6}
                 result = publish_to_chats(bot_token, chats, channels, post)
                 if result['ok']:
                     any_ok = True
@@ -756,7 +774,7 @@ def handler(event: dict, context) -> dict:
             post_chats = parse_chats(exp[3])
             per_chat = exp[4] or {}
             to_delete = list(ids) if ids else ([single_id] if single_id else [])
-            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
+            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6}
             if bot_token and to_delete:
                 for key in post_chats:
                     ch = channels.get(key)
@@ -912,7 +930,7 @@ def handler(event: dict, context) -> dict:
         if mode != 'db' and row and row[1] in ('published', 'expired') and bot_token:
             to_delete = list(row[2]) if row[2] else ([row[0]] if row[0] else [])
             per_chat = row[4] or {}
-            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5}
+            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6}
             for key in parse_chats(row[3]):
                 ch = channels.get(key)
                 chat_ids = per_chat.get(key) or (to_delete if key == 'main' else [])
