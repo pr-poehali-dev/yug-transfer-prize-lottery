@@ -44,8 +44,16 @@ def tg_api(method, payload, timeout=8, hosts=None):
     return {}
 
 
-# Кнопка прямо под текстом: по клику сразу открывает бот по реферальной ссылке.
+# Кнопка-ссылка: по клику сразу открывает бот по реферальной ссылке.
 SEARCH_MARKUP = {'inline_keyboard': [[{'text': SEARCH_BUTTON_TEXT, 'url': SEARCH_URL}]]}
+
+# Постоянная кнопка под строкой ввода — видна всегда.
+BOTTOM_KEYBOARD = {
+    'keyboard': [[{'text': SEARCH_BUTTON_TEXT}]],
+    'resize_keyboard': True,
+    'is_persistent': True,
+    'input_field_placeholder': '200+ групп',
+}
 
 
 def handler(event: dict, context) -> dict:
@@ -85,27 +93,21 @@ def handler(event: dict, context) -> dict:
     text = message.get('text') or ''
 
     if chat_id and (message.get('chat') or {}).get('type') == 'private':
-        if not text.startswith('/start'):
-            return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
-
-        # Убираем старую клавиатуру под строкой ввода, если она осталась.
-        rm = tg_api('sendMessage', {
-            'chat_id': chat_id,
-            'text': '\u2063',
-            'reply_markup': {'remove_keyboard': True},
-        }, timeout=5, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
-        rm_id = (rm.get('result') or {}).get('message_id')
-
-        res = tg_api('sendMessage', {
-            'chat_id': chat_id,
-            'text': START_TEXT,
-            'parse_mode': 'HTML',
-            'reply_markup': SEARCH_MARKUP,
-        }, timeout=5, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
+        if text.startswith('/start'):
+            payload = {
+                'chat_id': chat_id,
+                'text': START_TEXT,
+                'parse_mode': 'HTML',
+                'reply_markup': BOTTOM_KEYBOARD,
+            }
+        else:
+            payload = {
+                'chat_id': chat_id,
+                'text': '👇',
+                'reply_markup': SEARCH_MARKUP,
+            }
+        res = tg_api('sendMessage', payload, timeout=5,
+                     hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
         print(f"[INFO-BOT] chat={chat_id} text={text[:20]} ok={res.get('ok')}")
-
-        if rm_id:
-            tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': rm_id},
-                   timeout=5, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
 
     return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
