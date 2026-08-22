@@ -47,9 +47,11 @@ def tg_api(method, payload, timeout=8, hosts=None):
 # Кнопка-ссылка: по клику сразу открывает бот по реферальной ссылке.
 SEARCH_MARKUP = {'inline_keyboard': [[{'text': SEARCH_BUTTON_TEXT, 'url': SEARCH_URL}]]}
 
-# Постоянная кнопка под строкой ввода — видна всегда.
+WEBAPP_URL = 'https://ug-transfer.online/tg-search'
+
+# Постоянная кнопка под строкой ввода: сразу перебрасывает на реферального бота.
 BOTTOM_KEYBOARD = {
-    'keyboard': [[{'text': SEARCH_BUTTON_TEXT}]],
+    'keyboard': [[{'text': SEARCH_BUTTON_TEXT, 'web_app': {'url': WEBAPP_URL}}]],
     'resize_keyboard': True,
     'is_persistent': True,
     'input_field_placeholder': '200+ групп',
@@ -101,11 +103,7 @@ def handler(event: dict, context) -> dict:
                 'reply_markup': BOTTOM_KEYBOARD,
             }
         else:
-            payload = {
-                'chat_id': chat_id,
-                'text': '👇',
-                'reply_markup': SEARCH_MARKUP,
-            }
+            return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
         res = tg_api('sendMessage', payload, timeout=5,
                      hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
         print(f"[INFO-BOT] chat={chat_id} text={text[:20]} ok={res.get('ok')}")
