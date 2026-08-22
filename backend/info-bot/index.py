@@ -75,13 +75,31 @@ def handler(event: dict, context) -> dict:
             func_url = qs.get('url', '')
             if not func_url:
                 return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'error': 'url required'})}
-            res = tg_api('setWebhook', {'url': func_url, 'allowed_updates': ['message']})
+            res = tg_api('setWebhook', {'url': func_url, 'allowed_updates': ['message', 'callback_query']})
             tg_api('setChatMenuButton', {'menu_button': {'type': 'commands'}})
             tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Поиск заказов'}]})
             return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 
     body = json.loads(event.get('body') or '{}')
+
+    callback = body.get('callback_query') or {}
+    if callback.get('data') == 'search_orders':
+        hosts = [LAST_OK_HOST] if LAST_OK_HOST else None
+        tg_api('answerCallbackQuery', {
+            'callback_query_id': callback.get('id'),
+            'text': 'Открываем бота заказов...',
+            'show_alert': False,
+        }, timeout=5, hosts=hosts)
+        cb_chat = ((callback.get('message') or {}).get('chat') or {}).get('id')
+        if cb_chat:
+            tg_api('sendMessage', {
+                'chat_id': cb_chat,
+                'text': 'Перейдите по кнопке:',
+                'reply_markup': SEARCH_MARKUP,
+            }, timeout=5, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
+        return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
+
     message = body.get('message') or {}
     chat_id = (message.get('chat') or {}).get('id')
     text = message.get('text') or ''
