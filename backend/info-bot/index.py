@@ -5,7 +5,7 @@ import ssl
 import http.client
 
 SEARCH_URL = 'https://t.me/OneTMM_Bot?start=ref_6072837543'
-SEARCH_BUTTON_TEXT = '🔍 поиск заказов'
+SEARCH_BUTTON_TEXT = '🔍 ПОИСК ЗАКАЗОВ'
 START_TEXT = (
     '👋 <b>Информация</b>\n\n'
     'Чтобы упростить процесс поиска заказов, жми кнопку «Поиск заказов». '
