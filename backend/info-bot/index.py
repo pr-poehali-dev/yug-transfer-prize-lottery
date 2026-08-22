@@ -8,8 +8,9 @@ SEARCH_URL = 'https://t.me/OneTMM_Bot?start=ref_6072837543'
 SEARCH_BUTTON_TEXT = '🔍 поиск заказов'
 START_TEXT = (
     '👋 <b>ЮГ-Трансфер — информация</b>\n\n'
-    'Нажмите кнопку ниже, чтобы перейти к поиску заказов.'
+    'Кнопка «поиск заказов» под строкой ввода — нажмите её в любой момент.'
 )
+SEARCH_TEXT = 'Переход к поиску заказов 👇'
 
 TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
 LAST_OK_HOST = ''
@@ -43,6 +44,14 @@ def tg_api(method, payload, timeout=8, hosts=None):
 
 
 SEARCH_MARKUP = {'inline_keyboard': [[{'text': SEARCH_BUTTON_TEXT, 'url': SEARCH_URL}]]}
+
+# Постоянная кнопка под строкой ввода — видна всегда.
+BOTTOM_KEYBOARD = {
+    'keyboard': [[{'text': SEARCH_BUTTON_TEXT}]],
+    'resize_keyboard': True,
+    'is_persistent': True,
+    'input_field_placeholder': 'Сообщение',
+}
 
 
 def handler(event: dict, context) -> dict:
@@ -82,12 +91,21 @@ def handler(event: dict, context) -> dict:
     text = message.get('text') or ''
 
     if chat_id and (message.get('chat') or {}).get('type') == 'private':
-        res = tg_api('sendMessage', {
-            'chat_id': chat_id,
-            'text': START_TEXT,
-            'parse_mode': 'HTML',
-            'reply_markup': SEARCH_MARKUP,
-        }, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
-        print(f"[INFO-BOT] start chat={chat_id} text={text[:20]} ok={res.get('ok')}")
+        if text.startswith('/start'):
+            payload = {
+                'chat_id': chat_id,
+                'text': START_TEXT,
+                'parse_mode': 'HTML',
+                'reply_markup': BOTTOM_KEYBOARD,
+            }
+        else:
+            payload = {
+                'chat_id': chat_id,
+                'text': SEARCH_TEXT,
+                'parse_mode': 'HTML',
+                'reply_markup': SEARCH_MARKUP,
+            }
+        res = tg_api('sendMessage', payload, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
+        print(f"[INFO-BOT] chat={chat_id} text={text[:20]} ok={res.get('ok')}")
 
     return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
