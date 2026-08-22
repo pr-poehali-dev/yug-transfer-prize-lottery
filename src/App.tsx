@@ -38,6 +38,7 @@ const Tariffs = lazyWithReload(() => import("./pages/TariffsPage"));
 const TariffDetail = lazyWithReload(() => import("./pages/TariffDetailPage"));
 const Contacts = lazyWithReload(() => import("./pages/ContactsPage"));
 const Bridge = lazyWithReload(() => import("./pages/BridgePage"));
+const TgSearch = lazyWithReload(() => import("./pages/TgSearch"));
 const NotFound = lazyWithReload(() => import("./pages/NotFound"));
 
 if ("serviceWorker" in navigator) {
@@ -62,6 +63,7 @@ const App = () => (
           <Route path="/tariff/:slug" element={<TariffDetail />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/bridge" element={<Bridge />} />
+          <Route path="/tg-search" element={<TgSearch />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
