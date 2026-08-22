@@ -7,8 +7,9 @@ import http.client
 SEARCH_URL = 'https://t.me/OneTMM_Bot?start=ref_6072837543'
 SEARCH_BUTTON_TEXT = '🔍 поиск заказов'
 START_TEXT = (
-    '👋 <b>ЮГ-Трансфер — информация</b>\n\n'
-    'Кнопка «поиск заказов» под строкой ввода — нажмите её в любой момент.'
+    '👋 <b>Информация</b>\n\n'
+    'Чтобы упростить процесс поиска заказов, жми кнопку «Поиск заказов». '
+    'Теперь вам не нужно самостоятельно отслеживать группы — бот сделает это за вас!'
 )
 SEARCH_TEXT = 'Переход к поиску заказов 👇'
 
@@ -50,7 +51,7 @@ BOTTOM_KEYBOARD = {
     'keyboard': [[{'text': SEARCH_BUTTON_TEXT}]],
     'resize_keyboard': True,
     'is_persistent': True,
-    'input_field_placeholder': 'Сообщение',
+    'input_field_placeholder': '200+ групп',
 }
 
 
