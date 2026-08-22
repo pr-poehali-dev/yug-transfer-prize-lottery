@@ -92,23 +92,26 @@ def handler(event: dict, context) -> dict:
     text = message.get('text') or ''
 
     if chat_id and (message.get('chat') or {}).get('type') == 'private':
+        hosts = [LAST_OK_HOST] if LAST_OK_HOST else None
+
+        # Сначала убираем старую клавиатуру под строкой ввода.
+        rm = tg_api('sendMessage', {
+            'chat_id': chat_id,
+            'text': '\u2063',
+            'reply_markup': {'remove_keyboard': True},
+        }, timeout=5, hosts=hosts)
+        rm_id = (rm.get('result') or {}).get('message_id')
+
         res = tg_api('sendMessage', {
             'chat_id': chat_id,
             'text': START_TEXT,
             'parse_mode': 'HTML',
             'reply_markup': SEARCH_MARKUP,
-        }, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
-        print(f"[INFO-BOT] chat={chat_id} text={text[:20]} ok={res.get('ok')}")
+        }, timeout=5, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
+        print(f"[INFO-BOT] chat={chat_id} text={text[:20]} ok={res.get('ok')} rm={rm.get('ok')}")
 
-        # У старых пользователей осталась кнопка под строкой ввода — убираем её.
-        rm = tg_api('sendMessage', {
-            'chat_id': chat_id,
-            'text': '.',
-            'reply_markup': {'remove_keyboard': True},
-        }, timeout=3, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
-        rm_id = (rm.get('result') or {}).get('message_id')
         if rm_id:
             tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': rm_id},
-                   timeout=3, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
+                   timeout=5, hosts=[LAST_OK_HOST] if LAST_OK_HOST else None)
 
     return {'statusCode': 200, 'headers': cors, 'body': 'ok'}
