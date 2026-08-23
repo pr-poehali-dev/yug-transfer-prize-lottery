@@ -23,6 +23,7 @@ export const CHAT_OPTIONS = [
   { key: "chat4", label: "Группа Марриот трансфер" },
   { key: "chat5", label: "Группа ЮГ-Трансфер" },
   { key: "chat6", label: "Группа Трансфер" },
+  { key: "chat7", label: "Новая группа" },
 ] as const;
 
 interface PostFormProps {
