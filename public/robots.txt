@@ -10,11 +10,22 @@ Allow: /
 User-agent: facebookexternalhit
 Allow: /
 
+User-agent: Yandex
+Allow: /
+Disallow: /admin
+Disallow: /dispatch
+Disallow: /posts
+Disallow: /cabinet
+Disallow: /tg-search
+Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&yclid&gclid&from&ref
+
 User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /dispatch
 Disallow: /posts
 Disallow: /cabinet
+Disallow: /tg-search
 
+Host: https://moy-transfer.ru
 Sitemap: https://moy-transfer.ru/sitemap.xml

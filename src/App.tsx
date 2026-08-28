@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, type ComponentType } from "react";
+import SeoMeta from "@/components/SeoMeta";
 
 // Устойчивая ленивая загрузка страниц. Иногда браузер не может подгрузить
 // модуль страницы (обрыв сети, обновившийся деплой, устаревший кэш) — тогда
@@ -50,6 +51,7 @@ const App = () => (
     <Toaster />
     <Sonner />
     <BrowserRouter>
+      <SeoMeta />
       <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Index />} />
