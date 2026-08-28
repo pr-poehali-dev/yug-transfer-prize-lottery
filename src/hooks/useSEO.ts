@@ -43,7 +43,14 @@ export default function useSEO({ title, description, canonical, ogImage }: SEOOp
     if (ogImage) setMeta("property", "og:image", ogImage);
     setMeta("property", "og:type", "website");
 
-    const url = canonical || (typeof window !== "undefined" ? window.location.href : "");
+    const url =
+      canonical ||
+      (typeof window !== "undefined"
+        ? window.location.origin +
+          (window.location.pathname === "/"
+            ? "/"
+            : window.location.pathname.replace(/\/+$/, ""))
+        : "");
     if (url) {
       setCanonical(url);
       setMeta("property", "og:url", url);
