@@ -49,6 +49,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const [statusFilter, setStatusFilter] = useState("");
   const [deleting, setDeleting] = useState<number | null>(null);
   const [deletingChats, setDeletingChats] = useState<number | null>(null);
+  const [sendingMissingId, setSendingMissingId] = useState<number | null>(null);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [editingInTgId, setEditingInTgId] = useState<number | null>(null);
   const [localExpanded, setLocalExpanded] = useState(false);
@@ -300,6 +301,28 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     } finally { setDeletingChats(null); }
   };
 
+  const handleSendMissing = async (post: Post) => {
+    setSendingMissingId(post.id);
+    setFormError(""); setFormSuccess("");
+    try {
+      const res = await fetch(`${ADMIN_POSTS_URL}?action=send_missing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ post_id: post.id }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Не удалось дослать");
+      const names = (data.added || []).map((k: string) =>
+        CHAT_OPTIONS.find(c => c.key === k)?.label || k);
+      if (names.length) setFormSuccess(`Дослано в: ${names.join(", ")}`);
+      else setFormSuccess("Пост уже есть во всех группах");
+      if ((data.errors || []).length) setFormError(data.errors.join("; "));
+      fetchPosts(statusFilter);
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Ошибка");
+    } finally { setSendingMissingId(null); }
+  };
+
   const handleEditInTg = async (post: Post) => {
     if (!editId || editId !== post.id) return;
     setEditingInTgId(post.id);
@@ -375,6 +398,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             deleting={deleting}
             deletingChats={deletingChats}
             editingInTgId={editingInTgId}
+            sendingMissingId={sendingMissingId}
             onFilterChange={sf => setStatusFilter(sf)}
             onRefresh={() => fetchPosts(statusFilter)}
             onPublish={handlePublishFromList}
@@ -382,6 +406,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             onEdit={post => confirmLeave(() => startEdit(post))}
             onDelete={handleDelete}
             onDeleteFromChats={handleDeleteFromChats}
+            onSendMissing={handleSendMissing}
             onResetEdit={() => confirmLeave(resetForm)}
           />
         </div>

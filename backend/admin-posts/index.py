@@ -605,6 +605,77 @@ def handler(event: dict, context) -> dict:
         print(f"[POSTS] uploaded photo: {cdn_url}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'url': cdn_url})}
 
+    # ── POST ?action=send_missing — дослать пост только в те группы, где его нет ──
+    if method == 'POST' and action == 'send_missing':
+        body = json.loads(event.get('body') or '{}')
+        post_id = body.get('post_id')
+        if not post_id:
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'post_id обязателен'})}
+
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT id, title, text, photo_url, button_text, button_url, status, scheduled_at, published_at, telegram_message_id, created_at, updated_at, video_note_url, button2_text, button2_url, auto_expire_at, message_ids, expired_at, chats, chat_messages FROM {SCHEMA}.posts WHERE id = %s",
+            (post_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            cur.close(); conn.close()
+            return {'statusCode': 404, 'headers': CORS, 'body': json.dumps({'error': 'Пост не найден'})}
+
+        post = row_to_post(row)
+        channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse,
+                    'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6,
+                    'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9}
+        sent_map = post.get('chat_messages') or {}
+        # Прогресс оборванного запуска — там свежие message_id, их и копируем.
+        cur.execute(f"SELECT publish_progress FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+        prow = cur.fetchone()
+        progress = (prow[0] if prow and prow[0] else {}) or {}
+        if isinstance(progress, str):
+            progress = json.loads(progress)
+        source_map = progress if progress else sent_map
+
+        primary_key = 'main' if source_map.get('main') else (list(source_map)[0] if source_map else None)
+        if not primary_key or not channels.get(primary_key):
+            cur.close(); conn.close()
+            return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Пост ещё не опубликован ни в одну группу'})}
+
+        primary_chat = channels[primary_key]
+        primary_ids = source_map.get(primary_key) or []
+        missing = [k for k in ALL_CHATS if channels.get(k) and not source_map.get(k)]
+        print(f"[POSTS] send_missing post {post_id}: source={primary_key}, missing={missing}")
+
+        added = {}
+        errors = []
+        for key in missing:
+            cp = copy_messages(bot_token, primary_chat, channels[key], primary_ids, build_reply_markup(post))
+            print(f"[POSTS] send_missing copy to {key} ({channels[key]}): {cp}")
+            if not cp['ok']:
+                direct = publish_post(bot_token, channels[key], post)
+                if direct.get('ok'):
+                    cp = {'ok': True, 'message_ids': direct.get('message_ids') or [direct.get('message_id')], 'errors': []}
+            if cp['ok']:
+                added[key] = cp['message_ids']
+            else:
+                errors.append(f"{key}: {'; '.join(cp['errors']) or 'не удалось'}")
+
+        merged_map = {**sent_map, **source_map, **added}
+        merged_ids = []
+        for v in merged_map.values():
+            merged_ids.extend(v)
+        now = datetime.now(timezone.utc)
+        cur.execute(
+            f"UPDATE {SCHEMA}.posts SET chat_messages=%s, message_ids=%s, chats=%s, publish_progress=%s, updated_at=%s WHERE id=%s",
+            (json.dumps(merged_map), list(dict.fromkeys(merged_ids)), ','.join(merged_map.keys()),
+             json.dumps(merged_map), now, post_id)
+        )
+        conn.commit()
+        cur.close(); conn.close()
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
+            'ok': True, 'added': list(added.keys()), 'missing': missing, 'errors': errors
+        })}
+
     # ── POST ?action=publish — немедленная публикация ───────────────────────
     if method == 'POST' and action == 'publish':
         body = json.loads(event.get('body') or '{}')

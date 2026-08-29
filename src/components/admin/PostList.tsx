@@ -18,6 +18,7 @@ interface PostListProps {
   deleting: number | null;
   deletingChats: number | null;
   editingInTgId: number | null;
+  sendingMissingId: number | null;
   onFilterChange: (sf: string) => void;
   onRefresh: () => void;
   onPublish: (post: Post) => void;
@@ -25,14 +26,15 @@ interface PostListProps {
   onEditInTg: (post: Post) => void;
   onDelete: (post: Post) => void;
   onDeleteFromChats: (post: Post) => void;
+  onSendMissing: (post: Post) => void;
   onResetEdit: () => void;
 }
 
 const strip = (html: string) => html.replace(/<[^>]+>/g, "");
 
 export function PostList({
-  posts, loading, statusFilter, editId, publishingId, deleting, deletingChats, editingInTgId,
-  onFilterChange, onRefresh, onPublish, onEdit, onEditInTg, onDelete, onDeleteFromChats, onResetEdit,
+  posts, loading, statusFilter, editId, publishingId, deleting, deletingChats, editingInTgId, sendingMissingId,
+  onFilterChange, onRefresh, onPublish, onEdit, onEditInTg, onDelete, onDeleteFromChats, onSendMissing, onResetEdit,
 }: PostListProps) {
   return (
     <div className="space-y-3">
@@ -162,6 +164,18 @@ export function PostList({
                       {editingInTgId === post.id
                         ? <div className="w-3 h-3 border border-sky-400/30 border-t-sky-400 rounded-full animate-spin" />
                         : <Icon name="RefreshCw" size={13} />}
+                    </button>
+                  )}
+                  {post.status === "published" && (
+                    <button
+                      onClick={() => onSendMissing(post)}
+                      disabled={sendingMissingId === post.id}
+                      title="Дослать в группы, где поста нет"
+                      className="w-8 h-8 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center justify-center text-amber-400 transition-colors disabled:opacity-40"
+                    >
+                      {sendingMissingId === post.id
+                        ? <div className="w-3 h-3 border border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+                        : <Icon name="SendToBack" size={13} />}
                     </button>
                   )}
                   <button
