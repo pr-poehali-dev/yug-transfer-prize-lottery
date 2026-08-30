@@ -105,7 +105,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       button_text: post.button_text, button_url: post.button_url,
       button2_text: post.button2_text ?? "", button2_url: post.button2_url ?? "",
       status: post.status, scheduled_at: post.scheduled_at,
-      chats: ALL_CHAT_KEYS,
+      chats: post.chats || ALL_CHAT_KEYS,
     };
     setEditId(post.id);
     setForm(newForm);
@@ -188,7 +188,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
 
   // ── публикация с автоповтором: облако иногда обрывает запрос по таймауту,
   // при этом пост мог уже уйти — поэтому перед повтором проверяем статус поста.
-  const publishWithRetry = async (postId: number, extra: Record<string, unknown> = {}) => {
+  const publishWithRetry = async (postId: number, extra: Record<string, unknown> = {}, chats: string = ALL_CHAT_KEYS) => {
     const isPublished = async () => {
       try {
         const r = await fetch(`${ADMIN_POSTS_URL}?page=1&limit=50`, {
@@ -208,7 +208,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
         const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-          body: JSON.stringify({ post_id: postId, chats: ALL_CHAT_KEYS, run_id: runId, ...extra }),
+          body: JSON.stringify({ post_id: postId, chats, run_id: runId, ...extra }),
         });
         const data = await res.json().catch(() => ({}));
         if (data.ok) return data;
@@ -225,6 +225,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   // ── опубликовать сейчас из формы ──
   const handlePublishNow = async () => {
     if (!form.text.trim()) { setFormError("Введите текст поста"); return; }
+    if (!form.chats.trim()) { setFormError("Выберите хотя бы одну группу"); return; }
     setPublishing(true); setFormError(""); setFormSuccess("");
     try {
       const savePayload: Record<string, unknown> = {
@@ -240,7 +241,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       if (!saveData.ok) throw new Error(saveData.error || "Ошибка сохранения");
       const postId = saveData.post.id;
 
-      const pubData = await publishWithRetry(postId, { expire_hours: expireHours || 0 });
+      const pubData = await publishWithRetry(postId, { expire_hours: expireHours || 0 }, form.chats);
 
       const updatedPost = { ...saveData.post, status: "published" as const, published_at: new Date().toISOString(), telegram_message_id: pubData.message_id };
       setPosts(prev => {
@@ -259,7 +260,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const handlePublishFromList = async (post: Post) => {
     setPublishingId(post.id);
     try {
-      await publishWithRetry(post.id);
+      await publishWithRetry(post.id, {}, post.chats || ALL_CHAT_KEYS);
       setPosts(prev => prev.map(p => p.id === post.id
         ? { ...p, status: "published", published_at: new Date().toISOString() }
         : p));

@@ -224,15 +224,55 @@ export function PostForm({
           )}
         </div>
 
-        {/* Куда публиковать — всегда обе площадки */}
-        <div className="rounded-xl bg-sky-500/5 border border-sky-500/15 p-2">
-          <p className="text-[11px] text-sky-300 flex items-center gap-1 font-medium">
-            <Icon name="Send" size={12} /> Пост уйдёт сразу во все группы
-          </p>
-          <p className="text-[11px] text-white/40 mt-1">
-            {CHAT_OPTIONS.map((c) => c.label).join(" · ")}
-          </p>
-        </div>
+        {/* Куда публиковать — выбор групп */}
+        {(() => {
+          const selected = form.chats ? form.chats.split(",").filter(Boolean) : [];
+          const isOn = (k: string) => selected.includes(k);
+          const toggle = (k: string) => {
+            const next = isOn(k) ? selected.filter(x => x !== k) : [...selected, k];
+            onFormChange({ chats: CHAT_OPTIONS.filter(c => next.includes(c.key)).map(c => c.key).join(",") });
+          };
+          const allOn = selected.length === CHAT_OPTIONS.length;
+          return (
+            <div className="rounded-xl bg-sky-500/5 border border-sky-500/15 p-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-sky-300 flex items-center gap-1 font-medium">
+                  <Icon name="Send" size={12} /> Куда отправить · выбрано {selected.length} из {CHAT_OPTIONS.length}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onFormChange({ chats: allOn ? "" : CHAT_OPTIONS.map(c => c.key).join(",") })}
+                  className="text-[11px] text-sky-300/80 hover:text-sky-200 transition-colors shrink-0"
+                >
+                  {allOn ? "Снять все" : "Выбрать все"}
+                </button>
+              </div>
+              <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                {CHAT_OPTIONS.map(c => (
+                  <label
+                    key={c.key}
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                      isOn(c.key) ? "bg-sky-500/15 text-white" : "bg-white/5 text-white/50 hover:bg-white/10"
+                    }`}
+                  >
+                    <span
+                      className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                        isOn(c.key) ? "bg-sky-500 border-sky-500" : "border-white/25"
+                      }`}
+                    >
+                      {isOn(c.key) && <Icon name="Check" size={11} className="text-white" />}
+                    </span>
+                    <input type="checkbox" checked={isOn(c.key)} onChange={() => toggle(c.key)} className="sr-only" />
+                    <span className="text-[11px] leading-tight">{c.label}</span>
+                  </label>
+                ))}
+              </div>
+              {!selected.length && (
+                <p className="text-[11px] text-amber-400 mt-1.5">Выберите хотя бы одну группу</p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Автоудаление */}
         <div className="rounded-xl bg-orange-500/5 border border-orange-500/15 p-2">
