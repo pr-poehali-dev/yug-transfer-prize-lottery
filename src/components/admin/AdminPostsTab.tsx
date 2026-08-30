@@ -304,19 +304,31 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const handleSendMissing = async (post: Post) => {
     setSendingMissingId(post.id);
     setFormError(""); setFormSuccess("");
+    const label = (k: string) => CHAT_OPTIONS.find(c => c.key === k)?.label || k;
+    const added: string[] = [];
+    let lastErrors: string[] = [];
     try {
-      const res = await fetch(`${ADMIN_POSTS_URL}?action=send_missing`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ post_id: post.id }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Не удалось дослать");
-      const names = (data.added || []).map((k: string) =>
-        CHAT_OPTIONS.find(c => c.key === k)?.label || k);
-      if (names.length) setFormSuccess(`Дослано в: ${names.join(", ")}`);
-      else setFormSuccess("Пост уже есть во всех группах");
-      if ((data.errors || []).length) setFormError(data.errors.join("; "));
+      // Telegram из облака отвечает нестабильно, поэтому добиваем оставшиеся
+      // группы несколькими заходами — дубли исключены, шлём только недостающее.
+      for (let pass = 0; pass < 5; pass++) {
+        const res = await fetch(`${ADMIN_POSTS_URL}?action=send_missing`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+          body: JSON.stringify({ post_id: post.id }),
+        }).catch(() => null);
+        if (!res) { await new Promise(r => setTimeout(r, 1500)); continue; }
+        const data = await res.json().catch(() => ({}));
+        if (!data.ok) { lastErrors = [data.error || "Не удалось дослать"]; break; }
+        added.push(...(data.added || []));
+        lastErrors = data.errors || [];
+        const pending: string[] = data.pending || [];
+        if (!pending.length) break;
+        setFormSuccess(`Осталось дослать: ${pending.map(label).join(", ")}…`);
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      const uniq = Array.from(new Set(added));
+      setFormSuccess(uniq.length ? `Дослано в: ${uniq.map(label).join(", ")}` : "Пост уже есть во всех группах");
+      if (lastErrors.length) setFormError(lastErrors.join("; "));
       fetchPosts(statusFilter);
     } catch (e) {
       setFormError(e instanceof Error ? e.message : "Ошибка");
