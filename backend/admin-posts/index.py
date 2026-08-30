@@ -51,6 +51,15 @@ def verify_token(token: str) -> bool:
 # Ходим по каждому адресу напрямую, подставляя правильный Host/SNI.
 TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
 BEST_HOST = {'host': ''}
+# Общий дедлайн запуска: облако обрывает функцию по таймауту, поэтому
+# завершаемся сами чуть раньше — с сохранённым прогрессом и понятным ответом.
+DEADLINE = {'at': 0.0}
+
+
+def time_left() -> float:
+    if not DEADLINE['at']:
+        return 999.0
+    return DEADLINE['at'] - time.time()
 
 
 def hosts_order() -> list:
@@ -93,6 +102,10 @@ def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, ti
     wait = timeout or 4
     last_err = 'fail'
     for host in hosts_order():
+        left = time_left()
+        if left <= 1:
+            return {'ok': False, 'description': 'время запроса истекло', 'network_error': True}
+        wait = min(wait, max(2, int(left - 0.5)))
         try:
             res = _tg_call(host, bot_token, method, data, wait)
             # Ответ получен — отказ Telegram другим адресом не исправить.
@@ -411,9 +424,14 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
             on_progress(per_chat)
 
     # Остальные площадки — быстрым копированием исходных сообщений.
+    stopped = False
     for key in chats:
         if key == primary_key or done.get(key):
             continue
+        if time_left() < 6:
+            stopped = True
+            print(f"[POSTS] время запуска на исходе, останавливаемся перед {key}")
+            break
         target = channels.get(key)
         if not target:
             errors.append(f'{key}: канал не настроен')
@@ -440,6 +458,8 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
         'message_ids': all_ids,
         'per_chat': per_chat,
         'errors': errors,
+        'stopped': stopped,
+        'pending': [k for k in chats if k not in per_chat],
     }
 
 
@@ -499,6 +519,10 @@ def row_to_post(r) -> dict:
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
+
+    # Останавливаемся за пару секунд до жёсткого таймаута облака, чтобы успеть
+    # сохранить прогресс и вернуть список неотправленных групп.
+    DEADLINE['at'] = time.time() + 26
 
     token = event.get('headers', {}).get('X-Admin-Token', '')
     if not verify_token(token):
@@ -649,6 +673,9 @@ def handler(event: dict, context) -> dict:
         added = {}
         errors = []
         for key in missing:
+            if time_left() < 6:
+                print(f"[POSTS] send_missing: время на исходе, остановились перед {key}")
+                break
             cp = copy_messages(bot_token, primary_chat, channels[key], primary_ids, build_reply_markup(post))
             print(f"[POSTS] send_missing copy to {key} ({channels[key]}): {cp}")
             if not cp['ok']:
@@ -673,7 +700,8 @@ def handler(event: dict, context) -> dict:
         conn.commit()
         cur.close(); conn.close()
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
-            'ok': True, 'added': list(added.keys()), 'missing': missing, 'errors': errors
+            'ok': True, 'added': list(added.keys()), 'missing': missing, 'errors': errors,
+            'pending': [k for k in missing if k not in added],
         })}
 
     # ── POST ?action=publish — немедленная публикация ───────────────────────
@@ -793,7 +821,9 @@ def handler(event: dict, context) -> dict:
         print(f"[POSTS] published post {post_id}, msg_ids={msg_ids}, expire_at={expire_at}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
             'ok': True, 'message_id': result.get('message_id'),
-            'chats': chats, 'errors': result.get('errors') or []
+            'chats': chats, 'errors': result.get('errors') or [],
+            'sent': list(merged_map.keys()),
+            'pending': [k for k in chats if k not in merged_map],
         })}
 
     # ── POST ?action=check_scheduled — авто-публикация запланированных ──────
