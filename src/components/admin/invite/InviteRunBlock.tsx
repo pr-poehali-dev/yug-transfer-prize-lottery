@@ -10,13 +10,30 @@ interface Props {
   onToggle: () => void;
   onReload: () => void;
   onPace: (pace: string) => void;
+  error?: string;
 }
 
-export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, onReload, onPace }: Props) {
+export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, onReload, onPace, error }: Props) {
   if (!state) {
     return (
       <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-        <p className="text-[11px] text-white/30">Загружаю…</p>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-white/60 font-medium flex items-center gap-1.5">
+            <Icon name="Send" size={12} /> Рассылка приглашений
+          </p>
+          <button type="button" onClick={onReload} className="text-white/40 hover:text-white">
+            <Icon name="RefreshCw" size={13} />
+          </button>
+        </div>
+        <p className={`text-[11px] mt-2 ${error ? "text-amber-300" : "text-white/30"}`}>
+          {error || "Загружаю…"}
+        </p>
+        {!!error && (
+          <button type="button" onClick={onReload}
+            className="w-full mt-2 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors">
+            Повторить
+          </button>
+        )}
       </div>
     );
   }

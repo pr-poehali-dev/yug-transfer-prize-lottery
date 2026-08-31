@@ -48,7 +48,9 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
 
   const run = useInviteRun(token, load);
 
-  useEffect(() => { if (expanded && !loaded) load(); }, [expanded]);
+  useEffect(() => {
+    if (expanded && !loaded) { load(); run.loadState(); }
+  }, [expanded]);
 
   const saveTarget = async () => {
     if (!targetDraft.trim()) return;
@@ -180,6 +182,7 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
             onToggle={run.toggle}
             onReload={run.loadState}
             onPace={run.changePace}
+            error={run.error}
           />
 
           <p className="text-[11px] text-white/30 flex items-start gap-1.5">

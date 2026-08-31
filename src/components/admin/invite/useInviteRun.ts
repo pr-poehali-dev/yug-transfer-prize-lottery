@@ -30,11 +30,16 @@ export function useInviteRun(token: string, onProgress?: () => void) {
     if (s.pace) paceRef.current = s.pace;
   };
 
+  const [error, setError] = useState("");
+
   const loadState = useCallback(async () => {
     try {
       const d = await call("", "GET");
-      if (d.ok) apply(d.state);
-    } catch { /* */ }
+      if (d.ok) { apply(d.state); setError(""); }
+      else setError(d.error || "Нет доступа к рассылке");
+    } catch {
+      setError("Нет связи с сервером");
+    }
   }, [call]);
 
   const setRunning = (v: boolean) => { runningRef.current = v; setLive(v); };
@@ -149,5 +154,5 @@ export function useInviteRun(token: string, onProgress?: () => void) {
 
   const canStart = !!state && !!state.pending && !!state.capacity_today;
 
-  return { state, busy, live, nextIn, start, stop, toggle, loadState, canStart, changePace };
+  return { state, busy, live, nextIn, start, stop, toggle, loadState, canStart, changePace, error };
 }

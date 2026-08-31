@@ -8,6 +8,7 @@ POST ?action=set_pace  — сменить темп: safe / normal / fast / max
 import os
 import json
 import asyncio
+import hashlib
 import psycopg2
 
 from telethon import TelegramClient
@@ -51,8 +52,16 @@ def resp(status: int, body: dict) -> dict:
 
 
 def verify_token(token: str) -> bool:
-    expected = os.environ.get('ADMIN_TOKEN', '')
-    return bool(token) and bool(expected) and token == expected
+    if not token:
+        return False
+    admin_tok = hashlib.sha256(
+        f"{os.environ.get('ADMIN_LOGIN', '')}:{os.environ.get('ADMIN_PASSWORD', '')}:admin_secret_2026".encode()
+    ).hexdigest()
+    posts_login = os.environ.get('POSTS_LOGIN', '')
+    posts_tok = hashlib.sha256(
+        f"{posts_login}:{os.environ.get('POSTS_PASSWORD', '')}:posts_secret_2026".encode()
+    ).hexdigest()
+    return token == admin_tok or (bool(posts_login) and token == posts_tok)
 
 
 def get_invite_target() -> str:
