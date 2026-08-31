@@ -18,7 +18,17 @@ export interface InviteRunAccount {
   warmup: boolean;
 }
 
+export interface InvitePaceOption {
+  key: string;
+  title: string;
+  per_day: number;
+  delay: number;
+}
+
 export interface InviteRunState {
+  pace: string;
+  delay_sec: number;
+  pace_options: InvitePaceOption[];
   is_active: boolean;
   title: string;
   subtitle: string;

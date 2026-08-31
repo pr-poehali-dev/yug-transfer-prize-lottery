@@ -9,9 +9,10 @@ interface Props {
   canStart: boolean;
   onToggle: () => void;
   onReload: () => void;
+  onPace: (pace: string) => void;
 }
 
-export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, onReload }: Props) {
+export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, onReload, onPace }: Props) {
   if (!state) {
     return (
       <div className="rounded-xl bg-white/5 border border-white/10 p-3">
@@ -52,7 +53,38 @@ export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, 
         {busy ? "Секунду…" : live ? "Остановить инвайт" : paused ? "Продолжить инвайт" : "Запустить инвайт"}
       </button>
 
-      <div className="grid grid-cols-2 gap-1.5 mt-2.5">
+      <div className="mt-2.5">
+        <p className="text-[10px] text-white/40 mb-1.5">Скорость рассылки</p>
+        <div className="grid grid-cols-4 gap-1">
+          {(state.pace_options || []).map(o => {
+            const on = o.key === state.pace;
+            return (
+              <button
+                key={o.key}
+                type="button"
+                onClick={() => onPace(o.key)}
+                className={`rounded-lg py-1.5 px-1 text-center transition-colors border ${
+                  on
+                    ? "bg-emerald-500/20 border-emerald-500/40"
+                    : "bg-black/20 border-transparent hover:bg-white/10"
+                }`}
+              >
+                <span className={`block text-[11px] font-medium ${on ? "text-emerald-300" : "text-white/60"}`}>
+                  {o.title}
+                </span>
+                <span className="block text-[9px] text-white/35 leading-tight">{o.per_day}/день</span>
+              </button>
+            );
+          })}
+        </div>
+        {state.pace === "max" && (
+          <p className="text-[10px] text-amber-300/70 mt-1.5">
+            Максимум даёт больше приглашений, но выше риск ограничений от Telegram
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-1.5 mt-2.5">
         <div className="rounded-lg bg-black/20 px-2 py-1.5">
           <p className="text-[14px] font-semibold text-sky-300">{state.pending.toLocaleString("ru")}</p>
           <p className="text-[10px] text-white/35">в очереди</p>
@@ -60,6 +92,10 @@ export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, 
         <div className="rounded-lg bg-black/20 px-2 py-1.5">
           <p className="text-[14px] font-semibold text-emerald-300">{state.capacity_today}</p>
           <p className="text-[10px] text-white/35">можно сегодня</p>
+        </div>
+        <div className="rounded-lg bg-black/20 px-2 py-1.5">
+          <p className="text-[14px] font-semibold text-white/70">{state.delay_sec}с</p>
+          <p className="text-[10px] text-white/35">пауза</p>
         </div>
       </div>
 

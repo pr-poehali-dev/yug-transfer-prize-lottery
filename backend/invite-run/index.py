@@ -1,8 +1,9 @@
 """Запуск рассылки приглашений в группу.
 GET                    — статус текущего запуска
 POST ?action=start     — начать рассылку (план на сегодня)
-POST ?action=tick      — пригласить одного человека (вызывается фронтом по таймеру)
+POST ?action=tick      — пригласить одного человека (size=N — пачкой)
 POST ?action=stop      — остановить рассылку
+POST ?action=set_pace  — сменить темп: safe / normal / fast / max
 """
 import os
 import json
@@ -19,8 +20,14 @@ from telethon.errors import (
 )
 
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
-WARMUP_LIMIT = 10
-NORMAL_LIMIT = 30
+
+PACES = {
+    'safe':   {'warmup': 10, 'normal': 30,  'delay': 60, 'title': 'Осторожно'},
+    'normal': {'warmup': 15, 'normal': 50,  'delay': 40, 'title': 'Обычно'},
+    'fast':   {'warmup': 20, 'normal': 80,  'delay': 25, 'title': 'Быстро'},
+    'max':    {'warmup': 25, 'normal': 120, 'delay': 15, 'title': 'Максимум'},
+}
+DEFAULT_PACE = 'safe'
 
 
 def db():
@@ -76,7 +83,31 @@ def reset_daily_if_needed():
     conn.commit(); cur.close(); conn.close()
 
 
+def get_pace() -> dict:
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"SELECT value FROM {SCHEMA}.app_settings WHERE key='invite_pace'")
+    r = cur.fetchone(); cur.close(); conn.close()
+    key = (r[0] if r else DEFAULT_PACE).strip()
+    if key not in PACES:
+        key = DEFAULT_PACE
+    return {'key': key, **PACES[key]}
+
+
+def set_pace(key: str) -> dict:
+    if key not in PACES:
+        key = DEFAULT_PACE
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.app_settings (key, value, updated_at)
+        VALUES ('invite_pace', '{esc(key)}', NOW())
+        ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()
+    """)
+    conn.commit(); cur.close(); conn.close()
+    return {'key': key, **PACES[key]}
+
+
 def account_pool() -> list:
+    pace = get_pace()
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
         SELECT id, label, session_string, daily_invites_used, COALESCE(needs_warmup, TRUE)
@@ -87,7 +118,7 @@ def account_pool() -> list:
     rows = cur.fetchall(); cur.close(); conn.close()
     out = []
     for r in rows:
-        limit = WARMUP_LIMIT if r[4] else NORMAL_LIMIT
+        limit = pace['warmup'] if r[4] else pace['normal']
         out.append({
             'id': r[0], 'label': r[1], 'session': r[2],
             'used': r[3], 'warmup': r[4], 'limit': limit,
@@ -106,8 +137,25 @@ def active_base_id() -> int:
 def pending_count(base_id: int) -> int:
     conn = db(); cur = conn.cursor()
     where = f"AND base_id = {int(base_id)}" if base_id else ""
-    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.invite_targets WHERE status='pending' {where}")
+    cur.execute(f"""
+        SELECT COUNT(*) FROM {SCHEMA}.invite_targets
+        WHERE status='pending' AND username IS NOT NULL AND username <> '' {where}
+    """)
     n = cur.fetchone()[0]; cur.close(); conn.close()
+    return n
+
+
+def skip_no_username(base_id: int) -> int:
+    """Разом помечает контакты без ника — их пригласить нельзя."""
+    conn = db(); cur = conn.cursor()
+    where = f"AND base_id = {int(base_id)}" if base_id else ""
+    cur.execute(f"""
+        UPDATE {SCHEMA}.invite_targets
+        SET status = 'no_username', error = 'Нет ника'
+        WHERE status = 'pending' AND (username IS NULL OR username = '') {where}
+    """)
+    n = cur.rowcount
+    conn.commit(); cur.close(); conn.close()
     return n
 
 
@@ -135,8 +183,20 @@ def run_state() -> dict:
         'last_message': r[8] if r else '',
         'started_at': str(r[9]) if r and r[9] else None,
     }
+    pace = get_pace()
     state['pending'] = pending_count(base)
     state['capacity_today'] = capacity
+    state['pace'] = pace['key']
+    state['delay_sec'] = pace['delay']
+    state['pace_options'] = [
+        {
+            'key': k,
+            'title': v['title'],
+            'per_day': sum(v['warmup'] if a['warmup'] else v['normal'] for a in pool),
+            'delay': v['delay'],
+        }
+        for k, v in PACES.items()
+    ]
     state['accounts'] = [
         {'id': a['id'], 'label': a['label'], 'used': a['used'],
          'limit': a['limit'], 'left': a['left'], 'warmup': a['warmup']}
@@ -155,6 +215,7 @@ def save_run(**kw):
 def start_run() -> dict:
     pool = account_pool()
     base = active_base_id()
+    skip_no_username(base)
     pending = pending_count(base)
     capacity = sum(a['left'] for a in pool)
     planned = min(pending, capacity)
@@ -168,7 +229,7 @@ def start_run() -> dict:
             subtitle = '{esc(str(len(pool)))} аккаунтов в работе',
             total_planned = {planned}, progress_done = 0, progress_added = 0,
             progress_privacy = 0, progress_failed = 0, started_at = NOW(),
-            estimated_sec = {planned * 55}, last_message = 'Запускаем…', last_heartbeat = NOW()
+            estimated_sec = {planned * get_pace()['delay']}, last_message = 'Запускаем…', last_heartbeat = NOW()
         WHERE id = 1
     """)
     conn.commit(); cur.close(); conn.close()
@@ -185,7 +246,7 @@ def take_target(base_id: int) -> dict:
     where = f"AND base_id = {int(base_id)}" if base_id else ""
     cur.execute(f"""
         SELECT id, username, user_id FROM {SCHEMA}.invite_targets
-        WHERE status = 'pending' {where}
+        WHERE status = 'pending' AND username IS NOT NULL AND username <> '' {where}
         ORDER BY id ASC LIMIT 1
     """)
     r = cur.fetchone(); cur.close(); conn.close()
@@ -331,6 +392,28 @@ async def invite_one() -> dict:
         await client.disconnect()
 
 
+async def invite_batch(size: int) -> dict:
+    """Несколько приглашений подряд за один вызов — экономит время на подключении."""
+    import time
+    started = time.time()
+    results = []
+    last = {}
+    for i in range(max(1, min(size, 10))):
+        last = await invite_one()
+        results.append(last.get('result') or last.get('error'))
+        if last.get('finished') or not last.get('ok'):
+            break
+        if last.get('result') in ('peer_flood', 'flood_wait'):
+            break
+        if time.time() - started > 25:
+            break
+        if i < size - 1:
+            await asyncio.sleep(2)
+    out = dict(last)
+    out['batch'] = results
+    return out
+
+
 def handler(event: dict, context) -> dict:
     """Управляет рассылкой приглашений: старт, шаг, стоп, статус."""
     method = event.get('httpMethod', 'GET')
@@ -358,8 +441,14 @@ def handler(event: dict, context) -> dict:
     if action == 'stop':
         return resp(200, stop_run())
 
+    if action == 'set_pace':
+        body = json.loads(event.get('body') or '{}')
+        set_pace((body.get('pace') or '').strip())
+        return resp(200, {'ok': True, 'state': run_state()})
+
     if action == 'tick':
-        result = asyncio.run(invite_one())
+        size = int(params.get('size') or 1)
+        result = asyncio.run(invite_batch(size) if size > 1 else invite_one())
         return resp(200, result)
 
     return resp(400, {'ok': False, 'error': 'Неизвестное действие'})

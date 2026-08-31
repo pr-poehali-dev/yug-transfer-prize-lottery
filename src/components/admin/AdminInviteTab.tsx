@@ -179,11 +179,12 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
             canStart={run.canStart}
             onToggle={run.toggle}
             onReload={run.loadState}
+            onPace={run.changePace}
           />
 
           <p className="text-[11px] text-white/30 flex items-start gap-1.5">
             <Icon name="Info" size={12} className="mt-0.5 shrink-0" />
-            Приглашения идут по одному раз в минуту, аккаунты чередуются. Прогрев — до 10 в день, обычный — до 30.
+            Аккаунты чередуются автоматически. Чем выше скорость, тем больше приглашений в день, но выше риск ограничений Telegram.
           </p>
         </div>
       )}
