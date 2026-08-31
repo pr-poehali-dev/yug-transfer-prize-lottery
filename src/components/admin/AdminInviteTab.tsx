@@ -4,6 +4,7 @@ import { TG_ACCOUNTS_URL, INVITE_BASES_URL } from "./adminTypes";
 import type { TgAccount, InviteBase } from "./adminTypes";
 import { InviteBasesBlock } from "./invite/InviteBasesBlock";
 import { InviteRunBlock } from "./invite/InviteRunBlock";
+import { useInviteRun } from "./invite/useInviteRun";
 
 interface AdminInviteTabProps {
   token: string;
@@ -45,6 +46,8 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
     setLoading(false);
   };
 
+  const run = useInviteRun(token, load);
+
   useEffect(() => { if (expanded && !loaded) load(); }, [expanded]);
 
   const saveTarget = async () => {
@@ -66,23 +69,41 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
 
   return (
     <div className="card-glow rounded-2xl overflow-hidden">
-      <button
-        type="button"
-        onClick={toggleExpanded}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
-      >
-        <div className="flex items-center gap-2">
-          <Icon name="UserPlus" size={15} className="text-emerald-400" />
-          <span className="text-sm font-medium text-white">Invite</span>
-          {!!activeBase && (
-            <span className="text-[11px] text-white/40">
-              · {(bases.find(b => b.id === activeBase)?.pending || 0).toLocaleString("ru")} в очереди
-            </span>
-          )}
-        </div>
-        <Icon name="ChevronDown" size={16}
-          className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
+      <div className="flex items-stretch border-b border-white/10">
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          className="flex-1 min-w-0 flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Icon name="UserPlus" size={15} className="text-emerald-400" />
+            <span className="text-sm font-medium text-white">Invite</span>
+            {run.live ? (
+              <span className="text-[11px] text-emerald-300 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                идёт · {run.state?.added || 0}
+              </span>
+            ) : !!activeBase && (
+              <span className="text-[11px] text-white/40 truncate">
+                · {(bases.find(b => b.id === activeBase)?.pending || 0).toLocaleString("ru")} в очереди
+              </span>
+            )}
+          </div>
+          <Icon name="ChevronDown" size={16}
+            className={`shrink-0 text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`} />
+        </button>
+        <button
+          type="button"
+          onClick={run.toggle}
+          disabled={run.busy || (!run.live && !run.state?.is_active && !run.canStart)}
+          className={`shrink-0 px-4 flex items-center gap-1.5 text-[12px] font-semibold text-white transition-colors disabled:opacity-30 ${
+            run.live ? "bg-red-500/70 hover:bg-red-500" : "bg-emerald-500/70 hover:bg-emerald-500"
+          }`}
+        >
+          <Icon name={run.live ? "Square" : "Play"} size={13} />
+          {run.live ? "Стоп" : "Старт"}
+        </button>
+      </div>
 
       {expanded && (
         <div className="p-4 space-y-3">
@@ -150,7 +171,15 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
             </div>
           </div>
 
-          <InviteRunBlock token={token} onProgress={load} />
+          <InviteRunBlock
+            state={run.state}
+            busy={run.busy}
+            live={run.live}
+            nextIn={run.nextIn}
+            canStart={run.canStart}
+            onToggle={run.toggle}
+            onReload={run.loadState}
+          />
 
           <p className="text-[11px] text-white/30 flex items-start gap-1.5">
             <Icon name="Info" size={12} className="mt-0.5 shrink-0" />
