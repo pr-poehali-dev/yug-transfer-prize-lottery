@@ -121,7 +121,8 @@ def create_base(name: str, note: str, text: str) -> dict:
     """)
     base_id = cur.fetchone()[0]
 
-    chunk = 2000
+    imported = 0
+    chunk = 1000
     for i in range(0, len(usernames), chunk):
         part = usernames[i:i + chunk]
         values = ','.join(
@@ -130,9 +131,12 @@ def create_base(name: str, note: str, text: str) -> dict:
         cur.execute(f"""
             INSERT INTO {SCHEMA}.invite_targets (username, source, status, base_id)
             VALUES {values}
+            ON CONFLICT DO NOTHING
         """)
+        imported += cur.rowcount
     conn.commit(); cur.close(); conn.close()
-    return {'ok': True, 'base_id': base_id, 'imported': len(usernames), 'skipped': bad}
+    return {'ok': True, 'base_id': base_id, 'imported': imported, 'skipped': bad,
+            'duplicates': len(usernames) - imported}
 
 
 def delete_base(base_id: int):
@@ -187,7 +191,10 @@ def handler(event: dict, context) -> dict:
         text = body.get('content') or ''
         if body.get('content_base64'):
             text = base64.b64decode(body['content_base64']).decode('utf-8', 'ignore')
-        result = create_base(name, note, text)
+        try:
+            result = create_base(name, note, text)
+        except Exception as e:
+            return resp(400, {'ok': False, 'error': f'Ошибка загрузки: {str(e)[:300]}'})
         if not result.get('ok'):
             return resp(400, result)
         if not get_active_base():
