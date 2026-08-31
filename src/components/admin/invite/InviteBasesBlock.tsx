@@ -16,6 +16,7 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
   const [uploadName, setUploadName] = useState("");
   const [fileText, setFileText] = useState("");
   const [fileInfo, setFileInfo] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [showUpload, setShowUpload] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -48,13 +49,17 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
 
   const handleUpload = async () => {
     if (!fileText.trim()) return;
+    setUploadError("");
     const data = await call("create", { name: uploadName || "Новая база", content: fileText });
     if (data.ok) {
-      alert(`Загружено контактов: ${data.imported}\nПропущено строк: ${data.skipped}`);
+      alert(
+        `Загружено контактов: ${data.imported}\n` +
+        `Дубли: ${data.duplicates || 0}\nНераспознанные строки: ${data.skipped || 0}`
+      );
       setFileText(""); setFileInfo(""); setUploadName(""); setShowUpload(false);
       if (fileRef.current) fileRef.current.value = "";
     } else {
-      alert(data.error || "Не удалось загрузить базу");
+      setUploadError(data.error || "Не удалось загрузить базу");
     }
   };
 
@@ -109,8 +114,13 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
             className="w-full text-[12px] text-white/60 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-white/10 file:text-white/80 file:text-[11px]"
           />
           {fileInfo && <p className="text-[11px] text-emerald-300">{fileInfo}</p>}
+          {uploadError && (
+            <p className="text-[11px] text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg p-2 leading-relaxed break-words">
+              {uploadError}
+            </p>
+          )}
           <p className="text-[10px] text-white/35 leading-relaxed">
-            Файл .txt или .csv: по одному @username или ссылке t.me в строке. Дубли убираются автоматически.
+            Файл .txt или .csv: в строке @username, ссылка t.me, числовой ID или телефон +7… Дубли убираются автоматически.
           </p>
           <button type="button" onClick={handleUpload} disabled={busy || !fileText}
             className="w-full py-1.5 rounded-lg bg-emerald-500/80 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-medium transition-colors">

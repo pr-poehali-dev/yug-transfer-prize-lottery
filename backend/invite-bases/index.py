@@ -91,29 +91,46 @@ USERNAME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_]{3,31}$')
 
 
 def parse_contacts(text: str) -> tuple:
-    """Возвращает (валидные username, кол-во отброшенных строк)."""
+    """Возвращает (список контактов, кол-во отброшенных строк).
+    Контакт: ('u', username) | ('i', user_id) | ('p', phone)."""
     found, bad = [], 0
     seen = set()
     for raw in re.split(r'[\s,;]+', text or ''):
-        s = raw.strip()
+        s = raw.strip().strip('"\'')
         if not s:
             continue
+
         m = re.search(r'(?:t\.me/|telegram\.me/)([A-Za-z][A-Za-z0-9_]{3,31})', s)
-        u = m.group(1) if m else s.lstrip('@')
-        if USERNAME_RE.match(u):
-            k = u.lower()
-            if k not in seen:
-                seen.add(k)
-                found.append(u)
+        cand = m.group(1) if m else s.lstrip('@')
+
+        phone = re.sub(r'[^\d+]', '', s)
+        if USERNAME_RE.match(cand):
+            key = ('u', cand.lower())
+            item = ('u', cand)
+        elif cand.isdigit() and 5 <= len(cand) <= 12:
+            key = ('i', cand)
+            item = ('i', cand)
+        elif phone.startswith('+') and 11 <= len(phone) <= 16 and phone[1:].isdigit():
+            key = ('p', phone)
+            item = ('p', phone)
         else:
             bad += 1
+            continue
+
+        if key not in seen:
+            seen.add(key)
+            found.append(item)
     return found, bad
 
 
 def create_base(name: str, note: str, text: str) -> dict:
-    usernames, bad = parse_contacts(text)
-    if not usernames:
-        return {'ok': False, 'error': 'В файле не найдено ни одного username'}
+    contacts, bad = parse_contacts(text)
+    if not contacts:
+        preview = ' | '.join([p for p in re.split(r'[\r\n]+', (text or '').strip())[:3]])[:160]
+        return {'ok': False, 'error': (
+            'В файле не найдено контактов. Нужен @username, ссылка t.me, '
+            'числовой ID или телефон в формате +7... Первые строки файла: ' + (preview or 'файл пустой')
+        )}
 
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
@@ -121,22 +138,27 @@ def create_base(name: str, note: str, text: str) -> dict:
     """)
     base_id = cur.fetchone()[0]
 
+    def row(kind: str, val: str) -> str:
+        if kind == 'u':
+            return f"('{esc(val)}', NULL, NULL, 'base:{base_id}', 'pending', {base_id})"
+        if kind == 'i':
+            return f"(NULL, {int(val)}, NULL, 'base:{base_id}', 'pending', {base_id})"
+        return f"(NULL, NULL, '{esc(val)}', 'base:{base_id}', 'pending', {base_id})"
+
     imported = 0
     chunk = 1000
-    for i in range(0, len(usernames), chunk):
-        part = usernames[i:i + chunk]
-        values = ','.join(
-            f"('{esc(u)}', 'base:{base_id}', 'pending', {base_id})" for u in part
-        )
+    for i in range(0, len(contacts), chunk):
+        part = contacts[i:i + chunk]
+        values = ','.join(row(k, v) for k, v in part)
         cur.execute(f"""
-            INSERT INTO {SCHEMA}.invite_targets (username, source, status, base_id)
+            INSERT INTO {SCHEMA}.invite_targets (username, user_id, phone, source, status, base_id)
             VALUES {values}
             ON CONFLICT DO NOTHING
         """)
         imported += cur.rowcount
     conn.commit(); cur.close(); conn.close()
     return {'ok': True, 'base_id': base_id, 'imported': imported, 'skipped': bad,
-            'duplicates': len(usernames) - imported}
+            'duplicates': len(contacts) - imported}
 
 
 def delete_base(base_id: int):
