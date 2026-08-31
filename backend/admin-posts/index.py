@@ -540,7 +540,7 @@ def handler(event: dict, context) -> dict:
     channel_chat5 = os.environ.get('POSTS_CHAT_5_ID', '') or '@ugtransferrr'
     channel_chat6 = os.environ.get('POSTS_CHAT_6_ID', '') or '-1001851441423'
     channel_chat7 = os.environ.get('POSTS_CHAT_7_ID', '') or '-1002083907271'
-    channel_chat8 = os.environ.get('POSTS_CHAT_8_ID', '') or '-1002155598047'
+    channel_chat8 = os.environ.get('POSTS_CHAT_8_ID', '') or '-1003641778426'
     channel_chat9 = os.environ.get('POSTS_CHAT_9_ID', '') or '-1003254062916'
 
     # ── GET ?action=diag — проверка связи с Telegram ────────────────────────
