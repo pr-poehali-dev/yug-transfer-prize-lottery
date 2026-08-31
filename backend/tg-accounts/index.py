@@ -125,6 +125,45 @@ def list_accounts() -> list:
     } for r in rows]
 
 
+def get_invite_target() -> str:
+    """Группа, куда приглашаем (отдельно от target_group для прогрева)."""
+    try:
+        conn = db(); cur = conn.cursor()
+        cur.execute(f"SELECT value FROM {SCHEMA}.app_settings WHERE key='invite_target_group'")
+        r = cur.fetchone(); cur.close(); conn.close()
+        return (r[0] if r else 'https://t.me/moy_transfer').strip()
+    except Exception:
+        return 'https://t.me/moy_transfer'
+
+
+def set_invite_target(value: str):
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        INSERT INTO {SCHEMA}.app_settings (key, value, updated_at)
+        VALUES ('invite_target_group', '{esc(value)}', NOW())
+        ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()
+    """)
+    conn.commit(); cur.close(); conn.close()
+
+
+def invite_stats() -> dict:
+    """Сводка по базе контактов: сколько ждут очереди, приглашено, ошибок."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"SELECT status, COUNT(*) FROM {SCHEMA}.invite_targets GROUP BY status")
+    by_status = {r[0]: r[1] for r in cur.fetchall()}
+    cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.invite_targets WHERE status='added' AND added_at::date = CURRENT_DATE")
+    added_today = cur.fetchone()[0]
+    cur.close(); conn.close()
+    return {
+        'total': sum(by_status.values()),
+        'pending': by_status.get('pending', 0),
+        'added': by_status.get('added', 0),
+        'failed': by_status.get('failed', 0),
+        'no_username': by_status.get('no_username', 0),
+        'added_today': added_today,
+    }
+
+
 def save_login_session(phone: str, phone_code_hash: str, session_string: str):
     conn = db(); cur = conn.cursor()
     cur.execute(f"DELETE FROM {SCHEMA}.tg_account_login_sessions WHERE phone='{esc(phone)}'")
@@ -488,10 +527,23 @@ def handler(event: dict, context) -> dict:
     qs = event.get('queryStringParameters') or {}
     action = qs.get('action', '')
 
+    if method == 'GET' and action == 'invite_stats':
+        return resp(200, {'ok': True, 'stats': invite_stats(),
+                          'invite_target': get_invite_target(),
+                          'accounts': list_accounts()})
+
     if method == 'GET':
-        return resp(200, {'accounts': list_accounts(), 'target_group': get_target_group()})
+        return resp(200, {'accounts': list_accounts(), 'target_group': get_target_group(),
+                          'invite_target': get_invite_target()})
 
     body = json.loads(event.get('body') or '{}')
+
+    if action == 'set_invite_target':
+        val = (body.get('target') or '').strip()
+        if not val:
+            return resp(400, {'error': 'target required'})
+        set_invite_target(val)
+        return resp(200, {'ok': True, 'invite_target': get_invite_target()})
 
     if action == 'activate':
         activate_account(int(body.get('id', 0)))

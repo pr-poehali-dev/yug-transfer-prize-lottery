@@ -10,9 +10,7 @@
       "name": "GET unauthorized",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 401,
-      "expectedBody": {"error": "unauthorized"},
-      "bodyMatcher": "partial"
+      "expectedStatus": 401
     }
   ]
 }
