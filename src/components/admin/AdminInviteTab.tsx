@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { TG_ACCOUNTS_URL, INVITE_BASES_URL } from "./adminTypes";
 import type { TgAccount, InviteBase } from "./adminTypes";
 import { InviteBasesBlock } from "./invite/InviteBasesBlock";
+import { InviteRunBlock } from "./invite/InviteRunBlock";
 
 interface AdminInviteTabProps {
   token: string;
@@ -149,9 +150,11 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
             </div>
           </div>
 
+          <InviteRunBlock token={token} onProgress={load} />
+
           <p className="text-[11px] text-white/30 flex items-start gap-1.5">
             <Icon name="Info" size={12} className="mt-0.5 shrink-0" />
-            Следующий шаг — запуск рассылки приглашений с лимитами по каждому аккаунту.
+            Приглашения идут по одному раз в минуту, аккаунты чередуются. Прогрев — до 10 в день, обычный — до 30.
           </p>
         </div>
       )}

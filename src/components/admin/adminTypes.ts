@@ -7,6 +7,32 @@ export const ADMIN_BOT_POSTS_URL = "https://functions.poehali.dev/9578d639-08e5-
 export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21";
 export const TG_ACCOUNTS_URL = "https://functions.poehali.dev/c23d251a-47cc-43e5-bd98-f9e0ebee8f2a";
 export const INVITE_BASES_URL = "https://functions.poehali.dev/3987ac55-9490-466a-ac86-784129dab17c";
+export const INVITE_RUN_URL = "https://functions.poehali.dev/66269b46-56a1-420d-9371-47218b8605eb";
+
+export interface InviteRunAccount {
+  id: number;
+  label: string;
+  used: number;
+  limit: number;
+  left: number;
+  warmup: boolean;
+}
+
+export interface InviteRunState {
+  is_active: boolean;
+  title: string;
+  subtitle: string;
+  total_planned: number;
+  done: number;
+  added: number;
+  privacy: number;
+  failed: number;
+  last_message: string;
+  started_at: string | null;
+  pending: number;
+  capacity_today: number;
+  accounts: InviteRunAccount[];
+}
 
 export interface InviteBase {
   id: number;
