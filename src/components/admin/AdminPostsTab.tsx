@@ -7,6 +7,7 @@ import type { PostFormData } from "./PostForm";
 
 const ALL_CHAT_KEYS = CHAT_OPTIONS.map((c) => c.key).join(",");
 import { PostList } from "./PostList";
+import { toast } from "sonner";
 
 interface AdminPostsTabProps {
   token: string;
@@ -178,12 +179,11 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
 
   const confirmLeave = (callback: () => void) => {
     if (!isDirty || !form.text.trim()) { callback(); return; }
-    const choice = window.confirm("Есть несохранённые изменения. Сохранить черновик перед выходом?");
-    if (choice) {
-      handleSaveDraft().then(callback);
-    } else {
-      callback();
-    }
+    toast("Есть несохранённые изменения", {
+      description: "Сохранить черновик перед выходом?",
+      action: { label: "Сохранить", onClick: () => { handleSaveDraft().then(callback); } },
+      cancel: { label: "Не сохранять", onClick: () => callback() },
+    });
   };
 
   // ── публикация с автоповтором: облако иногда обрывает запрос по таймауту,
@@ -265,13 +265,22 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
         ? { ...p, status: "published", published_at: new Date().toISOString() }
         : p));
     } catch (e) {
-      alert("Ошибка: " + (e instanceof Error ? e.message : "?"));
+      toast.error("Не удалось опубликовать", {
+        description: e instanceof Error ? e.message : undefined,
+      });
     } finally { setPublishingId(null); }
   };
 
   // Обычное удаление: убираем пост из списка (в группах сообщения не трогаем).
-  const handleDelete = async (post: Post) => {
-    if (!confirm("Удалить пост из списка? В группах он останется.")) return;
+  const handleDelete = (post: Post) => {
+    toast("Удалить пост из списка?", {
+      description: "В группах он останется.",
+      action: { label: "Удалить", onClick: () => doDelete(post) },
+      cancel: { label: "Отмена", onClick: () => {} },
+    });
+  };
+
+  const doDelete = async (post: Post) => {
     setDeleting(post.id);
     try {
       await fetch(ADMIN_POSTS_URL, {
@@ -287,8 +296,15 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   };
 
   // Удалить из групп: сообщения стираются в Telegram, пост остаётся черновиком.
-  const handleDeleteFromChats = async (post: Post) => {
-    if (!confirm("Удалить это сообщение из всех групп? Пост останется в списке.")) return;
+  const handleDeleteFromChats = (post: Post) => {
+    toast("Удалить сообщение из всех групп?", {
+      description: "Пост останется в списке.",
+      action: { label: "Удалить", onClick: () => doDeleteFromChats(post) },
+      cancel: { label: "Отмена", onClick: () => {} },
+    });
+  };
+
+  const doDeleteFromChats = async (post: Post) => {
     setDeletingChats(post.id);
     try {
       const res = await fetch(ADMIN_POSTS_URL, {

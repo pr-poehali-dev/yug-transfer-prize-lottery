@@ -6,6 +6,7 @@ import { BotsListBlock } from "./bot/BotsListBlock";
 import { BotPostForm } from "./bot/BotPostForm";
 import { BotPostsList } from "./bot/BotPostsList";
 import { BotCronStatus } from "./bot/BotCronStatus";
+import { toast } from "sonner";
 
 interface AdminBotTabProps {
   token: string;
@@ -54,18 +55,37 @@ export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: A
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Удалить этот пост?")) return;
-    await fetch(`${ADMIN_BOT_POSTS_URL}?id=${id}`, {
-      method: "DELETE",
-      headers: { "X-Admin-Token": token },
+    toast("Удалить этот пост?", {
+      action: {
+        label: "Удалить",
+        onClick: async () => {
+          await fetch(`${ADMIN_BOT_POSTS_URL}?id=${id}`, {
+            method: "DELETE",
+            headers: { "X-Admin-Token": token },
+          });
+          toast.success("Пост удалён");
+          fetchPosts();
+        },
+      },
+      cancel: { label: "Отмена", onClick: () => {} },
     });
-    fetchPosts();
   };
 
   const handleEdit = (post: BotPost) => {
     setEditingId(post.id);
     setShowAdd(true);
     setForm({ photo_url: post.photo_url, greeting: post.greeting, description: post.description });
+  };
+
+  const reportSend = (tgOk: boolean, vkOk: boolean, data: Record<string, unknown>) => {
+    const vk = data.vk as { error?: string } | undefined;
+    const desc = [
+      tgOk ? "Telegram: отправлено" : `Telegram: ${data.tg_status || "ошибка"}`,
+      vkOk ? "ВКонтакте: отправлено" : `ВКонтакте: ${vk?.error || data.vk_status || "ошибка"}`,
+    ].join(" · ");
+    if (tgOk && vkOk) toast.success("Пост опубликован", { description: desc });
+    else if (tgOk || vkOk) toast.warning("Опубликовано частично", { description: desc });
+    else toast.error("Не удалось опубликовать", { description: desc });
   };
 
   const handleSendNow = async () => {
@@ -75,34 +95,33 @@ export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: A
       const data = await res.json();
       const tgOk = !!data.tg;
       const vkOk = !!(data.vk && data.vk.ok);
-      const lines: string[] = [];
-      lines.push(tgOk ? "✅ Telegram: отправлено" : `❌ Telegram: ${data.tg_status || "ошибка"}`);
-      lines.push(vkOk ? "✅ ВКонтакте: отправлено" : `❌ ВКонтакте: ${(data.vk && data.vk.error) || data.vk_status || "ошибка"}`);
-      alert(lines.join("\n"));
+      reportSend(tgOk, vkOk, data);
       fetchPosts();
     } catch {
-      alert("Ошибка соединения");
+      toast.error("Ошибка соединения");
     }
     setSending(false);
   };
 
   const handleSendOne = async (id: number) => {
-    if (!confirm("Отправить этот пост в Telegram и ВКонтакте прямо сейчас?")) return;
-    setSendingId(id);
-    try {
-      const res = await fetch(`${SAIT_BOT_DAILY_URL}?post_id=${id}`);
-      const data = await res.json();
-      const tgOk = !!data.tg;
-      const vkOk = !!(data.vk && data.vk.ok);
-      const lines: string[] = [];
-      lines.push(tgOk ? "✅ Telegram: отправлено" : `❌ Telegram: ${data.tg_status || "ошибка"}`);
-      lines.push(vkOk ? "✅ ВКонтакте: отправлено" : `❌ ВКонтакте: ${(data.vk && data.vk.error) || data.vk_status || "ошибка"}`);
-      alert(lines.join("\n"));
-      fetchPosts();
-    } catch {
-      alert("Ошибка соединения");
-    }
-    setSendingId(null);
+    toast("Отправить этот пост в Telegram и ВКонтакте прямо сейчас?", {
+      action: {
+        label: "Отправить",
+        onClick: async () => {
+          setSendingId(id);
+          try {
+            const res = await fetch(`${SAIT_BOT_DAILY_URL}?post_id=${id}`);
+            const data = await res.json();
+            reportSend(!!data.tg, !!(data.vk && data.vk.ok), data);
+            fetchPosts();
+          } catch {
+            toast.error("Ошибка соединения");
+          }
+          setSendingId(null);
+        },
+      },
+      cancel: { label: "Отмена", onClick: () => {} },
+    });
   };
 
   const showBotsBlock = false as boolean;
