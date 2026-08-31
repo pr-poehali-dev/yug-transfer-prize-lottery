@@ -1,16 +1,8 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
-import { TG_ACCOUNTS_URL } from "./adminTypes";
-import type { TgAccount } from "./adminTypes";
-
-interface InviteStats {
-  total: number;
-  pending: number;
-  added: number;
-  failed: number;
-  no_username: number;
-  added_today: number;
-}
+import { TG_ACCOUNTS_URL, INVITE_BASES_URL } from "./adminTypes";
+import type { TgAccount, InviteBase } from "./adminTypes";
+import { InviteBasesBlock } from "./invite/InviteBasesBlock";
 
 interface AdminInviteTabProps {
   token: string;
@@ -23,8 +15,10 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
   const expanded = controlledExpanded ?? localExpanded;
   const toggleExpanded = onToggle ?? (() => setLocalExpanded(v => !v));
 
-  const [stats, setStats] = useState<InviteStats | null>(null);
   const [accounts, setAccounts] = useState<TgAccount[]>([]);
+  const [bases, setBases] = useState<InviteBase[]>([]);
+  const [activeBase, setActiveBase] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   const [target, setTarget] = useState("");
   const [targetDraft, setTargetDraft] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,19 +27,24 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${TG_ACCOUNTS_URL}?action=invite_stats`, { headers: { "X-Admin-Token": token } });
-      const data = await res.json();
-      if (data.ok) {
-        setStats(data.stats);
-        setAccounts(data.accounts || []);
-        setTarget(data.invite_target || "");
-        setTargetDraft(data.invite_target || "");
+      const [accRes, basesRes] = await Promise.all([
+        fetch(`${TG_ACCOUNTS_URL}?action=invite_stats`, { headers: { "X-Admin-Token": token } }),
+        fetch(INVITE_BASES_URL, { headers: { "X-Admin-Token": token } }),
+      ]);
+      const acc = await accRes.json();
+      if (acc.ok) {
+        setAccounts(acc.accounts || []);
+        setTarget(acc.invite_target || "");
+        setTargetDraft(acc.invite_target || "");
       }
+      const bs = await basesRes.json();
+      if (bs.ok) { setBases(bs.bases || []); setActiveBase(bs.active_base || 0); }
+      setLoaded(true);
     } catch { /* */ }
     setLoading(false);
   };
 
-  useEffect(() => { if (expanded && !stats) load(); }, [expanded]);
+  useEffect(() => { if (expanded && !loaded) load(); }, [expanded]);
 
   const saveTarget = async () => {
     if (!targetDraft.trim()) return;
@@ -74,7 +73,11 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
         <div className="flex items-center gap-2">
           <Icon name="UserPlus" size={15} className="text-emerald-400" />
           <span className="text-sm font-medium text-white">Invite</span>
-          {stats && <span className="text-[11px] text-white/40">· {stats.pending} в очереди</span>}
+          {!!activeBase && (
+            <span className="text-[11px] text-white/40">
+              · {(bases.find(b => b.id === activeBase)?.pending || 0).toLocaleString("ru")} в очереди
+            </span>
+          )}
         </div>
         <Icon name="ChevronDown" size={16}
           className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -111,37 +114,14 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
             )}
           </div>
 
-          {/* Статистика базы */}
-          <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] text-white/60 font-medium flex items-center gap-1.5">
-                <Icon name="Database" size={12} /> База контактов
-              </p>
-              <button type="button" onClick={load} disabled={loading}
-                className="text-white/40 hover:text-white transition-colors">
-                <Icon name="RefreshCw" size={13} className={loading ? "animate-spin" : ""} />
-              </button>
-            </div>
-            {stats ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mt-2">
-                {[
-                  { label: "В очереди", value: stats.pending, color: "text-sky-300" },
-                  { label: "Приглашено", value: stats.added, color: "text-emerald-300" },
-                  { label: "Сегодня", value: stats.added_today, color: "text-purple-300" },
-                  { label: "Ошибки", value: stats.failed, color: "text-amber-300" },
-                  { label: "Без username", value: stats.no_username, color: "text-white/40" },
-                  { label: "Всего", value: stats.total, color: "text-white/70" },
-                ].map(s => (
-                  <div key={s.label} className="rounded-lg bg-white/5 px-2 py-1.5">
-                    <p className={`text-sm font-semibold ${s.color}`}>{s.value.toLocaleString("ru")}</p>
-                    <p className="text-[10px] text-white/40">{s.label}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[11px] text-white/30 mt-2">{loading ? "Загружаю…" : "Нет данных"}</p>
-            )}
-          </div>
+          <InviteBasesBlock
+            token={token}
+            bases={bases}
+            activeBase={activeBase}
+            loading={loading}
+            onChanged={(b, a) => { setBases(b); setActiveBase(a); }}
+            onReload={load}
+          />
 
           {/* Аккаунты */}
           <div className="rounded-xl bg-white/5 border border-white/10 p-3">
