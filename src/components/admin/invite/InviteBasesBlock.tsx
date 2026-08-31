@@ -11,14 +11,31 @@ interface Props {
   onReload: () => void;
 }
 
+interface UploadResult {
+  imported: number;
+  duplicates: number;
+  skipped: number;
+  name: string;
+}
+
 export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged, onReload }: Props) {
   const [busy, setBusy] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [fileText, setFileText] = useState("");
   const [fileInfo, setFileInfo] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [result, setResult] = useState<UploadResult | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(0);
+  const [renaming, setRenaming] = useState(0);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [toast, setToast] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 4000);
+  };
 
   const call = async (action: string, body: Record<string, unknown>) => {
     setBusy(true);
@@ -43,6 +60,7 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
     const text = await f.text();
     const count = text.split(/[\s,;]+/).filter(Boolean).length;
     setFileText(text);
+    setUploadError("");
     setFileInfo(`${f.name} · строк: ${count.toLocaleString("ru")}`);
     if (!uploadName) setUploadName(f.name.replace(/\.[^.]+$/, ""));
   };
@@ -50,12 +68,15 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
   const handleUpload = async () => {
     if (!fileText.trim()) return;
     setUploadError("");
-    const data = await call("create", { name: uploadName || "Новая база", content: fileText });
+    const name = uploadName || "Новая база";
+    const data = await call("create", { name, content: fileText });
     if (data.ok) {
-      alert(
-        `Загружено контактов: ${data.imported}\n` +
-        `Дубли: ${data.duplicates || 0}\nНераспознанные строки: ${data.skipped || 0}`
-      );
+      setResult({
+        imported: data.imported || 0,
+        duplicates: data.duplicates || 0,
+        skipped: data.skipped || 0,
+        name,
+      });
       setFileText(""); setFileInfo(""); setUploadName(""); setShowUpload(false);
       if (fileRef.current) fileRef.current.value = "";
     } else {
@@ -63,21 +84,22 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
     }
   };
 
-  const handleDelete = async (b: InviteBase) => {
-    if (!confirm(`Удалить базу «${b.name}» и все ${b.total.toLocaleString("ru")} контактов?`)) return;
-    await call("delete", { id: b.id });
+  const handleDelete = async (id: number) => {
+    setConfirmDelete(0);
+    await call("delete", { id });
+    showToast("База удалена");
   };
 
   const handleReset = async (b: InviteBase) => {
-    if (!confirm(`Вернуть в очередь все неудачные контакты базы «${b.name}»?`)) return;
     const d = await call("reset_status", { id: b.id });
-    if (d.ok) alert(`Возвращено в очередь: ${d.reset}`);
+    if (d.ok) showToast(`Возвращено в очередь: ${d.reset}`);
   };
 
-  const handleRename = async (b: InviteBase) => {
-    const name = prompt("Новое название базы", b.name);
-    if (!name || name === b.name) return;
-    await call("rename", { id: b.id, name });
+  const submitRename = async (id: number) => {
+    const name = renameDraft.trim();
+    setRenaming(0);
+    if (!name) return;
+    await call("rename", { id, name });
   };
 
   return (
@@ -87,7 +109,7 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
           <Icon name="Database" size={12} /> Базы для инвайта · {bases.length}
         </p>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setShowUpload(v => !v)}
+          <button type="button" onClick={() => { setShowUpload(v => !v); setUploadError(""); }}
             className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
             <Icon name={showUpload ? "X" : "Plus"} size={12} />{showUpload ? "Отмена" : "Добавить"}
           </button>
@@ -97,6 +119,37 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
           </button>
         </div>
       </div>
+
+      {toast && (
+        <p className="mt-2 text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2.5 py-1.5">
+          {toast}
+        </p>
+      )}
+
+      {result && (
+        <div className="mt-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 p-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[12px] text-emerald-300 font-medium flex items-center gap-1.5">
+              <Icon name="CircleCheck" size={13} /> База «{result.name}» загружена
+            </p>
+            <button type="button" onClick={() => setResult(null)} className="text-white/35 hover:text-white shrink-0">
+              <Icon name="X" size={13} />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1 mt-2">
+            {[
+              { l: "загружено", v: result.imported, c: "text-emerald-300" },
+              { l: "дубли", v: result.duplicates, c: "text-white/50" },
+              { l: "не распознано", v: result.skipped, c: "text-amber-300" },
+            ].map(s => (
+              <div key={s.l} className="rounded-md bg-black/20 px-1.5 py-1">
+                <p className={`text-[13px] font-semibold ${s.c}`}>{s.v.toLocaleString("ru")}</p>
+                <p className="text-[9px] text-white/35 leading-tight">{s.l}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showUpload && (
         <div className="mt-2 rounded-lg bg-emerald-500/5 border border-emerald-500/15 p-2.5 space-y-2">
@@ -137,30 +190,67 @@ export function InviteBasesBlock({ token, bases, activeBase, loading, onChanged,
               className={`rounded-lg border p-2.5 transition-colors ${
                 isActive ? "bg-emerald-500/10 border-emerald-500/30" : "bg-white/5 border-white/10"
               }`}>
-              <div className="flex items-start justify-between gap-2">
-                <button type="button" onClick={() => !isActive && call("activate", { id: b.id })}
-                  className="min-w-0 text-left flex items-start gap-1.5">
-                  <Icon name={isActive ? "CircleCheck" : "Circle"} size={14}
-                    className={`mt-0.5 shrink-0 ${isActive ? "text-emerald-400" : "text-white/30"}`} />
-                  <span className="min-w-0">
-                    <span className="block text-[13px] text-white truncate">{b.name}</span>
-                    <span className="block text-[10px] text-white/40">
-                      {isActive ? "активная база · " : ""}всего {b.total.toLocaleString("ru")}
-                    </span>
-                  </span>
-                </button>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button type="button" onClick={() => handleRename(b)} className="text-white/35 hover:text-white">
-                    <Icon name="Pencil" size={12} />
+              {renaming === b.id ? (
+                <div className="flex gap-1.5">
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={e => setRenameDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") submitRename(b.id); if (e.key === "Escape") setRenaming(0); }}
+                    className="flex-1 min-w-0 bg-white/5 border border-emerald-500/40 rounded-lg px-2 py-1 text-white text-[13px] outline-none"
+                  />
+                  <button type="button" onClick={() => submitRename(b.id)}
+                    className="shrink-0 px-2.5 rounded-lg bg-emerald-500/80 hover:bg-emerald-500 text-white text-[11px]">
+                    ОК
                   </button>
-                  <button type="button" onClick={() => handleReset(b)} className="text-white/35 hover:text-amber-300">
-                    <Icon name="RotateCcw" size={12} />
-                  </button>
-                  <button type="button" onClick={() => handleDelete(b)} className="text-white/35 hover:text-red-400">
-                    <Icon name="Trash2" size={12} />
+                  <button type="button" onClick={() => setRenaming(0)}
+                    className="shrink-0 px-2 text-white/40 hover:text-white">
+                    <Icon name="X" size={13} />
                   </button>
                 </div>
-              </div>
+              ) : confirmDelete === b.id ? (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-red-300 min-w-0">
+                    Удалить «{b.name}» и {b.total.toLocaleString("ru")} контактов?
+                  </p>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button type="button" onClick={() => handleDelete(b.id)}
+                      className="px-2.5 py-1 rounded-lg bg-red-500/80 hover:bg-red-500 text-white text-[11px]">
+                      Удалить
+                    </button>
+                    <button type="button" onClick={() => setConfirmDelete(0)}
+                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px]">
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <button type="button" onClick={() => !isActive && call("activate", { id: b.id })}
+                    className="min-w-0 text-left flex items-start gap-1.5">
+                    <Icon name={isActive ? "CircleCheck" : "Circle"} size={14}
+                      className={`mt-0.5 shrink-0 ${isActive ? "text-emerald-400" : "text-white/30"}`} />
+                    <span className="min-w-0">
+                      <span className="block text-[13px] text-white truncate">{b.name}</span>
+                      <span className="block text-[10px] text-white/40">
+                        {isActive ? "активная база · " : "нажми, чтобы выбрать · "}всего {b.total.toLocaleString("ru")}
+                      </span>
+                    </span>
+                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button type="button" onClick={() => { setRenaming(b.id); setRenameDraft(b.name); }}
+                      className="text-white/35 hover:text-white">
+                      <Icon name="Pencil" size={12} />
+                    </button>
+                    <button type="button" onClick={() => handleReset(b)} className="text-white/35 hover:text-amber-300">
+                      <Icon name="RotateCcw" size={12} />
+                    </button>
+                    <button type="button" onClick={() => setConfirmDelete(b.id)} className="text-white/35 hover:text-red-400">
+                      <Icon name="Trash2" size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-4 gap-1 mt-2">
                 {[
                   { l: "в очереди", v: b.pending, c: "text-sky-300" },
