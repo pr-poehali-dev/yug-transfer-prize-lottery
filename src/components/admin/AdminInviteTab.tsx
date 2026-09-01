@@ -5,6 +5,7 @@ import type { TgAccount, InviteBase } from "./adminTypes";
 import { InviteBasesBlock } from "./invite/InviteBasesBlock";
 import { InviteRunBlock } from "./invite/InviteRunBlock";
 import { useInviteRun } from "./invite/useInviteRun";
+import { AddAccountForm } from "./invite/AddAccountForm";
 
 interface AdminInviteTabProps {
   token: string;
@@ -188,6 +189,7 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
                 <p className="text-[11px] text-white/30">{loading ? "Загружаю…" : "Аккаунтов нет"}</p>
               )}
             </div>
+            <AddAccountForm token={token} onDone={load} />
           </div>
 
           <InviteRunBlock
