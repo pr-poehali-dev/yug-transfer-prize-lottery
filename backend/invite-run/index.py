@@ -380,7 +380,7 @@ async def invite_one() -> dict:
         await client.connect()
         _CLIENTS[acc['id']] = client
     try:
-        group = _GROUPS.get((acc['id'], username_group))
+        group = _GROUPS.get(username_group + str(acc['id']))
         if group is None:
             group = await client.get_entity(username_group)
             try:
@@ -392,7 +392,7 @@ async def invite_one() -> dict:
                 msg = str(je)
                 if 'ALREADY' not in msg.upper():
                     log_run(acc['id'], 0, 0, 1, f'join: {msg[:150]}')
-            _GROUPS[(acc['id'], username_group)] = group
+            _GROUPS[username_group + str(acc['id'])] = group
         user = await client.get_entity(tgt['username'])
         await client(InviteToChannelRequest(group, [user]))
         mark_target(tgt['id'], 'added', acc['id'])
@@ -468,15 +468,19 @@ async def join_group(acc_id: int) -> dict:
     if not acc:
         return {'ok': False, 'error': 'Аккаунт не найден'}
 
-    client = None
     try:
-        client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
-                                connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
-        await client.connect()
-        if not await client.is_user_authorized():
-            return {'ok': False, 'status': 'dead',
-                    'error': 'Сессия не работает — нужен новый вход'}
-        group = await client.get_entity(username_group)
+        client = _CLIENTS.get(acc['id'])
+        if client is None or not client.is_connected():
+            client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
+                                    connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
+            await client.connect()
+            _CLIENTS[acc['id']] = client
+
+        group = _GROUPS.get(username_group + str(acc['id']))
+        if group is None:
+            group = await client.get_entity(username_group)
+            _GROUPS[username_group + str(acc['id'])] = group
+
         try:
             await client(JoinChannelRequest(group))
             return {'ok': True, 'status': 'joined', 'text': 'вступил в группу'}
@@ -489,12 +493,6 @@ async def join_group(acc_id: int) -> dict:
             return {'ok': False, 'status': 'no_join', 'error': m[:150]}
     except Exception as e:
         return {'ok': False, 'status': 'error', 'error': str(e)[:150]}
-    finally:
-        if client is not None:
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
 
 
 async def check_accounts(index: int) -> dict:
@@ -510,14 +508,14 @@ async def check_accounts(index: int) -> dict:
 
     acc = pool[index]
     row = {'label': acc['label'], 'left': acc['left']}
-    client = None
     try:
-        client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
-                                connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
-        await client.connect()
-        if not await client.is_user_authorized():
-            row.update(status='dead', text='сессия не работает — нужен новый вход')
-        else:
+        client = _CLIENTS.get(acc['id'])
+        if client is None or not client.is_connected():
+            client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
+                                    connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
+            await client.connect()
+            _CLIENTS[acc['id']] = client
+        if True:
             group = await client.get_entity(username_group)
             try:
                 await client(JoinChannelRequest(group))
@@ -532,12 +530,6 @@ async def check_accounts(index: int) -> dict:
                     row.update(status='no_join', text=f'не может вступить: {m[:120]}')
     except Exception as e:
         row.update(status='error', text=str(e)[:140])
-    finally:
-        if client is not None:
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
     return {'ok': True, 'account': row, 'index': index, 'total': total,
             'done': index + 1 >= total}
 

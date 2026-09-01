@@ -80,7 +80,21 @@ export function useInviteRun(token: string, onProgress?: () => void) {
   const joinGroup = useCallback(async (accId: number) => {
     setJoining(accId);
     try {
-      const d = await call(`join&id=${accId}`);
+      let d: { ok?: boolean; text?: string; error?: string } = {};
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          d = await call(`join&id=${accId}`);
+        } catch {
+          d = { ok: false, error: "timeout" };
+        }
+        if (d.ok) break;
+        const e = (d.error || "").toLowerCase();
+        const retriable = !e || e.includes("timeout") || e.includes("connect")
+          || e.includes("disconnect") || e.includes("подключ");
+        if (!retriable) break;
+        setJoined(p => ({ ...p, [accId]: `попытка ${attempt + 2}…` }));
+        await new Promise(r => setTimeout(r, 1200));
+      }
       if (d.ok) {
         setJoined(p => ({ ...p, [accId]: d.text || "в группе" }));
         toast.success(d.text === "уже в группе" ? "Уже в группе" : "Вступил в группу");
