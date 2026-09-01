@@ -35,7 +35,7 @@ def handler(event: dict, context) -> dict:
         return resp(200, {'ok': True, 'skipped': 'лимиты на сегодня исчерпаны'})
 
     try:
-        result = asyncio.run(core.invite_batch(3, budget=15.0))
+        result = core.run_async(core.invite_batch(3, budget=15.0))
     except asyncio.TimeoutError:
         core.note('Telegram не ответил, повторим в следующий заход')
         return resp(200, {'ok': True, 'skipped': 'нет связи с Telegram'})

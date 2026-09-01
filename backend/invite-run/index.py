@@ -32,6 +32,23 @@ PACES = {
 DEFAULT_PACE = 'safe'
 
 
+
+_LOOP = None
+
+
+def loop():
+    """Один постоянный цикл — иначе сохранённые соединения ломаются."""
+    global _LOOP
+    if _LOOP is None or _LOOP.is_closed():
+        _LOOP = asyncio.new_event_loop()
+        asyncio.set_event_loop(_LOOP)
+    return _LOOP
+
+
+def run_async(coro):
+    return loop().run_until_complete(coro)
+
+
 _CONN = None
 _CLIENTS = {}
 _GROUPS = {}
@@ -379,7 +396,7 @@ async def invite_one() -> dict:
         client = TelegramClient(StringSession(acc['session']), api_id, api_hash,
                                 connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
-        await asyncio.wait_for(client.connect(), timeout=3.0)
+        await asyncio.wait_for(client.connect(), timeout=4.2)
         _CLIENTS[acc['id']] = client
     try:
         group = _GROUPS.get(username_group + str(acc['id']))
@@ -476,7 +493,7 @@ async def join_group(acc_id: int) -> dict:
             client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
                                     connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
-            await asyncio.wait_for(client.connect(), timeout=3.0)
+            await asyncio.wait_for(client.connect(), timeout=4.2)
             _CLIENTS[acc['id']] = client
 
         group = _GROUPS.get(username_group + str(acc['id']))
@@ -520,7 +537,7 @@ async def check_accounts(index: int) -> dict:
             client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
                                     connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
-            await asyncio.wait_for(client.connect(), timeout=3.0)
+            await asyncio.wait_for(client.connect(), timeout=4.2)
             _CLIENTS[acc['id']] = client
         if True:
             group = await client.get_entity(username_group)
@@ -553,7 +570,7 @@ def api_hash_env() -> str:
 
 def run_invites(size: int) -> dict:
     """Запускает шаг рассылки и добавляет актуальное состояние в ответ."""
-    result = asyncio.run(invite_batch(size))
+    result = run_async(invite_batch(size))
     result.pop('need_state', None)
     result['state'] = run_state()
     return result
@@ -592,10 +609,10 @@ def handler(event: dict, context) -> dict:
         return resp(200, {'ok': True, 'state': run_state()})
 
     if action == 'join':
-        return resp(200, asyncio.run(join_group(int(params.get('id') or 0))))
+        return resp(200, run_async(join_group(int(params.get('id') or 0))))
 
     if action == 'check':
-        return resp(200, asyncio.run(check_accounts(int(params.get('i') or 0))))
+        return resp(200, run_async(check_accounts(int(params.get('i') or 0))))
 
     if action == 'tick':
         return resp(200, run_invites(int(params.get('size') or 1)))
