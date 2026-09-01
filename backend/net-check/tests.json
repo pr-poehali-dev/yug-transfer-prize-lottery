@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Проверка сети",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": { "ok": "boolean" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

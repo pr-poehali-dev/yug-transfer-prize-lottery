@@ -92,6 +92,17 @@ def resp(status: int, body: dict) -> dict:
     return {'statusCode': status, 'headers': CORS, 'body': json.dumps(body, default=str)}
 
 
+def tg_proxy():
+    """Прокси до Telegram: сервер приложения ходит в Telegram только через него."""
+    raw = os.environ.get('TG_PROXY', '').strip()
+    if not raw:
+        return None
+    from urllib.parse import urlparse
+    u = urlparse(raw if '://' in raw else 'socks5://' + raw)
+    kind = {'socks5': 2, 'socks4': 1, 'http': 3}.get((u.scheme or 'socks5').lower(), 2)
+    return (kind, u.hostname, u.port or 1080, True, u.username, u.password)
+
+
 def db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
@@ -211,7 +222,7 @@ def add_account(label: str, phone: str, session_string: str) -> int:
 async def send_code(phone: str) -> dict:
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
-    client = TelegramClient(StringSession(), api_id, api_hash, connection=ConnectionTcpAbridged,
+    client = TelegramClient(StringSession(), api_id, api_hash, proxy=tg_proxy(), connection=ConnectionTcpAbridged,
                             connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
     await client.connect()
     try:
@@ -220,8 +231,10 @@ async def send_code(phone: str) -> dict:
         return {'ok': True}
     except PhoneNumberInvalidError:
         return {'ok': False, 'error': 'Неверный номер телефона'}
+    except (ConnectionError, OSError, asyncio.TimeoutError):
+        return {'ok': False, 'error': 'Нет доступа к Telegram с сервера. Нужен прокси (TG_PROXY)'}
     except Exception as e:
-        return {'ok': False, 'error': str(e)}
+        return {'ok': False, 'error': str(e) or type(e).__name__}
     finally:
         await client.disconnect()
 
@@ -232,7 +245,7 @@ async def verify_code(phone: str, code: str, label: str) -> dict:
         return {'ok': False, 'error': 'Сначала запроси код'}
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
-    client = TelegramClient(StringSession(sess['session_string']), api_id, api_hash,
+    client = TelegramClient(StringSession(sess['session_string']), api_id, api_hash, proxy=tg_proxy(),
                             connection=ConnectionTcpAbridged,
                             connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
     await client.connect()
@@ -261,7 +274,7 @@ async def verify_2fa(phone: str, password: str, label: str) -> dict:
         return {'ok': False, 'error': 'Сначала запроси код'}
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
-    client = TelegramClient(StringSession(sess['session_string']), api_id, api_hash,
+    client = TelegramClient(StringSession(sess['session_string']), api_id, api_hash, proxy=tg_proxy(),
                             connection=ConnectionTcpAbridged,
                             connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
     await client.connect()
@@ -368,7 +381,7 @@ async def join_group_one(account_id: int, target: str = '') -> dict:
 
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
-    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
+    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash, proxy=tg_proxy())
     await client.connect()
     try:
         if not await client.is_user_authorized():
@@ -439,7 +452,7 @@ async def check_target(target: str = '') -> dict:
     acc = get_account_session(ids[0])
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
-    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash)
+    client = TelegramClient(StringSession(acc['session_string']), api_id, api_hash, proxy=tg_proxy())
     await client.connect()
     try:
         if not await client.is_user_authorized():

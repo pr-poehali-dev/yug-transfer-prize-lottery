@@ -1,4 +1,5 @@
 {
+  "net-check": "https://functions.poehali.dev/11cd34da-b7b8-4440-a2d4-258a0ffe979f",
   "invite-cron": "https://functions.poehali.dev/989d3a36-7a64-4d9e-9a4c-a3c486e4a980",
   "invite-run": "https://functions.poehali.dev/66269b46-56a1-420d-9371-47218b8605eb",
   "invite-bases": "https://functions.poehali.dev/3987ac55-9490-466a-ac86-784129dab17c",

@@ -54,6 +54,17 @@ _CLIENTS = {}
 _GROUPS = {}
 
 
+def tg_proxy():
+    """Прокси до Telegram: сервер приложения ходит в Telegram только через него."""
+    raw = os.environ.get('TG_PROXY', '').strip()
+    if not raw:
+        return None
+    from urllib.parse import urlparse
+    u = urlparse(raw if '://' in raw else 'socks5://' + raw)
+    kind = {'socks5': 2, 'socks4': 1, 'http': 3}.get((u.scheme or 'socks5').lower(), 2)
+    return (kind, u.hostname, u.port or 1080, True, u.username, u.password)
+
+
 def db():
     """Одно соединение на весь вызов — экономит ~100 мс на каждом запросе."""
     global _CONN
@@ -393,7 +404,7 @@ async def invite_one() -> dict:
     api_hash = os.environ['TG_API_HASH']
     client = _CLIENTS.get(acc['id'])
     if client is None or not client.is_connected():
-        client = TelegramClient(StringSession(acc['session']), api_id, api_hash,
+        client = TelegramClient(StringSession(acc['session']), api_id, api_hash, proxy=tg_proxy(),
                                 connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
         await asyncio.wait_for(client.connect(), timeout=4.2)
@@ -490,7 +501,7 @@ async def join_group(acc_id: int) -> dict:
     try:
         client = _CLIENTS.get(acc['id'])
         if client is None or not client.is_connected():
-            client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
+            client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(), proxy=tg_proxy(),
                                     connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
             await asyncio.wait_for(client.connect(), timeout=4.2)
@@ -534,7 +545,7 @@ async def check_accounts(index: int) -> dict:
     try:
         client = _CLIENTS.get(acc['id'])
         if client is None or not client.is_connected():
-            client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
+            client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(), proxy=tg_proxy(),
                                     connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
             await asyncio.wait_for(client.connect(), timeout=4.2)
