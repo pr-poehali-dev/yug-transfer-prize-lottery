@@ -74,6 +74,27 @@ export function useInviteRun(token: string, onProgress?: () => void) {
     }
   }, [call]);
 
+  const [joining, setJoining] = useState<number | null>(null);
+  const [joined, setJoined] = useState<Record<number, string>>({});
+
+  const joinGroup = useCallback(async (accId: number) => {
+    setJoining(accId);
+    try {
+      const d = await call(`join&id=${accId}`);
+      if (d.ok) {
+        setJoined(p => ({ ...p, [accId]: d.text || "в группе" }));
+        toast.success(d.text === "уже в группе" ? "Уже в группе" : "Вступил в группу");
+      } else {
+        setJoined(p => ({ ...p, [accId]: d.error || "ошибка" }));
+        toast.error(d.error || "Не удалось вступить");
+      }
+    } catch {
+      toast.error("Нет связи с сервером");
+    } finally {
+      setJoining(null);
+    }
+  }, [call]);
+
   const setRunning = (v: boolean) => { runningRef.current = v; setLive(v); };
 
   const delayRef = useRef(60);
@@ -186,5 +207,5 @@ export function useInviteRun(token: string, onProgress?: () => void) {
 
   const canStart = !!state && !!state.pending && !!state.capacity_today;
 
-  return { state, busy, live, nextIn, start, stop, toggle, loadState, canStart, changePace, error, checkAccounts, checking, checkRows };
+  return { state, busy, live, nextIn, start, stop, toggle, loadState, canStart, changePace, error, checkAccounts, checking, checkRows, joinGroup, joining, joined };
 }

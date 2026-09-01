@@ -457,6 +457,44 @@ async def invite_batch(size: int, budget: float = 20.0) -> dict:
     return out
 
 
+async def join_group(acc_id: int) -> dict:
+    """Вступает в целевую группу конкретным аккаунтом."""
+    username_group = parse_username(get_invite_target())
+    if not username_group:
+        return {'ok': False, 'error': 'Некорректная ссылка на группу'}
+
+    acc = next((a for a in account_pool() if a['id'] == acc_id), None)
+    if not acc:
+        return {'ok': False, 'error': 'Аккаунт не найден'}
+
+    client = None
+    try:
+        client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env())
+        await client.connect()
+        if not await client.is_user_authorized():
+            return {'ok': False, 'status': 'dead',
+                    'error': 'Сессия не работает — нужен новый вход'}
+        group = await client.get_entity(username_group)
+        try:
+            await client(JoinChannelRequest(group))
+            return {'ok': True, 'status': 'joined', 'text': 'вступил в группу'}
+        except UserAlreadyParticipantError:
+            return {'ok': True, 'status': 'ok', 'text': 'уже в группе'}
+        except Exception as je:
+            m = str(je)
+            if 'ALREADY' in m.upper():
+                return {'ok': True, 'status': 'ok', 'text': 'уже в группе'}
+            return {'ok': False, 'status': 'no_join', 'error': m[:150]}
+    except Exception as e:
+        return {'ok': False, 'status': 'error', 'error': str(e)[:150]}
+    finally:
+        if client is not None:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+
+
 async def check_accounts(index: int) -> dict:
     """Проверяет ОДИН аккаунт по порядковому номеру: жив ли и в группе ли."""
     username_group = parse_username(get_invite_target())
@@ -548,6 +586,9 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get('body') or '{}')
         set_pace((body.get('pace') or '').strip())
         return resp(200, {'ok': True, 'state': run_state()})
+
+    if action == 'join':
+        return resp(200, asyncio.run(join_group(int(params.get('id') or 0))))
 
     if action == 'check':
         return resp(200, asyncio.run(check_accounts(int(params.get('i') or 0))))

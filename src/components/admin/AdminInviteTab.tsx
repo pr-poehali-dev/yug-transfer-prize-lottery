@@ -162,9 +162,26 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
                       {" · "}сегодня {a.daily_invites_used}
                     </p>
                   </div>
-                  <span className={`shrink-0 w-2 h-2 rounded-full ${
-                    a.is_banned ? "bg-red-400" : a.needs_warmup ? "bg-amber-400" : "bg-emerald-400"
-                  }`} />
+                  <div className="flex items-center gap-2 shrink-0">
+                    {run.joined[a.id] && (
+                      <span className="text-[10px] text-emerald-300/70 max-w-[90px] truncate">
+                        {run.joined[a.id]}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => run.joinGroup(a.id)}
+                      disabled={run.joining === a.id}
+                      className="px-2 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 disabled:opacity-50 text-emerald-300 text-[10px] font-medium transition-colors flex items-center gap-1"
+                    >
+                      <Icon name={run.joining === a.id ? "Loader2" : "LogIn"} size={11}
+                        className={run.joining === a.id ? "animate-spin" : ""} />
+                      В группу
+                    </button>
+                    <span className={`w-2 h-2 rounded-full ${
+                      a.is_banned ? "bg-red-400" : a.needs_warmup ? "bg-amber-400" : "bg-emerald-400"
+                    }`} />
+                  </div>
                 </div>
               ))}
               {!accounts.length && (
