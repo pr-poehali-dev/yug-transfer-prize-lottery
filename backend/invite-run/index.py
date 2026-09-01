@@ -457,25 +457,26 @@ async def invite_batch(size: int, budget: float = 20.0) -> dict:
     return out
 
 
-async def check_accounts() -> dict:
-    """Проверяет каждый аккаунт: жив ли, в группе ли, может ли приглашать."""
+async def check_accounts(index: int) -> dict:
+    """Проверяет ОДИН аккаунт по порядковому номеру: жив ли и в группе ли."""
     username_group = parse_username(get_invite_target())
     if not username_group:
         return {'ok': False, 'error': 'Некорректная ссылка на группу'}
 
-    api_id = int(os.environ['TG_API_ID'])
-    api_hash = os.environ['TG_API_HASH']
-    report = []
-    for acc in account_pool():
-        row = {'label': acc['label'], 'left': acc['left']}
-        try:
-            client = TelegramClient(StringSession(acc['session']), api_id, api_hash)
-            await client.connect()
-            if not await client.is_user_authorized():
-                row.update(status='dead', text='сессия не работает — нужен новый вход')
-                report.append(row)
-                await client.disconnect()
-                continue
+    pool = account_pool()
+    total = len(pool)
+    if index >= total:
+        return {'ok': True, 'done': True, 'total': total}
+
+    acc = pool[index]
+    row = {'label': acc['label'], 'left': acc['left']}
+    client = None
+    try:
+        client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env())
+        await client.connect()
+        if not await client.is_user_authorized():
+            row.update(status='dead', text='сессия не работает — нужен новый вход')
+        else:
             group = await client.get_entity(username_group)
             try:
                 await client(JoinChannelRequest(group))
@@ -488,11 +489,24 @@ async def check_accounts() -> dict:
                     row.update(status='ok', text='уже в группе')
                 else:
                     row.update(status='no_join', text=f'не может вступить: {m[:120]}')
-            await client.disconnect()
-        except Exception as e:
-            row.update(status='error', text=str(e)[:140])
-        report.append(row)
-    return {'ok': True, 'accounts': report}
+    except Exception as e:
+        row.update(status='error', text=str(e)[:140])
+    finally:
+        if client is not None:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+    return {'ok': True, 'account': row, 'index': index, 'total': total,
+            'done': index + 1 >= total}
+
+
+def api_id_env() -> int:
+    return int(os.environ['TG_API_ID'])
+
+
+def api_hash_env() -> str:
+    return os.environ['TG_API_HASH']
 
 
 def run_invites(size: int) -> dict:
@@ -536,7 +550,7 @@ def handler(event: dict, context) -> dict:
         return resp(200, {'ok': True, 'state': run_state()})
 
     if action == 'check':
-        return resp(200, asyncio.run(check_accounts()))
+        return resp(200, asyncio.run(check_accounts(int(params.get('i') or 0))))
 
     if action == 'tick':
         return resp(200, run_invites(int(params.get('size') or 1)))

@@ -49,15 +49,24 @@ export function useInviteRun(token: string, onProgress?: () => void) {
 
   const checkAccounts = useCallback(async () => {
     setChecking(true);
+    setCheckRows([]);
+    const rows: { label: string; status: string; text: string }[] = [];
     try {
-      const d = await call("check");
-      if (d.ok) {
-        setCheckRows(d.accounts || []);
-        const bad = (d.accounts || []).filter((a: { status: string }) => a.status !== "ok" && a.status !== "joined");
+      for (let i = 0; i < 30; i++) {
+        const d = await call(`check&i=${i}`);
+        if (!d.ok) { toast.error(d.error || "Не удалось проверить"); break; }
+        if (d.account) {
+          rows.push(d.account);
+          setCheckRows([...rows]);
+        }
+        if (d.done) break;
+      }
+      if (rows.length) {
+        const bad = rows.filter(a => a.status !== "ok" && a.status !== "joined");
         toast[bad.length ? "warning" : "success"](
           bad.length ? `Проблемных аккаунтов: ${bad.length}` : "Все аккаунты в группе",
         );
-      } else toast.error(d.error || "Не удалось проверить");
+      }
     } catch {
       toast.error("Нет связи с сервером");
     } finally {
