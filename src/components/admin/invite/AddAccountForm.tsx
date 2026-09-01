@@ -15,12 +15,24 @@ export function AddAccountForm({ token, onDone }: { token: string; onDone: () =>
   const [busy, setBusy] = useState(false);
 
   const call = async (action: string, body: Record<string, string>) => {
-    const res = await fetch(`${TG_ACCOUNTS_URL}?action=${action}`, {
-      method: "POST",
-      headers: { "X-Admin-Token": token, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return res.json();
+    let last: { ok?: boolean; error?: string; need_2fa?: boolean; id?: number } = {};
+    for (let i = 0; i < 3; i++) {
+      try {
+        const res = await fetch(`${TG_ACCOUNTS_URL}?action=${action}`, {
+          method: "POST",
+          headers: { "X-Admin-Token": token, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        last = await res.json();
+      } catch {
+        last = { ok: false, error: "timeout" };
+      }
+      if (last.ok || last.need_2fa) return last;
+      const e = (last.error || "").toLowerCase();
+      if (!(e.includes("timeout") || e.includes("connect") || !e)) return last;
+      await new Promise(r => setTimeout(r, 1200));
+    }
+    return last;
   };
 
   const reset = () => {

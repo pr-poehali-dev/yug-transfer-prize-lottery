@@ -16,6 +16,7 @@ import asyncio
 import psycopg2
 
 from telethon import TelegramClient
+from telethon.network import ConnectionTcpAbridged
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
@@ -210,7 +211,8 @@ def add_account(label: str, phone: str, session_string: str) -> int:
 async def send_code(phone: str) -> dict:
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
-    client = TelegramClient(StringSession(), api_id, api_hash)
+    client = TelegramClient(StringSession(), api_id, api_hash, connection=ConnectionTcpAbridged,
+                            connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
     await client.connect()
     try:
         sent = await client.send_code_request(phone)
@@ -230,7 +232,9 @@ async def verify_code(phone: str, code: str, label: str) -> dict:
         return {'ok': False, 'error': 'Сначала запроси код'}
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
-    client = TelegramClient(StringSession(sess['session_string']), api_id, api_hash)
+    client = TelegramClient(StringSession(sess['session_string']), api_id, api_hash,
+                            connection=ConnectionTcpAbridged,
+                            connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
     await client.connect()
     try:
         await client.sign_in(phone=phone, code=code, phone_code_hash=sess['phone_code_hash'])
@@ -257,7 +261,9 @@ async def verify_2fa(phone: str, password: str, label: str) -> dict:
         return {'ok': False, 'error': 'Сначала запроси код'}
     api_id = int(os.environ['TG_API_ID'])
     api_hash = os.environ['TG_API_HASH']
-    client = TelegramClient(StringSession(sess['session_string']), api_id, api_hash)
+    client = TelegramClient(StringSession(sess['session_string']), api_id, api_hash,
+                            connection=ConnectionTcpAbridged,
+                            connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
     await client.connect()
     try:
         await client.sign_in(password=password)
