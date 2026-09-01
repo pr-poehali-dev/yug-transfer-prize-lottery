@@ -379,7 +379,7 @@ async def invite_one() -> dict:
         client = TelegramClient(StringSession(acc['session']), api_id, api_hash,
                                 connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
-        await client.connect()
+        await asyncio.wait_for(client.connect(), timeout=3.0)
         _CLIENTS[acc['id']] = client
     try:
         group = _GROUPS.get(username_group + str(acc['id']))
@@ -476,7 +476,7 @@ async def join_group(acc_id: int) -> dict:
             client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
                                     connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
-            await client.connect()
+            await asyncio.wait_for(client.connect(), timeout=3.0)
             _CLIENTS[acc['id']] = client
 
         group = _GROUPS.get(username_group + str(acc['id']))
@@ -494,8 +494,11 @@ async def join_group(acc_id: int) -> dict:
             if 'ALREADY' in m.upper():
                 return {'ok': True, 'status': 'ok', 'text': 'уже в группе'}
             return {'ok': False, 'status': 'no_join', 'error': m[:150]}
+    except asyncio.TimeoutError:
+        return {'ok': False, 'status': 'timeout',
+                'error': 'Telegram не ответил за 3 сек — нажми ещё раз'}
     except Exception as e:
-        return {'ok': False, 'status': 'error', 'error': str(e)[:150]}
+        return {'ok': False, 'status': 'error', 'error': str(e)[:150] or type(e).__name__}
 
 
 async def check_accounts(index: int) -> dict:
@@ -517,7 +520,7 @@ async def check_accounts(index: int) -> dict:
             client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
                                     connection=ConnectionTcpAbridged,
                                 connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
-            await client.connect()
+            await asyncio.wait_for(client.connect(), timeout=3.0)
             _CLIENTS[acc['id']] = client
         if True:
             group = await client.get_entity(username_group)
@@ -532,8 +535,10 @@ async def check_accounts(index: int) -> dict:
                     row.update(status='ok', text='уже в группе')
                 else:
                     row.update(status='no_join', text=f'не может вступить: {m[:120]}')
+    except asyncio.TimeoutError:
+        row.update(status='timeout', text='Telegram не ответил за 3 сек')
     except Exception as e:
-        row.update(status='error', text=str(e)[:140])
+        row.update(status='error', text=str(e)[:140] or type(e).__name__)
     return {'ok': True, 'account': row, 'index': index, 'total': total,
             'done': index + 1 >= total}
 
