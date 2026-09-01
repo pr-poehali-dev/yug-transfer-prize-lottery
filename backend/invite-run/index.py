@@ -13,7 +13,7 @@ import psycopg2
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import InviteToChannelRequest
+from telethon.tl.functions.channels import InviteToChannelRequest, JoinChannelRequest
 from telethon.errors import (
     UserPrivacyRestrictedError, UserNotMutualContactError, PeerFloodError,
     FloodWaitError, UserChannelsTooMuchError, UserAlreadyParticipantError,
@@ -319,6 +319,17 @@ def log_run(account_id: int, added: int, privacy: int, failed: int, note: str, b
     conn.commit(); cur.close()
 
 
+def note(msg: str):
+    """Сообщение в статус без изменения счётчиков."""
+    conn = db(); cur = conn.cursor()
+    cur.execute(f"""
+        UPDATE {SCHEMA}.invite_active_run
+        SET last_message = '{esc(msg[:300])}', last_heartbeat = NOW()
+        WHERE id = 1
+    """)
+    conn.commit(); cur.close()
+
+
 def progress(field: str, msg: str):
     conn = db(); cur = conn.cursor()
     cur.execute(f"""
@@ -371,6 +382,15 @@ async def invite_one() -> dict:
         group = _GROUPS.get((acc['id'], username_group))
         if group is None:
             group = await client.get_entity(username_group)
+            try:
+                await client(JoinChannelRequest(group))
+                note(f"{acc['label']} вступил в группу")
+            except UserAlreadyParticipantError:
+                pass
+            except Exception as je:
+                msg = str(je)
+                if 'ALREADY' not in msg.upper():
+                    log_run(acc['id'], 0, 0, 1, f'join: {msg[:150]}')
             _GROUPS[(acc['id'], username_group)] = group
         user = await client.get_entity(tgt['username'])
         await client(InviteToChannelRequest(group, [user]))
