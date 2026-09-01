@@ -12,6 +12,7 @@ import hashlib
 import psycopg2
 
 from telethon import TelegramClient
+from telethon.network import ConnectionTcpAbridged
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import InviteToChannelRequest, JoinChannelRequest
 from telethon.errors import (
@@ -376,7 +377,8 @@ async def invite_one() -> dict:
     client = _CLIENTS.get(acc['id'])
     if client is None or not client.is_connected():
         client = TelegramClient(StringSession(acc['session']), api_id, api_hash,
-                                connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
+                                connection=ConnectionTcpAbridged,
+                                connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
         await client.connect()
         _CLIENTS[acc['id']] = client
     try:
@@ -472,7 +474,8 @@ async def join_group(acc_id: int) -> dict:
         client = _CLIENTS.get(acc['id'])
         if client is None or not client.is_connected():
             client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
-                                    connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
+                                    connection=ConnectionTcpAbridged,
+                                connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
             await client.connect()
             _CLIENTS[acc['id']] = client
 
@@ -512,7 +515,8 @@ async def check_accounts(index: int) -> dict:
         client = _CLIENTS.get(acc['id'])
         if client is None or not client.is_connected():
             client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
-                                    connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
+                                    connection=ConnectionTcpAbridged,
+                                connection_retries=0, retry_delay=0, timeout=3, request_retries=1)
             await client.connect()
             _CLIENTS[acc['id']] = client
         if True:
