@@ -351,7 +351,7 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
     return {'ok': False, 'error': result.get('description', 'Unknown error')}
 
 
-ALL_CHATS = ['main', 'vip', 'horse', 'chat4', 'chat5', 'chat6', 'chat7', 'chat8', 'chat9']
+ALL_CHATS = ['main', 'vip', 'horse', 'chat4', 'chat5', 'chat6', 'chat7', 'chat8', 'chat9', 'chat10']
 
 
 def parse_chats(value) -> list:
@@ -542,6 +542,7 @@ def handler(event: dict, context) -> dict:
     channel_chat7 = os.environ.get('POSTS_CHAT_7_ID', '') or '-1002083907271'
     channel_chat8 = os.environ.get('POSTS_CHAT_8_ID', '') or '-1003641778426'
     channel_chat9 = os.environ.get('POSTS_CHAT_9_ID', '') or '-1003254062916'
+    channel_chat10 = os.environ.get('POSTS_CHAT_10_ID', '') or '-1002132967829'
 
     # ── GET ?action=diag — проверка связи с Telegram ────────────────────────
     if method == 'GET' and action == 'diag':
@@ -650,7 +651,7 @@ def handler(event: dict, context) -> dict:
         post = row_to_post(row)
         channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse,
                     'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6,
-                    'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9}
+                    'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9, 'chat10': channel_chat10}
         sent_map = post.get('chat_messages') or {}
         # Прогресс оборванного запуска — там свежие message_id, их и копируем.
         cur.execute(f"SELECT publish_progress FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
@@ -723,7 +724,7 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 404, 'headers': CORS, 'body': json.dumps({'error': 'Пост не найден'})}
 
         post = row_to_post(row)
-        channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6, 'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9}
+        channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6, 'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9, 'chat10': channel_chat10}
         chats = parse_chats(body.get('chats') or post.get('chats'))
 
         if not bot_token:
@@ -845,7 +846,7 @@ def handler(event: dict, context) -> dict:
             per_chat = {}
             chats = parse_chats(post.get('chats'))
             if bot_token:
-                channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6, 'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9}
+                channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6, 'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9, 'chat10': channel_chat10}
                 result = publish_to_chats(bot_token, chats, channels, post)
                 if result['ok']:
                     any_ok = True
@@ -878,7 +879,7 @@ def handler(event: dict, context) -> dict:
             post_chats = parse_chats(exp[3])
             per_chat = exp[4] or {}
             to_delete = list(ids) if ids else ([single_id] if single_id else [])
-            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6, 'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9}
+            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6, 'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9, 'chat10': channel_chat10}
             if bot_token and to_delete:
                 for key in post_chats:
                     ch = channels.get(key)
@@ -1034,7 +1035,7 @@ def handler(event: dict, context) -> dict:
         if mode != 'db' and row and row[1] in ('published', 'expired') and bot_token:
             to_delete = list(row[2]) if row[2] else ([row[0]] if row[0] else [])
             per_chat = row[4] or {}
-            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6, 'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9}
+            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse, 'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6, 'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9, 'chat10': channel_chat10}
             for key in parse_chats(row[3]):
                 ch = channels.get(key)
                 chat_ids = per_chat.get(key) or (to_delete if key == 'main' else [])
