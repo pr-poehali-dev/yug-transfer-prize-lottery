@@ -375,7 +375,8 @@ async def invite_one() -> dict:
     api_hash = os.environ['TG_API_HASH']
     client = _CLIENTS.get(acc['id'])
     if client is None or not client.is_connected():
-        client = TelegramClient(StringSession(acc['session']), api_id, api_hash)
+        client = TelegramClient(StringSession(acc['session']), api_id, api_hash,
+                                connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
         await client.connect()
         _CLIENTS[acc['id']] = client
     try:
@@ -469,7 +470,8 @@ async def join_group(acc_id: int) -> dict:
 
     client = None
     try:
-        client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env())
+        client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
+                                connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
         await client.connect()
         if not await client.is_user_authorized():
             return {'ok': False, 'status': 'dead',
@@ -510,7 +512,8 @@ async def check_accounts(index: int) -> dict:
     row = {'label': acc['label'], 'left': acc['left']}
     client = None
     try:
-        client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env())
+        client = TelegramClient(StringSession(acc['session']), api_id_env(), api_hash_env(),
+                                connection_retries=1, retry_delay=0, timeout=4, request_retries=1)
         await client.connect()
         if not await client.is_user_authorized():
             row.update(status='dead', text='сессия не работает — нужен новый вход')
