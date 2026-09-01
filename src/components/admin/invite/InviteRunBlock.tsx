@@ -11,9 +11,12 @@ interface Props {
   onReload: () => void;
   onPace: (pace: string) => void;
   error?: string;
+  onCheck: () => void;
+  checking: boolean;
+  checkRows: { label: string; status: string; text: string }[] | null;
 }
 
-export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, onReload, onPace, error }: Props) {
+export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, onReload, onPace, error, onCheck, checking, checkRows }: Props) {
   if (!state) {
     return (
       <div className="rounded-xl bg-white/5 border border-white/10 p-3">
@@ -142,6 +145,32 @@ export function InviteRunBlock({ state, busy, live, nextIn, canStart, onToggle, 
       )}
       {!live && !!state.pending && !state.capacity_today && (
         <p className="text-[10px] text-amber-300/70 mt-2">Дневные лимиты аккаунтов исчерпаны, продолжим завтра</p>
+      )}
+
+      <button
+        type="button"
+        onClick={onCheck}
+        disabled={checking}
+        className="w-full mt-2.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white/80 text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5"
+      >
+        <Icon name={checking ? "Loader2" : "ShieldCheck"} size={13}
+          className={checking ? "animate-spin" : ""} />
+        {checking ? "Проверяю аккаунты…" : "Проверить аккаунты в группе"}
+      </button>
+
+      {!!checkRows?.length && (
+        <div className="mt-2 space-y-1">
+          {checkRows.map((r) => {
+            const good = r.status === "ok" || r.status === "joined";
+            return (
+              <div key={r.label} className="flex items-start gap-2 text-[10px] rounded-lg bg-black/20 px-2 py-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${good ? "bg-emerald-400" : "bg-red-400"}`} />
+                <span className="text-white/70 shrink-0">{r.label}</span>
+                <span className={`${good ? "text-white/40" : "text-red-300/80"} truncate`}>{r.text}</span>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

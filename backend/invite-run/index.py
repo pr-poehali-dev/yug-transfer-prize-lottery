@@ -457,6 +457,44 @@ async def invite_batch(size: int, budget: float = 20.0) -> dict:
     return out
 
 
+async def check_accounts() -> dict:
+    """Проверяет каждый аккаунт: жив ли, в группе ли, может ли приглашать."""
+    username_group = parse_username(get_invite_target())
+    if not username_group:
+        return {'ok': False, 'error': 'Некорректная ссылка на группу'}
+
+    api_id = int(os.environ['TG_API_ID'])
+    api_hash = os.environ['TG_API_HASH']
+    report = []
+    for acc in account_pool():
+        row = {'label': acc['label'], 'left': acc['left']}
+        try:
+            client = TelegramClient(StringSession(acc['session']), api_id, api_hash)
+            await client.connect()
+            if not await client.is_user_authorized():
+                row.update(status='dead', text='сессия не работает — нужен новый вход')
+                report.append(row)
+                await client.disconnect()
+                continue
+            group = await client.get_entity(username_group)
+            try:
+                await client(JoinChannelRequest(group))
+                row.update(status='joined', text='вступил в группу сейчас')
+            except UserAlreadyParticipantError:
+                row.update(status='ok', text='уже в группе')
+            except Exception as je:
+                m = str(je)
+                if 'ALREADY' in m.upper():
+                    row.update(status='ok', text='уже в группе')
+                else:
+                    row.update(status='no_join', text=f'не может вступить: {m[:120]}')
+            await client.disconnect()
+        except Exception as e:
+            row.update(status='error', text=str(e)[:140])
+        report.append(row)
+    return {'ok': True, 'accounts': report}
+
+
 def run_invites(size: int) -> dict:
     """Запускает шаг рассылки и добавляет актуальное состояние в ответ."""
     result = asyncio.run(invite_batch(size))
@@ -496,6 +534,9 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get('body') or '{}')
         set_pace((body.get('pace') or '').strip())
         return resp(200, {'ok': True, 'state': run_state()})
+
+    if action == 'check':
+        return resp(200, asyncio.run(check_accounts()))
 
     if action == 'tick':
         return resp(200, run_invites(int(params.get('size') or 1)))

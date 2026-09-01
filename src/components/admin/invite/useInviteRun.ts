@@ -42,6 +42,29 @@ export function useInviteRun(token: string, onProgress?: () => void) {
     }
   }, [call]);
 
+  const [checking, setChecking] = useState(false);
+  const [checkRows, setCheckRows] = useState<
+    { label: string; status: string; text: string }[] | null
+  >(null);
+
+  const checkAccounts = useCallback(async () => {
+    setChecking(true);
+    try {
+      const d = await call("check");
+      if (d.ok) {
+        setCheckRows(d.accounts || []);
+        const bad = (d.accounts || []).filter((a: { status: string }) => a.status !== "ok" && a.status !== "joined");
+        toast[bad.length ? "warning" : "success"](
+          bad.length ? `Проблемных аккаунтов: ${bad.length}` : "Все аккаунты в группе",
+        );
+      } else toast.error(d.error || "Не удалось проверить");
+    } catch {
+      toast.error("Нет связи с сервером");
+    } finally {
+      setChecking(false);
+    }
+  }, [call]);
+
   const setRunning = (v: boolean) => { runningRef.current = v; setLive(v); };
 
   const delayRef = useRef(60);
@@ -154,5 +177,5 @@ export function useInviteRun(token: string, onProgress?: () => void) {
 
   const canStart = !!state && !!state.pending && !!state.capacity_today;
 
-  return { state, busy, live, nextIn, start, stop, toggle, loadState, canStart, changePace, error };
+  return { state, busy, live, nextIn, start, stop, toggle, loadState, canStart, changePace, error, checkAccounts, checking, checkRows };
 }

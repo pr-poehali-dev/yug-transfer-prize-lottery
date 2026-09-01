@@ -183,6 +183,9 @@ export function AdminInviteTab({ token, expanded: controlledExpanded, onToggle }
             onReload={run.loadState}
             onPace={run.changePace}
             error={run.error}
+            onCheck={run.checkAccounts}
+            checking={run.checking}
+            checkRows={run.checkRows}
           />
 
           <p className="text-[11px] text-white/30 flex items-start gap-1.5">
