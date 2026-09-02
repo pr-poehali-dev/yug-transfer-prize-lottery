@@ -36,7 +36,6 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const [editId, setEditId] = useState<number | null>(null);
   const [scheduledAt, setScheduledAt] = useState("");
   const [expireHours, setExpireHours] = useState(0);
-  const [editInTg, setEditInTg] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [formError, setFormError] = useState("");
@@ -122,7 +121,6 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     } else {
       setExpireHours(0);
     }
-    setEditInTg(post.status === "published");
     setFormError(""); setFormSuccess("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -133,7 +131,6 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     setSavedForm({ ...EMPTY });
     setScheduledAt("");
     setExpireHours(0);
-    setEditInTg(false);
     setFormError(""); setFormSuccess("");
   };
 
@@ -154,7 +151,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
         status: saveStatus,
         scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
         expire_hours: expireHours || 0,
-        ...(editId ? { id: editId, edit_in_telegram: editInTg } : {}),
+        ...(editId ? { id: editId } : {}),
       };
       const res = await fetch(ADMIN_POSTS_URL, {
         method: editId ? "PUT" : "POST",
@@ -409,7 +406,6 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             editId={editId}
             scheduledAt={scheduledAt}
             expireHours={expireHours}
-            editInTg={editInTg}
             saving={saving}
             publishing={publishing}
             uploading={uploading}
@@ -419,7 +415,6 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             onFormChange={patch => setForm(f => ({ ...f, ...patch }))}
             onScheduledAtChange={setScheduledAt}
             onExpireHoursChange={setExpireHours}
-            onEditInTgToggle={() => setEditInTg(v => !v)}
             onPhotoUpload={handlePhotoUpload}
             onSave={handleSave}
             onPublishNow={handlePublishNow}

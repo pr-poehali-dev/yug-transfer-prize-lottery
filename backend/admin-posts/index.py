@@ -1012,24 +1012,35 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
 
         edit_result = {'edited': [], 'failed': []}
-        if edit_in_tg and bot_token:
-            cur.execute(
-                f"SELECT telegram_message_id, message_ids, chat_messages FROM {SCHEMA}.posts WHERE id=%s",
-                (post_id,))
-            row = cur.fetchone()
-            if row:
-                chat_messages = row[2] or {}
-                if isinstance(chat_messages, str):
-                    chat_messages = json.loads(chat_messages)
-                fallback = list(row[1]) if row[1] else ([row[0]] if row[0] else [])
-                channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse,
-                            'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6,
-                            'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9,
-                            'chat10': channel_chat10}
-                fresh = {'title': title, 'text': text, 'photo_url': photo_url,
-                         'button_text': button_text, 'button_url': button_url,
-                         'button2_text': button2_text, 'button2_url': button2_url}
-                edit_result = edit_everywhere(bot_token, channels, chat_messages, fallback, fresh)
+        cur.execute(
+            f"SELECT telegram_message_id, message_ids, chat_messages, status, published_at "
+            f"FROM {SCHEMA}.posts WHERE id=%s",
+            (post_id,))
+        row = cur.fetchone()
+        prev_status = row[3] if row else None
+        chat_messages = (row[2] if row else None) or {}
+        if isinstance(chat_messages, str):
+            chat_messages = json.loads(chat_messages)
+        fallback = list(row[1]) if row and row[1] else ([row[0]] if row and row[0] else [])
+
+        # Пост уже висит в группах, если под него есть message_id.
+        already_live = bool(chat_messages) or bool(fallback)
+
+        # Кнопка "Сохранить" всегда шлёт status=draft — но опубликованный пост
+        # не должен из-за этого превращаться в черновик и терять связь с группами.
+        if already_live and prev_status in ('published', 'expired') and status == 'draft':
+            status = prev_status
+
+        # Любая правка живого поста сразу уходит во все группы — без галочек.
+        if already_live and bot_token and prev_status != 'expired':
+            channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse,
+                        'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6,
+                        'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9,
+                        'chat10': channel_chat10}
+            fresh = {'title': title, 'text': text, 'photo_url': photo_url,
+                     'button_text': button_text, 'button_url': button_url,
+                     'button2_text': button2_text, 'button2_url': button2_url}
+            edit_result = edit_everywhere(bot_token, channels, chat_messages, fallback, fresh)
 
         now = datetime.now(timezone.utc)
         expire_hours = body.get('expire_hours')
@@ -1046,7 +1057,9 @@ def handler(event: dict, context) -> dict:
                     button2_text=%s, button2_url=%s, status=%s, scheduled_at=%s, auto_expire_at=%s, chats=%s, updated_at=%s
                 WHERE id=%s""",
             (title, text, photo_url, '', button_text, button_url, button2_text, button2_url, status, sched_dt, expire_at,
-             ','.join(parse_chats(body.get('chats'))), now, post_id)
+             ','.join(sorted(set(parse_chats(body.get('chats'))) | set(chat_messages.keys()),
+                             key=lambda k: ALL_CHATS.index(k) if k in ALL_CHATS else 99)),
+             now, post_id)
         )
         conn.commit()
 

@@ -34,7 +34,6 @@ interface PostFormProps {
   editId: number | null;
   scheduledAt: string;
   expireHours: number;
-  editInTg: boolean;
   saving: boolean;
   publishing: boolean;
   uploading: boolean;
@@ -44,7 +43,6 @@ interface PostFormProps {
   onFormChange: (patch: Partial<PostFormData>) => void;
   onScheduledAtChange: (v: string) => void;
   onExpireHoursChange: (v: number) => void;
-  onEditInTgToggle: () => void;
   onPhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSave: (status: "draft" | "scheduled") => void;
   onPublishNow: () => void;
@@ -52,9 +50,9 @@ interface PostFormProps {
 }
 
 export function PostForm({
-  form, editId, scheduledAt, expireHours, editInTg, saving, publishing, uploading,
+  form, editId, scheduledAt, expireHours, saving, publishing, uploading,
   formError, formSuccess, editingPublished,
-  onFormChange, onScheduledAtChange, onExpireHoursChange, onEditInTgToggle,
+  onFormChange, onScheduledAtChange, onExpireHoursChange,
   onPhotoUpload, onSave, onPublishNow, onReset,
 }: PostFormProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -312,21 +310,17 @@ export function PostForm({
           )}
         </div>
 
-        {/* Тоггл "редактировать в TG" для опубликованных */}
+        {/* Опубликованный пост правится сразу во всех группах */}
         {editingPublished && (
-          <button
-            onClick={onEditInTgToggle}
-            className={`w-full flex items-center gap-2 p-2 rounded-lg border transition-colors text-left ${editInTg ? "border-orange-500/30 bg-orange-500/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
-          >
-            <Icon name="Edit3" size={13} className={editInTg ? "text-orange-400" : "text-muted-foreground"} />
+          <div className="flex items-start gap-2 p-2 rounded-lg border border-orange-500/30 bg-orange-500/10">
+            <Icon name="Edit3" size={13} className="text-orange-400 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className={`text-xs font-medium ${editInTg ? "text-orange-300" : "text-white"}`}>Изменить текст в Telegram</p>
-              <p className="text-[10px] text-muted-foreground">Обновит пост во всех группах, куда он был отправлен</p>
+              <p className="text-xs font-medium text-orange-300">Пост уже опубликован</p>
+              <p className="text-[10px] text-muted-foreground">
+                При сохранении текст и кнопки обновятся во всех группах, куда он ушёл. Фото Telegram менять не даёт.
+              </p>
             </div>
-            <div className={`w-8 h-4 rounded-full transition-colors flex items-center px-0.5 shrink-0 ${editInTg ? "bg-orange-500" : "bg-white/10"}`}>
-              <div className={`w-3 h-3 rounded-full bg-white transition-transform ${editInTg ? "translate-x-4" : ""}`} />
-            </div>
-          </button>
+          </div>
         )}
 
         {/* Ошибка / успех */}
