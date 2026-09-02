@@ -475,21 +475,52 @@ def tg_delete_messages(bot_token: str, channel_id: str, message_ids: list) -> No
 
 
 def edit_tg_message(bot_token: str, channel_id: str, message_id: int, post: dict) -> dict:
-    """Редактирует уже опубликованный пост в Telegram"""
+    """Редактирует уже опубликованный пост в Telegram (текст + кнопки)."""
     text = build_text_with_title(post)
     photo_url = post.get('photo_url', '')
+    markup = build_reply_markup(post)
+
+    payload = {'chat_id': channel_id, 'message_id': message_id, 'parse_mode': 'HTML'}
+    if markup:
+        payload['reply_markup'] = markup
 
     if photo_url:
-        result = tg_request(bot_token, 'editMessageCaption', {
-            'chat_id': channel_id, 'message_id': message_id,
-            'caption': text, 'parse_mode': 'HTML',
-        })
+        payload['caption'] = text
+        result = tg_request(bot_token, 'editMessageCaption', payload)
     else:
-        result = tg_request(bot_token, 'editMessageText', {
-            'chat_id': channel_id, 'message_id': message_id,
-            'text': text, 'parse_mode': 'HTML',
-        })
+        payload['text'] = text
+        result = tg_request(bot_token, 'editMessageText', payload)
+
+    # Telegram ругается на разметку — повторяем без неё, лишь бы текст обновился.
+    if not result.get('ok') and not is_network_error(result):
+        payload.pop('parse_mode', None)
+        result = tg_request(bot_token, 'editMessageCaption' if photo_url else 'editMessageText', payload)
     return result
+
+
+def edit_everywhere(bot_token: str, channels: dict, chat_messages: dict,
+                    fallback_ids: list, post: dict) -> dict:
+    """Правит пост во всех группах, где он был опубликован."""
+    edited, failed = [], []
+    for key, chat_id in channels.items():
+        if not chat_id:
+            continue
+        ids = chat_messages.get(key) or (fallback_ids if key == 'main' else [])
+        if not ids:
+            continue
+        # Правим первое сообщение — в нём текст поста.
+        res = edit_tg_message(bot_token, chat_id, ids[0], post)
+        if res.get('ok'):
+            edited.append(key)
+        else:
+            desc = res.get('description', '')
+            # "message is not modified" — текст и так совпадает, это не ошибка.
+            if 'not modified' in desc.lower():
+                edited.append(key)
+            else:
+                failed.append(f"{key}: {desc or 'не удалось'}")
+        print(f"[POSTS] edit {key} ({chat_id}) msg={ids[0]}: {res.get('ok')} {res.get('description','')}")
+    return {'edited': edited, 'failed': failed}
 
 
 def row_to_post(r) -> dict:
@@ -980,12 +1011,25 @@ def handler(event: dict, context) -> dict:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
 
-        if edit_in_tg:
-            cur.execute(f"SELECT telegram_message_id FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+        edit_result = {'edited': [], 'failed': []}
+        if edit_in_tg and bot_token:
+            cur.execute(
+                f"SELECT telegram_message_id, message_ids, chat_messages FROM {SCHEMA}.posts WHERE id=%s",
+                (post_id,))
             row = cur.fetchone()
-            if row and row[0] and bot_token and channel_main:
-                msg_id = row[0]
-                edit_tg_message(bot_token, channel_main, msg_id, {'text': text, 'photo_url': photo_url})
+            if row:
+                chat_messages = row[2] or {}
+                if isinstance(chat_messages, str):
+                    chat_messages = json.loads(chat_messages)
+                fallback = list(row[1]) if row[1] else ([row[0]] if row[0] else [])
+                channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse,
+                            'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6,
+                            'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9,
+                            'chat10': channel_chat10}
+                fresh = {'title': title, 'text': text, 'photo_url': photo_url,
+                         'button_text': button_text, 'button_url': button_url,
+                         'button2_text': button2_text, 'button2_url': button2_url}
+                edit_result = edit_everywhere(bot_token, channels, chat_messages, fallback, fresh)
 
         now = datetime.now(timezone.utc)
         expire_hours = body.get('expire_hours')
@@ -1012,8 +1056,11 @@ def handler(event: dict, context) -> dict:
         )
         post = row_to_post(cur.fetchone())
         cur.close(); conn.close()
-        print(f"[POSTS] updated post {post_id}, status={status}")
-        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'post': post})}
+        print(f"[POSTS] updated post {post_id}, status={status}, edited={edit_result['edited']}")
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
+            'ok': True, 'post': post,
+            'edited': edit_result['edited'], 'edit_errors': edit_result['failed'],
+        }, ensure_ascii=False)}
 
     # ── DELETE — удалить пост (из Telegram + из базы) ───────────────────────
     if method == 'DELETE':

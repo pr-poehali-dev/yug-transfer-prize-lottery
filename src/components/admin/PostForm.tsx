@@ -321,7 +321,7 @@ export function PostForm({
             <Icon name="Edit3" size={13} className={editInTg ? "text-orange-400" : "text-muted-foreground"} />
             <div className="flex-1 min-w-0">
               <p className={`text-xs font-medium ${editInTg ? "text-orange-300" : "text-white"}`}>Изменить текст в Telegram</p>
-              <p className="text-[10px] text-muted-foreground">Обновит уже опубликованное сообщение</p>
+              <p className="text-[10px] text-muted-foreground">Обновит пост во всех группах, куда он был отправлен</p>
             </div>
             <div className={`w-8 h-4 rounded-full transition-colors flex items-center px-0.5 shrink-0 ${editInTg ? "bg-orange-500" : "bg-white/10"}`}>
               <div className={`w-3 h-3 rounded-full bg-white transition-transform ${editInTg ? "translate-x-4" : ""}`} />

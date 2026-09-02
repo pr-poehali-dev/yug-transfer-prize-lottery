@@ -122,7 +122,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     } else {
       setExpireHours(0);
     }
-    setEditInTg(false);
+    setEditInTg(post.status === "published");
     setFormError(""); setFormSuccess("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -168,8 +168,16 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
         return idx >= 0 ? prev.map(p => p.id === data.post.id ? data.post : p) : [data.post, ...prev];
       });
       if (!editId) setTotal(t => t + 1);
+      const edited: string[] = data.edited || [];
+      const editErrors: string[] = data.edit_errors || [];
       resetForm();
-      setFormSuccess(saveStatus === "scheduled" ? "Пост запланирован!" : "Черновик сохранён!");
+      if (edited.length) {
+        const names = edited.map(k => CHAT_OPTIONS.find(c => c.key === k)?.label || k);
+        setFormSuccess(`Текст обновлён в группах: ${names.join(", ")}`);
+      } else {
+        setFormSuccess(saveStatus === "scheduled" ? "Пост запланирован!" : "Черновик сохранён!");
+      }
+      if (editErrors.length) setFormError(editErrors.join("; "));
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Ошибка");
     } finally { setSaving(false); }
