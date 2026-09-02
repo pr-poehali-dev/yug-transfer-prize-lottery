@@ -1028,11 +1028,11 @@ def handler(event: dict, context) -> dict:
 
         # Кнопка "Сохранить" всегда шлёт status=draft — но опубликованный пост
         # не должен из-за этого превращаться в черновик и терять связь с группами.
-        if already_live and prev_status in ('published', 'expired') and status == 'draft':
-            status = prev_status
+        if already_live and status == 'draft' and prev_status != 'expired':
+            status = 'published'
 
         # Любая правка живого поста сразу уходит во все группы — без галочек.
-        if already_live and bot_token and prev_status != 'expired':
+        if already_live and bot_token and status != 'expired':
             channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse,
                         'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6,
                         'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9,
