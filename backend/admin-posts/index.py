@@ -154,7 +154,10 @@ def tg_upload(bot_token: str, method: str, payload: dict, photo_bytes: bytes,
         if host != 'api.telegram.org':
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-        conn = http.client.HTTPSConnection(host, 443, timeout=20, context=ctx)
+        left = time_left()
+        if left <= 1:
+            return {'ok': False, 'description': 'время запроса истекло', 'network_error': True}
+        conn = http.client.HTTPSConnection(host, 443, timeout=max(3, int(left - 0.5)), context=ctx)
         try:
             conn.request(
                 'POST', f'/bot{bot_token}/{method}', body=body,
@@ -183,6 +186,7 @@ def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
 
 
 PHOTO_ID_CACHE = {}
+PHOTO_BYTES_CACHE = {}
 
 
 def extract_file_id(res: dict) -> str:
@@ -487,14 +491,15 @@ def tg_delete_messages(bot_token: str, channel_id: str, message_ids: list) -> No
 
 def replace_tg_photo(bot_token: str, channel_id: str, message_id: int,
                      photo_url: str, caption: str, markup) -> dict:
-    """Меняет картинку в уже отправленном сообщении (editMessageMedia).
-    Работает только если сообщение изначально было с фото."""
-    media = {'type': 'photo', 'media': photo_url}
+    """Меняет картинку в уже отправленном сообщении.
+    Первый раз заливаем файл сами (Telegram наш CDN качает медленно и отваливается),
+    дальше во все остальные группы шлём по file_id — мгновенно."""
+    media = {'type': 'photo'}
     if caption:
         media['caption'] = caption[:1024]
         media['parse_mode'] = 'HTML'
 
-    payload = {'chat_id': channel_id, 'message_id': message_id, 'media': media}
+    payload = {'chat_id': channel_id, 'message_id': message_id}
     if markup:
         payload['reply_markup'] = markup
 
@@ -503,29 +508,28 @@ def replace_tg_photo(bot_token: str, channel_id: str, message_id: int,
         res = tg_request(bot_token, 'editMessageMedia',
                          {**payload, 'media': {**media, 'media': cached}})
         if res.get('ok') or 'not modified' in str(res.get('description', '')).lower():
+            fid = extract_file_id(res)
+            if fid:
+                PHOTO_ID_CACHE[photo_url] = fid
             return res
+        # file_id не подошёл (другой бот/чат) — перезаливаем файлом.
+        PHOTO_ID_CACHE.pop(photo_url, None)
 
-    res = tg_request(bot_token, 'editMessageMedia', payload)
-    desc = str(res.get('description', '')).lower()
-
-    # Telegram не смог скачать наш CDN — заливаем файл напрямую через attach://
-    if not res.get('ok') and any(
-        s in desc for s in ('wrong type of the web page', 'failed to get http url', 'webpage_curl_failed',
-                            'wrong file identifier', 'image_process_failed', 'wrong remote file')
-    ):
+    photo_bytes = PHOTO_BYTES_CACHE.get(photo_url)
+    if photo_bytes is None:
         photo_bytes, err = download_photo(photo_url)
         if err:
             return {'ok': False, 'description': err}
-        upload_payload = dict(payload)
-        upload_payload['media'] = {**media, 'media': 'attach://photo'}
-        res = tg_upload(bot_token, 'editMessageMedia', upload_payload, photo_bytes)
-        desc = str(res.get('description', '')).lower()
+        PHOTO_BYTES_CACHE[photo_url] = photo_bytes
+
+    res = tg_upload(bot_token, 'editMessageMedia',
+                    {**payload, 'media': {**media, 'media': 'attach://photo'}}, photo_bytes)
 
     # Разметка не понравилась — повторяем без неё, лишь бы фото заменилось.
-    if not res.get('ok') and 'parse' in desc:
-        plain = dict(media)
-        plain.pop('parse_mode', None)
-        res = tg_request(bot_token, 'editMessageMedia', {**payload, 'media': plain})
+    if not res.get('ok') and 'parse' in str(res.get('description', '')).lower():
+        plain = {k: v for k, v in media.items() if k != 'parse_mode'}
+        res = tg_upload(bot_token, 'editMessageMedia',
+                        {**payload, 'media': {**plain, 'media': 'attach://photo'}}, photo_bytes)
 
     fid = extract_file_id(res)
     if fid:
@@ -573,12 +577,24 @@ def edit_everywhere(bot_token: str, channels: dict, chat_messages: dict,
                     photo_changed: bool = False) -> dict:
     """Правит пост во всех группах, где он был опубликован."""
     edited, failed = [], []
+    chat_messages = chat_messages or {}
+    # Список id по группам надёжнее общего списка: он есть у постов,
+    # опубликованных не в основной канал. Общий — только как запасной вариант.
     for key, chat_id in channels.items():
         if not chat_id:
             continue
-        ids = chat_messages.get(key) or (fallback_ids if key == 'main' else [])
+        ids = chat_messages.get(key)
+        if not ids and key == 'main' and not chat_messages:
+            ids = fallback_ids
+        ids = [i for i in (ids or []) if i]
         if not ids:
             continue
+
+        # Времени до обрыва функции не осталось — честно говорим, что не успели.
+        if time_left() <= 4:
+            failed.append(f"{key}: не успели за отведённое время, сохраните ещё раз")
+            continue
+
         # Длинный пост уходит двумя сообщениями: фото отдельно, текст отдельно.
         if len(ids) > 1:
             res = {'ok': True}
@@ -591,16 +607,14 @@ def edit_everywhere(bot_token: str, channels: dict, chat_messages: dict,
         else:
             res = edit_tg_message(bot_token, chat_id, ids[0], post,
                                   had_photo=had_photo, photo_changed=photo_changed)
-        if res.get('ok'):
+
+        desc = str(res.get('description', ''))
+        # "message is not modified" — содержимое и так совпадает, это не ошибка.
+        if res.get('ok') or 'not modified' in desc.lower():
             edited.append(key)
         else:
-            desc = res.get('description', '')
-            # "message is not modified" — текст и так совпадает, это не ошибка.
-            if 'not modified' in desc.lower():
-                edited.append(key)
-            else:
-                failed.append(f"{key}: {desc or 'не удалось'}")
-        print(f"[POSTS] edit {key} ({chat_id}) msg={ids[0]}: {res.get('ok')} {res.get('description','')}")
+            failed.append(f"{key}: {desc or 'не удалось'}")
+        print(f"[POSTS] edit {key} ({chat_id}) msg={ids[0]}: {res.get('ok')} {desc}")
     return {'edited': edited, 'failed': failed}
 
 
