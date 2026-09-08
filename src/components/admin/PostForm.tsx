@@ -318,7 +318,7 @@ export function PostForm({
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-orange-300">Пост уже опубликован</p>
               <p className="text-[10px] text-muted-foreground">
-                При сохранении текст и кнопки обновятся во всех группах, куда он ушёл. Фото Telegram менять не даёт.
+                При сохранении текст, кнопки и фото обновятся во всех группах, куда он ушёл.
               </p>
             </div>
           </div>

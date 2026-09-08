@@ -118,19 +118,22 @@ def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, ti
     return {'ok': False, 'description': last_err, 'network_error': True}
 
 
-def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
-    """Запасной путь: Telegram не может скачать фото по ссылке (наш CDN ему недоступен),
-    поэтому скачиваем файл сами и отправляем его напрямую."""
+def download_photo(photo_url: str):
+    """Скачивает картинку по ссылке. Возвращает (bytes, ошибка)."""
     try:
         with urllib.request.urlopen(photo_url, timeout=20) as r:
-            photo_bytes = r.read()
+            return r.read(), None
     except Exception as e:
-        return {'ok': False, 'description': f'photo download failed: {type(e).__name__}'}
+        return None, f'photo download failed: {type(e).__name__}'
 
+
+def tg_upload(bot_token: str, method: str, payload: dict, photo_bytes: bytes,
+              field: str = 'photo') -> dict:
+    """Отправляет в Telegram запрос с файлом (multipart) — когда ссылку он скачать не может."""
     boundary = '----tgboundary' + uuid.uuid4().hex
     parts = []
     for key, value in payload.items():
-        if key == 'photo':
+        if key == field:
             continue
         if isinstance(value, (dict, list)):
             value = json.dumps(value)
@@ -138,7 +141,7 @@ def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
             f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode()
         )
     parts.append(
-        f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\n'
+        f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; filename="photo.jpg"\r\n'
         f'Content-Type: image/jpeg\r\n\r\n'.encode()
     )
     parts.append(photo_bytes)
@@ -154,7 +157,7 @@ def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
         conn = http.client.HTTPSConnection(host, 443, timeout=20, context=ctx)
         try:
             conn.request(
-                'POST', f'/bot{bot_token}/sendPhoto', body=body,
+                'POST', f'/bot{bot_token}/{method}', body=body,
                 headers={
                     'Content-Type': f'multipart/form-data; boundary={boundary}',
                     'Host': 'api.telegram.org',
@@ -165,10 +168,18 @@ def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
             return json.loads(raw)
         except Exception as e:
             last_err = f'{type(e).__name__}: {str(e)[:150]}'
-            print(f'[POSTS] tg sendPhoto(file) via {host} failed: {last_err}')
+            print(f'[POSTS] tg {method}(file) via {host} failed: {last_err}')
         finally:
             conn.close()
     return {'ok': False, 'description': last_err, 'network_error': True}
+
+
+def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
+    """Telegram не смог скачать фото по ссылке — качаем сами и шлём файлом."""
+    photo_bytes, err = download_photo(photo_url)
+    if err:
+        return {'ok': False, 'description': err}
+    return tg_upload(bot_token, 'sendPhoto', payload, photo_bytes)
 
 
 PHOTO_ID_CACHE = {}
@@ -474,32 +485,92 @@ def tg_delete_messages(bot_token: str, channel_id: str, message_ids: list) -> No
             print(f"[POSTS] deleteMessage {mid} failed: {e}")
 
 
-def edit_tg_message(bot_token: str, channel_id: str, message_id: int, post: dict) -> dict:
-    """Редактирует уже опубликованный пост в Telegram (текст + кнопки)."""
+def replace_tg_photo(bot_token: str, channel_id: str, message_id: int,
+                     photo_url: str, caption: str, markup) -> dict:
+    """Меняет картинку в уже отправленном сообщении (editMessageMedia).
+    Работает только если сообщение изначально было с фото."""
+    media = {'type': 'photo', 'media': photo_url}
+    if caption:
+        media['caption'] = caption[:1024]
+        media['parse_mode'] = 'HTML'
+
+    payload = {'chat_id': channel_id, 'message_id': message_id, 'media': media}
+    if markup:
+        payload['reply_markup'] = markup
+
+    cached = PHOTO_ID_CACHE.get(photo_url)
+    if cached:
+        res = tg_request(bot_token, 'editMessageMedia',
+                         {**payload, 'media': {**media, 'media': cached}})
+        if res.get('ok') or 'not modified' in str(res.get('description', '')).lower():
+            return res
+
+    res = tg_request(bot_token, 'editMessageMedia', payload)
+    desc = str(res.get('description', '')).lower()
+
+    # Telegram не смог скачать наш CDN — заливаем файл напрямую через attach://
+    if not res.get('ok') and any(
+        s in desc for s in ('wrong type of the web page', 'failed to get http url', 'webpage_curl_failed',
+                            'wrong file identifier', 'image_process_failed', 'wrong remote file')
+    ):
+        photo_bytes, err = download_photo(photo_url)
+        if err:
+            return {'ok': False, 'description': err}
+        upload_payload = dict(payload)
+        upload_payload['media'] = {**media, 'media': 'attach://photo'}
+        res = tg_upload(bot_token, 'editMessageMedia', upload_payload, photo_bytes)
+        desc = str(res.get('description', '')).lower()
+
+    # Разметка не понравилась — повторяем без неё, лишь бы фото заменилось.
+    if not res.get('ok') and 'parse' in desc:
+        plain = dict(media)
+        plain.pop('parse_mode', None)
+        res = tg_request(bot_token, 'editMessageMedia', {**payload, 'media': plain})
+
+    fid = extract_file_id(res)
+    if fid:
+        PHOTO_ID_CACHE[photo_url] = fid
+    return res
+
+
+def edit_tg_message(bot_token: str, channel_id: str, message_id: int, post: dict,
+                    had_photo: bool = None, photo_changed: bool = False) -> dict:
+    """Редактирует уже опубликованный пост: текст, кнопки и при необходимости само фото."""
     text = build_text_with_title(post)
     photo_url = post.get('photo_url', '')
     markup = build_reply_markup(post)
+    if had_photo is None:
+        had_photo = bool(photo_url)
+
+    # Фото заменили — обновляем картинку вместе с подписью одним запросом.
+    if photo_changed and photo_url and had_photo:
+        res = replace_tg_photo(bot_token, channel_id, message_id, photo_url, text, markup)
+        if res.get('ok') or 'not modified' in str(res.get('description', '')).lower():
+            return res
+        print(f"[POSTS] editMessageMedia failed: {res.get('description')}, fallback to caption")
 
     payload = {'chat_id': channel_id, 'message_id': message_id, 'parse_mode': 'HTML'}
     if markup:
         payload['reply_markup'] = markup
 
-    if photo_url:
-        payload['caption'] = text
-        result = tg_request(bot_token, 'editMessageCaption', payload)
+    if had_photo and photo_url:
+        payload['caption'] = text[:1024]
+        method = 'editMessageCaption'
     else:
         payload['text'] = text
-        result = tg_request(bot_token, 'editMessageText', payload)
+        method = 'editMessageText'
+    result = tg_request(bot_token, method, payload)
 
     # Telegram ругается на разметку — повторяем без неё, лишь бы текст обновился.
     if not result.get('ok') and not is_network_error(result):
         payload.pop('parse_mode', None)
-        result = tg_request(bot_token, 'editMessageCaption' if photo_url else 'editMessageText', payload)
+        result = tg_request(bot_token, method, payload)
     return result
 
 
 def edit_everywhere(bot_token: str, channels: dict, chat_messages: dict,
-                    fallback_ids: list, post: dict) -> dict:
+                    fallback_ids: list, post: dict, had_photo: bool = None,
+                    photo_changed: bool = False) -> dict:
     """Правит пост во всех группах, где он был опубликован."""
     edited, failed = [], []
     for key, chat_id in channels.items():
@@ -508,8 +579,18 @@ def edit_everywhere(bot_token: str, channels: dict, chat_messages: dict,
         ids = chat_messages.get(key) or (fallback_ids if key == 'main' else [])
         if not ids:
             continue
-        # Правим первое сообщение — в нём текст поста.
-        res = edit_tg_message(bot_token, chat_id, ids[0], post)
+        # Длинный пост уходит двумя сообщениями: фото отдельно, текст отдельно.
+        if len(ids) > 1:
+            res = {'ok': True}
+            if photo_changed and post.get('photo_url'):
+                res = replace_tg_photo(bot_token, chat_id, ids[0], post['photo_url'], '', None)
+            text_res = edit_tg_message(bot_token, chat_id, ids[-1], post,
+                                       had_photo=False, photo_changed=False)
+            if not text_res.get('ok') and 'not modified' not in str(text_res.get('description', '')).lower():
+                res = text_res
+        else:
+            res = edit_tg_message(bot_token, chat_id, ids[0], post,
+                                  had_photo=had_photo, photo_changed=photo_changed)
         if res.get('ok'):
             edited.append(key)
         else:
@@ -1014,11 +1095,13 @@ def handler(event: dict, context) -> dict:
 
         edit_result = {'edited': [], 'failed': []}
         cur.execute(
-            f"SELECT telegram_message_id, message_ids, chat_messages, status, published_at "
+            f"SELECT telegram_message_id, message_ids, chat_messages, status, published_at, photo_url "
             f"FROM {SCHEMA}.posts WHERE id=%s",
             (post_id,))
         row = cur.fetchone()
         prev_status = row[3] if row else None
+        prev_photo = (row[5] or '') if row else ''
+        photo_changed = (photo_url or '') != prev_photo
         chat_messages = (row[2] if row else None) or {}
         if isinstance(chat_messages, str):
             chat_messages = json.loads(chat_messages)
@@ -1041,7 +1124,12 @@ def handler(event: dict, context) -> dict:
             fresh = {'title': title, 'text': text, 'photo_url': photo_url,
                      'button_text': button_text, 'button_url': button_url,
                      'button2_text': button2_text, 'button2_url': button2_url}
-            edit_result = edit_everywhere(bot_token, channels, chat_messages, fallback, fresh)
+            edit_result = edit_everywhere(bot_token, channels, chat_messages, fallback, fresh,
+                                          had_photo=bool(prev_photo), photo_changed=photo_changed)
+            # Фото было и его убрали — Telegram не даёт превратить фото-пост в текстовый.
+            if not photo_url and prev_photo:
+                edit_result['failed'].append(
+                    'Убрать фото у опубликованного поста нельзя — удалите пост из групп и опубликуйте заново')
 
         now = datetime.now(timezone.utc)
         expire_hours = body.get('expire_hours')
