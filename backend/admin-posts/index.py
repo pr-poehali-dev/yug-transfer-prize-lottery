@@ -180,6 +180,8 @@ def tg_upload(bot_token: str, method: str, payload: dict, photo_bytes: bytes,
 
 PHOTO_ID_CACHE = {}
 PHOTO_BYTES_CACHE = {}
+# Группы, куда Telegram не даёт копировать сообщения — публикуем напрямую.
+NO_COPY_CHATS = {'chat9', 'chat10'}
 
 
 def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
@@ -350,7 +352,9 @@ def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
             return tg_request(bot_token, 'sendMessage', payload)
 
     result = try_send('HTML')
-    if not result.get('ok') and not is_network_error(result):
+    desc_low = str(result.get('description', '')).lower()
+    # Повторяем без разметки только если Telegram ругается именно на неё.
+    if not result.get('ok') and not is_network_error(result) and 'rights to send' not in desc_low:
         print(f"[POSTS] HTML parse failed: {result.get('description')}, retrying without parse_mode")
         result = try_send(None)
 
@@ -455,11 +459,17 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
         target = channels.get(key)
         if not target:
             return key, [], 'канал не настроен'
-        cp = copy_messages(bot_token, primary_chat, target, primary_ids, markup)
-        print(f"[POSTS] copy to {key} ({target}): {cp}")
-        if cp['ok']:
-            return key, cp['message_ids'], None
-        # Копирование не прошло — публикуем в группу напрямую.
+        # Есть группы, куда копировать нельзя (запрет пересылки/медиа) —
+        # для них сразу публикуем напрямую, не тратя время на копию.
+        if key not in NO_COPY_CHATS:
+            cp = copy_messages(bot_token, primary_chat, target, primary_ids, markup)
+            print(f"[POSTS] copy to {key} ({target}): {cp}")
+            if cp['ok']:
+                return key, cp['message_ids'], None
+            if "can't be copied" in '; '.join(cp['errors']):
+                NO_COPY_CHATS.add(key)
+        else:
+            cp = {'errors': []}
         direct = publish_post(bot_token, target, post)
         print(f"[POSTS] direct publish to {key} ({target}): {direct}")
         if direct.get('ok'):
