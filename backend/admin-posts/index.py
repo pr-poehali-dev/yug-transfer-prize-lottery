@@ -178,16 +178,19 @@ def tg_upload(bot_token: str, method: str, payload: dict, photo_bytes: bytes,
     return {'ok': False, 'description': last_err, 'network_error': True}
 
 
-def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
-    """Telegram не смог скачать фото по ссылке — качаем сами и шлём файлом."""
-    photo_bytes, err = download_photo(photo_url)
-    if err:
-        return {'ok': False, 'description': err}
-    return tg_upload(bot_token, 'sendPhoto', payload, photo_bytes)
-
-
 PHOTO_ID_CACHE = {}
 PHOTO_BYTES_CACHE = {}
+
+
+def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
+    """Качаем фото сами и шлём файлом. Скачанное держим в памяти запуска."""
+    photo_bytes = PHOTO_BYTES_CACHE.get(photo_url)
+    if photo_bytes is None:
+        photo_bytes, err = download_photo(photo_url)
+        if err:
+            return {'ok': False, 'description': err}
+        PHOTO_BYTES_CACHE[photo_url] = photo_bytes
+    return tg_upload(bot_token, 'sendPhoto', payload, photo_bytes)
 
 
 def extract_file_id(res: dict) -> str:
@@ -197,22 +200,24 @@ def extract_file_id(res: dict) -> str:
 
 
 def send_photo_smart(bot_token: str, payload: dict) -> dict:
-    """Отправка фото. Один раз заливаем файл, дальше шлём по file_id — мгновенно."""
+    """Отправка фото. Наш CDN Telegram качает медленно и обрывается по таймауту,
+    поэтому первый раз заливаем файл сами, а дальше шлём по file_id — мгновенно."""
     src = payload.get('photo', '')
     cached = PHOTO_ID_CACHE.get(src)
     if cached:
         res = tg_request(bot_token, 'sendPhoto', {**payload, 'photo': cached})
         if res.get('ok'):
             return res
+        # file_id не подошёл — перезальём файлом.
+        PHOTO_ID_CACHE.pop(src, None)
 
-    res = tg_request(bot_token, 'sendPhoto', payload)
-    desc = str(res.get('description', '')).lower()
-    if not res.get('ok') and any(
-        s in desc for s in ('wrong type of the web page', 'failed to get http url', 'webpage_curl_failed',
-                            'wrong file identifier', 'image_process_failed', 'wrong remote file')
-    ):
-        print('[POSTS] photo by URL rejected, uploading file directly')
-        res = tg_send_photo_file(bot_token, payload, src)
+    res = tg_send_photo_file(bot_token, payload, src)
+
+    # Файлом не вышло (например, картинка недоступна) — пробуем по ссылке.
+    if not res.get('ok') and not is_network_error(res):
+        desc = str(res.get('description', '')).lower()
+        if 'rights to send photos' not in desc:
+            res = tg_request(bot_token, 'sendPhoto', payload)
 
     fid = extract_file_id(res)
     if fid and src:
