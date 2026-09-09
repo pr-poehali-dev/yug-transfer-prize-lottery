@@ -439,34 +439,43 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
         if on_progress:
             on_progress(per_chat)
 
-    # Остальные площадки — быстрым копированием исходных сообщений.
-    stopped = False
-    for key in chats:
-        if key == primary_key or done.get(key):
-            continue
-        if time_left() < 6:
-            stopped = True
-            print(f"[POSTS] время запуска на исходе, останавливаемся перед {key}")
-            break
+    # Остальные площадки — параллельно: последовательно на 11 групп
+    # не хватает времени, если Telegram отвечает медленно.
+    markup = build_reply_markup(post)
+
+    def send_one(key: str):
+        """Отправка в одну группу. Возвращает (ключ, ids, ошибка)."""
+        if time_left() < 5:
+            return key, [], 'не успели за отведённое время'
         target = channels.get(key)
         if not target:
-            errors.append(f'{key}: канал не настроен')
-            continue
-        cp = copy_messages(bot_token, primary_chat, target, primary_ids, build_reply_markup(post))
+            return key, [], 'канал не настроен'
+        cp = copy_messages(bot_token, primary_chat, target, primary_ids, markup)
         print(f"[POSTS] copy to {key} ({target}): {cp}")
-        if not cp['ok']:
-            # Копирование не прошло — публикуем в группу напрямую.
-            direct = publish_post(bot_token, target, post)
-            print(f"[POSTS] direct publish to {key} ({target}): {direct}")
-            if direct.get('ok'):
-                cp = {'ok': True, 'message_ids': direct.get('message_ids') or [direct.get('message_id')], 'errors': []}
         if cp['ok']:
-            per_chat[key] = cp['message_ids']
-            all_ids.extend(cp['message_ids'])
-            if on_progress:
-                on_progress(per_chat)
-        else:
-            errors.append(f"{key}: {'; '.join(cp['errors']) or 'не удалось скопировать'}")
+            return key, cp['message_ids'], None
+        # Копирование не прошло — публикуем в группу напрямую.
+        direct = publish_post(bot_token, target, post)
+        print(f"[POSTS] direct publish to {key} ({target}): {direct}")
+        if direct.get('ok'):
+            ids = direct.get('message_ids') or [direct.get('message_id')]
+            return key, [i for i in ids if i], None
+        return key, [], '; '.join(cp['errors']) or direct.get('error', 'не удалось скопировать')
+
+    queue = [k for k in chats if k != primary_key and not done.get(k)]
+    stopped = False
+    if queue:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(queue))) as pool:
+            for key, ids, err in pool.map(send_one, queue):
+                if ids:
+                    per_chat[key] = ids
+                    all_ids.extend(ids)
+                    if on_progress:
+                        on_progress(per_chat)
+                else:
+                    errors.append(f'{key}: {err}')
+                    if 'не успели' in str(err):
+                        stopped = True
 
     return {
         'ok': bool(all_ids),
