@@ -11,6 +11,7 @@ POST ?action=check_scheduled — проверить и опубликовать 
 import os
 import time
 import json
+import concurrent.futures
 import hashlib
 import base64
 import uuid
@@ -572,49 +573,79 @@ def edit_tg_message(bot_token: str, channel_id: str, message_id: int, post: dict
     return result
 
 
+def edit_one_chat(bot_token: str, key: str, chat_id: str, ids: list, post: dict,
+                  had_photo: bool, photo_changed: bool) -> tuple:
+    """Обновляет пост в одной группе. Возвращает (ключ, ok, описание)."""
+    if time_left() <= 3:
+        return key, False, 'не успели за отведённое время, сохраните ещё раз'
+
+    # Длинный пост уходит двумя сообщениями: фото отдельно, текст отдельно.
+    if len(ids) > 1:
+        res = {'ok': True}
+        if photo_changed and post.get('photo_url'):
+            res = replace_tg_photo(bot_token, chat_id, ids[0], post['photo_url'], '', None)
+        text_res = edit_tg_message(bot_token, chat_id, ids[-1], post,
+                                   had_photo=False, photo_changed=False)
+        if not text_res.get('ok') and 'not modified' not in str(text_res.get('description', '')).lower():
+            res = text_res
+    else:
+        res = edit_tg_message(bot_token, chat_id, ids[0], post,
+                              had_photo=had_photo, photo_changed=photo_changed)
+
+    desc = str(res.get('description', ''))
+    # "message is not modified" — содержимое и так совпадает, это не ошибка.
+    ok = bool(res.get('ok')) or 'not modified' in desc.lower()
+    print(f"[POSTS] edit {key} ({chat_id}) msg={ids[0]}: {ok} {desc}")
+    return key, ok, desc
+
+
 def edit_everywhere(bot_token: str, channels: dict, chat_messages: dict,
                     fallback_ids: list, post: dict, had_photo: bool = None,
                     photo_changed: bool = False) -> dict:
-    """Правит пост во всех группах, где он был опубликован."""
-    edited, failed = [], []
+    """Правит пост во всех группах сразу, параллельно.
+    Последовательно на 11 групп не хватает времени, если Telegram отвечает медленно."""
     chat_messages = chat_messages or {}
-    # Список id по группам надёжнее общего списка: он есть у постов,
-    # опубликованных не в основной канал. Общий — только как запасной вариант.
+    targets = []
     for key, chat_id in channels.items():
         if not chat_id:
             continue
         ids = chat_messages.get(key)
+        # Общий список id — запасной вариант для постов старого формата.
         if not ids and key == 'main' and not chat_messages:
             ids = fallback_ids
         ids = [i for i in (ids or []) if i]
-        if not ids:
-            continue
+        if ids:
+            targets.append((key, chat_id, ids))
 
-        # Времени до обрыва функции не осталось — честно говорим, что не успели.
-        if time_left() <= 4:
-            failed.append(f"{key}: не успели за отведённое время, сохраните ещё раз")
-            continue
+    if not targets:
+        return {'edited': [], 'failed': []}
 
-        # Длинный пост уходит двумя сообщениями: фото отдельно, текст отдельно.
-        if len(ids) > 1:
-            res = {'ok': True}
-            if photo_changed and post.get('photo_url'):
-                res = replace_tg_photo(bot_token, chat_id, ids[0], post['photo_url'], '', None)
-            text_res = edit_tg_message(bot_token, chat_id, ids[-1], post,
-                                       had_photo=False, photo_changed=False)
-            if not text_res.get('ok') and 'not modified' not in str(text_res.get('description', '')).lower():
-                res = text_res
-        else:
-            res = edit_tg_message(bot_token, chat_id, ids[0], post,
-                                  had_photo=had_photo, photo_changed=photo_changed)
+    # Фото заливаем в Telegram один раз до рассылки: дальше все группы
+    # получают его по готовой ссылке и правятся почти мгновенно.
+    if photo_changed and post.get('photo_url') and had_photo:
+        first_key, first_chat, first_ids = targets[0]
+        ok, desc = edit_one_chat(bot_token, first_key, first_chat, first_ids,
+                                 post, had_photo, photo_changed)[1:]
+        head = [(first_key, ok, desc)]
+        rest = targets[1:]
+    else:
+        head = []
+        rest = targets
 
-        desc = str(res.get('description', ''))
-        # "message is not modified" — содержимое и так совпадает, это не ошибка.
-        if res.get('ok') or 'not modified' in desc.lower():
-            edited.append(key)
-        else:
-            failed.append(f"{key}: {desc or 'не удалось'}")
-        print(f"[POSTS] edit {key} ({chat_id}) msg={ids[0]}: {res.get('ok')} {desc}")
+    results = list(head)
+    if rest:
+        workers = min(6, len(rest))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(edit_one_chat, bot_token, k, c, i, post, had_photo, photo_changed)
+                       for k, c, i in rest]
+            for f in futures:
+                try:
+                    results.append(f.result())
+                except Exception as e:
+                    results.append(('?', False, f'{type(e).__name__}: {str(e)[:120]}'))
+
+    edited = [k for k, ok, _ in results if ok]
+    failed = [f"{k}: {d or 'не удалось'}" for k, ok, d in results if not ok]
     return {'edited': edited, 'failed': failed}
 
 
