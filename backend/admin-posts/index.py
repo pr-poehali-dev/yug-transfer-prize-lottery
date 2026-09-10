@@ -182,6 +182,8 @@ PHOTO_ID_CACHE = {}
 PHOTO_BYTES_CACHE = {}
 # Группы, куда Telegram не даёт копировать сообщения — публикуем напрямую.
 NO_COPY_CHATS = {'chat9', 'chat10'}
+# Группы, где боту запрещены картинки — шлём текстом, не тратя время на фото.
+NO_PHOTO_CHATS = {'chat9', 'chat10'}
 
 
 def tg_send_photo_file(bot_token: str, payload: dict, photo_url: str) -> dict:
@@ -284,10 +286,10 @@ def build_reply_markup(post: dict):
     return {'inline_keyboard': [row]} if row else None
 
 
-def publish_post(bot_token: str, channel_id: str, post: dict) -> dict:
+def publish_post(bot_token: str, channel_id: str, post: dict, allow_photo: bool = True) -> dict:
     """Публикует пост в Telegram, возвращает {ok, message_id}"""
     text = build_text_with_title(post)
-    photo_url = post.get('photo_url', '')
+    photo_url = post.get('photo_url', '') if allow_photo else ''
     button_text = post.get('button_text', '')
     button_url = post.get('button_url', '')
     button2_text = post.get('button2_text', '')
@@ -470,8 +472,10 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
                 NO_COPY_CHATS.add(key)
         else:
             cp = {'errors': []}
-        direct = publish_post(bot_token, target, post)
+        direct = publish_post(bot_token, target, post, allow_photo=key not in NO_PHOTO_CHATS)
         print(f"[POSTS] direct publish to {key} ({target}): {direct}")
+        if not direct.get('ok') and 'rights to send photos' in str(direct.get('error', '')):
+            NO_PHOTO_CHATS.add(key)
         if direct.get('ok'):
             ids = direct.get('message_ids') or [direct.get('message_id')]
             return key, [i for i in ids if i], None
@@ -480,8 +484,10 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
     queue = [k for k in chats if k != primary_key and not done.get(k)]
     stopped = False
     if queue:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(queue))) as pool:
-            for key, ids, err in pool.map(send_one, queue):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(queue))) as pool:
+            futures = [pool.submit(send_one, k) for k in queue]
+            for fut in concurrent.futures.as_completed(futures):
+                key, ids, err = fut.result()
                 if ids:
                     per_chat[key] = ids
                     all_ids.extend(ids)
