@@ -1,6 +1,7 @@
 """Ежедневная рассылка контактов ЮГ ТРАНСФЕР в Telegram и ВКонтакте."""
 import os
 import json
+import concurrent.futures
 import re
 import time
 import urllib.request
@@ -79,7 +80,7 @@ def tg_api(method, payload):
         if host != 'api.telegram.org':
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-        conn = http.client.HTTPSConnection(host, 443, timeout=20, context=ctx)
+        conn = http.client.HTTPSConnection(host, 443, timeout=6, context=ctx)
         try:
             conn.request('POST', f'/bot{token}/{method}', body=data,
                          headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
@@ -92,14 +93,28 @@ def tg_api(method, payload):
     return {'ok': False, 'description': last_err}
 
 
-def tg_send_photo_file(payload: dict, photo_url: str) -> dict:
-    """Запасной путь: Telegram не смог скачать фото по ссылке — шлём файл сами."""
-    token = get_bot_token()
+PHOTO_BYTES_CACHE = {}
+
+
+def fetch_photo(photo_url: str):
+    """Скачивает картинку один раз за запуск и держит в памяти."""
+    if photo_url in PHOTO_BYTES_CACHE:
+        return PHOTO_BYTES_CACHE[photo_url], None
     try:
-        with urllib.request.urlopen(photo_url, timeout=20) as r:
-            photo_bytes = r.read()
+        with urllib.request.urlopen(photo_url, timeout=12) as r:
+            data = r.read()
+        PHOTO_BYTES_CACHE[photo_url] = data
+        return data, None
     except Exception as e:
-        return {'ok': False, 'description': f'photo download failed: {type(e).__name__}'}
+        return None, f'photo download failed: {type(e).__name__}'
+
+
+def tg_send_photo_file(payload: dict, photo_url: str) -> dict:
+    """Шлём картинку файлом: Telegram не успевает скачать её с нашего хранилища."""
+    token = get_bot_token()
+    photo_bytes, err = fetch_photo(photo_url)
+    if err:
+        return {'ok': False, 'description': err}
 
     boundary = '----tgdaily' + uuid.uuid4().hex
     parts = []
@@ -123,7 +138,7 @@ def tg_send_photo_file(payload: dict, photo_url: str) -> dict:
         if host != 'api.telegram.org':
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-        conn = http.client.HTTPSConnection(host, 443, timeout=30, context=ctx)
+        conn = http.client.HTTPSConnection(host, 443, timeout=10, context=ctx)
         try:
             conn.request('POST', f'/bot{token}/sendPhoto', body=body,
                          headers={'Content-Type': f'multipart/form-data; boundary={boundary}',
@@ -163,14 +178,12 @@ def vk_api(method, params, use_user_token: bool = True):
 
 
 def vk_upload_photo(photo_url: str, group_id: str, log: list):
-    try:
-        with urllib.request.urlopen(photo_url, timeout=15) as resp:
-            photo_bytes = resp.read()
-            content_type = resp.headers.get('Content-Type', 'image/jpeg')
-        log.append({'step': 'download', 'ok': True, 'size': len(photo_bytes), 'ct': content_type})
-    except Exception as e:
-        log.append({'step': 'download', 'ok': False, 'err': str(e)})
+    photo_bytes, dl_err = fetch_photo(photo_url)
+    if dl_err:
+        log.append({'step': 'download', 'ok': False, 'err': dl_err})
         return None
+    content_type = 'image/jpeg'
+    log.append({'step': 'download', 'ok': True, 'size': len(photo_bytes), 'ct': content_type})
 
     server = vk_api('photos.getWallUploadServer', {'group_id': group_id})
     log.append({'step': 'getWallUploadServer', 'resp': server})
@@ -251,14 +264,12 @@ def post_to_vk(photo_url: str, text: str, debug: bool = False):
 
 def vk_upload_photo_user(photo_url: str, user_id: str, log: list):
     """Загружает фото на стену пользователя (без group_id)."""
-    try:
-        with urllib.request.urlopen(photo_url, timeout=15) as resp:
-            photo_bytes = resp.read()
-            content_type = resp.headers.get('Content-Type', 'image/jpeg')
-        log.append({'step': 'download', 'ok': True, 'size': len(photo_bytes)})
-    except Exception as e:
-        log.append({'step': 'download', 'ok': False, 'err': str(e)})
+    photo_bytes, dl_err = fetch_photo(photo_url)
+    if dl_err:
+        log.append({'step': 'download', 'ok': False, 'err': dl_err})
         return None
+    content_type = 'image/jpeg'
+    log.append({'step': 'download', 'ok': True, 'size': len(photo_bytes)})
 
     server = vk_api('photos.getWallUploadServer', {})
     log.append({'step': 'getWallUploadServer', 'resp': server})
@@ -341,14 +352,12 @@ def get_max_token():
 
 def max_upload_image(photo_url: str, token: str, log: list):
     """Загружает фото в MAX и возвращает токен вложения."""
-    try:
-        with urllib.request.urlopen(photo_url, timeout=15) as resp:
-            photo_bytes = resp.read()
-            content_type = resp.headers.get('Content-Type', 'image/jpeg')
-        log.append({'step': 'max_download', 'ok': True, 'size': len(photo_bytes)})
-    except Exception as e:
-        log.append({'step': 'max_download', 'ok': False, 'err': str(e)})
+    photo_bytes, dl_err = fetch_photo(photo_url)
+    if dl_err:
+        log.append({'step': 'max_download', 'ok': False, 'err': dl_err})
         return None
+    content_type = 'image/jpeg'
+    log.append({'step': 'max_download', 'ok': True, 'size': len(photo_bytes)})
 
     up_req = urllib.request.Request(f"{MAX_API_BASE}/uploads?type=image", method='POST')
     up_req.add_header('Authorization', token)
@@ -521,11 +530,10 @@ def handler(event: dict, context) -> dict:
         'caption': tg_text,
         'parse_mode': 'HTML',
     }
-    tg_result = tg_api('sendPhoto', tg_payload)
+    tg_result = tg_send_photo_file(tg_payload, photo)
     if not tg_result.get('ok'):
-        # Telegram не смог забрать фото по ссылке — отправляем файл напрямую.
-        print(f"[DAILY] sendPhoto by url failed: {str(tg_result.get('description'))[:200]}")
-        tg_result = tg_send_photo_file(tg_payload, photo)
+        print(f"[DAILY] sendPhoto file failed: {str(tg_result.get('description'))[:200]}, trying by url")
+        tg_result = tg_api('sendPhoto', tg_payload)
     if not tg_result.get('ok'):
         # Совсем не вышло с фото — публикуем хотя бы текст, пост не пропадёт.
         print(f"[DAILY] sendPhoto file failed: {str(tg_result.get('description'))[:200]}")
@@ -535,9 +543,13 @@ def handler(event: dict, context) -> dict:
             'parse_mode': 'HTML',
         })
 
-    vk_result = post_to_vk(photo, vk_text)
-    vk_user_result = post_to_vk_user_wall(photo, vk_text)
-    max_result = post_to_max(photo, max_text)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        f_vk = pool.submit(post_to_vk, photo, vk_text)
+        f_vk_user = pool.submit(post_to_vk_user_wall, photo, vk_text)
+        f_max = pool.submit(post_to_max, photo, max_text)
+        vk_result = f_vk.result()
+        vk_user_result = f_vk_user.result()
+        max_result = f_max.result()
 
     tg_status = 'ok' if tg_result.get('ok') else f"err:{(tg_result.get('description') or 'fail')[:200]}"
     vk_status = 'ok' if vk_result.get('ok') else f"err:{(vk_result.get('error') or 'fail')[:200]}"
