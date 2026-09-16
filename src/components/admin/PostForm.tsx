@@ -351,7 +351,7 @@ export function PostForm({
         <div className="flex gap-1.5 pt-0.5 flex-wrap">
           <button
             onClick={() => onSave("draft")}
-            disabled={saving || publishing}
+            disabled={saving || publishing || uploading}
             className="flex-1 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             <Icon name="FileText" size={13} />
@@ -361,7 +361,7 @@ export function PostForm({
           {scheduledAt && (
             <button
               onClick={() => onSave("scheduled")}
-              disabled={saving || publishing}
+              disabled={saving || publishing || uploading}
               className="flex-1 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
             >
               <Icon name="Clock" size={13} />
@@ -371,12 +371,14 @@ export function PostForm({
 
           <button
             onClick={onPublishNow}
-            disabled={saving || publishing}
+            disabled={saving || publishing || uploading}
             className="flex-1 grad-btn py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
             {publishing
               ? <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Публикую...</>
-              : <><Icon name="Send" size={13} />Опубликовать</>}
+              : uploading
+                ? <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Ждём фото...</>
+                : <><Icon name="Send" size={13} />Опубликовать</>}
           </button>
         </div>
       </div>

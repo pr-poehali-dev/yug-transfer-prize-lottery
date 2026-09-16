@@ -1199,8 +1199,36 @@ def handler(event: dict, context) -> dict:
             fresh = {'title': title, 'text': text, 'photo_url': photo_url,
                      'button_text': button_text, 'button_url': button_url,
                      'button2_text': button2_text, 'button2_url': button2_url}
-            edit_result = edit_everywhere(bot_token, channels, chat_messages, fallback, fresh,
-                                          had_photo=bool(prev_photo), photo_changed=photo_changed)
+            # Сообщение в группе без картинки — правкой фото не добавить.
+            needs_repost = bool(photo_url) and not prev_photo
+            if not needs_repost and photo_url:
+                probe = edit_everywhere(bot_token, channels, chat_messages, fallback, fresh,
+                                        had_photo=True, photo_changed=photo_changed)
+                if any('no caption in the message' in f for f in probe['failed']):
+                    needs_repost = True
+                else:
+                    edit_result = probe
+            if needs_repost:
+                # Текстовое сообщение нельзя превратить в фото-пост правкой —
+                # снимаем старое и публикуем заново уже с картинкой.
+                live_keys = [k for k in chat_messages if chat_messages.get(k)] or ['main']
+                for k in live_keys:
+                    ch = channels.get(k)
+                    ids = chat_messages.get(k) or fallback
+                    if ch and ids:
+                        tg_delete_messages(bot_token, ch, ids)
+                fresh['id'] = post_id
+                repub = publish_to_chats(bot_token, live_keys, channels, fresh)
+                chat_messages = repub.get('per_chat') or {}
+                fallback = repub.get('message_ids') or []
+                cur.execute(
+                    f"UPDATE {SCHEMA}.posts SET chat_messages=%s, message_ids=%s, telegram_message_id=%s WHERE id=%s",
+                    (json.dumps(chat_messages), fallback, fallback[0] if fallback else None, post_id))
+                conn.commit()
+                edit_result = {'edited': list(chat_messages.keys()), 'failed': repub.get('errors') or []}
+            elif not photo_url:
+                edit_result = edit_everywhere(bot_token, channels, chat_messages, fallback, fresh,
+                                              had_photo=bool(prev_photo), photo_changed=photo_changed)
             # Фото было и его убрали — Telegram не даёт превратить фото-пост в текстовый.
             if not photo_url and prev_photo:
                 edit_result['failed'].append(
