@@ -9,7 +9,16 @@ export interface BotPost {
   last_tg_status?: string | null;
   last_vk_status?: string | null;
   last_sent_at?: string | null;
+  season?: string;
 }
+
+export const SEASONS = [
+  { value: "any", label: "Всесезонный", icon: "Infinity" },
+  { value: "winter", label: "Зима", icon: "Snowflake" },
+  { value: "spring", label: "Весна", icon: "Flower2" },
+  { value: "summer", label: "Лето", icon: "Sun" },
+  { value: "autumn", label: "Осень", icon: "Leaf" },
+];
 
 export interface BotInfo {
   username: string;

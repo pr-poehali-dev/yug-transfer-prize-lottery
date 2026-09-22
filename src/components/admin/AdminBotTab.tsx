@@ -18,7 +18,7 @@ export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: A
   const [posts, setPosts] = useState<BotPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ photo_url: "", greeting: "", description: "" });
+  const [form, setForm] = useState({ photo_url: "", greeting: "", description: "", season: "any" });
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
@@ -48,7 +48,7 @@ export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: A
       });
       setEditingId(null);
       setShowAdd(false);
-      setForm({ photo_url: "", greeting: "", description: "" });
+      setForm({ photo_url: "", greeting: "", description: "", season: "any" });
       fetchPosts();
     } catch { /* */ }
     setSaving(false);
@@ -74,7 +74,7 @@ export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: A
   const handleEdit = (post: BotPost) => {
     setEditingId(post.id);
     setShowAdd(true);
-    setForm({ photo_url: post.photo_url, greeting: post.greeting, description: post.description });
+    setForm({ photo_url: post.photo_url, greeting: post.greeting, description: post.description, season: post.season || "any" });
   };
 
   const reportSend = (tgOk: boolean, vkOk: boolean, data: Record<string, unknown>) => {
@@ -209,7 +209,7 @@ export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: A
             queueOrder={queueOrder}
             formatNextDate={formatNextDate}
             onSendNow={handleSendNow}
-            onAddNew={() => { setShowAdd(true); setEditingId(null); setForm({ photo_url: "", greeting: "", description: "" }); }}
+            onAddNew={() => { setShowAdd(true); setEditingId(null); setForm({ photo_url: "", greeting: "", description: "", season: "any" }); }}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSendOne={handleSendOne}

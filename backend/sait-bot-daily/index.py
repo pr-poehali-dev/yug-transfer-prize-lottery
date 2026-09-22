@@ -19,28 +19,17 @@ VK_API_VERSION = '5.199'
 
 CONTACTS = """
 ━━━━━━━━━━━━━━━━━━━
-✨ <b>ПОЧЕМУ ВЫБИРАЮТ НАС:</b>
+✅ Подача за 5 минут • фиксированная цена
+✅ Опытные водители • 24/7 без выходных
+✅ Детские кресла • оплата картой и чеки
 
-✅ Подача авто за 5 минут
-✅ Фиксированная цена без накруток
-✅ Опытные водители со стажем
-✅ Иномарки бизнес и комфорт класса
-✅ Круглосуточно — 24/7 без выходных
-✅ Детские кресла по запросу
-✅ Безналичная оплата и чеки
-
-━━━━━━━━━━━━━━━━━━━
-📲 <b>СВЯЖИТЕСЬ УДОБНЫМ СПОСОБОМ:</b>
-
-📞 <b>Телефон:</b> +7 (995) 614-14-14
+📞 <b>+7 (995) 614-14-14</b>
 💬 <b>WhatsApp:</b> wa.me/79956141414
 ✈️ <b>Telegram:</b> @ug_transfer_online
-🌐 <b>Сайт:</b> ug-transfer.online
-🤖 <b>Бот заказа:</b> @ug_sait_bot
+🌐 ug-transfer.online • 🤖 @ug_sait_bot
 🅼 <b>MAX:</b> <a href="https://max.ru/id910238307053_2_bot">Заказать</a>
 
-━━━━━━━━━━━━━━━━━━━
-🚖 <i>ЮГ ТРАНСФЕР — ваш надёжный партнёр в дороге!</i>
+🚖 <i>ЮГ ТРАНСФЕР — надёжный партнёр в дороге!</i>
 
 #такси #трансфер #ЮгТрансфер #поездки"""
 
@@ -447,16 +436,39 @@ def post_to_max(photo_url: str, text: str, debug: bool = False):
     return out
 
 
+def current_season() -> str:
+    """Сезон по текущему месяцу — чтобы лыжи не уезжали в июнь, а пляж в январь."""
+    m = date.today().month
+    if m in (12, 1, 2):
+        return 'winter'
+    if m in (3, 4, 5):
+        return 'spring'
+    if m in (6, 7, 8):
+        return 'summer'
+    return 'autumn'
+
+
 def get_next_post():
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     today = date.today().isoformat()
+    season = current_season()
+    # Берём самый давно не выходивший пост, подходящий сезону.
     cur.execute(
         f"SELECT id, photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts "
-        f"WHERE scheduled_date IS NULL OR scheduled_date < '{today}' "
+        f"WHERE (scheduled_date IS NULL OR scheduled_date < '{today}') "
+        f"AND season IN ('any', '{season}') "
         f"ORDER BY scheduled_date ASC NULLS FIRST, id ASC LIMIT 1"
     )
     row = cur.fetchone()
+    # Сезонных не осталось — не молчим, берём любой доступный.
+    if not row:
+        cur.execute(
+            f"SELECT id, photo_url, greeting, description FROM {SCHEMA}.bot_daily_posts "
+            f"WHERE scheduled_date IS NULL OR scheduled_date < '{today}' "
+            f"ORDER BY scheduled_date ASC NULLS FIRST, id ASC LIMIT 1"
+        )
+        row = cur.fetchone()
     if row:
         cur.execute(
             f"UPDATE {SCHEMA}.bot_daily_posts SET is_used = TRUE, scheduled_date = '{today}' "
@@ -508,6 +520,13 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': False, 'error': 'no posts'})}
 
     post_id, photo, greeting, description = row
+    # Подпись к фото в Telegram ограничена 1024 символами: если пост длинный,
+    # ужимаем описание, чтобы блок контактов гарантированно уцелел.
+    room = 1024 - len(CONTACTS) - len(greeting) - 24
+    if len(description) > room > 80:
+        cut = description[:room].rsplit('\n', 1)[0].rstrip()
+        print(f"[DAILY] post {post_id}: описание укорочено {len(description)}→{len(cut)}")
+        description = cut
     tg_text = f"<b>{greeting}</b>\n\n{description}\n{CONTACTS}"
     vk_text = build_vk_text(f"{greeting}\n\n{description}\n{CONTACTS}")
     max_text = build_max_text(f"{greeting}\n\n{description}\n{CONTACTS}")

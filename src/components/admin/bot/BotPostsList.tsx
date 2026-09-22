@@ -1,5 +1,12 @@
 import Icon from "@/components/ui/icon";
-import { BotPost } from "./botTypes";
+import { BotPost, SEASONS } from "./botTypes";
+
+const SEASON_LABELS: Record<string, string> = Object.fromEntries(
+  SEASONS.map(s => [s.value, s.label]),
+);
+const SEASON_ICONS: Record<string, string> = Object.fromEntries(
+  SEASONS.map(s => [s.value, s.icon]),
+);
 
 interface BotPostsListProps {
   posts: BotPost[];
@@ -108,6 +115,12 @@ export function BotPostsList({
                     <span className={`text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${isNext ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300" : "bg-purple-500/10 border border-purple-500/20 text-purple-300"}`}>
                       <Icon name="Clock" size={10} />
                       {formatNextDate(sched.date)}
+                    </span>
+                  )}
+                  {post.season && post.season !== "any" && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                      <Icon name={SEASON_ICONS[post.season] || "Calendar"} size={10} />
+                      {SEASON_LABELS[post.season] || post.season}
                     </span>
                   )}
                   {post.is_used && post.scheduled_date && (

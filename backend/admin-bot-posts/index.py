@@ -33,6 +33,15 @@ def escape_sql(value: str) -> str:
     return str(value).replace("'", "''")
 
 
+SEASONS = ('any', 'winter', 'spring', 'summer', 'autumn')
+
+
+def normalize_season(value) -> str:
+    """Сезон поста: неизвестное значение считаем всесезонным."""
+    v = str(value or 'any').strip().lower()
+    return v if v in SEASONS else 'any'
+
+
 def resp(status: int, body: dict) -> dict:
     return {
         'statusCode': status,
@@ -72,7 +81,7 @@ def handler(event: dict, context) -> dict:
         if method == 'GET':
             cur.execute(
                 f"SELECT id, photo_url, greeting, description, is_used, scheduled_date, created_at, "
-                f"last_tg_status, last_vk_status, last_sent_at "
+                f"last_tg_status, last_vk_status, last_sent_at, season "
                 f"FROM {SCHEMA}.bot_daily_posts ORDER BY id DESC"
             )
             rows = cur.fetchall()
@@ -89,6 +98,7 @@ def handler(event: dict, context) -> dict:
                     'last_tg_status': r[7],
                     'last_vk_status': r[8],
                     'last_sent_at': r[9].isoformat() if r[9] else None,
+                    'season': r[10] or 'any',
                 })
             cur.close()
             conn.close()
@@ -106,6 +116,7 @@ def handler(event: dict, context) -> dict:
             photo_url = escape_sql(body.get('photo_url', ''))
             greeting = escape_sql(body.get('greeting', ''))
             description = escape_sql(body.get('description', ''))
+            season = normalize_season(body.get('season'))
 
             if not photo_url or not greeting or not description:
                 cur.close()
@@ -113,9 +124,9 @@ def handler(event: dict, context) -> dict:
                 return resp(400, {'error': 'photo_url, greeting и description обязательны'})
 
             cur.execute(
-                f"INSERT INTO {SCHEMA}.bot_daily_posts (photo_url, greeting, description) "
-                f"VALUES ('{photo_url}', '{greeting}', '{description}') "
-                f"RETURNING id, photo_url, greeting, description, is_used, scheduled_date, created_at"
+                f"INSERT INTO {SCHEMA}.bot_daily_posts (photo_url, greeting, description, season) "
+                f"VALUES ('{photo_url}', '{greeting}', '{description}', '{season}') "
+                f"RETURNING id, photo_url, greeting, description, is_used, scheduled_date, created_at, season"
             )
             r = cur.fetchone()
             conn.commit()
@@ -127,6 +138,7 @@ def handler(event: dict, context) -> dict:
                 'is_used': r[4],
                 'scheduled_date': r[5].isoformat() if r[5] else None,
                 'created_at': r[6].isoformat() if r[6] else None,
+                'season': (r[7] if len(r) > 7 else None) or 'any',
             }
             cur.close()
             conn.close()
@@ -151,6 +163,7 @@ def handler(event: dict, context) -> dict:
             photo_url = escape_sql(body.get('photo_url', ''))
             greeting = escape_sql(body.get('greeting', ''))
             description = escape_sql(body.get('description', ''))
+            season = normalize_season(body.get('season'))
 
             if not photo_url or not greeting or not description:
                 cur.close()
@@ -160,9 +173,10 @@ def handler(event: dict, context) -> dict:
             post_id_safe = int(post_id)
             cur.execute(
                 f"UPDATE {SCHEMA}.bot_daily_posts "
-                f"SET photo_url = '{photo_url}', greeting = '{greeting}', description = '{description}' "
+                f"SET photo_url = '{photo_url}', greeting = '{greeting}', "
+                f"description = '{description}', season = '{season}' "
                 f"WHERE id = {post_id_safe} "
-                f"RETURNING id, photo_url, greeting, description, is_used, scheduled_date, created_at"
+                f"RETURNING id, photo_url, greeting, description, is_used, scheduled_date, created_at, season"
             )
             r = cur.fetchone()
             if not r:
@@ -179,6 +193,7 @@ def handler(event: dict, context) -> dict:
                 'is_used': r[4],
                 'scheduled_date': r[5].isoformat() if r[5] else None,
                 'created_at': r[6].isoformat() if r[6] else None,
+                'season': (r[7] if len(r) > 7 else None) or 'any',
             }
             cur.close()
             conn.close()

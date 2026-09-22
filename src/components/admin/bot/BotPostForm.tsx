@@ -1,12 +1,13 @@
 import { useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { ADMIN_POSTS_URL } from "../adminTypes";
+import { SEASONS } from "./botTypes";
 
 interface BotPostFormProps {
   token: string;
   editingId: number | null;
-  form: { photo_url: string; greeting: string; description: string };
-  setForm: React.Dispatch<React.SetStateAction<{ photo_url: string; greeting: string; description: string }>>;
+  form: { photo_url: string; greeting: string; description: string; season: string };
+  setForm: React.Dispatch<React.SetStateAction<{ photo_url: string; greeting: string; description: string; season: string }>>;
   saving: boolean;
   onSave: () => void;
   onCancel: () => void;
@@ -73,6 +74,33 @@ export function BotPostForm({ token, editingId, form, setForm, saving, onSave, o
       <div>
         <label className="text-white/50 text-xs mb-1 block">Описание</label>
         <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Комфортные автомобили..." rows={3} className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-purple-500/40 resize-none" />
+      </div>
+      <div>
+        <label className="text-white/50 text-xs mb-1 block">Когда показывать</label>
+        <div className="flex flex-wrap gap-1.5">
+          {SEASONS.map(s => {
+            const active = (form.season || "any") === s.value;
+            return (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => setForm(f => ({ ...f, season: s.value }))}
+                className={
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors " +
+                  (active
+                    ? "border-purple-500/50 bg-purple-500/15 text-white"
+                    : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10")
+                }
+              >
+                <Icon name={s.icon} size={13} />
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-white/30 text-[11px] mt-1.5">
+          Сезонный пост выйдет только в свои месяцы — зимние темы не попадут в летнюю рассылку.
+        </p>
       </div>
       <div className="flex gap-2">
         <button onClick={onSave} disabled={saving || !form.photo_url || !form.greeting || !form.description} className="px-4 py-2 rounded-xl bg-purple-500 text-white text-sm font-medium hover:bg-purple-600 transition-colors disabled:opacity-50">
