@@ -53,7 +53,7 @@ export function PostTelegramPreview({ title = "", text, photo_url, button_text, 
                 </div>
               )}
               {(button_text && button_url) || (button2_text && button2_url) ? (
-                <div className="border-t border-white/5 px-3 py-1.5 flex gap-1">
+                <div className="border-t border-white/5 px-3 py-1.5 flex flex-col gap-1">
                   {button_text && button_url && (
                     <div className="flex-1 flex items-center justify-center gap-1.5 text-[#2ea6ff] text-sm font-medium py-1">
                       <Icon name="ExternalLink" size={13} />
@@ -61,7 +61,7 @@ export function PostTelegramPreview({ title = "", text, photo_url, button_text, 
                     </div>
                   )}
                   {button_text && button_url && button2_text && button2_url && (
-                    <div className="w-px bg-white/10 self-stretch" />
+                    <div className="h-px bg-white/10 w-full" />
                   )}
                   {button2_text && button2_url && (
                     <div className="flex-1 flex items-center justify-center gap-1.5 text-[#2ea6ff] text-sm font-medium py-1">

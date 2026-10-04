@@ -276,14 +276,14 @@ def normalize_button_url(url: str) -> str:
 
 def build_reply_markup(post: dict):
     """Собирает inline-кнопки поста (до двух в ряд)."""
-    row = []
+    rows = []
     b1t, b1u = post.get('button_text', ''), normalize_button_url(post.get('button_url', ''))
     b2t, b2u = post.get('button2_text', ''), normalize_button_url(post.get('button2_url', ''))
     if b1t and b1u:
-        row.append({'text': b1t, 'url': b1u})
+        rows.append([{'text': b1t, 'url': b1u}])
     if b2t and b2u:
-        row.append({'text': b2t, 'url': b2u})
-    return {'inline_keyboard': [row]} if row else None
+        rows.append([{'text': b2t, 'url': b2u}])
+    return {'inline_keyboard': rows} if rows else None
 
 
 def publish_post(bot_token: str, channel_id: str, post: dict, allow_photo: bool = True) -> dict:
@@ -299,13 +299,13 @@ def publish_post(bot_token: str, channel_id: str, post: dict, allow_photo: bool 
     button2_url = normalize_button_url(button2_url)
 
     reply_markup = None
-    buttons_row = []
+    buttons_rows = []
     if button_text and button_url:
-        buttons_row.append({'text': button_text, 'url': button_url})
+        buttons_rows.append([{'text': button_text, 'url': button_url}])
     if button2_text and button2_url:
-        buttons_row.append({'text': button2_text, 'url': button2_url})
-    if buttons_row:
-        reply_markup = {'inline_keyboard': [buttons_row]}
+        buttons_rows.append([{'text': button2_text, 'url': button2_url}])
+    if buttons_rows:
+        reply_markup = {'inline_keyboard': buttons_rows}
 
     # Telegram: подпись к фото ограничена 1024 символами, текст сообщения — 4096.
     # Если фото есть, но текст длиннее лимита подписи — шлём фото отдельно,
