@@ -515,6 +515,15 @@ def handle_daily_scan(event: dict, context) -> dict:
         {'ok': True, 'scanned': done, 'changes': changed, 'errors': errors, 'left': left})}
 
 
+def private_only_commands() -> dict:
+    """Команды бота видны только в личке: в группах меню «/» пустое."""
+    res = {}
+    for scope in ('default', 'all_group_chats', 'all_chat_administrators'):
+        res[scope] = tg_api('deleteMyCommands', {'scope': {'type': scope}}, timeout=2.2).get('ok')
+    res['private'] = tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}], 'scope': {'type': 'all_private_chats'}}, timeout=2.2).get('ok')
+    return res
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -532,13 +541,15 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
                 'ok': bool(me), 'username': me.get('username', ''), 'webhook': wh.get('url', ''),
                 'error': me_res.get('description', '') if not me else ''})}
+        if action == 'private_commands':
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(private_only_commands())}
         if action == 'set_webhook':
             url = qs.get('url', '')
             if not url:
                 return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'url required'})}
             res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'callback_query', 'chat_member']}, timeout=2.2)
             if res.get('ok'):
-                tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}]}, timeout=2.2)
+                private_only_commands()
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(res)}
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 

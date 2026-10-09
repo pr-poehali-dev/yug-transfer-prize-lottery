@@ -13,7 +13,7 @@ START_TEXT = (
 )
 SEARCH_TEXT = 'Переход к поиску заказов 👇'
 
-TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
+TG_HOSTS = ['149.154.167.41', '149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
 LAST_OK_HOST = ''
 
 
@@ -23,8 +23,10 @@ def get_bot_token():
 
 def tg_api(method, payload, timeout=8, hosts=None):
     """Запрос к Telegram: из облака часть адресов недоступна, перебираем рабочие."""
+    global LAST_OK_HOST
     data = json.dumps(payload).encode()
-    for host in (hosts or TG_HOSTS):
+    order = hosts or ([LAST_OK_HOST] + [h for h in TG_HOSTS if h != LAST_OK_HOST] if LAST_OK_HOST else TG_HOSTS)
+    for host in order:
         ctx = ssl.create_default_context()
         if host != 'api.telegram.org':
             ctx.check_hostname = False
@@ -34,7 +36,6 @@ def tg_api(method, payload, timeout=8, hosts=None):
             conn.request('POST', f'/bot{get_bot_token()}/{method}', body=data,
                          headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
             result = json.loads(conn.getresponse().read())
-            global LAST_OK_HOST
             LAST_OK_HOST = host
             return result
         except Exception as e:
@@ -48,6 +49,18 @@ def tg_api(method, payload, timeout=8, hosts=None):
 SEARCH_MARKUP = {'inline_keyboard': [[{'text': SEARCH_BUTTON_TEXT, 'url': SEARCH_URL}]]}
 
 
+
+
+def private_only_commands() -> dict:
+    """Команды бота видны только в личке: в группах меню «/» пустое."""
+    import concurrent.futures as cf
+    calls = {scope: ('deleteMyCommands', {'scope': {'type': scope}})
+             for scope in ('default', 'all_group_chats', 'all_chat_administrators')}
+    calls['private'] = ('setMyCommands', {'commands': [{'command': 'start', 'description': 'Поиск заказов'}],
+                                          'scope': {'type': 'all_private_chats'}})
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        futs = {k: pool.submit(tg_api, m, p, 1.5, ['149.154.167.41', '149.154.167.220']) for k, (m, p) in calls.items()}
+        return {k: f.result().get('ok') for k, f in futs.items()}
 
 
 def handler(event: dict, context) -> dict:
@@ -71,13 +84,15 @@ def handler(event: dict, context) -> dict:
                 'ok': True, 'username': me.get('username', ''),
                 'webhook': wh.get('url', ''),
             })}
+        if action == 'private_commands':
+            return {'statusCode': 200, 'headers': cors, 'body': json.dumps(private_only_commands())}
         if action == 'set_webhook':
             func_url = qs.get('url', '')
             if not func_url:
                 return {'statusCode': 400, 'headers': cors, 'body': json.dumps({'error': 'url required'})}
             res = tg_api('setWebhook', {'url': func_url, 'allowed_updates': ['message', 'callback_query']})
             tg_api('setChatMenuButton', {'menu_button': {'type': 'commands'}})
-            tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Поиск заказов'}]})
+            private_only_commands()
             return {'statusCode': 200, 'headers': cors, 'body': json.dumps(res)}
         return {'statusCode': 200, 'headers': cors, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 
