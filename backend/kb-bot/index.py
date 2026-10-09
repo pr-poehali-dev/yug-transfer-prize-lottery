@@ -613,7 +613,7 @@ def handler(event: dict, context) -> dict:
         if action == 'complaint_decided':
             cid = int(qs.get('id') or 0)
             st = qs.get('status', '')
-            complaints.mark_group_message(tg_api, cid, '⛔️ В ЧС — из админки' if st == 'accepted' else '✖️ Отклонена — из админки')
+            complaints.mark_group_message(tg_api, cid, '⛔️ Занесён в ЧС — из админки' if st == 'accepted' else '✖️ Не обоснована — из админки')
             complaints.notify_reporter(tg_api, cid)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
         if action == 'test_complaint_topic':

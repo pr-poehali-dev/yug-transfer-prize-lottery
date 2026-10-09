@@ -284,11 +284,11 @@ def notify_admin(tg_api, cid: int) -> None:
 def admin_markup(cid: int, list_type: str = '') -> dict:
     rows = []
     if list_type != 'black':
-        rows.append([{'text': '⛔️ Отправить в ЧС', 'callback_data': f'cblack:{int(cid)}'},
-                     {'text': '✖️ Отклонить', 'callback_data': f'creject:{int(cid)}'}])
+        rows.append([{'text': '⛔️ Заносим в ЧС', 'callback_data': f'cblack:{int(cid)}'},
+                     {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
     else:
-        rows.append([{'text': '✅ Принять (уже в ЧС)', 'callback_data': f'cblack:{int(cid)}'},
-                     {'text': '✖️ Отклонить', 'callback_data': f'creject:{int(cid)}'}])
+        rows.append([{'text': '⛔️ Подтвердить (уже в ЧС)', 'callback_data': f'cblack:{int(cid)}'},
+                     {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
     rows.append([{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}])
     return {'inline_keyboard': rows}
 
@@ -342,7 +342,7 @@ def handle_black_button(tg_api, callback: dict) -> None:
     cid = int(str(callback.get('data', '')).split(':')[1])
     if not is_group_admin(tg_api, chat_id, user.get('id')):
         tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': True,
-                                       'text': 'Отправить в ЧС может только администратор группы.'}, timeout=2.2)
+                                       'text': 'Заносить в ЧС может только администратор группы.'}, timeout=2.2)
         return
     by = f"@{user['username']}" if user.get('username') else (user.get('first_name') or str(user.get('id')))
     result = to_black(cid, by)
@@ -352,7 +352,7 @@ def handle_black_button(tg_api, callback: dict) -> None:
     tg_api('editMessageReplyMarkup', {
         'chat_id': chat_id, 'message_id': msg.get('message_id'),
         'reply_markup': {'inline_keyboard': [
-            [{'text': f"⛔️ В ЧС — {by}", 'callback_data': 'noop'}],
+            [{'text': f"⛔️ Занесён в ЧС — {by}", 'callback_data': 'noop'}],
             [{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}}, timeout=3)
     notify_reporter(tg_api, cid)
 
@@ -376,7 +376,7 @@ def notify_reporter(tg_api, cid: int) -> None:
                     f"Спасибо, что помогаете делать работу безопаснее!")
         else:
             text = (f"ℹ️ <b>Ваша жалоба #{cid} рассмотрена</b>\n\n"
-                    f"Жалоба от {when} на {who} <b>отклонена</b> — информация не подтвердилась.\n\n"
+                    f"Жалоба от {when} на {who} признана <b>необоснованной</b> — информация не подтвердилась.\n\n"
                     f"Если у вас есть новые доказательства, отправьте жалобу повторно.")
         res = tg_api('sendMessage', {'chat_id': rep, 'text': text, 'parse_mode': 'HTML'}, timeout=3)
         cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET reporter_notified=TRUE WHERE id={int(cid)}")
@@ -412,7 +412,7 @@ def reject(cid: int, by: str) -> str:
                     f"updated_at=now() WHERE id={int(cid)} AND status='new' RETURNING id")
         ok = cur.fetchone()
         conn.commit()
-        return '✖️ Жалоба отклонена' if ok else 'Жалоба уже обработана'
+        return '✖️ Жалоба признана необоснованной' if ok else 'Жалоба уже обработана'
     finally:
         cur.close()
         conn.close()
@@ -425,11 +425,11 @@ def handle_reject_button(tg_api, callback: dict) -> None:
     cid = int(str(callback.get('data', '')).split(':')[1])
     if not is_group_admin(tg_api, chat_id, user.get('id')):
         tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': True,
-                                       'text': 'Отклонить может только администратор группы.'}, timeout=2.2)
+                                       'text': 'Решение по жалобе принимает только администратор группы.'}, timeout=2.2)
         return
     by = f"@{user['username']}" if user.get('username') else (user.get('first_name') or str(user.get('id')))
     result = reject(cid, by)
     tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': result}, timeout=2.2)
     if result.startswith('✖️'):
-        mark_group_message(tg_api, cid, f"✖️ Отклонена — {by}")
+        mark_group_message(tg_api, cid, f"✖️ Не обоснована — {by}")
         notify_reporter(tg_api, cid)

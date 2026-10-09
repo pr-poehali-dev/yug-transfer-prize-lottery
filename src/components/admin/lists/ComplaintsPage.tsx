@@ -22,7 +22,7 @@ interface Complaint {
 const STATUS: Record<string, { label: string; cls: string }> = {
   new: { label: "Новая", cls: "bg-amber-500 text-black" },
   accepted: { label: "Принята", cls: "bg-red-500/80 text-white" },
-  rejected: { label: "Отклонена", cls: "bg-white/15 text-white/70" },
+  rejected: { label: "Не обоснована", cls: "bg-white/15 text-white/70" },
 };
 const ROLE: Record<string, string> = { driver: "Водитель", dispatcher: "Диспетчер" };
 const LIST: Record<string, string> = { white: "белый список", black: "чёрный список", pending: "на модерации" };
@@ -63,7 +63,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
       });
       const d = await res.json();
       if (d.ok) {
-        toast.success(toBlack ? "Жалоба принята, аккаунт в чёрном списке" : status === "accepted" ? "Жалоба принята" : "Жалоба отклонена");
+        toast.success(toBlack ? "Занесён в ЧС, автору отправлено уведомление" : status === "accepted" ? "Жалоба принята" : "Жалоба не обоснована, автору отправлено уведомление");
         load();
       } else toast.error("Не удалось сохранить");
     } catch {
@@ -85,7 +85,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
       </div>
 
       <div className="flex gap-1 overflow-x-auto">
-        {([["new", "Новые"], ["accepted", "Принятые"], ["rejected", "Отклонённые"], ["", "Все"]] as const).map(([k, l]) => (
+        {([["new", "Новые"], ["accepted", "Принятые"], ["rejected", "Не обоснованные"], ["", "Все"]] as const).map(([k, l]) => (
           <button key={k || "all"} onClick={() => setFilter(k)}
             className={`shrink-0 rounded-lg px-3 py-1.5 text-xs border ${filter === k
               ? "border-red-400/60 bg-red-500/15 text-red-200" : "border-white/10 text-white/60 hover:bg-white/5"}`}>
@@ -176,7 +176,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                 <div className="grid grid-cols-3 gap-1.5">
                   <button disabled={busy === c.id} onClick={() => decide(c, "accepted", true)}
                     className="rounded-lg bg-red-500/80 hover:bg-red-500 text-white text-[11px] py-2 disabled:opacity-60">
-                    В чёрный список
+                    Заносим в ЧС
                   </button>
                   <button disabled={busy === c.id} onClick={() => decide(c, "accepted")}
                     className="rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[11px] py-2 disabled:opacity-60">
@@ -184,7 +184,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                   </button>
                   <button disabled={busy === c.id} onClick={() => decide(c, "rejected")}
                     className="rounded-lg border border-white/10 hover:bg-white/5 text-white/70 text-[11px] py-2 disabled:opacity-60">
-                    Отклонить
+                    Не обоснована
                   </button>
                 </div>
               )}
