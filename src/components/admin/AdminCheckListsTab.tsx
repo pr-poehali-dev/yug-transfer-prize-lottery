@@ -32,12 +32,11 @@ interface ListBlockProps {
   token: string;
   def: (typeof LISTS)[number];
   items: ListItem[];
-  expanded: boolean;
   onToggle: () => void;
   onChanged: () => void;
 }
 
-function ListBlock({ token, def, items, expanded, onToggle, onChanged }: ListBlockProps) {
+function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -104,22 +103,18 @@ function ListBlock({ token, def, items, expanded, onToggle, onChanged }: ListBlo
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/5 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <Icon name={def.icon} size={15} className={def.color} />
-          <span className="text-sm text-white">{def.title}</span>
-          <span className="text-[11px] text-white/40">· {items.length}</span>
-        </div>
-        <Icon name="ChevronDown" size={15} className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
-
-      {expanded && (
-        <div className="p-3 space-y-3 border-t border-white/10">
+    <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onToggle}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm border border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+            >
+              <Icon name="ArrowLeft" size={14} />Назад
+            </button>
+            <Icon name={def.icon} size={18} className={def.color} />
+            <span className="text-base font-medium text-white">{def.title}</span>
+            <span className="text-xs text-white/40">· {items.length}</span>
+          </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
@@ -189,8 +184,6 @@ function ListBlock({ token, def, items, expanded, onToggle, onChanged }: ListBlo
               ))}
             </div>
           )}
-        </div>
-      )}
     </div>
   );
 }
@@ -204,6 +197,7 @@ interface Props {
 export function AdminCheckListsTab({ token, expanded, onToggle }: Props) {
   const [items, setItems] = useState<ListItem[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  const current = LISTS.find((d) => `${d.role}-${d.list_type}` === open) || null;
 
   const load = async () => {
     try {
@@ -236,21 +230,46 @@ export function AdminCheckListsTab({ token, expanded, onToggle }: Props) {
       </button>
 
       {expanded && (
-        <div className="p-4 space-y-2">
-          {LISTS.map((def) => {
-            const key = `${def.role}-${def.list_type}`;
-            return (
-              <ListBlock
-                key={key}
-                token={token}
-                def={def}
-                items={items.filter((i) => i.role === def.role && i.list_type === def.list_type)}
-                expanded={open === key}
-                onToggle={() => setOpen(open === key ? null : key)}
-                onChanged={load}
-              />
-            );
-          })}
+        <div className="p-4">
+          {current ? (
+            <ListBlock
+              token={token}
+              def={current}
+              items={items.filter((i) => i.role === current.role && i.list_type === current.list_type)}
+              onToggle={() => setOpen(null)}
+              onChanged={load}
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {LISTS.map((def) => {
+                const key = `${def.role}-${def.list_type}`;
+                const count = items.filter((i) => i.role === def.role && i.list_type === def.list_type).length;
+                const black = def.list_type === "black";
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setOpen(key)}
+                    className={`group text-left rounded-2xl border p-4 md:p-5 min-h-[120px] flex flex-col justify-between transition-all hover:-translate-y-0.5 ${
+                      black
+                        ? "border-red-500/25 bg-red-500/[0.06] hover:bg-red-500/[0.12]"
+                        : "border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12]"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${black ? "bg-red-500/15" : "bg-emerald-500/15"}`}>
+                        <Icon name={def.role === "driver" ? "Car" : "Headset"} fallback="Users" size={20} className={def.color} />
+                      </div>
+                      <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-white/70 transition-colors" />
+                    </div>
+                    <div className="mt-3">
+                      <div className="text-sm md:text-base font-medium text-white leading-snug">{def.title}</div>
+                      <div className="text-xs text-white/50 mt-0.5">{count} чел.</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
