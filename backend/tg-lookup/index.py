@@ -1,6 +1,6 @@
 """
 Поиск аккаунта Telegram по @username через подключённый user-аккаунт.
-GET ?username=name — возвращает Telegram ID, имя, username, телефон (если открыт), описание и фото.
+GET ?username=name или ?phone=79991234567 — возвращает Telegram ID, имя, username, телефон (если открыт), описание и фото.
 """
 import os
 import json
@@ -12,6 +12,8 @@ import boto3
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.users import GetFullUserRequest
+from telethon.tl.functions.contacts import ImportContactsRequest, DeleteContactsRequest
+from telethon.tl.types import InputPhoneContact
 from telethon.tl.types import User
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
@@ -63,14 +65,32 @@ def store_photo(raw: bytes) -> str:
     return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
-async def lookup(session: str, username: str) -> dict:
+async def resolve_phone(client, phone: str):
+    """Находит аккаунт по номеру: временно добавляем в контакты и сразу удаляем."""
+    res = await client(ImportContactsRequest([InputPhoneContact(client_id=0, phone=phone, first_name='check', last_name='')]))
+    if not res.users:
+        return None
+    user = res.users[0]
+    try:
+        await client(DeleteContactsRequest(id=[user]))
+    except Exception as e:
+        print(f'[TG-LOOKUP] delete contact failed: {type(e).__name__}')
+    return user
+
+
+async def lookup(session: str, username: str, phone: str = '') -> dict:
     client = TelegramClient(StringSession(session), int(os.environ['TG_API_ID']), os.environ['TG_API_HASH'],
                             connection_retries=1, timeout=8)
     await client.connect()
     try:
         if not await client.is_user_authorized():
             return {'retry': True, 'error': 'session not authorized'}
-        entity = await client.get_entity(username)
+        if phone:
+            entity = await resolve_phone(client, phone)
+            if entity is None:
+                return {'error': 'По этому номеру аккаунт не найден или скрыт настройками приватности'}
+        else:
+            entity = await client.get_entity(username)
         if not isinstance(entity, User):
             return {'error': 'Это не личный аккаунт, а группа или канал'}
         bio = ''
@@ -87,9 +107,9 @@ async def lookup(session: str, username: str) -> dict:
                 photo_uid = str(entity.photo.photo_id)
         return {
             'tg_id': entity.id,
-            'username': entity.username or username,
+            'username': entity.username or username or '',
             'name': ' '.join(x for x in [entity.first_name or '', entity.last_name or ''] if x).strip(),
-            'phone': f"+{entity.phone}" if entity.phone else '',
+            'phone': f"+{entity.phone}" if entity.phone else (f"+{phone}" if phone else ''),
             'bio': bio,
             'photo_url': photo_url,
             'photo_uid': photo_uid,
@@ -130,8 +150,13 @@ def handler(event: dict, context) -> dict:
 
     qs = event.get('queryStringParameters') or {}
     username = clean_username(qs.get('username', ''))
-    if len(username) < 4:
-        return resp(400, {'ok': False, 'error': 'Укажите @username (минимум 4 символа)'})
+    phone = ''.join(ch for ch in str(qs.get('phone') or '') if ch.isdigit())
+    if len(phone) == 11 and phone[0] == '8':
+        phone = '7' + phone[1:]
+    elif len(phone) == 10 and phone[0] == '9':
+        phone = '7' + phone
+    if not phone and len(username) < 4:
+        return resp(400, {'ok': False, 'error': 'Укажите @username или номер телефона'})
 
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
@@ -141,7 +166,7 @@ def handler(event: dict, context) -> dict:
             return resp(200, {'ok': False, 'error': 'Нет подключённого Telegram-аккаунта'})
         result = {'error': 'Не удалось получить данные'}
         for s in sessions[:3]:
-            result = asyncio.run(lookup(s, username))
+            result = asyncio.run(lookup(s, '' if phone else username, phone))
             if not result.get('retry'):
                 break
         if not result.get('tg_id'):

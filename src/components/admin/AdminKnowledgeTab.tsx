@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { KNOWLEDGE_BASE_URL, KB_BOT_URL } from "./adminTypes";
 import { CheckListsTiles } from "./CheckListsTiles";
+import { NewPersonCardForm } from "./lists/NewPersonCardForm";
 
 interface KnowledgeItem {
   id: number;
@@ -30,6 +31,8 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
   const [saving, setSaving] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [tilesKey, setTilesKey] = useState(0);
   const [bot, setBot] = useState<{ username: string; webhook: string } | null>(null);
   const fetchBot = async () => {
     try {
@@ -97,6 +100,7 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
   const handleEdit = (item: KnowledgeItem) => {
     setEditingId(item.id);
     setForm({ title: item.title, category: item.category, content: item.content });
+    setShowCardForm(false);
     setShowForm(true);
   };
 
@@ -152,7 +156,7 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
               @{bot.username}
             </a>
           )}
-          <CheckListsTiles token={token} onOpenChange={setListOpen} />
+          <CheckListsTiles key={tilesKey} token={token} onOpenChange={setListOpen} />
           {!listOpen && (<>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
@@ -164,15 +168,23 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
                 className={`${inputCls} pl-9`}
               />
             </div>
-            {!showForm && (
+            {!showForm && !showCardForm && (
               <button
-                onClick={() => { setForm(emptyForm); setEditingId(null); setShowForm(true); }}
+                onClick={() => { resetForm(); setShowCardForm(true); }}
                 className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Icon name="Plus" size={15} />Добавить запись
               </button>
             )}
           </div>
+
+          {showCardForm && (
+            <NewPersonCardForm
+              token={token}
+              onSaved={() => { setShowCardForm(false); setTilesKey((k) => k + 1); }}
+              onCancel={() => setShowCardForm(false)}
+            />
+          )}
 
           {showForm && (
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">

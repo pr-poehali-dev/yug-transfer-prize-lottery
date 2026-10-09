@@ -55,13 +55,15 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
 
   const fromTelegram = async (raw: string, silent = false): Promise<typeof empty | null> => {
     const uname = raw.trim().replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?]/)[0];
-    if (uname.length < 4) {
-      if (!silent) toast.error("Укажите @username");
+    const digits = form.phone.replace(/\D/g, "");
+    if (uname.length < 4 && digits.length < 10) {
+      if (!silent) toast.error("Укажите @username или номер телефона");
       return null;
     }
     setFetching(true);
     try {
-      const res = await fetch(`${TG_LOOKUP_API}?username=${encodeURIComponent(uname)}`, {
+      const q = uname.length >= 4 ? `username=${encodeURIComponent(uname)}` : `phone=${digits}`;
+      const res = await fetch(`${TG_LOOKUP_API}?${q}`, {
         headers: { "X-Admin-Token": token },
       });
       const d = await res.json().catch(() => ({}));
@@ -73,7 +75,7 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
       setForm((f) => {
         next = {
           ...f,
-          username: d.username || uname,
+          username: d.username || f.username,
           tg_id: String(d.tg_id),
           name: d.name || f.name,
           phone: f.phone || d.phone || "",
@@ -82,7 +84,7 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
         };
         return next;
       });
-      setFetchedFor(uname.toLowerCase());
+      setFetchedFor((uname || "").toLowerCase());
       toast.success("Данные подтянуты из Telegram", {
         description: [d.name, `ID ${d.tg_id}`, d.phone ? d.phone : "телефон скрыт"].filter(Boolean).join(" · "),
       });
