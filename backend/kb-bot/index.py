@@ -344,17 +344,22 @@ def load_history(item_id) -> list:
         conn.close()
 
 
+NO_PHOTO_URL = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/cc06515e-5e65-4cde-b02f-d24b1889abb4.jpg'
+
+
 def send_card(chat_id, r, head: str) -> None:
+    """Карточка всегда уходит одним сообщением с фото: своё фото аккаунта или заглушка."""
     text = card_text(r, head)
-    photo_url = r[6]
     markup = complaints.complain_button(r[9])
-    if photo_url and len(text) <= 1024:
-        res = tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo_url, 'caption': text,
+    photo_url = r[6] or NO_PHOTO_URL
+    if len(text) > 1024:
+        # Подпись к фото ограничена — режем длинные блоки (описание, история), основное остаётся.
+        text = text[:1000].rsplit('\n', 1)[0] + '\n…'
+    for photo in dict.fromkeys([photo_url, NO_PHOTO_URL]):
+        res = tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo, 'caption': text,
                                    'parse_mode': 'HTML', 'reply_markup': markup})
         if res.get('ok'):
             return
-    if photo_url:
-        tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo_url})
     tg_api('sendMessage', {'chat_id': chat_id, 'text': text[:4000], 'parse_mode': 'HTML',
                            'disable_web_page_preview': True, 'reply_markup': markup})
 
