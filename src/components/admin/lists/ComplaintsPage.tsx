@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
-import { COMPLAINTS_API, fmtDate } from "./listTypes";
+import { COMPLAINTS_API, COMPLAINT_TO_GROUP_API, fmtDate } from "./listTypes";
 
 interface Complaint {
   id: number;
@@ -13,6 +13,7 @@ interface Complaint {
   incident_date: string | null;
   photos: string[];
   status: "new" | "accepted" | "rejected";
+  group_msg_id?: number | null;
   admin_note: string;
   created_at: string;
   target: { name: string; username: string; role: string; list_type: string; photo_url: string; tg_id: number | null };
@@ -52,6 +53,22 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, token, itemFilter]);
+
+  const [sending, setSending] = useState<number | null>(null);
+
+  const sendToGroup = async (c: Complaint) => {
+    setSending(c.id);
+    try {
+      const res = await fetch(`${COMPLAINT_TO_GROUP_API}&id=${c.id}`);
+      const d = await res.json();
+      if (d.ok) toast.success(`Жалоба отправлена в ${d.where}`, { description: "Решение примут администраторы группы" });
+      else toast.error(d.error || "Не удалось отправить");
+      load();
+    } catch {
+      toast.error("Не удалось отправить");
+    }
+    setSending(null);
+  };
 
   const decide = async (c: Complaint, status: "accepted" | "rejected", toBlack = false) => {
     setBusy(c.id);
@@ -171,6 +188,14 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                 </a>
                 <span className="text-white/30 font-mono">ID {c.reporter_tg_id}</span>
               </div>
+
+              {c.status === "new" && (
+                <button disabled={sending === c.id} onClick={() => sendToGroup(c)}
+                  className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 text-xs py-2 flex items-center justify-center gap-1.5 disabled:opacity-60">
+                  <Icon name={sending === c.id ? "Loader2" : "Send"} size={13} className={sending === c.id ? "animate-spin" : ""} />
+                  {c.group_msg_id ? "Отправить в группу ЧС повторно" : "Отправить в группу ЧС на решение"}
+                </button>
+              )}
 
               {c.status === "new" && (
                 <div className="grid grid-cols-3 gap-1.5">

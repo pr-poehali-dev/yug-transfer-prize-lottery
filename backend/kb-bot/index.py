@@ -610,6 +610,19 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
                 'ok': bool(me), 'username': me.get('username', ''), 'webhook': wh.get('url', ''),
                 'error': me_res.get('description', '') if not me else ''})}
+        if action == 'complaint_to_group':
+            cid = int(qs.get('id') or 0)
+            complaints.notify_admin(tg_api, cid)
+            conn = psycopg2.connect(os.environ['DATABASE_URL'])
+            cur = conn.cursor()
+            cur.execute(f"SELECT group_chat, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={cid}")
+            r = cur.fetchone() or ('', None)
+            conn.close()
+            where = {complaints.DECISION_CHAT: 'группу «ЧС Авто трансфера РФ»',
+                     complaints.COPY_CHAT: 'тему «жалобы» в «Заявки юг-трансфер»'}.get(r[0], '')
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(
+                {'ok': bool(r[1]), 'where': where,
+                 'error': '' if r[1] else 'Бот не смог отправить — добавьте @mew_zbot админом в группу ЧС'}, ensure_ascii=False)}
         if action == 'complaint_decided':
             cid = int(qs.get('id') or 0)
             st = qs.get('status', '')
