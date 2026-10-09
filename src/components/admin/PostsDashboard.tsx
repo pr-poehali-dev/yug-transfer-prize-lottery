@@ -6,7 +6,7 @@ import { AdminKnowledgeTab } from "./AdminKnowledgeTab";
 
 export function PostsDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [postsTotal, setPostsTotal] = useState<number | null>(null);
-  type Section = "posts" | "bot" | "kb";
+  type Section = "posts" | "bot" | "kb" | "ai";
   const [openSection, setOpenSection] = useState<Section | null>(null);
   const toggleSection = (s: Section) => setOpenSection((cur) => (cur === s ? null : s));
 
@@ -14,10 +14,12 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
     { key: "posts", title: "Посты в канал", sub: postsTotal != null ? `${postsTotal} постов` : "Публикация в группы", icon: "Send", tone: "violet" },
     { key: "bot", title: "Ежедневные посты", sub: "Автопостинг бота", icon: "Calendar", tone: "orange" },
     { key: "kb", title: "База знаний", sub: "Списки, группы, подписки", icon: "BookOpen", tone: "emerald" },
+    { key: "ai", title: "ИИ Агенты", sub: "Умные помощники", icon: "Sparkles", tone: "sky" },
   ];
   const toneCls: Record<string, { box: string; icon: string; text: string }> = {
     violet: { box: "border-violet-500/25 bg-violet-500/[0.06] hover:bg-violet-500/[0.12]", icon: "bg-violet-500/15", text: "text-violet-400" },
     orange: { box: "border-orange-500/25 bg-orange-500/[0.06] hover:bg-orange-500/[0.12]", icon: "bg-orange-500/15", text: "text-orange-400" },
+    sky: { box: "border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.12]", icon: "bg-sky-500/15", text: "text-sky-400" },
     emerald: { box: "border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12]", icon: "bg-emerald-500/15", text: "text-emerald-400" },
   };
 
@@ -55,10 +57,22 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
           )}
           {openSection === "bot" && <AdminBotTab token={token} expanded onToggle={() => toggleSection("bot")} />}
           {openSection === "kb" && <AdminKnowledgeTab token={token} expanded onToggle={() => toggleSection("kb")} />}
+          {openSection === "ai" && (
+            <div className="card-glow rounded-2xl p-8 md:p-12 flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-sky-500/15 flex items-center justify-center">
+                <Icon name="Sparkles" size={30} className="text-sky-400" />
+              </div>
+              <div className="text-xl font-semibold text-white">ИИ Агенты</div>
+              <div className="text-sm text-white/50 max-w-md">
+                Здесь появятся ИИ-помощники, которые будут работать за вас: отвечать в боте, писать посты, проверять людей.
+              </div>
+              <span className="text-xs px-3 py-1 rounded-full bg-sky-500/15 text-sky-300">Скоро</span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="max-w-5xl mx-auto px-4 md:px-6 py-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {tiles.map((t) => {
               const c = toneCls[t.tone];
               return (
