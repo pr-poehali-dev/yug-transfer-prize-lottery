@@ -610,11 +610,16 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
                 'ok': bool(me), 'username': me.get('username', ''), 'webhook': wh.get('url', ''),
                 'error': me_res.get('description', '') if not me else ''})}
+        if action == 'test_complaint_topic':
+            res = tg_api('sendMessage', {'chat_id': complaints.CHAT_CANDIDATES[0], 'message_thread_id': complaints.COMPLAINTS_THREAD_ID,
+                                         'text': '✅ Сюда будут приходить новые жалобы из бота «База знаний».'}, timeout=4)
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': res.get('ok'), 'error': res.get('description', '')}, ensure_ascii=False)}
         if action == 'test_complaint_chat':
             out = {}
             for chat in complaints.CHAT_CANDIDATES:
                 res = tg_api('getChat', {'chat_id': chat}, timeout=3)
-                out[chat] = (res.get('result') or {}).get('title') or res.get('description', '')[:80]
+                r = res.get('result') or {}
+                out[chat] = {'title': r.get('title') or res.get('description', '')[:80], 'is_forum': r.get('is_forum')}
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(out, ensure_ascii=False)}
         if action == 'private_commands':
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(private_only_commands())}

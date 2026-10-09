@@ -205,6 +205,7 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
 
 ADMIN_URL = 'https://ug-transfer.online/posts'
 CHAT_CANDIDATES = ['-1002146850254']
+COMPLAINTS_THREAD_ID = 10266
 
 
 def notify_admin(tg_api, cid: int) -> None:
@@ -249,15 +250,25 @@ def notify_admin(tg_api, cid: int) -> None:
     markup = {'inline_keyboard': [[{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}
     env_chat = os.environ.get('KB_COMPLAINTS_CHAT_ID', '').strip()
     for chat in ([env_chat] if env_chat else []) + CHAT_CANDIDATES:
-        res = tg_api('sendMessage', {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML',
-                                     'disable_web_page_preview': True, 'reply_markup': markup})
+        payload = {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML',
+                   'disable_web_page_preview': True, 'reply_markup': markup}
+        # В группе включены темы — жалобы уходят в отдельную тему «жалобы».
+        res = tg_api('sendMessage', {**payload, 'message_thread_id': COMPLAINTS_THREAD_ID})
+        thread = COMPLAINTS_THREAD_ID
+        if not res.get('ok'):
+            print(f"[KB-BOT] complaint topic failed: {res.get('description', '')[:120]}")
+            res = tg_api('sendMessage', payload)
+            thread = None
         if res.get('ok'):
             msg_id = (res.get('result') or {}).get('message_id')
             if plist:
                 media = [{'type': 'photo', 'media': p} for p in plist[:10]]
                 media[0]['caption'] = f"Фото к жалобе #{cid}"
-                tg_api('sendMediaGroup', {'chat_id': chat, 'media': media,
-                                          'reply_parameters': {'message_id': msg_id, 'allow_sending_without_reply': True}})
+                mg = {'chat_id': chat, 'media': media,
+                      'reply_parameters': {'message_id': msg_id, 'allow_sending_without_reply': True}}
+                if thread:
+                    mg['message_thread_id'] = thread
+                tg_api('sendMediaGroup', mg)
             print(f'[KB-BOT] complaint #{cid} sent to {chat}')
             return
         print(f"[KB-BOT] complaint notify to {chat} failed: {res.get('description', '')[:120]}")
