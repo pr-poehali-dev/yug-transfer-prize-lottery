@@ -46,6 +46,10 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   const [counts, setCounts] = useState({ all: 0, new: 0, ok: 0, miss: 0 });
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [groupChat, setGroupChat] = useState("");
+  const [group, setGroup] = useState<{ running: boolean; title: string; added: number; skipped: number; total: number; progress: number } | null>(null);
+  const groupStop = useRef(false);
   const [scan, setScan] = useState<{ running: boolean; done: number; found: number; left: number } | null>(null);
   const stopRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -106,6 +110,41 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
     }
     setImporting(false);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const scanGroup = async () => {
+    const chat = groupChat.trim();
+    if (!chat) return;
+    groupStop.current = false;
+    setGroup({ running: true, title: chat, added: 0, skipped: 0, total: 0, progress: 0 });
+    let jobId = 0;
+    let fails = 0;
+    while (!groupStop.current) {
+      try {
+        const q = jobId ? `job=${jobId}` : `chat=${encodeURIComponent(chat)}`;
+        const res = await fetch(`${TG_LOOKUP_API}?action=group&${q}`, { headers: { "X-Admin-Token": token } });
+        const d = await res.json();
+        const j = d.job;
+        if (!j) {
+          toast.error(d.error || "Не удалось просканировать группу");
+          break;
+        }
+        jobId = j.id;
+        fails = 0;
+        setGroup({ running: true, title: j.title || chat, added: j.added, skipped: j.skipped, total: j.total, progress: j.progress ?? 0 });
+        if (j.status === "done" || j.status === "error") {
+          if (j.status === "error") toast.error(j.error || "Не удалось просканировать группу");
+          else toast.success(`Группа просканирована: новых ${j.added}, уже были в базе ${j.skipped}`);
+          break;
+        }
+      } catch {
+        fails += 1;
+        if (fails >= 4) { toast.error("Сканирование прервано — нажмите ещё раз, продолжит с места остановки"); break; }
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+    }
+    setGroup((g) => (g ? { ...g, running: false } : g));
+    onChanged();
   };
 
   const scanAll = async () => {
@@ -191,6 +230,10 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
         <div className="ml-auto flex flex-wrap gap-2">
           <input ref={fileRef} type="file" accept=".txt,.csv" className="hidden"
             onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])} />
+          <button onClick={() => setGroupOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm border border-sky-500/40 text-sky-200 hover:bg-sky-500/10">
+            <Icon name="Users" size={14} />Сканировать группу
+          </button>
           <button onClick={() => fileRef.current?.click()} disabled={importing}
             className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm border border-white/10 text-white/80 hover:bg-white/5 disabled:opacity-60">
             <Icon name={importing ? "Loader2" : "Upload"} size={14} className={importing ? "animate-spin" : ""} />
@@ -209,6 +252,40 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
           )}
         </div>
       </div>
+
+      {groupOpen && (
+        <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.05] p-3 space-y-2">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input value={groupChat} onChange={(e) => setGroupChat(e.target.value)} disabled={group?.running}
+              placeholder="Ссылка t.me/…, @группа или ID группы (-100…)" className={inputCls} />
+            {group?.running ? (
+              <button onClick={() => { groupStop.current = true; }}
+                className="shrink-0 rounded-xl px-4 py-2 text-sm bg-red-500/80 hover:bg-red-500 text-white">Остановить</button>
+            ) : (
+              <button onClick={scanGroup} disabled={!groupChat.trim()}
+                className="shrink-0 grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50">Начать</button>
+            )}
+          </div>
+          <div className="text-[11px] text-white/40">
+            Участники попадут в «На модерации». Кто уже есть в базе (по Telegram ID или @username) — пропускается, дублей не будет.
+            Полный список доступен, если один из ваших аккаунтов — админ группы; иначе соберём тех, кто писал сообщения.
+          </div>
+          {group && (
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center gap-2 text-sm text-white">
+                {group.running && <Icon name="Loader2" size={14} className="animate-spin text-sky-300" />}
+                <span className="truncate">{group.title}</span>
+                <span className="ml-auto text-xs text-white/60 shrink-0">
+                  новых {group.added} · уже в базе {group.skipped}{group.total ? ` · в группе ${group.total}` : ""}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full bg-sky-400 transition-all" style={{ width: `${Math.min(100, group.progress)}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {scan && (
         <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] px-4 py-3 space-y-2">

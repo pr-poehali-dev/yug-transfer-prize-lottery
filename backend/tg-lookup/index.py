@@ -310,8 +310,15 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
                 else:
                     print(f'[TG-LOOKUP] batch {uname}: {n}')
                     break
-            cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(row_id)}")
-            conn.commit()
+            try:
+                cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(row_id)}")
+                conn.commit()
+            except psycopg2.errors.UniqueViolation:
+                # Тот же человек уже есть в базе под другим username — дубль с модерации убираем.
+                conn.rollback()
+                cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={int(row_id)} AND list_type='pending'")
+                conn.commit()
+                stats['dupes'] = stats.get('dupes', 0) + 1
             stats['done'] += 1
     finally:
         await client.disconnect()
@@ -419,6 +426,257 @@ def apply_rescan(cur, item_id: int, d: dict) -> dict:
     return {'status': 'ok', 'changes': len(changes), 'fields': [f for f, _, _ in changes]}
 
 
+GROUP_QUERIES = [''] + list('абвгдеёжзийклмнопрстуфхцчшщэюяabcdefghijklmnopqrstuvwxyz0123456789_')
+EXCLUDED_CHATS = {'-1002146850254', '2146850254', '-2146850254', '-1003740884399', '3740884399', 'chernyi_spisok_transfer'}
+
+
+async def resolve_chat(client, chat: str):
+    """Находит группу по ссылке, @username или числовому ID (через список диалогов аккаунта)."""
+    c = chat.strip()
+    for pref in ('https://t.me/', 'http://t.me/', 't.me/', 'tg://chat?id='):
+        if c.lower().startswith(pref):
+            c = c[len(pref):]
+    c = c.strip('/').lstrip('@')
+    if c.lstrip('-').isdigit():
+        want = int(c)
+        short = int(str(abs(want))[3:]) if str(abs(want)).startswith('100') else abs(want)
+        async for d in client.iter_dialogs(limit=500):
+            if d.id == want or getattr(d.entity, 'id', None) in (short, abs(want)):
+                return d.entity
+        return None
+    if c.startswith('+') or c.startswith('joinchat/'):
+        return None
+    try:
+        ent = await client.get_entity(c)
+    except Exception:
+        return None
+    try:
+        from telethon.tl.functions.channels import JoinChannelRequest
+        await client(JoinChannelRequest(ent))
+    except Exception as e:
+        print(f'[TG-LOOKUP] join skipped: {type(e).__name__}')
+    return ent
+
+
+def insert_users(cur, users: list, title: str) -> int:
+    q = lambda v: str(v or '').replace("'", "''")
+    vals = []
+    for u in users:
+        name = ' '.join(x for x in [u.first_name or '', u.last_name or ''] if x).strip()
+        un = u.username or ''
+        ph = f"+{u.phone}" if u.phone else ''
+        scanned = "NULL, ''" if un else "now(), 'из группы'"
+        vals.append(f"('', 'pending', '{q(name)}', '{q(un)}', '{q(ph)}', '', {int(u.id)}, '{q(title)[:120]}', {scanned})")
+    if not vals:
+        return 0
+    cache = {}
+    for u in users:
+        if u.username:
+            cache[u.id] = (f"({int(u.id)}, '{q(u.username)}', '{q(u.first_name or '')}', '{q(u.last_name or '')}', "
+                           f"'{q(u.phone or '')}', 'group')")
+    if cache:
+        cur.execute(f"INSERT INTO {SCHEMA}.tg_users (tg_id, username, first_name, last_name, phone, source) VALUES "
+                    f"{', '.join(cache.values())} ON CONFLICT (tg_id) DO UPDATE SET username=EXCLUDED.username, "
+                    f"first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, updated_at=now()")
+    cur.execute(f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id, "
+                f"source, last_scan_at, scan_status) VALUES {', '.join(vals)} ON CONFLICT DO NOTHING RETURNING id")
+    return len(cur.fetchall())
+
+
+def save_job(cur, conn, job: dict) -> None:
+    q = lambda v: str(v or '').replace("'", "''")
+    cur.execute(f"UPDATE {SCHEMA}.group_scan_jobs SET q_index={job['q_index']}, q_offset={job['q_offset']}, "
+                f"fetched={job['fetched']}, added={job['added']}, skipped={job['skipped']}, "
+                f"total={int(job.get('total') or 0)}, title='{q(job.get('title'))}', last_msg_id={int(job.get('last_msg_id') or 0)}, "
+                f"messages={int(job.get('messages') or 0)}, updated_at=now() WHERE id={job['id']}")
+    conn.commit()
+
+
+async def history_pull(client, chat, job: dict, deadline: float, cur, conn) -> dict:
+    """Собирает всех, кто писал в группе: идём по истории сообщений от новых к старым."""
+    from telethon.tl.functions.messages import GetHistoryRequest
+    from telethon.errors import FloodWaitError
+    offset_id = int(job.get('last_msg_id') or 0)
+    while time.time() < deadline - 3:
+        try:
+            res = await asyncio.wait_for(client(GetHistoryRequest(
+                peer=chat, offset_id=offset_id, offset_date=None, add_offset=0, limit=100,
+                max_id=0, min_id=0, hash=0)), timeout=8)
+        except FloodWaitError as e:
+            return {'flood': e.seconds}
+        if not res.messages:
+            job['q_index'] = len(GROUP_QUERIES)
+            break
+        offset_id = min(m.id for m in res.messages)
+        users = [u for u in res.users if isinstance(u, User) and not u.bot and not u.deleted]
+        added = insert_users(cur, users, job['title'])
+        job['added'] += added
+        job['skipped'] += len(users) - added
+        job['fetched'] += len(users)
+        job['messages'] = int(job.get('messages') or 0) + len(res.messages)
+        job['last_msg_id'] = offset_id
+        total_msgs = getattr(res, 'count', 0) or 0
+        if total_msgs:
+            job['q_index'] = min(len(GROUP_QUERIES) - 1, int(job['messages'] / total_msgs * len(GROUP_QUERIES)))
+        save_job(cur, conn, job)
+        await asyncio.sleep(0.4)
+    return {}
+
+
+async def group_pull(session: str, job: dict, deadline: float, cur, conn) -> dict:
+    """Выгружает участников группы порциями по 200 (поиск по буквам обходит лимит Telegram в 10 000)."""
+    from telethon.tl.functions.channels import GetParticipantsRequest, GetFullChannelRequest
+    from telethon.tl.types import ChannelParticipantsSearch
+    from telethon.errors import FloodWaitError
+    client = make_client(session)
+    await asyncio.wait_for(client.connect(), timeout=8)
+    try:
+        if not await client.is_user_authorized():
+            return {'error': 'session'}
+        chat = await resolve_chat(client, job['chat'])
+        if chat is None:
+            return {'error': 'no_access'}
+        is_admin = bool(getattr(chat, 'admin_rights', None) or getattr(chat, 'creator', False))
+        if job.get('mode') != 'history' and not is_admin:
+            return {'error': 'not_admin'}
+        if not job.get('title'):
+            job['title'] = getattr(chat, 'title', '') or job['chat']
+        try:
+            full = await client(GetFullChannelRequest(chat))
+            job['total'] = full.full_chat.participants_count or job.get('total', 0)
+        except Exception:
+            pass
+        if job.get('mode') == 'history':
+            return await history_pull(client, chat, job, deadline, cur, conn)
+        while time.time() < deadline - 3 and job['q_index'] < len(GROUP_QUERIES):
+            try:
+                res = await asyncio.wait_for(client(GetParticipantsRequest(
+                    chat, ChannelParticipantsSearch(GROUP_QUERIES[job['q_index']]), job['q_offset'], 200, hash=0)), timeout=8)
+            except FloodWaitError as e:
+                return {'flood': e.seconds}
+            users = [u for u in res.users if not u.bot and not u.deleted]
+            if users:
+                added = insert_users(cur, users, job['title'])
+                job['added'] += added
+                job['skipped'] += len(users) - added
+                job['fetched'] += len(res.users)
+            if len(res.users) < 200:
+                job['q_index'] += 1
+                job['q_offset'] = 0
+            else:
+                job['q_offset'] += 200
+                if job['q_offset'] >= 10000:
+                    job['q_index'] += 1
+                    job['q_offset'] = 0
+            save_job(cur, conn, job)
+            await asyncio.sleep(0.8)
+        return {}
+    finally:
+        await client.disconnect()
+
+
+async def find_admin_session(sessions: list, chat_ref: str) -> str:
+    """Параллельно проверяет аккаунты и возвращает тот, что админ группы (видит всех участников)."""
+    async def check(sess):
+        client = make_client(sess)
+        try:
+            await asyncio.wait_for(client.connect(), timeout=8)
+            chat = await asyncio.wait_for(resolve_chat(client, chat_ref), timeout=10)
+            if chat is not None and (getattr(chat, 'admin_rights', None) or getattr(chat, 'creator', False)):
+                return sess_key(sess)
+        except Exception:
+            return ''
+        finally:
+            await client.disconnect()
+        return ''
+    res = await asyncio.gather(*(asyncio.wait_for(check(x), timeout=15) for x in sessions), return_exceptions=True)
+    return next((r for r in res if isinstance(r, str) and r), '')
+
+
+def handle_group(qs: dict, context) -> dict:
+    raw_chat = str(qs.get('chat') or '').strip().lower()
+    for pref in ('https://t.me/', 'http://t.me/', 't.me/', 'tg://chat?id=', '@'):
+        if raw_chat.startswith(pref):
+            raw_chat = raw_chat[len(pref):]
+    if raw_chat.strip('/') in EXCLUDED_CHATS:
+        return resp(200, {'ok': False, 'error': 'Это служебная группа — её не сканируем.'})
+    started = time.time()
+    try:
+        budget = context.get_remaining_time_in_millis() / 1000 - 2
+    except Exception:
+        budget = 3
+    deadline = started + budget
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    cols = "id, chat, title, session_hash, q_index, q_offset, status, fetched, added, skipped, total, error, mode, last_msg_id, messages"
+    try:
+        chat = str(qs.get('chat') or '').strip()
+        job_id = int(qs.get('job') or 0) if str(qs.get('job') or '').isdigit() else 0
+        if job_id:
+            cur.execute(f"SELECT {cols} FROM {SCHEMA}.group_scan_jobs WHERE id={job_id}")
+        elif chat:
+            cur.execute(f"SELECT {cols} FROM {SCHEMA}.group_scan_jobs WHERE lower(chat)=lower('{chat.replace(chr(39), '')}') "
+                        f"AND status IN ('running', 'paused') ORDER BY id DESC LIMIT 1")
+        else:
+            return resp(400, {'ok': False, 'error': 'Укажите группу'})
+        row = cur.fetchone()
+        if not row:
+            cur.execute(f"INSERT INTO {SCHEMA}.group_scan_jobs (chat, mode) VALUES ('{chat.replace(chr(39), '')}', 'members') RETURNING {cols}")
+            row = cur.fetchone()
+            conn.commit()
+        job = dict(zip(cols.split(', '), row))
+        if job['status'] == 'done':
+            job.pop('session_hash', None)
+            job['progress'] = 100
+            return resp(200, {'ok': True, 'job': job})
+
+        sessions = load_sessions(cur)
+        if not job['session_hash'] and job.get('mode') != 'history':
+            admin_hash = asyncio.run(find_admin_session(sessions, job['chat']))
+            if admin_hash:
+                job['session_hash'] = admin_hash
+            else:
+                job['mode'] = 'history'
+                cur.execute(f"UPDATE {SCHEMA}.group_scan_jobs SET mode='history' WHERE id={job['id']}")
+                conn.commit()
+        sessions.sort(key=lambda x: (0 if sess_key(x) == job['session_hash'] else 1, 0 if StringSession(x).dc_id == 2 else 1))
+        result = {'error': 'no_access'}
+        for sess in sessions:
+            if deadline - time.time() < 6:
+                break
+            if job.get('mode') != 'history' and job['session_hash'] and sess_key(sess) != job['session_hash']:
+                continue
+            try:
+                result = asyncio.run(asyncio.wait_for(group_pull(sess, job, deadline, cur, conn),
+                                                      timeout=max(2, deadline - time.time())))
+            except asyncio.TimeoutError:
+                result = {}
+            except Exception as e:
+                print(f'[TG-LOOKUP] group pull failed: {type(e).__name__}: {str(e)[:150]}')
+                result = {'error': type(e).__name__}
+            if result.get('flood'):
+                break
+            if result.get('error'):
+                continue
+            job['session_hash'] = sess_key(sess)
+            break
+        status = 'done' if job['q_index'] >= len(GROUP_QUERIES) else 'running'
+        err = ''
+        if result.get('error') in ('no_access', 'not_admin') and not job['session_hash']:
+            status, err = 'error', ('Ни один из подключённых аккаунтов не состоит в этой группе. '
+                                    'Добавьте аккаунт в группу или укажите публичную ссылку @группы.')
+        cur.execute(f"UPDATE {SCHEMA}.group_scan_jobs SET status='{status}', error='{err}', "
+                    f"session_hash='{job['session_hash']}', updated_at=now() WHERE id={job['id']}")
+        conn.commit()
+        job.update({'status': status, 'error': err})
+        job.pop('session_hash', None)
+        job['progress'] = round(job['q_index'] / len(GROUP_QUERIES) * 100)
+        return resp(200, {'ok': status != 'error', 'job': job, 'error': err})
+    finally:
+        cur.close()
+        conn.close()
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -431,6 +689,8 @@ def handler(event: dict, context) -> dict:
         return resp(401, {'error': 'Unauthorized'})
     if qs.get('action') == 'batch':
         return handle_batch(context)
+    if qs.get('action') == 'group':
+        return handle_group(qs, context)
     if is_cron:
         return resp(400, {'error': 'only batch'})
 

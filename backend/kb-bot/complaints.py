@@ -204,8 +204,12 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
 
 
 ADMIN_URL = 'https://ug-transfer.online/posts'
-CHAT_CANDIDATES = ['-1002146850254']
+# Решения по жалобам принимаются в группе «ЧС Авто трансфера РФ» (@chernyi_spisok_transfer).
+DECISION_CHAT = '-1003740884399'
+# Копия жалобы — в тему «жалобы» группы «Заявки юг-трансфер».
+COPY_CHAT = '-1002146850254'
 COMPLAINTS_THREAD_ID = 10266
+CHAT_CANDIDATES = [DECISION_CHAT, COPY_CHAT]
 
 
 def notify_admin(tg_api, cid: int) -> None:
@@ -248,37 +252,48 @@ def notify_admin(tg_api, cid: int) -> None:
         lines.append(f"📎 Фото: {len(plist)}")
     msg = '\n'.join(lines)
     markup = admin_markup(cid, lt)
-    env_chat = os.environ.get('KB_COMPLAINTS_CHAT_ID', '').strip()
-    for chat in ([env_chat] if env_chat else []) + CHAT_CANDIDATES:
-        payload = {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML',
-                   'disable_web_page_preview': True, 'reply_markup': markup}
-        # В группе включены темы — жалобы уходят в отдельную тему «жалобы».
-        res = tg_api('sendMessage', {**payload, 'message_thread_id': COMPLAINTS_THREAD_ID})
-        thread = COMPLAINTS_THREAD_ID
-        if not res.get('ok'):
-            print(f"[KB-BOT] complaint topic failed: {res.get('description', '')[:120]}")
+    plist_media = [{'type': 'photo', 'media': p} for p in plist[:10]]
+
+    def send_to(chat, thread, with_buttons):
+        payload = {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+                   'reply_markup': markup if with_buttons else {'inline_keyboard': [[{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}}
+        if thread:
+            payload['message_thread_id'] = thread
+        res = tg_api('sendMessage', payload)
+        if not res.get('ok') and thread:
+            payload.pop('message_thread_id')
             res = tg_api('sendMessage', payload)
             thread = None
-        if res.get('ok'):
-            msg_id = (res.get('result') or {}).get('message_id')
-            c2 = db()
-            k2 = c2.cursor()
-            k2.execute(f"UPDATE {SCHEMA}.kb_complaints SET group_chat='{q(chat)}', group_msg_id={int(msg_id)} WHERE id={int(cid)}")
-            c2.commit()
-            k2.close()
-            c2.close()
-            if plist:
-                media = [{'type': 'photo', 'media': p} for p in plist[:10]]
-                media[0]['caption'] = f"Фото к жалобе #{cid}"
-                mg = {'chat_id': chat, 'media': media,
-                      'reply_parameters': {'message_id': msg_id, 'allow_sending_without_reply': True}}
-                if thread:
-                    mg['message_thread_id'] = thread
-                tg_api('sendMediaGroup', mg)
-            print(f'[KB-BOT] complaint #{cid} sent to {chat}')
-            return
-        print(f"[KB-BOT] complaint notify to {chat} failed: {res.get('description', '')[:120]}")
+        if not res.get('ok'):
+            print(f"[KB-BOT] complaint to {chat} failed: {res.get('description', '')[:120]}")
+            return None
+        msg_id = (res.get('result') or {}).get('message_id')
+        if plist_media:
+            media = [dict(m) for m in plist_media]
+            media[0]['caption'] = f"Фото к жалобе #{cid}"
+            mg = {'chat_id': chat, 'media': media,
+                  'reply_parameters': {'message_id': msg_id, 'allow_sending_without_reply': True}}
+            if thread:
+                mg['message_thread_id'] = thread
+            tg_api('sendMediaGroup', mg)
+        return msg_id
 
+    # 1) Группа для решений — с кнопками «Заносим в ЧС» / «Не обоснована».
+    decision_chat = os.environ.get('KB_COMPLAINTS_CHAT_ID', '').strip() or DECISION_CHAT
+    msg_id = send_to(decision_chat, None, True)
+    target_chat = decision_chat
+    # 2) Копия — в тему «жалобы». Если группа решений недоступна, кнопки будут здесь.
+    copy_id = send_to(COPY_CHAT, COMPLAINTS_THREAD_ID, not msg_id)
+    if not msg_id and copy_id:
+        msg_id, target_chat = copy_id, COPY_CHAT
+    if msg_id:
+        c2 = db()
+        k2 = c2.cursor()
+        k2.execute(f"UPDATE {SCHEMA}.kb_complaints SET group_chat='{q(target_chat)}', group_msg_id={int(msg_id)} WHERE id={int(cid)}")
+        c2.commit()
+        k2.close()
+        c2.close()
+        print(f'[KB-BOT] complaint #{cid} sent to {target_chat}')
 
 
 def admin_markup(cid: int, list_type: str = '') -> dict:

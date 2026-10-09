@@ -259,11 +259,11 @@ def handle_bulk_import(cur, conn, body: dict) -> dict:
         return resp(400, {'ok': False, 'error': 'Нет корректных @username'})
     arr = ','.join(f"'{esc(n)}'" for n in names)
     cur.execute(
-        f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note) "
-        f"SELECT '', 'pending', '', u.un, '', '' FROM unnest(ARRAY[{arr}]::text[]) WITH ORDINALITY AS u(un, ord) "
+        f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, source) "
+        f"SELECT '', 'pending', '', u.un, '', '', 'file' FROM unnest(ARRAY[{arr}]::text[]) WITH ORDINALITY AS u(un, ord) "
         f"WHERE NOT EXISTS (SELECT 1 FROM {SCHEMA}.check_lists c WHERE lower(c.username) = lower(u.un)) "
-        f"ORDER BY u.ord DESC")
-    added = cur.rowcount
+        f"ORDER BY u.ord DESC ON CONFLICT DO NOTHING RETURNING id")
+    added = len(cur.fetchall())
     cur.execute(
         f"UPDATE {SCHEMA}.check_lists c SET tg_id = u.tg_id, "
         f"name = CASE WHEN c.name = '' THEN trim(coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'')) ELSE c.name END "
@@ -367,6 +367,19 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
             return f"'{esc(v)}'"
 
         cols = list(new.keys())
+        cond = []
+        if tg_id:
+            cond.append(f"tg_id={int(tg_id)}")
+        if username:
+            cond.append(f"lower(username)=lower('{esc(username)}')")
+        if cond:
+            own = f" AND id<>{int(body.get('id') or 0)}" if method == 'PUT' else ''
+            cur.execute(f"SELECT id, list_type, role, name FROM {SCHEMA}.check_lists WHERE ({' OR '.join(cond)}){own} LIMIT 1")
+            dup = cur.fetchone()
+            if dup:
+                where = {'pending': 'На модерации', 'white': 'белом списке', 'black': 'чёрном списке'}.get(dup[1], dup[1])
+                return resp(409, {'ok': False, 'duplicate_id': dup[0],
+                                  'error': f"Этот аккаунт уже есть в базе ({where}): {dup[3] or '#' + str(dup[0])}"})
         if method == 'POST':
             cur.execute(
                 f"INSERT INTO {SCHEMA}.check_lists ({', '.join(cols)}) "

@@ -617,15 +617,22 @@ def handler(event: dict, context) -> dict:
             complaints.notify_reporter(tg_api, cid)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
         if action == 'test_complaint_topic':
-            res = tg_api('sendMessage', {'chat_id': complaints.CHAT_CANDIDATES[0], 'message_thread_id': complaints.COMPLAINTS_THREAD_ID,
+            res = tg_api('sendMessage', {'chat_id': complaints.COPY_CHAT, 'message_thread_id': complaints.COMPLAINTS_THREAD_ID,
                                          'text': '✅ Сюда будут приходить новые жалобы из бота «База знаний».'}, timeout=4)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': res.get('ok'), 'error': res.get('description', '')}, ensure_ascii=False)}
         if action == 'test_complaint_chat':
             out = {}
-            for chat in complaints.CHAT_CANDIDATES:
+            for chat in complaints.CHAT_CANDIDATES + [qs.get('chat', '')]:
+                if not chat:
+                    continue
                 res = tg_api('getChat', {'chat_id': chat}, timeout=3)
                 r = res.get('result') or {}
-                out[chat] = {'title': r.get('title') or res.get('description', '')[:80], 'is_forum': r.get('is_forum')}
+                out[chat] = {'title': r.get('title') or res.get('description', '')[:80], 'is_forum': r.get('is_forum'), 'id': r.get('id')}
+                if r.get('id'):
+                    me = tg_api('getMe', {}, timeout=3).get('result') or {}
+                    mem = tg_api('getChatMember', {'chat_id': r['id'], 'user_id': me.get('id')}, timeout=3).get('result') or {}
+                    out[chat]['bot_status'] = mem.get('status')
+                    out[chat]['can_post'] = mem.get('can_post_messages', mem.get('can_send_messages'))
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(out, ensure_ascii=False)}
         if action == 'private_commands':
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(private_only_commands())}
