@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { KNOWLEDGE_BASE_URL, KB_BOT_URL } from "./adminTypes";
+import { CheckListsTiles } from "./CheckListsTiles";
 
 interface KnowledgeItem {
   id: number;
@@ -150,6 +151,7 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
               @{bot.username}
             </a>
           )}
+          <CheckListsTiles token={token} />
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />

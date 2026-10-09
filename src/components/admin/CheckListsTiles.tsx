@@ -188,13 +188,7 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
   );
 }
 
-interface Props {
-  token: string;
-  expanded?: boolean;
-  onToggle?: () => void;
-}
-
-export function AdminCheckListsTab({ token, expanded, onToggle }: Props) {
+export function CheckListsTiles({ token }: { token: string }) {
   const [items, setItems] = useState<ListItem[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const current = LISTS.find((d) => `${d.role}-${d.list_type}` === open) || null;
@@ -215,22 +209,8 @@ export function AdminCheckListsTab({ token, expanded, onToggle }: Props) {
   }, [token]);
 
   return (
-    <div className="card-glow rounded-2xl overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
-      >
-        <div className="flex items-center gap-2">
-          <Icon name="Users" size={15} className="text-sky-400" />
-          <span className="text-sm font-medium text-white">Белые и чёрные списки</span>
-          <span className="text-[11px] text-white/40">· {items.length}</span>
-        </div>
-        <Icon name="ChevronDown" size={16} className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
-
-      {expanded && (
-        <div className="p-4">
+    <div>
+        <div>
           {current ? (
             <ListBlock
               token={token}
@@ -271,9 +251,8 @@ export function AdminCheckListsTab({ token, expanded, onToggle }: Props) {
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }
 
-export default AdminCheckListsTab;
+export default CheckListsTiles;
