@@ -243,14 +243,48 @@ def run_check(chat_id, kind: str, query: str) -> None:
     shown = esc_html(query.strip())
     found = [r for r in rows if r[0] in ('black', 'white')]
     if not found:
-        head = (f"❔ <b>{shown}</b> не найден в нашей базе водителей и диспетчеров.\n\n"
-                f"⚠️ Аккаунт не проверен — будьте внимательны при работе.")
+        add_to_moderation(kind_q, q, known)
+        head = (f"⚠️ <b>Будьте внимательны!</b>\n\n"
+                f"У нас ещё нет информации о данном участнике <b>{shown}</b>.\n"
+                f"Мы взяли его на проверку — данные появятся после модерации.")
         tg_api('sendMessage', {'chat_id': chat_id, 'text': head, 'parse_mode': 'HTML',
                                'reply_markup': MAIN_KEYBOARD})
         return
     found.sort(key=lambda r: 0 if r[0] == 'black' else 1)
     for r in found[:3]:
         send_card(chat_id, r, verdict(r))
+
+
+def add_to_moderation(kind_q: str, q, known) -> None:
+    """Неизвестный аккаунт из запроса сразу попадает «На модерацию». Дубли не создаются."""
+    tg_id = int(q) if kind_q == 'id' else (int(known[0]) if known else None)
+    username = (known[1] if known and known[1] else '') if kind_q == 'id' else (q if kind_q == 'username' else '')
+    phone = f"+7{q}" if kind_q == 'phone' else ''
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        conds = []
+        if tg_id:
+            conds.append(f"tg_id={tg_id}")
+        if username:
+            conds.append(f"lower(username)=lower('{username.replace(chr(39), '')}')")
+        if phone:
+            conds.append(f"right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}'")
+        if not conds:
+            return
+        cur.execute(f"SELECT 1 FROM {SCHEMA}.check_lists WHERE {' OR '.join(conds)} LIMIT 1")
+        if cur.fetchone():
+            return
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id, source) "
+            f"VALUES ('', 'pending', '', '{username.replace(chr(39), '')}', '{phone}', '', "
+            f"{tg_id if tg_id else 'NULL'}, 'запрос в боте') ON CONFLICT DO NOTHING")
+        conn.commit()
+    except Exception as e:
+        print(f'[KB-BOT] add to moderation failed: {type(e).__name__}')
+    finally:
+        cur.close()
+        conn.close()
 
 
 def verdict(r) -> str:
