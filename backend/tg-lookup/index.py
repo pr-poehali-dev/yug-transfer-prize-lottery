@@ -148,8 +148,7 @@ def proxy_kwargs() -> dict:
                       'password': unquote(u.password) if u.password else None, 'rdns': True}}
 
 
-async def lookup(session: str, username: str, phone: str = '') -> dict:
-    t0 = time.time()
+def make_client(session: str):
     sess = StringSession(session)
     extra = proxy_kwargs()
     if extra and isinstance(extra.get('proxy'), dict):
@@ -172,6 +171,12 @@ async def lookup(session: str, username: str, phone: str = '') -> dict:
     client = TelegramClient(sess, int(os.environ['TG_API_ID']), os.environ['TG_API_HASH'],
                             connection_retries=1, retry_delay=0, timeout=6, receive_updates=False,
                             **extra)
+    return client
+
+
+async def lookup(session: str, username: str, phone: str = '') -> dict:
+    t0 = time.time()
+    client = make_client(session)
     await client.connect()
     print(f'[TG-LOOKUP] connected in {time.time() - t0:.2f}s')
     try:
@@ -237,15 +242,153 @@ def save_cache(cur, d: dict) -> None:
         f"updated_at=now()")
 
 
+def sess_key(session: str) -> str:
+    return hashlib.sha256(session.encode()).hexdigest()[:24]
+
+
+async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats: dict) -> dict:
+    """Пачкой сканирует карточки модерации одним подключением, пока есть время."""
+    from telethon.errors import FloodWaitError
+    client = make_client(session)
+    t0 = time.time()
+    await asyncio.wait_for(client.connect(), timeout=8)
+    print(f'[TG-LOOKUP] batch connected {time.time() - t0:.1f}s')
+    try:
+        if not await asyncio.wait_for(client.is_user_authorized(), timeout=6):
+            stats['flood'] = 86400
+            return stats
+        for row_id, uname in rows:
+            if deadline - time.time() < 7:
+                break
+            sets = ["last_scan_at=now()"]
+            try:
+                entity = await asyncio.wait_for(client.get_entity(uname), timeout=6)
+                if not isinstance(entity, User):
+                    sets.append("scan_status='не личный аккаунт'")
+                    stats['missing'] += 1
+                else:
+                    bio = ''
+                    try:
+                        full = await asyncio.wait_for(client(GetFullUserRequest(entity)), timeout=4)
+                        bio = getattr(full.full_user, 'about', '') or ''
+                    except Exception:
+                        pass
+                    photo_url, photo_uid = '', ''
+                    if entity.photo and getattr(entity.photo, 'photo_id', None) and deadline - time.time() > 4:
+                        try:
+                            raw = await asyncio.wait_for(client.download_profile_photo(entity, file=bytes, download_big=False), timeout=4)
+                            if raw:
+                                photo_url, photo_uid = store_photo(raw), str(entity.photo.photo_id)
+                        except Exception:
+                            pass
+                    name = ' '.join(x for x in [entity.first_name or '', entity.last_name or ''] if x).strip()
+                    phone = f"+{entity.phone}" if entity.phone else ''
+                    q = lambda v: str(v or '').replace("'", "''")
+                    sets += [f"tg_id={int(entity.id)}", f"name=CASE WHEN name='' THEN '{q(name)}' ELSE name END",
+                             f"bio='{q(bio)}'", f"scan_status='ok'"]
+                    if photo_url:
+                        sets += [f"photo_url='{q(photo_url)}'", f"photo_file_uid='{q(photo_uid)}'"]
+                    if phone:
+                        sets.append(f"phone=CASE WHEN phone='' THEN '{q(phone)}' ELSE phone END")
+                    save_cache(cur, {'tg_id': entity.id, 'username': entity.username or uname, 'name': name, 'phone': phone})
+                    stats['found'] += 1
+            except FloodWaitError as e:
+                stats['flood'] = int(e.seconds)
+                print(f'[TG-LOOKUP] flood wait {e.seconds}s')
+                break
+            except (ValueError, asyncio.TimeoutError) as e:
+                if isinstance(e, asyncio.TimeoutError):
+                    print(f'[TG-LOOKUP] batch timeout on {uname}')
+                    break
+                sets.append("scan_status='не найден'")
+                stats['missing'] += 1
+            except Exception as e:
+                n = type(e).__name__
+                if 'Username' in n:
+                    sets.append("scan_status='не найден'")
+                    stats['missing'] += 1
+                else:
+                    print(f'[TG-LOOKUP] batch {uname}: {n}')
+                    break
+            cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(row_id)}")
+            conn.commit()
+            stats['done'] += 1
+    finally:
+        await client.disconnect()
+    return stats
+
+
+def handle_batch(context) -> dict:
+    started = time.time()
+    try:
+        budget = context.get_remaining_time_in_millis() / 1000 - 2
+    except Exception:
+        budget = 3
+    deadline = started + budget
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    total = {'done': 0, 'found': 0, 'missing': 0}
+    try:
+        cur.execute(f"SELECT session_hash FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
+        blocked = {r[0] for r in cur.fetchall()}
+        sessions = [x for x in load_sessions(cur) if sess_key(x) not in blocked]
+        sessions.sort(key=lambda x: 0 if StringSession(x).dc_id == 2 else 1)
+        print(f'[TG-LOOKUP] batch sessions {len(sessions)}, blocked {len(blocked)}')
+        workers = sessions[:4]
+        cur.execute(f"SELECT id, username FROM {SCHEMA}.check_lists WHERE list_type='pending' AND username <> '' "
+                    f"AND last_scan_at IS NULL ORDER BY id DESC LIMIT {12 * max(1, len(workers))}")
+        rows = cur.fetchall()
+        stats = [{'done': 0, 'found': 0, 'missing': 0, 'flood': 0} for _ in workers]
+
+        async def run_all():
+            async def one(i, sess):
+                try:
+                    await asyncio.wait_for(batch_scan(sess, rows[i::len(workers)], deadline, cur, conn, stats[i]),
+                                           timeout=max(2, deadline - time.time()))
+                except asyncio.TimeoutError:
+                    stats[i]['cut'] = True
+                except Exception as e:
+                    print(f'[TG-LOOKUP] batch session failed: {type(e).__name__}: {str(e)[:150]}')
+                    if not stats[i]['done']:
+                        stats[i]['flood'] = 300
+            await asyncio.gather(*(one(i, w) for i, w in enumerate(workers)))
+
+        if rows and workers:
+            asyncio.run(run_all())
+        for sess, st in zip(workers, stats):
+            print(f'[TG-LOOKUP] batch result {st}')
+            for k in total:
+                total[k] += st.get(k, 0)
+            if st.get('flood') and not st.get('cut'):
+                cur.execute(f"INSERT INTO {SCHEMA}.tg_session_flood (session_hash, until_at) VALUES "
+                            f"('{sess_key(sess)}', now() + interval '{int(st['flood']) + 30} seconds') "
+                            f"ON CONFLICT (session_hash) DO UPDATE SET until_at = EXCLUDED.until_at")
+                conn.commit()
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists WHERE list_type='pending' AND username <> '' AND last_scan_at IS NULL")
+        left = cur.fetchone()[0]
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
+        paused = cur.fetchone()[0]
+        return resp(200, {'ok': True, **total, 'left': left, 'accounts': len(load_sessions(cur)), 'paused': paused})
+    finally:
+        cur.close()
+        conn.close()
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 
     headers = event.get('headers') or {}
-    if not verify_token(headers.get('X-Admin-Token') or headers.get('x-admin-token') or ''):
-        return resp(401, {'error': 'Unauthorized'})
-
     qs = event.get('queryStringParameters') or {}
+    cron = os.environ.get('CRON_SECRET', '')
+    is_cron = bool(cron) and (headers.get('X-Cron-Secret') or headers.get('x-cron-secret') or qs.get('secret')) == cron
+    if not is_cron and not verify_token(headers.get('X-Admin-Token') or headers.get('x-admin-token') or ''):
+        return resp(401, {'error': 'Unauthorized'})
+    if qs.get('action') == 'batch':
+        return handle_batch(context)
+    if is_cron:
+        return resp(400, {'error': 'only batch'})
+
     if qs.get('action') == 'proxy_test':
         import socks
         pk = proxy_kwargs().get('proxy') or {}

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
-import { LISTS, LISTS_API, ListItem } from "./listTypes";
+import { LISTS, LISTS_API, TG_LOOKUP_API, BULK_IMPORT_API, ListItem, inputCls } from "./listTypes";
 
 interface Props {
   token: string;
@@ -35,8 +35,89 @@ export function ModerationRow({ count, onOpen }: { count: number; onOpen: () => 
   );
 }
 
+const PAGE = 60;
+
 export function ModerationPage({ token, items, onChanged, onOpen, onBack }: Props) {
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "new" | "ok" | "miss">("all");
+  const [limit, setLimit] = useState(PAGE);
+  const [importing, setImporting] = useState(false);
+  const [scan, setScan] = useState<{ running: boolean; done: number; found: number; left: number } | null>(null);
+  const stopRef = useRef(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const counts = useMemo(() => ({
+    new: items.filter((i) => !i.last_scan_at).length,
+    ok: items.filter((i) => i.scan_status === "ok").length,
+    miss: items.filter((i) => i.last_scan_at && i.scan_status !== "ok").length,
+  }), [items]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase().replace(/^@/, "");
+    return items.filter((i) => {
+      if (filter === "new" && i.last_scan_at) return false;
+      if (filter === "ok" && i.scan_status !== "ok") return false;
+      if (filter === "miss" && (!i.last_scan_at || i.scan_status === "ok")) return false;
+      if (!q) return true;
+      return [i.name, i.username, i.phone, i.bio, String(i.tg_id ?? "")].some((v) => (v || "").toLowerCase().includes(q));
+    });
+  }, [items, search, filter]);
+
+  const importFile = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const usernames = text.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+      const res = await fetch(BULK_IMPORT_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ usernames }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success(`Добавлено ${d.added}, уже было ${d.skipped}, сразу найдено ID: ${d.matched_ids}`);
+        onChanged();
+      } else toast.error(d.error || "Не удалось загрузить список");
+    } catch {
+      toast.error("Не удалось загрузить список");
+    }
+    setImporting(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const scanAll = async () => {
+    stopRef.current = false;
+    let done = 0, found = 0;
+    setScan({ running: true, done, found, left: counts.new });
+    let idle = 0;
+    while (!stopRef.current) {
+      try {
+        const res = await fetch(`${TG_LOOKUP_API}?action=batch`, { headers: { "X-Admin-Token": token } });
+        const d = await res.json();
+        if (!d.ok) break;
+        done += d.done;
+        found += d.found;
+        setScan({ running: true, done, found, left: d.left });
+        if (!d.left) break;
+        if (!d.done) {
+          idle += 1;
+          if (idle >= 3) {
+            toast.error(d.paused ? "Telegram попросил паузу — продолжим позже автоматически" : "Сканирование остановилось");
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 20000));
+        } else idle = 0;
+        if (done % 150 < d.done) onChanged();
+      } catch {
+        idle += 1;
+        if (idle >= 3) break;
+      }
+    }
+    setScan((s) => (s ? { ...s, running: false } : s));
+    onChanged();
+  };
+
   const [menuId, setMenuId] = useState<number | null>(null);
 
   const assign = async (item: ListItem, role: string, list_type: string) => {
@@ -85,15 +166,71 @@ export function ModerationPage({ token, items, onChanged, onOpen, onBack }: Prop
         <Icon name="Clock" size={18} className="text-amber-400" />
         <span className="text-base font-medium text-white">На модерации</span>
         <span className="text-xs text-white/40">· {items.length}</span>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <input ref={fileRef} type="file" accept=".txt,.csv" className="hidden"
+            onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])} />
+          <button onClick={() => fileRef.current?.click()} disabled={importing}
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm border border-white/10 text-white/80 hover:bg-white/5 disabled:opacity-60">
+            <Icon name={importing ? "Loader2" : "Upload"} size={14} className={importing ? "animate-spin" : ""} />
+            Загрузить список
+          </button>
+          {scan?.running ? (
+            <button onClick={() => { stopRef.current = true; }}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm bg-red-500/80 hover:bg-red-500 text-white">
+              <Icon name="Square" size={13} />Остановить
+            </button>
+          ) : (
+            <button onClick={scanAll} disabled={!counts.new}
+              className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2 disabled:opacity-50">
+              <Icon name="ScanSearch" fallback="Search" size={15} />Сканировать все{counts.new ? ` (${counts.new})` : ""}
+            </button>
+          )}
+        </div>
       </div>
+
+      {scan && (
+        <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] px-4 py-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm text-white">
+            {scan.running && <Icon name="Loader2" size={14} className="animate-spin text-sky-300" />}
+            {scan.running ? "Сканирую Telegram…" : "Сканирование остановлено"}
+            <span className="ml-auto text-xs text-white/60">проверено {scan.done} · найдено {scan.found} · осталось {scan.left}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full bg-sky-400 transition-all"
+              style={{ width: `${Math.min(100, (scan.done / Math.max(1, scan.done + scan.left)) * 100)}%` }} />
+          </div>
+          <div className="text-[11px] text-white/40">Не закрывайте страницу. Можно остановить и продолжить позже — проверенные не повторяются.</div>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+          <input value={search} onChange={(e) => { setSearch(e.target.value); setLimit(PAGE); }}
+            placeholder="Поиск по имени, @username, ID, описанию" className={`${inputCls} pl-9`} />
+        </div>
+        <div className="flex gap-1 overflow-x-auto">
+          {([
+            ["all", `Все ${items.length}`], ["new", `Не проверены ${counts.new}`],
+            ["ok", `Найдены ${counts.ok}`], ["miss", `Не найдены ${counts.miss}`],
+          ] as const).map(([k, label]) => (
+            <button key={k} onClick={() => { setFilter(k); setLimit(PAGE); }}
+              className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs border ${filter === k
+                ? "border-amber-400/60 bg-amber-500/15 text-amber-200" : "border-white/10 text-white/60 hover:bg-white/5"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="text-xs text-white/40">Присвойте статус — карточка уйдёт в нужный список.</div>
-      {!items.length && (
+      {!filtered.length && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] py-10 text-center text-sm text-white/40">
-          Новых карточек нет
+          {items.length ? "Ничего не найдено" : "Новых карточек нет"}
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {items.map((i) => {
+        {filtered.slice(0, limit).map((i) => {
           const initials = (i.name || i.username || "?").slice(0, 2).toUpperCase();
           const busy = busyId === i.id;
           return (
@@ -151,6 +288,12 @@ export function ModerationPage({ token, items, onChanged, onOpen, onBack }: Prop
           );
         })}
       </div>
+      {filtered.length > limit && (
+        <button onClick={() => setLimit((l) => l + PAGE * 2)}
+          className="w-full rounded-xl border border-white/10 py-2.5 text-sm text-white/70 hover:bg-white/5">
+          Показать ещё ({filtered.length - limit})
+        </button>
+      )}
     </div>
   );
 }

@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.tg_session_flood SET until_at = now() WHERE until_at > now();

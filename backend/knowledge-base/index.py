@@ -181,6 +181,39 @@ def handle_subs_stats(cur, qs: dict) -> dict:
     }, 'by_month': by_month, 'payments': payments, 'subscribers': subscribers})
 
 
+def handle_bulk_import(cur, conn, body: dict) -> dict:
+    """Массовая загрузка @username в «На модерации»: дубликаты пропускаются, известные ID подставляются."""
+    import re
+    raw = body.get('usernames') or []
+    names = []
+    for v in raw:
+        u = str(v or '').strip()
+        for pref in ('https://t.me/', 'http://t.me/', 't.me/'):
+            if u.lower().startswith(pref):
+                u = u[len(pref):]
+        u = u.lstrip('@').split('/')[0].split('?')[0]
+        if re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{3,31}', u):
+            names.append(u)
+    names = list(dict.fromkeys(names))[:10000]
+    if not names:
+        return resp(400, {'ok': False, 'error': 'Нет корректных @username'})
+    arr = ','.join(f"'{esc(n)}'" for n in names)
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note) "
+        f"SELECT '', 'pending', '', u.un, '', '' FROM unnest(ARRAY[{arr}]::text[]) WITH ORDINALITY AS u(un, ord) "
+        f"WHERE NOT EXISTS (SELECT 1 FROM {SCHEMA}.check_lists c WHERE lower(c.username) = lower(u.un)) "
+        f"ORDER BY u.ord DESC")
+    added = cur.rowcount
+    cur.execute(
+        f"UPDATE {SCHEMA}.check_lists c SET tg_id = u.tg_id, "
+        f"name = CASE WHEN c.name = '' THEN trim(coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'')) ELSE c.name END "
+        f"FROM {SCHEMA}.tg_users u WHERE c.tg_id IS NULL AND u.username <> '' AND lower(u.username) = lower(c.username)")
+    matched = cur.rowcount
+    conn.commit()
+    return resp(200, {'ok': True, 'received': len(raw), 'valid': len(names), 'added': added,
+                      'skipped': len(names) - added, 'matched_ids': matched})
+
+
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
     if method == 'GET':
         cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists ORDER BY id DESC")
@@ -293,6 +326,8 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
+        if qs.get('entity') == 'bulk_import' and method == 'POST':
+            return handle_bulk_import(cur, conn, body)
         if qs.get('entity') == 'subs':
             return handle_subs_stats(cur, qs)
         if qs.get('entity') == 'snapshots':
