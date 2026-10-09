@@ -248,32 +248,46 @@ def notify_admin(tg_api, cid: int) -> None:
         f"🙋 <b>Пожаловался:</b> {reporter} (ID <code>{rep_id}</code>)",
     ]
     plist = [p for p in (photos or '').split('\n') if p]
-    if plist:
-        lines.append(f"📎 Фото: {len(plist)}")
+    if len(plist) > 1:
+        lines.append(f"📎 Ещё фото: {len(plist) - 1} (ниже)")
     msg = '\n'.join(lines)
     markup = admin_markup(cid, lt)
     plist_media = [{'type': 'photo', 'media': p} for p in plist[:10]]
     sent_ids = {}
 
     def send_to(chat, thread, with_buttons):
-        payload = {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML', 'disable_web_page_preview': True,
-                   **({'reply_markup': markup} if with_buttons else {})}
-        if thread:
-            payload['message_thread_id'] = thread
-        res = tg_api('sendMessage', payload)
+        """Одно сообщение: фото + текст жалобы подписью + кнопки. Остальные фото (если их несколько) — альбомом ответом."""
+        caption = msg if len(msg) <= 1024 else msg[:1000].rsplit('\n', 1)[0] + '\n…'
+        extra = {'reply_markup': markup} if with_buttons else {}
+        first_photo = plist_media[0]['media'] if plist_media else None
+
+        def call(th):
+            if first_photo:
+                p = {'chat_id': chat, 'photo': first_photo, 'caption': caption, 'parse_mode': 'HTML', **extra}
+                method = 'sendPhoto'
+            else:
+                p = {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML', 'disable_web_page_preview': True, **extra}
+                method = 'sendMessage'
+            if th:
+                p['message_thread_id'] = th
+            return tg_api(method, p)
+
+        res = call(thread)
         if not res.get('ok') and thread:
-            payload.pop('message_thread_id')
-            res = tg_api('sendMessage', payload)
+            res = call(None)
             thread = None
+        if not res.get('ok') and first_photo:
+            print(f"[KB-BOT] complaint photo failed: {res.get('description', '')[:120]}")
+            first_photo = None
+            res = call(thread)
         if not res.get('ok'):
             print(f"[KB-BOT] complaint to {chat} failed: {res.get('description', '')[:120]}")
             return None
         msg_id = (res.get('result') or {}).get('message_id')
         sent_ids.setdefault(str(chat), []).append(msg_id)
-        if plist_media:
-            media = [dict(m) for m in plist_media]
-            media[0]['caption'] = f"Фото к жалобе #{cid}"
-            mg = {'chat_id': chat, 'media': media,
+        rest = plist_media[1:] if first_photo else plist_media
+        if rest:
+            mg = {'chat_id': chat, 'media': [dict(m) for m in rest],
                   'reply_parameters': {'message_id': msg_id, 'allow_sending_without_reply': True}}
             if thread:
                 mg['message_thread_id'] = thread
