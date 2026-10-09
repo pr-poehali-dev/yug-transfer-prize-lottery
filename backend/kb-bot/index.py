@@ -22,7 +22,7 @@ CHECKS = {
     'driver': {'button': BUTTON_CHECK_DRIVER, 'prompt': 'Проверка водителя', 'category': 'водител', 'who': 'Водитель', 'role': 'driver'},
     'disp': {'button': BUTTON_CHECK_DISP, 'prompt': 'Проверка диспетчера', 'category': 'диспетчер', 'who': 'Диспетчер', 'role': 'dispatcher'},
 }
-TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
+TG_HOSTS = ['149.154.167.220', '149.154.167.41', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -612,6 +612,7 @@ def handler(event: dict, context) -> dict:
                 'error': me_res.get('description', '') if not me else ''})}
         if action == 'complaint_to_group':
             cid = int(qs.get('id') or 0)
+            tg_api('getMe', {}, timeout=2.5)
             complaints.delete_group_messages(tg_api, cid)
             complaints.notify_admin(tg_api, cid)
             conn = psycopg2.connect(os.environ['DATABASE_URL'])
