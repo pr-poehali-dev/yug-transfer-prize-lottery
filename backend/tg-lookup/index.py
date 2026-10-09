@@ -225,6 +225,8 @@ async def lookup(session: str, username: str, phone: str = '') -> dict:
         print(f'[TG-LOOKUP] {name}: {e}')
         if 'UsernameNotOccupied' in name or 'UsernameInvalid' in name:
             return {'error': 'Аккаунт с таким username не найден'}
+        if 'FloodWait' in name:
+            return {'retry': True, 'error': name, 'flood': int(getattr(e, 'seconds', 600) or 600)}
         return {'retry': True, 'error': name}
     finally:
         await client.disconnect()
@@ -792,18 +794,31 @@ def handler(event: dict, context) -> dict:
         except Exception:
             budget = 4.2
         print(f'[TG-LOOKUP] budget {budget:.1f}s')
-        sessions.sort(key=lambda x: 0 if StringSession(x).dc_id == 2 else 1)
-        for s in sessions[:3]:
+        cur.execute(f"SELECT session_hash FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
+        blocked = {r[0] for r in cur.fetchall()}
+        # Аккаунты, которые Telegram поставил на паузу, пропускаем — берём свободные.
+        sessions.sort(key=lambda x: (1 if sess_key(x) in blocked else 0, 0 if StringSession(x).dc_id == 2 else 1))
+        tried = 0
+        for s in sessions:
             left = budget - (time.time() - started)
-            if left < 1.5:
+            if left < 2.5 or tried >= 5:
                 break
+            tried += 1
             try:
-                result = asyncio.run(asyncio.wait_for(lookup(s, '' if phone else username, phone), timeout=left))
+                result = asyncio.run(asyncio.wait_for(lookup(s, '' if phone else username, phone), timeout=min(left, 14)))
             except (asyncio.TimeoutError, OSError, ConnectionError) as e:
                 print(f'[TG-LOOKUP] session timeout: {type(e).__name__}')
                 result = {'retry': True, 'error': 'timeout'}
+            if result.get('flood'):
+                cur.execute(f"INSERT INTO {SCHEMA}.tg_session_flood (session_hash, until_at) VALUES "
+                            f"('{sess_key(s)}', now() + interval '{int(result['flood']) + 30} seconds') "
+                            f"ON CONFLICT (session_hash) DO UPDATE SET until_at = EXCLUDED.until_at")
+                conn.commit()
             if not result.get('retry'):
                 break
+        if result.get('error') == 'FloodWaitError':
+            result['error'] = ('Telegram временно ограничил поиск у всех подключённых аккаунтов. '
+                               'Попробуйте позже или подключите ещё аккаунты.')
         if not result.get('tg_id'):
             err = result.get('error', 'Не найдено')
             if err == 'timeout':

@@ -17,9 +17,9 @@ export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) 
   const offset = 6;
 
   return (
-    <div className="relative" style={{ paddingTop: Math.max(behind, 1) * offset, paddingRight: Math.max(behind, 1) * offset }}>
-      {Array.from({ length: Math.max(behind, 1) }).map((_, i) => {
-        const depth = Math.max(behind, 1) - i;
+    <div className="relative" style={{ paddingTop: behind * offset, paddingRight: behind * offset }}>
+      {Array.from({ length: behind }).map((_, i) => {
+        const depth = behind - i;
         return (
           <div
             key={i}
@@ -27,8 +27,8 @@ export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) 
               black ? "border-red-500/25 bg-red-500/[0.06]" : "border-emerald-500/25 bg-emerald-500/[0.06]"
             }`}
             style={{
-              top: (Math.max(behind, 1) - depth) * offset,
-              right: (Math.max(behind, 1) - depth) * offset,
+              top: (behind - depth) * offset,
+              right: (behind - depth) * offset,
               left: depth * offset,
               bottom: depth * offset,
               opacity: 1 - (depth - 1) * 0.18,
