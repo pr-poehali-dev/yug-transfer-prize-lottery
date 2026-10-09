@@ -79,10 +79,28 @@ async def resolve_phone(client, phone: str):
     return user
 
 
+def proxy_kwargs() -> dict:
+    """TG_PROXY: socks5://user:pass@host:port | http://host:port | mtproxy://SECRET@host:port"""
+    from urllib.parse import urlparse, unquote
+    raw = (os.environ.get('TG_PROXY') or '').strip()
+    if not raw:
+        return {}
+    u = urlparse(raw)
+    if u.scheme == 'mtproxy':
+        from telethon import connection
+        return {'connection': connection.ConnectionTcpMTProxyRandomizedIntermediate,
+                'proxy': (u.hostname, u.port or 443, unquote(u.username or ''))}
+    ptype = 'socks5' if u.scheme.startswith('socks') else u.scheme
+    return {'proxy': {'proxy_type': ptype, 'addr': u.hostname, 'port': u.port,
+                      'username': unquote(u.username) if u.username else None,
+                      'password': unquote(u.password) if u.password else None, 'rdns': True}}
+
+
 async def lookup(session: str, username: str, phone: str = '') -> dict:
     t0 = time.time()
     client = TelegramClient(StringSession(session), int(os.environ['TG_API_ID']), os.environ['TG_API_HASH'],
-                            connection_retries=1, retry_delay=0, timeout=8, receive_updates=False)
+                            connection_retries=1, retry_delay=0, timeout=8, receive_updates=False,
+                            **proxy_kwargs())
     await client.connect()
     print(f'[TG-LOOKUP] connected in {time.time() - t0:.2f}s')
     try:
@@ -159,6 +177,8 @@ def handler(event: dict, context) -> dict:
         targets = [(ip, port) for ip in ['149.154.175.53', '149.154.167.51', '149.154.175.100', '149.154.167.91',
                                          '91.108.56.130', '149.154.167.220', '149.154.167.99']
                    for port in (443, 80, 5222)]
+        targets += [(h, 443) for h in ['api.telegram.org', 'web.telegram.org', 'kws2.web.telegram.org',
+                                        'venus.web.telegram.org', 'pluto.web.telegram.org', 't.me']]
 
         def probe(t):
             t0 = time.time()
@@ -168,7 +188,7 @@ def handler(event: dict, context) -> dict:
                 return f"{t[0]}:{t[1]} ok {time.time() - t0:.2f}s"
             except Exception as e:
                 return f"{t[0]}:{t[1]} {type(e).__name__}"
-        with cf.ThreadPoolExecutor(max_workers=21) as pool:
+        with cf.ThreadPoolExecutor(max_workers=27) as pool:
             res = list(pool.map(probe, targets))
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
@@ -218,8 +238,8 @@ def handler(event: dict, context) -> dict:
         if not result.get('tg_id'):
             err = result.get('error', 'Не найдено')
             if err == 'timeout':
-                err = ('Telegram не успел ответить. Увеличьте таймаут функции tg-lookup до 30 секунд: '
-                       'Ядро → Функции → tg-lookup → Настройки')
+                err = ('Сервер не может подключиться к Telegram. Нужен прокси: добавьте секрет TG_PROXY'
+                       if not os.environ.get('TG_PROXY') else 'Прокси TG_PROXY не отвечает — проверьте его данные')
             return resp(200, {'ok': False, 'error': err, 'budget': round(budget, 1)})
         save_cache(cur, result)
         conn.commit()
