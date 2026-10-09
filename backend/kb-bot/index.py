@@ -16,6 +16,7 @@ CORS = {
     'Access-Control-Allow-Headers': 'Content-Type',
 }
 LAST_OK = {'host': ''}
+RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
 MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}], [{'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True}
 
 
@@ -93,6 +94,28 @@ def send_subscription(chat_id, user_id) -> None:
         until = row[0].strftime('%d.%m.%Y')
         text = f'💳 <b>Моя подписка</b>\n\n❌ Закончилась {until}'
     tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML',
+                           'reply_markup': RENEW_MARKUP})
+
+
+def create_payment_url(user_id) -> str:
+    """Заглушка под ЮKassa: здесь будет создание платежа и возврат ссылки на оплату."""
+    return ''
+
+
+def handle_renew(callback: dict) -> None:
+    user_id = (callback.get('from') or {}).get('id')
+    chat_id = ((callback.get('message') or {}).get('chat') or {}).get('id') or user_id
+    url = create_payment_url(user_id)
+    if url:
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id')}, timeout=2.2)
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': '💳 Перейдите к оплате подписки:',
+                               'reply_markup': {'inline_keyboard': [[{'text': 'Оплатить', 'url': url}]]}})
+        return
+    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'),
+                                   'text': 'Онлайн-оплата скоро появится', 'show_alert': False}, timeout=2.2)
+    tg_api('sendMessage', {'chat_id': chat_id,
+                           'text': '🔧 Онлайн-оплата подписки скоро будет доступна.\n'
+                                   'Чтобы продлить подписку сейчас, напишите администратору.',
                            'reply_markup': MAIN_KEYBOARD})
 
 
@@ -133,13 +156,18 @@ def handler(event: dict, context) -> dict:
             url = qs.get('url', '')
             if not url:
                 return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'url required'})}
-            res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message']}, timeout=2.2)
+            res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'callback_query']}, timeout=2.2)
             if res.get('ok'):
                 tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}]}, timeout=2.2)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(res)}
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 
     body = json.loads(event.get('body') or '{}')
+    callback = body.get('callback_query') or {}
+    if callback.get('data') == 'renew_sub':
+        handle_renew(callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+
     message = body.get('message') or {}
     chat = message.get('chat') or {}
     chat_id = chat.get('id')
