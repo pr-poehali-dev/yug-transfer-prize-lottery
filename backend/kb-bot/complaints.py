@@ -227,7 +227,7 @@ def notify_admin(tg_api, cid: int) -> None:
     if not r:
         return
     text, inc, photos, rep_id, rep_un, rep_name, created, name, un, role, lt, tg_id, item_id = r
-    role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '👤 Роль не указана')
+    role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '❓ Роль не определена — выберите кнопкой ниже')
     lt_txt = {'white': '✅ белый список', 'black': '⛔️ чёрный список', 'pending': '🕓 на модерации'}.get(lt, '')
     cnt = complaints_count(item_id)
     reporter = f"@{esc(rep_un)}" if rep_un else f'<a href="tg://user?id={rep_id}">{esc(rep_name) or rep_id}</a>'
@@ -251,7 +251,7 @@ def notify_admin(tg_api, cid: int) -> None:
     if len(plist) > 1:
         lines.append(f"📎 Ещё фото: {len(plist) - 1} (ниже)")
     msg = '\n'.join(lines)
-    markup = admin_markup(cid, lt)
+    markup = admin_markup(cid, lt, role or '')
     plist_media = [{'type': 'photo', 'media': p} for p in plist[:10]]
     sent_ids = {}
 
@@ -316,15 +316,49 @@ def notify_admin(tg_api, cid: int) -> None:
         print(f'[KB-BOT] complaint #{cid} sent to {target_chat}')
 
 
-def admin_markup(cid: int, list_type: str = '') -> dict:
-    rows = []
-    if list_type != 'black':
-        rows.append([{'text': '⛔️ Заносим в ЧС', 'callback_data': f'cblack:{int(cid)}'},
-                     {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
-    else:
-        rows.append([{'text': '⛔️ Подтвердить (уже в ЧС)', 'callback_data': f'cblack:{int(cid)}'},
-                     {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
+def admin_markup(cid: int, list_type: str = '', role: str = '') -> dict:
+    """Кнопки решения. Роль ставится прямо здесь: выбранная отмечена галочкой."""
+    rows = [[
+        {'text': ('✅ ' if role == 'driver' else '') + '🚗 Водитель', 'callback_data': f'crole:{int(cid)}:driver'},
+        {'text': ('✅ ' if role == 'dispatcher' else '') + '🎧 Диспетчер', 'callback_data': f'crole:{int(cid)}:dispatcher'},
+    ]]
+    first = '⛔️ Подтвердить (уже в ЧС)' if list_type == 'black' else '⛔️ Заносим в ЧС'
+    rows.append([{'text': first, 'callback_data': f'cblack:{int(cid)}'},
+                 {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
     return {'inline_keyboard': rows}
+
+
+def handle_role_button(tg_api, callback: dict) -> None:
+    """Админ группы присваивает роль аккаунту из жалобы (водитель / диспетчер)."""
+    user = callback.get('from') or {}
+    msg = callback.get('message') or {}
+    chat_id = (msg.get('chat') or {}).get('id')
+    _, cid, role = str(callback.get('data', '')).split(':')
+    if not is_group_admin(tg_api, chat_id, user.get('id')):
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': True,
+                                       'text': 'Роль присваивает только администратор группы.'}, timeout=2.2)
+        return
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT c.id, c.role, c.list_type FROM {SCHEMA}.kb_complaints k JOIN {SCHEMA}.check_lists c "
+                    f"ON c.id = k.item_id WHERE k.id={int(cid)}")
+        r = cur.fetchone()
+        if not r:
+            tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': 'Аккаунт не найден'}, timeout=2.2)
+            return
+        if r[1] != role:
+            cur.execute(f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                        f"VALUES ({int(r[0])}, 'role', '{q(r[1])}', '{q(role)}', 'complaint')")
+            cur.execute(f"UPDATE {SCHEMA}.check_lists SET role='{q(role)}', updated_at=now() WHERE id={int(r[0])}")
+            conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+    label = 'Водитель' if role == 'driver' else 'Диспетчер'
+    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': f'Роль: {label}'}, timeout=2.2)
+    tg_api('editMessageReplyMarkup', {'chat_id': chat_id, 'message_id': msg.get('message_id'),
+                                      'reply_markup': admin_markup(int(cid), r[2], role)}, timeout=3)
 
 
 def is_group_admin(tg_api, chat_id, user_id) -> bool:
@@ -379,6 +413,16 @@ def handle_black_button(tg_api, callback: dict) -> None:
                                        'text': 'Заносить в ЧС может только администратор группы.'}, timeout=2.2)
         return
     by = f"@{user['username']}" if user.get('username') else (user.get('first_name') or str(user.get('id')))
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT c.role FROM {SCHEMA}.kb_complaints k JOIN {SCHEMA}.check_lists c ON c.id=k.item_id WHERE k.id={int(cid)}")
+    rr = cur.fetchone()
+    cur.close()
+    conn.close()
+    if rr is not None and not rr[0]:
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': True,
+                                       'text': 'Сначала выберите роль: 🚗 Водитель или 🎧 Диспетчер.'}, timeout=2.2)
+        return
     result = to_black(cid, by)
     tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': result[:190]}, timeout=2.2)
     if 'не найден' in result:

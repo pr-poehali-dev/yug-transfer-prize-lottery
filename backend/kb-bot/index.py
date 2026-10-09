@@ -629,14 +629,14 @@ def handler(event: dict, context) -> dict:
             cid = int(qs.get('id') or 0)
             conn = psycopg2.connect(os.environ['DATABASE_URL'])
             cur = conn.cursor()
-            cur.execute(f"SELECT k.group_chat, k.group_msg_id, k.status, c.list_type FROM {SCHEMA}.kb_complaints k "
+            cur.execute(f"SELECT k.group_chat, k.group_msg_id, k.status, c.list_type, c.role FROM {SCHEMA}.kb_complaints k "
                         f"LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id WHERE k.id={cid}")
             r = cur.fetchone()
             conn.close()
             res = {}
             if r and r[0] and r[1] and r[2] == 'new':
                 res = tg_api('editMessageReplyMarkup', {'chat_id': r[0], 'message_id': r[1],
-                                                        'reply_markup': complaints.admin_markup(cid, r[3] or '')}, timeout=3)
+                                                        'reply_markup': complaints.admin_markup(cid, r[3] or '', r[4] or '')}, timeout=3)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': res.get('ok'), 'error': res.get('description', '')}, ensure_ascii=False)}
         if action == 'complaint_decided':
             cid = int(qs.get('id') or 0)
@@ -666,6 +666,7 @@ def handler(event: dict, context) -> dict:
                     mem = tg_api('getChatMember', {'chat_id': r['id'], 'user_id': me.get('id')}, timeout=3).get('result') or {}
                     out[chat]['bot_status'] = mem.get('status')
                     out[chat]['can_post'] = mem.get('can_post_messages', mem.get('can_send_messages'))
+                    out[chat]['can_delete'] = mem.get('can_delete_messages')
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(out, ensure_ascii=False)}
         if action == 'private_commands':
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(private_only_commands())}
@@ -685,6 +686,9 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get('body') or '{}')
     callback = body.get('callback_query') or {}
+    if str(callback.get('data') or '').startswith('crole:'):
+        complaints.handle_role_button(tg_api, callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if str(callback.get('data') or '').startswith('creject:'):
         complaints.handle_reject_button(tg_api, callback)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}

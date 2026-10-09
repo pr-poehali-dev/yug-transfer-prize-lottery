@@ -72,6 +72,25 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
     setSending(null);
   };
 
+  const setRole = async (c: Complaint, role: "driver" | "dispatcher") => {
+    setBusy(c.id);
+    try {
+      const res = await fetch(COMPLAINTS_API, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ id: c.id, edit: true, role }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success(`Роль: ${ROLE[role]}`);
+        load();
+      } else toast.error(d.error || "Не удалось сохранить роль");
+    } catch {
+      toast.error("Не удалось сохранить роль");
+    }
+    setBusy(null);
+  };
+
   const decide = async (c: Complaint, status: "accepted" | "rejected", toBlack = false) => {
     setBusy(c.id);
     try {
@@ -205,6 +224,20 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
               </div>
 
               {c.status === "new" && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-white/50 shrink-0">Роль:</span>
+                  {(["driver", "dispatcher"] as const).map((r) => (
+                    <button key={r} disabled={busy === c.id} onClick={() => setRole(c, r)}
+                      className={`flex-1 rounded-lg py-1.5 text-xs border transition-colors ${c.target.role === r
+                        ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-200"
+                        : "border-white/10 text-white/60 hover:bg-white/5"}`}>
+                      {c.target.role === r ? "✓ " : ""}{r === "driver" ? "🚗 Водитель" : "🎧 Диспетчер"}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {c.status === "new" && (
                 <button disabled={sending === c.id} onClick={() => sendToGroup(c)}
                   className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 text-xs py-2 flex items-center justify-center gap-1.5 disabled:opacity-60">
                   <Icon name={sending === c.id ? "Loader2" : "Send"} size={13} className={sending === c.id ? "animate-spin" : ""} />
@@ -214,7 +247,10 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
 
               {c.status === "new" && (
                 <div className="grid grid-cols-3 gap-1.5">
-                  <button disabled={busy === c.id} onClick={() => decide(c, "accepted", true)}
+                  <button disabled={busy === c.id} onClick={() => {
+                    if (!c.target.role) { toast.error("Сначала выберите роль: водитель или диспетчер"); return; }
+                    decide(c, "accepted", true);
+                  }}
                     className="rounded-lg bg-red-500/80 hover:bg-red-500 text-white text-[11px] py-2 disabled:opacity-60">
                     Заносим в ЧС
                   </button>

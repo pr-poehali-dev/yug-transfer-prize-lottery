@@ -224,6 +224,21 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
             sets.append(f"photos='{esc(chr(10).join(ph))}'")
         if 'admin_note' in body:
             sets.append(f"admin_note='{esc(str(body.get('admin_note') or '')[:1000])}'")
+        if body.get('role') in ('driver', 'dispatcher'):
+            cur.execute(f"SELECT c.id, c.role FROM {SCHEMA}.kb_complaints k JOIN {SCHEMA}.check_lists c ON c.id=k.item_id WHERE k.id={cid}")
+            rr = cur.fetchone()
+            if rr and rr[1] != body['role']:
+                cur.execute(f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                            f"VALUES ({rr[0]}, 'role', '{esc(rr[1])}', '{esc(body['role'])}', 'manual')")
+                cur.execute(f"UPDATE {SCHEMA}.check_lists SET role='{esc(body['role'])}', updated_at=now() WHERE id={rr[0]}")
+            if not sets:
+                conn.commit()
+                try:
+                    import urllib.request
+                    urllib.request.urlopen(f"{KB_BOT_URL}?action=complaint_refresh_buttons&id={cid}", timeout=8).read()
+                except Exception:
+                    pass
+                return resp(200, {'ok': True})
         if not sets:
             return resp(400, {'ok': False, 'error': 'Нечего сохранять'})
         cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET {', '.join(sets)}, updated_at=now() WHERE id={cid} RETURNING id")
