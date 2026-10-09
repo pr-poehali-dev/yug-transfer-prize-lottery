@@ -371,6 +371,11 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
         if not old_row:
             return resp(404, {'error': 'not found'})
         old = row_to_item(old_row)
+        if body.get('merge'):
+            # Перенос существующего аккаунта из формы «Новая запись»: пустые поля формы не затирают данные карточки.
+            for k in cols:
+                if new[k] in (None, '') and old.get(k) not in (None, ''):
+                    new[k] = old.get(k)
         for k in cols:
             ov = '' if old.get(k) is None else str(old.get(k))
             nv = '' if new[k] is None else str(new[k])

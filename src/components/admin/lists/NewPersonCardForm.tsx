@@ -91,13 +91,33 @@ export function NewPersonCardForm({ token, onSaved, onCancel, prefill }: Props) 
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
         body: JSON.stringify({ ...data, ...target }),
       });
-      const d = await res.json();
+      const d = await res.json().catch(() => ({}));
       if (d.ok) {
         toast.success(`Добавлено: ${targetTitle}`, pending ? { description: "Присвойте статус в строке «На модерации»" } : undefined);
         setForm(empty);
         setScanned(false);
         onSaved();
-      } else toast.error("Не удалось сохранить");
+      } else if (res.status === 409 && d.duplicate_id) {
+        if (pending) {
+          toast.info(d.error || "Этот аккаунт уже есть в базе", { description: "Новая карточка не создана" });
+          setForm(empty);
+          setScanned(false);
+          onSaved();
+        } else {
+          const up = await fetch(LISTS_API, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+            body: JSON.stringify({ ...data, ...target, id: d.duplicate_id, merge: true }),
+          });
+          const u = await up.json().catch(() => ({}));
+          if (u.ok) {
+            toast.success(`Аккаунт уже был в базе — перенесён: ${targetTitle}`);
+            setForm(empty);
+            setScanned(false);
+            onSaved();
+          } else toast.error(u.error || "Не удалось сохранить");
+        }
+      } else toast.error(d.error || "Не удалось сохранить");
     } catch {
       toast.error("Не удалось сохранить");
     }
