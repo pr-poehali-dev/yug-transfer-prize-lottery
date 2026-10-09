@@ -15,6 +15,7 @@ BUTTON_GROUPS = '📋 Список групп'
 BUTTON_SUB = '💳 Моя подписка'
 BUTTON_CHECK_DRIVER = '🚗 Проверить водителя'
 BUTTON_CHECK_DISP = '🎧 Проверить диспетчера'
+CHECKS_ANY = {'prompt': 'Проверка', 'who': 'Аккаунт', 'role': ''}
 CHECKS = {
     'driver': {'button': BUTTON_CHECK_DRIVER, 'prompt': 'Проверка водителя', 'category': 'водител', 'who': 'Водитель', 'role': 'driver'},
     'disp': {'button': BUTTON_CHECK_DISP, 'prompt': 'Проверка диспетчера', 'category': 'диспетчер', 'who': 'Диспетчер', 'role': 'dispatcher'},
@@ -139,19 +140,35 @@ def ask_check(chat_id, kind: str) -> None:
 
 
 def classify_query(q: str):
-    """Определяет, что прислали: ('id', 123), ('phone', '9181234567') или ('username', 'name')."""
+    """Определяет, что прислали: ('id', 123), ('phone', '9181234567') или ('username', 'name').
+    Понимает tg://user?id=..., tg://resolve?domain=..., ссылки t.me / telegram.me, @username, ID и номер."""
+    import re
     q = q.strip()
-    if q.startswith('https://t.me/'):
-        q = q[len('https://t.me/'):].strip('/')
+    m = re.search(r'tg://(?:user|openmessage)\?(?:user_)?id=(\d+)', q, re.I)
+    if m:
+        return 'id', int(m.group(1))
+    m = re.search(r'tg://resolve\?domain=([A-Za-z0-9_]+)', q, re.I)
+    if m:
+        return 'username', m.group(1).lower()
+    m = re.search(r'(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)/(?:@)?([A-Za-z0-9_]+)', q, re.I)
+    if m:
+        return 'username', m.group(1).lower()
     if q.startswith('@'):
         return 'username', q[1:].lower()
-    compact = q.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    compact = re.sub(r'[\s\-()]', '', q)
     if compact.lstrip('+').isdigit():
         digits = compact.lstrip('+')
         if compact.startswith('+') or (len(digits) == 11 and digits[0] in '78') or len(digits) == 10 and digits[0] == '9':
             return 'phone', digits[-10:]
         return 'id', int(digits)
     return 'username', q.lower()
+
+
+def looks_like_person(q: str) -> bool:
+    """Запрос похож на ссылку на человека (а не на текст для базы знаний)."""
+    import re
+    q = q.strip()
+    return bool(re.match(r'(tg://|https?://(www\.)?(t\.me|telegram\.me)/|t\.me/|@[A-Za-z0-9_]{3,}$|\+?[\d\s\-()]{7,}$)', q, re.I))
 
 
 def save_tg_user(user: dict, source: str) -> None:
@@ -180,7 +197,7 @@ def save_tg_user(user: dict, source: str) -> None:
 
 
 def run_check(chat_id, kind: str, query: str) -> None:
-    c = CHECKS[kind]
+    c = CHECKS.get(kind) or CHECKS_ANY
     kind_q, q = classify_query(query)
     if kind_q == 'username' and len(q) < 3:
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Слишком короткий запрос. Попробуйте ещё раз.',
@@ -211,10 +228,11 @@ def run_check(chat_id, kind: str, query: str) -> None:
             conds.append(f"lower(username) = '{qe}'")
             if known:
                 conds.append(f"tg_id = {int(known[0])}")
+        role_cond = f"role = '{c['role']}' AND " if c['role'] else "list_type <> 'pending' AND "
         cur.execute(
             f"SELECT list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, id "
             f"FROM {SCHEMA}.check_lists "
-            f"WHERE role = '{c['role']}' AND ({' OR '.join(conds)}) "
+            f"WHERE {role_cond}({' OR '.join(conds)}) "
             f"ORDER BY CASE list_type WHEN 'black' THEN 0 ELSE 1 END, id DESC LIMIT 5")
         rows = cur.fetchall()
     finally:
@@ -299,6 +317,9 @@ def send_card(chat_id, r, head: str) -> None:
 
 
 def run_search(chat_id, query: str) -> None:
+    if looks_like_person(query):
+        run_check(chat_id, 'any', query)
+        return
     q = query.strip().replace("'", "''").replace('%', '')
     if len(q) < 2:
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Выберите пункт меню 👇', 'reply_markup': MAIN_KEYBOARD})

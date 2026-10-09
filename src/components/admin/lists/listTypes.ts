@@ -94,6 +94,10 @@ export const fmtDate = (v: string | null | undefined, withTime = false) => {
 export function detectQuery(raw: string): { field: "username" | "phone" | "tg_id"; value: string } | null {
   const v = raw.trim();
   if (!v) return null;
+  const tgId = v.match(/tg:\/\/(?:user|openmessage)\?(?:user_)?id=(\d+)/i);
+  if (tgId) return { field: "tg_id", value: tgId[1] };
+  const tgDomain = v.match(/tg:\/\/resolve\?domain=([A-Za-z0-9_]+)/i);
+  if (tgDomain) return { field: "username", value: tgDomain[1] };
   const link = v.match(/^(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{4,})/i);
   if (link) return { field: "username", value: link[1] };
   if (v.startsWith("@")) return { field: "username", value: v.slice(1) };
