@@ -142,34 +142,34 @@ def handle_subs_stats(cur, qs: dict) -> dict:
     m_end = f"('{month}-01'::date + interval '1 month')"
 
     cur.execute(f"SELECT count(*), coalesce(sum(amount_rub), 0), count(DISTINCT tg_user_id) "
-                f"FROM {SCHEMA}.payment_log WHERE kind='subscription' "
+                f"FROM {SCHEMA}.kb_payments WHERE status='succeeded' "
                 f"AND created_at >= {m_start} AND created_at < {m_end}")
     m_cnt, m_sum, m_users = cur.fetchone()
 
-    cur.execute(f"SELECT count(*), coalesce(sum(amount_rub), 0) FROM {SCHEMA}.payment_log WHERE kind='subscription'")
+    cur.execute(f"SELECT count(*), coalesce(sum(amount_rub), 0) FROM {SCHEMA}.kb_payments WHERE status='succeeded'")
     all_cnt, all_sum = cur.fetchone()
 
     cur.execute(f"SELECT count(*) FILTER (WHERE active_until > now()), count(*), "
                 f"count(*) FILTER (WHERE active_until > now() AND active_until < now() + interval '3 days') "
-                f"FROM {SCHEMA}.driver_subs")
+                f"FROM {SCHEMA}.kb_subscriptions")
     active, total_subs, expiring = cur.fetchone()
 
     cur.execute(f"SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') m, count(*), coalesce(sum(amount_rub), 0) "
-                f"FROM {SCHEMA}.payment_log WHERE kind='subscription' "
+                f"FROM {SCHEMA}.kb_payments WHERE status='succeeded' "
                 f"AND created_at >= date_trunc('month', now()) - interval '11 months' GROUP BY 1 ORDER BY 1")
     by_month = [{'month': r[0], 'count': r[1], 'sum': float(r[2])} for r in cur.fetchall()]
 
     cur.execute(f"SELECT p.id, p.tg_user_id, coalesce(nullif(p.username, ''), s.username, '') , "
                 f"coalesce(nullif(p.first_name, ''), s.first_name, ''), p.amount_rub, p.note, p.payment_id, "
                 f"p.created_at, s.active_until "
-                f"FROM {SCHEMA}.payment_log p LEFT JOIN {SCHEMA}.driver_subs s ON s.tg_user_id = p.tg_user_id "
-                f"WHERE p.kind='subscription' AND p.created_at >= {m_start} AND p.created_at < {m_end} "
+                f"FROM {SCHEMA}.kb_payments p LEFT JOIN {SCHEMA}.kb_subscriptions s ON s.tg_user_id = p.tg_user_id "
+                f"WHERE p.status='succeeded' AND p.created_at >= {m_start} AND p.created_at < {m_end} "
                 f"ORDER BY p.created_at DESC LIMIT 500")
     payments = [{'id': r[0], 'tg_id': r[1], 'username': r[2], 'name': r[3], 'amount': float(r[4] or 0),
                  'note': r[5] or '', 'payment_id': r[6] or '', 'created_at': r[7], 'active_until': r[8]}
                 for r in cur.fetchall()]
 
-    cur.execute(f"SELECT tg_user_id, username, first_name, active_until FROM {SCHEMA}.driver_subs "
+    cur.execute(f"SELECT tg_user_id, username, first_name, active_until FROM {SCHEMA}.kb_subscriptions "
                 f"ORDER BY active_until DESC NULLS LAST LIMIT 500")
     subscribers = [{'tg_id': r[0], 'username': r[1] or '', 'name': r[2] or '', 'active_until': r[3]}
                    for r in cur.fetchall()]

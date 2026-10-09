@@ -87,7 +87,7 @@ def send_subscription(chat_id, user_id) -> None:
     cur = conn.cursor()
     try:
         cur.execute(
-            f"SELECT active_until, active_until > NOW() FROM {SCHEMA}.driver_subs "
+            f"SELECT active_until, active_until > NOW() FROM {SCHEMA}.kb_subscriptions "
             f"WHERE tg_user_id = {int(user_id)}")
         row = cur.fetchone()
     finally:
