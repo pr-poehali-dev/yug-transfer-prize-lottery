@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
+import { ComplaintEditDialog } from "./ComplaintEditDialog";
 import { COMPLAINTS_API, COMPLAINT_TO_GROUP_API, fmtDate } from "./listTypes";
 
 interface Complaint {
@@ -55,6 +56,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
   }, [filter, token, itemFilter]);
 
   const [sending, setSending] = useState<number | null>(null);
+  const [editing, setEditing] = useState<Complaint | null>(null);
 
   const sendToGroup = async (c: Complaint) => {
     setSending(c.id);
@@ -156,9 +158,15 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                     </button>
                   )}
                 </div>
-                <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS[c.status].cls}`}>
-                  {STATUS[c.status].label}
-                </span>
+                <div className="shrink-0 flex flex-col items-end gap-1.5">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS[c.status].cls}`}>
+                    {STATUS[c.status].label}
+                  </span>
+                  <button onClick={() => setEditing(c)} title="Редактировать"
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] border border-white/10 text-white/70 hover:text-white hover:bg-white/5">
+                    <Icon name="Pencil" size={11} />Изменить
+                  </button>
+                </div>
               </div>
 
               <div className="rounded-lg bg-white/[0.03] border border-white/5 p-2.5 space-y-1.5">
@@ -168,6 +176,13 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                   <span className="flex items-center gap-1"><Icon name="Clock" size={11} />Подана: {fmtDate(c.created_at, true)}</span>
                 </div>
               </div>
+
+              {c.admin_note && (
+                <div className="flex items-start gap-1.5 text-[11px] text-amber-200/80">
+                  <Icon name="StickyNote" fallback="FileText" size={12} className="mt-0.5 shrink-0" />
+                  <span className="whitespace-pre-wrap break-words">{c.admin_note}</span>
+                </div>
+              )}
 
               {c.photos.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto">
@@ -217,6 +232,8 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
           ))}
         </div>
       )}
+
+      <ComplaintEditDialog token={token} complaint={editing} onClose={() => setEditing(null)} onSaved={load} />
 
       {preview && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreview(null)}>

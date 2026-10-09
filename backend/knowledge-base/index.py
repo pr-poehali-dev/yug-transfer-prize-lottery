@@ -206,6 +206,30 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
                   'stats': {'total': r[17], 'accepted': r[18], 'reporters': r[19]}, 'group_msg_id': r[20]} for r in cur.fetchall()]
         cur.execute(f"SELECT count(*) FROM {SCHEMA}.kb_complaints WHERE status='new'")
         return resp(200, {'ok': True, 'items': items, 'new_count': cur.fetchone()[0]})
+    if method == 'PUT' and body.get('edit'):
+        cid = int(body.get('id') or 0)
+        sets = []
+        if 'text' in body:
+            t = str(body.get('text') or '').strip()
+            if len(t) < 3:
+                return resp(400, {'ok': False, 'error': 'Опишите, что произошло'})
+            sets.append(f"text='{esc(t[:2000])}'")
+        if 'incident_date' in body:
+            d = parse_date(body.get('incident_date'))
+            dval = f"'{d.isoformat()}'" if d else 'NULL'
+            sets.append(f"incident_date={dval}")
+        if 'photos' in body:
+            ph = [str(p) for p in (body.get('photos') or []) if str(p).startswith('https://')][:10]
+            sets.append(f"photos='{esc(chr(10).join(ph))}'")
+        if 'admin_note' in body:
+            sets.append(f"admin_note='{esc(str(body.get('admin_note') or '')[:1000])}'")
+        if not sets:
+            return resp(400, {'ok': False, 'error': 'Нечего сохранять'})
+        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET {', '.join(sets)}, updated_at=now() WHERE id={cid} RETURNING id")
+        if not cur.fetchone():
+            return resp(404, {'ok': False, 'error': 'not found'})
+        conn.commit()
+        return resp(200, {'ok': True})
     if method == 'PUT':
         cid = int(body.get('id') or 0)
         status = body.get('status')
