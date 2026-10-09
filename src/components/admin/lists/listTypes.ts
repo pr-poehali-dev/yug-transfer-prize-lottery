@@ -1,4 +1,4 @@
-import { KNOWLEDGE_BASE_URL, KB_BOT_URL } from "../adminTypes";
+import { KNOWLEDGE_BASE_URL, KB_BOT_URL, TG_LOOKUP_URL } from "../adminTypes";
 
 export type Role = "driver" | "dispatcher";
 export type ListType = "white" | "black";
@@ -51,6 +51,7 @@ export const HISTORY_API = `${KNOWLEDGE_BASE_URL}?entity=history`;
 export const LOOKUP_API = `${KNOWLEDGE_BASE_URL}?entity=lookup`;
 export const UPLOAD_API = `${KNOWLEDGE_BASE_URL}?entity=upload_photo`;
 export const SCAN_API = `${KB_BOT_URL}?action=scan`;
+export const TG_LOOKUP_API = TG_LOOKUP_URL;
 
 export const inputCls =
   "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-purple-400/60";

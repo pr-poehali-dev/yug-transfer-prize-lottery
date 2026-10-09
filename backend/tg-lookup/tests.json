@@ -1,0 +1,6 @@
+{
+  "tests": [
+    {"name": "OPTIONS CORS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+    {"name": "Unauthorized without token", "method": "GET", "path": "/?username=durov", "expectedStatus": 401}
+  ]
+}

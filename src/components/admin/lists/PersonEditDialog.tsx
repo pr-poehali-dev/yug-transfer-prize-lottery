@@ -3,7 +3,7 @@ import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
-  HistoryItem, ListDef, ListItem, HISTORY_API, LISTS_API, LOOKUP_API, UPLOAD_API, inputCls, fmtDate,
+  HistoryItem, ListDef, ListItem, HISTORY_API, LISTS_API, LOOKUP_API, UPLOAD_API, TG_LOOKUP_API, inputCls, fmtDate,
 } from "./listTypes";
 
 interface Props {
@@ -22,6 +22,8 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [fetching, setFetching] = useState(false);
+  const [fetchedFor, setFetchedFor] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const black = def.list_type === "black";
 
@@ -33,6 +35,7 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
       photo_url: item.photo_url,
     } : empty);
     setHistory([]);
+    setFetchedFor(item?.username?.toLowerCase() || "");
     if (item) {
       fetch(`${HISTORY_API}&id=${item.id}`, { headers: { "X-Admin-Token": token } })
         .then((r) => r.json()).then((d) => d.ok && setHistory(d.items || [])).catch(() => {});
@@ -48,6 +51,48 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
         ...f, tg_id: f.tg_id || String(d.tg_id), username: f.username || d.username || "", name: f.name || d.name || "",
       }));
     } catch { /* */ }
+  };
+
+  const fromTelegram = async (raw: string, silent = false): Promise<typeof empty | null> => {
+    const uname = raw.trim().replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?]/)[0];
+    if (uname.length < 4) {
+      if (!silent) toast.error("Укажите @username");
+      return null;
+    }
+    setFetching(true);
+    try {
+      const res = await fetch(`${TG_LOOKUP_API}?username=${encodeURIComponent(uname)}`, {
+        headers: { "X-Admin-Token": token },
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!d.ok) {
+        toast.error(d.error || (res.status >= 500 ? "Telegram не ответил вовремя" : "Не удалось получить данные"));
+        return null;
+      }
+      let next: typeof empty = form;
+      setForm((f) => {
+        next = {
+          ...f,
+          username: d.username || uname,
+          tg_id: String(d.tg_id),
+          name: d.name || f.name,
+          phone: f.phone || d.phone || "",
+          photo_url: d.photo_url || f.photo_url,
+          note: f.note || d.bio || "",
+        };
+        return next;
+      });
+      setFetchedFor(uname.toLowerCase());
+      toast.success("Данные подтянуты из Telegram", {
+        description: [d.name, `ID ${d.tg_id}`, d.phone ? d.phone : "телефон скрыт"].filter(Boolean).join(" · "),
+      });
+      return next;
+    } catch {
+      toast.error("Не удалось связаться с Telegram");
+      return null;
+    } finally {
+      setFetching(false);
+    }
   };
 
   const upload = async (file: File) => {
@@ -79,8 +124,14 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
       return;
     }
     setSaving(true);
+    let data = form;
+    const uname = form.username.trim().replace(/^@/, "").toLowerCase();
+    if (uname && (!form.tg_id || !form.photo_url) && fetchedFor !== uname) {
+      const got = await fromTelegram(form.username, true);
+      if (got) data = got;
+    }
     try {
-      const payload = { ...form, role: def.role, list_type: def.list_type };
+      const payload = { ...data, role: def.role, list_type: def.list_type };
       const res = await fetch(LISTS_API, {
         method: item ? "PUT" : "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
@@ -156,14 +207,35 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
               onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           </div>
 
+          {fetching && (
+            <div className="text-xs text-sky-300 flex items-center gap-1.5">
+              <Icon name="Loader2" size={12} className="animate-spin" />Получаю фото, имя, ID и телефон из Telegram…
+            </div>
+          )}
           <input value={form.name} onChange={set("name")} placeholder="Имя" className={inputCls} />
           <div className="grid grid-cols-2 gap-2">
             <input value={form.tg_id} onChange={(e) => setForm({ ...form, tg_id: e.target.value.replace(/\D/g, "") })}
               onBlur={(e) => lookup(e.target.value)} inputMode="numeric" placeholder="Telegram ID" className={inputCls} />
             <input value={form.phone} onChange={set("phone")} placeholder="Телефон" className={inputCls} />
           </div>
-          <input value={form.username} onChange={set("username")} onBlur={(e) => !form.tg_id && lookup(e.target.value)}
-            placeholder="@username" className={inputCls} />
+          <div className="flex gap-2">
+            <input value={form.username} onChange={set("username")}
+              onBlur={(e) => {
+                const u = e.target.value.trim().replace(/^@/, "").toLowerCase();
+                if (u.length >= 4 && u !== fetchedFor && !form.tg_id) fromTelegram(e.target.value, true);
+              }}
+              placeholder="@username" className={inputCls} />
+            <button
+              type="button"
+              onClick={() => fromTelegram(form.username)}
+              disabled={fetching}
+              title="Подтянуть данные из Telegram"
+              className="shrink-0 rounded-xl px-3 border border-sky-500/30 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 text-xs flex items-center gap-1.5 disabled:opacity-60"
+            >
+              <Icon name={fetching ? "Loader2" : "Download"} size={14} className={fetching ? "animate-spin" : ""} />
+              Из Telegram
+            </button>
+          </div>
 
           {black && (
             <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-3 space-y-2">
@@ -218,7 +290,7 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
             <button onClick={save} disabled={saving}
               className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-60 flex items-center gap-2">
               <Icon name={saving ? "Loader2" : "Check"} size={15} className={saving ? "animate-spin" : ""} />
-              Сохранить
+              {saving && fetching ? "Тяну из Telegram…" : "Сохранить"}
             </button>
             <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm border border-white/10 text-white/70 hover:bg-white/5">
               Отмена
