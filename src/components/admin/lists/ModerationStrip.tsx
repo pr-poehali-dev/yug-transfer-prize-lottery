@@ -48,7 +48,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   const [importing, setImporting] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupChat, setGroupChat] = useState("");
-  const [group, setGroup] = useState<{ running: boolean; title: string; added: number; skipped: number; total: number; progress: number } | null>(null);
+  const [group, setGroup] = useState<{ running: boolean; title: string; added: number; skipped: number; total: number; progress: number; mode?: string } | null>(null);
   const groupStop = useRef(false);
   const [scan, setScan] = useState<{ running: boolean; done: number; found: number; left: number } | null>(null);
   const stopRef = useRef(false);
@@ -112,16 +112,16 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const scanGroup = async () => {
+  const scanGroup = async (mode: "members" | "photos" = "members") => {
     const chat = groupChat.trim();
     if (!chat) return;
     groupStop.current = false;
-    setGroup({ running: true, title: chat, added: 0, skipped: 0, total: 0, progress: 0 });
+    setGroup({ running: true, title: chat, added: 0, skipped: 0, total: 0, progress: 0, mode });
     let jobId = 0;
     let fails = 0;
     while (!groupStop.current) {
       try {
-        const q = jobId ? `job=${jobId}` : `chat=${encodeURIComponent(chat)}`;
+        const q = jobId ? `job=${jobId}` : `chat=${encodeURIComponent(chat)}${mode === "photos" ? "&mode=photos" : ""}`;
         const res = await fetch(`${TG_LOOKUP_API}?action=group&${q}`, { headers: { "X-Admin-Token": token } });
         const d = await res.json();
         const j = d.job;
@@ -131,10 +131,12 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
         }
         jobId = j.id;
         fails = 0;
-        setGroup({ running: true, title: j.title || chat, added: j.added, skipped: j.skipped, total: j.total, progress: j.progress ?? 0 });
+        setGroup({ running: true, title: j.title || chat, added: j.added, skipped: j.skipped, total: j.total, progress: j.progress ?? 0, mode });
         if (j.status === "done" || j.status === "error") {
           if (j.status === "error") toast.error(j.error || "Не удалось просканировать группу");
-          else toast.success(`Группа просканирована: новых ${j.added}, уже были в базе ${j.skipped}`);
+          else toast.success(mode === "photos"
+            ? `Фото загружены: ${j.added}, без фото: ${j.skipped}`
+            : `Группа просканирована: новых ${j.added}, уже были в базе ${j.skipped}`);
           break;
         }
       } catch {
@@ -262,13 +264,20 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
               <button onClick={() => { groupStop.current = true; }}
                 className="shrink-0 rounded-xl px-4 py-2 text-sm bg-red-500/80 hover:bg-red-500 text-white">Остановить</button>
             ) : (
-              <button onClick={scanGroup} disabled={!groupChat.trim()}
-                className="shrink-0 grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50">Начать</button>
+              <>
+                <button onClick={() => scanGroup("members")} disabled={!groupChat.trim()}
+                  className="shrink-0 grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50">Участники</button>
+                <button onClick={() => scanGroup("photos")} disabled={!groupChat.trim()}
+                  className="shrink-0 rounded-xl px-4 py-2 text-sm font-medium border border-sky-400/50 text-sky-200 hover:bg-sky-500/10 disabled:opacity-50 flex items-center gap-1.5">
+                  <Icon name="Image" size={14} />Фото
+                </button>
+              </>
             )}
           </div>
           <div className="text-[11px] text-white/40">
             Участники попадут в «На модерации». Кто уже есть в базе (по Telegram ID или @username) — пропускается, дублей не будет.
             Полный список доступен, если один из ваших аккаунтов — админ группы; иначе соберём тех, кто писал сообщения.
+            «Фото» — подтянет аватарки уже загруженных участников этой группы (нужен аккаунт-админ, лимиты поиска не тратятся).
           </div>
           {group && (
             <div className="space-y-1.5 pt-1">
@@ -276,7 +285,8 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
                 {group.running && <Icon name="Loader2" size={14} className="animate-spin text-sky-300" />}
                 <span className="truncate">{group.title}</span>
                 <span className="ml-auto text-xs text-white/60 shrink-0">
-                  новых {group.added} · уже в базе {group.skipped}{group.total ? ` · в группе ${group.total}` : ""}
+                  {group.mode === "photos" ? `фото ${group.added} · без фото ${group.skipped}` : `новых ${group.added} · уже в базе ${group.skipped}`}
+                  {group.total ? ` · в группе ${group.total}` : ""}
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">

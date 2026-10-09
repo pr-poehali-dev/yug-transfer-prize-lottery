@@ -525,6 +525,73 @@ async def history_pull(client, chat, job: dict, deadline: float, cur, conn) -> d
     return {}
 
 
+async def photos_pull(client, chat, job: dict, deadline: float, cur, conn, skey: str) -> dict:
+    """Фото участников группы без поиска по username: аккаунт-админ видит людей напрямую, лимиты Telegram не тратятся."""
+    from telethon.tl.functions.channels import GetParticipantsRequest
+    from telethon.tl.types import ChannelParticipantsSearch
+    from telethon.errors import FloodWaitError
+    sem = asyncio.Semaphore(8)
+
+    async def grab(u):
+        async with sem:
+            try:
+                return u, await asyncio.wait_for(client.download_profile_photo(u, file=bytes, download_big=False), timeout=8)
+            except Exception:
+                return u, b''
+
+    while time.time() < deadline - 4 and job['q_index'] < len(GROUP_QUERIES):
+        try:
+            res = await asyncio.wait_for(client(GetParticipantsRequest(
+                chat, ChannelParticipantsSearch(GROUP_QUERIES[job['q_index']]), job['q_offset'], 200, hash=0)), timeout=8)
+        except FloodWaitError as e:
+            return {'flood': e.seconds}
+        users = {u.id: u for u in res.users if not u.bot and not u.deleted}
+        page_done = True
+        if users:
+            cur.execute(f"SELECT tg_id FROM {SCHEMA}.check_lists WHERE tg_id IN ({','.join(str(i) for i in users)}) "
+                        f"AND coalesce(photo_url, '') = ''")
+            need = [users[r[0]] for r in cur.fetchall() if r[0] in users]
+            with_photo = [u for u in need if getattr(u, 'photo', None) and getattr(u.photo, 'photo_id', None)]
+            without = [u for u in need if u not in with_photo]
+            if without:
+                cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), scan_status='нет фото', "
+                            f"tg_access_hash=CASE tg_id {' '.join(f'WHEN {u.id} THEN {int(u.access_hash or 0)}' for u in without)} END, "
+                            f"access_session='{skey}' WHERE tg_id IN ({','.join(str(u.id) for u in without)}) AND list_type='pending'")
+                job['skipped'] += cur.rowcount
+            for i in range(0, len(with_photo), 24):
+                if time.time() > deadline - 4:
+                    page_done = False
+                    break
+                chunk = with_photo[i:i + 24]
+                got = await asyncio.gather(*(grab(u) for u in chunk))
+                for u, raw in got:
+                    if not raw:
+                        continue
+                    url = await asyncio.get_running_loop().run_in_executor(None, store_photo, raw)
+                    cur.execute(f"UPDATE {SCHEMA}.check_lists SET photo_url='{url}', photo_file_uid='{u.photo.photo_id}', "
+                                f"tg_access_hash={int(u.access_hash or 0)}, access_session='{skey}', "
+                                f"last_scan_at=coalesce(last_scan_at, now()), "
+                                f"scan_status=CASE WHEN scan_status IN ('', 'из группы', 'нет фото') THEN 'ok' ELSE scan_status END "
+                                f"WHERE tg_id={int(u.id)}")
+                    job['added'] += 1
+                conn.commit()
+            job['fetched'] += len(res.users) if page_done else 0
+        if not page_done:
+            save_job(cur, conn, job)
+            break
+        if len(res.users) < 200:
+            job['q_index'] += 1
+            job['q_offset'] = 0
+        else:
+            job['q_offset'] += 200
+            if job['q_offset'] >= 10000:
+                job['q_index'] += 1
+                job['q_offset'] = 0
+        save_job(cur, conn, job)
+        await asyncio.sleep(0.5)
+    return {}
+
+
 async def group_pull(session: str, job: dict, deadline: float, cur, conn) -> dict:
     """Выгружает участников группы порциями по 200 (поиск по буквам обходит лимит Telegram в 10 000)."""
     from telethon.tl.functions.channels import GetParticipantsRequest, GetFullChannelRequest
@@ -550,6 +617,8 @@ async def group_pull(session: str, job: dict, deadline: float, cur, conn) -> dic
             pass
         if job.get('mode') == 'history':
             return await history_pull(client, chat, job, deadline, cur, conn)
+        if job.get('mode') == 'photos':
+            return await photos_pull(client, chat, job, deadline, cur, conn, sess_key(session))
         while time.time() < deadline - 3 and job['q_index'] < len(GROUP_QUERIES):
             try:
                 res = await asyncio.wait_for(client(GetParticipantsRequest(
@@ -613,17 +682,20 @@ def handle_group(qs: dict, context) -> dict:
     cols = "id, chat, title, session_hash, q_index, q_offset, status, fetched, added, skipped, total, error, mode, last_msg_id, messages"
     try:
         chat = str(qs.get('chat') or '').strip()
+        want_photos = qs.get('mode') == 'photos'
         job_id = int(qs.get('job') or 0) if str(qs.get('job') or '').isdigit() else 0
         if job_id:
             cur.execute(f"SELECT {cols} FROM {SCHEMA}.group_scan_jobs WHERE id={job_id}")
         elif chat:
+            mode_cond = "mode = 'photos'" if want_photos else "mode <> 'photos'"
             cur.execute(f"SELECT {cols} FROM {SCHEMA}.group_scan_jobs WHERE lower(chat)=lower('{chat.replace(chr(39), '')}') "
-                        f"AND status IN ('running', 'paused') ORDER BY id DESC LIMIT 1")
+                        f"AND status IN ('running', 'paused') AND {mode_cond} ORDER BY id DESC LIMIT 1")
         else:
             return resp(400, {'ok': False, 'error': 'Укажите группу'})
         row = cur.fetchone()
         if not row:
-            cur.execute(f"INSERT INTO {SCHEMA}.group_scan_jobs (chat, mode) VALUES ('{chat.replace(chr(39), '')}', 'members') RETURNING {cols}")
+            new_mode = 'photos' if want_photos else 'members'
+            cur.execute(f"INSERT INTO {SCHEMA}.group_scan_jobs (chat, mode) VALUES ('{chat.replace(chr(39), '')}', '{new_mode}') RETURNING {cols}")
             row = cur.fetchone()
             conn.commit()
         job = dict(zip(cols.split(', '), row))
@@ -637,6 +709,10 @@ def handle_group(qs: dict, context) -> dict:
             admin_hash = asyncio.run(find_admin_session(sessions, job['chat']))
             if admin_hash:
                 job['session_hash'] = admin_hash
+            elif job.get('mode') == 'photos':
+                cur.execute(f"UPDATE {SCHEMA}.group_scan_jobs SET status='error', error='Нужен аккаунт-админ этой группы' WHERE id={job['id']}")
+                conn.commit()
+                return resp(200, {'ok': False, 'error': 'Фото можно подтянуть, только если один из ваших аккаунтов — админ этой группы.'})
             else:
                 job['mode'] = 'history'
                 cur.execute(f"UPDATE {SCHEMA}.group_scan_jobs SET mode='history' WHERE id={job['id']}")
