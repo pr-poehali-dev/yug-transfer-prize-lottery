@@ -2,3 +2,4 @@ telethon
 psycopg2-binary
 boto3
 pysocks
+python-socks[asyncio]

@@ -76,6 +76,14 @@ async def resolve_phone(client, phone: str):
         await client(DeleteContactsRequest(id=[user]))
     except Exception as e:
         print(f'[TG-LOOKUP] delete contact failed: {type(e).__name__}')
+    try:
+        # После удаления из контактов Telegram отдаёт настоящее имя, которое человек указал сам.
+        from telethon.tl.functions.users import GetUsersRequest
+        fresh = await client(GetUsersRequest([user]))
+        if fresh:
+            user = fresh[0]
+    except Exception as e:
+        print(f'[TG-LOOKUP] refresh user failed: {type(e).__name__}')
     return user
 
 
@@ -120,12 +128,21 @@ def proxy_kwargs() -> dict:
     raw = (os.environ.get('TG_PROXY') or '').strip()
     if not raw:
         return {}
+    if '://' not in raw:
+        parts = raw.replace('@', ':').split(':')
+        if len(parts) == 4 and parts[1].isdigit():
+            raw = f'socks5://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}'
+        elif len(parts) == 4 and parts[3].isdigit():
+            raw = f'socks5://{parts[0]}:{parts[1]}@{parts[2]}:{parts[3]}'
+        else:
+            raw = 'socks5://' + raw
     u = urlparse(raw)
     if u.scheme == 'mtproxy':
         from telethon import connection
         return {'connection': connection.ConnectionTcpMTProxyRandomizedIntermediate,
                 'proxy': (u.hostname, u.port or 443, unquote(u.username or ''))}
     ptype = 'socks5' if u.scheme.startswith('socks') else u.scheme
+    print(f'[TG-LOOKUP] proxy {ptype} {u.hostname}:{u.port} auth={bool(u.username)}')
     return {'proxy': {'proxy_type': ptype, 'addr': u.hostname, 'port': u.port,
                       'username': unquote(u.username) if u.username else None,
                       'password': unquote(u.password) if u.password else None, 'rdns': True}}
@@ -135,6 +152,17 @@ async def lookup(session: str, username: str, phone: str = '') -> dict:
     t0 = time.time()
     sess = StringSession(session)
     extra = proxy_kwargs()
+    if extra and isinstance(extra.get('proxy'), dict):
+        # Прокси не пускает на «голые» IP Telegram — подключаемся через доменное имя того же адреса.
+        from telethon.network.connection import ConnectionTcpFull
+
+        class NamedHostConnection(ConnectionTcpFull):
+            def __init__(self, ip, port, dc_id, **kw):
+                super().__init__(ip, port, dc_id, **kw)
+                if ip.replace('.', '').isdigit():
+                    self._ip = f"{ip.replace('.', '-')}.nip.io"
+                print(f'[TG-LOOKUP] dc{dc_id} via {self._ip}')
+        extra = {**extra, 'connection': NamedHostConnection}
     if not extra:
         from telethon import connection
         ip = pick_ip(sess.dc_id, sess.server_address)
@@ -218,6 +246,38 @@ def handler(event: dict, context) -> dict:
         return resp(401, {'error': 'Unauthorized'})
 
     qs = event.get('queryStringParameters') or {}
+    if qs.get('action') == 'proxy_test':
+        import socks
+        pk = proxy_kwargs().get('proxy') or {}
+        out = {}
+        if not isinstance(pk, dict):
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'error': 'not socks/http proxy'})}
+        pt = socks.SOCKS5 if pk['proxy_type'] == 'socks5' else socks.HTTP
+
+        def via(host, port, rdns=True, req=None):
+            t0 = time.time()
+            try:
+                sk = socks.socksocket()
+                sk.set_proxy(pt, pk['addr'], pk['port'], rdns, pk['username'], pk['password'])
+                sk.settimeout(6)
+                sk.connect((host, port))
+                data = b''
+                if req:
+                    sk.sendall(req)
+                    data = sk.recv(400)
+                sk.close()
+                return f"ok {time.time() - t0:.2f}s " + data.decode(errors='ignore')[-80:].replace('\r\n', ' ')
+            except Exception as e:
+                return f"{type(e).__name__}: {str(e)[:120]}"
+        out['ipify_80'] = via('api.ipify.org', 80, req=b'GET / HTTP/1.0\r\nHost: api.ipify.org\r\n\r\n')
+        out['tg_api_443'] = via('api.telegram.org', 443)
+        for ip in ['149.154.167.51', '149.154.175.53']:
+            out[f'{ip}:443'] = via(ip, 443, rdns=False)
+            out[f'{ip}.sslip.io:443'] = via(f'{ip}.sslip.io', 443)
+            out[f'{ip.replace(".", "-")}.nip.io:443'] = via(f'{ip.replace(".", "-")}.nip.io', 443)
+        out['zws2.web.telegram.org'] = via('zws2.web.telegram.org', 443)
+        return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(out, ensure_ascii=False)}
+
     if qs.get('action') == 'diag':
         import socket
         import concurrent.futures as cf
