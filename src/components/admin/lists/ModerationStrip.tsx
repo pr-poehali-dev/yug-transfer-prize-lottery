@@ -20,8 +20,18 @@ const SHORT: Record<string, string> = {
 export function ModerationStrip({ token, items, onChanged, onOpen }: Props) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [menuId, setMenuId] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
-  if (!items.length) return null;
+  if (!items.length) {
+    return (
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-4 py-2.5 flex items-center gap-2">
+        <Icon name="Clock" size={15} className="text-amber-400" />
+        <span className="text-sm font-medium text-white">На модерации</span>
+        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50">0</span>
+        <span className="text-xs text-white/40 ml-auto truncate">Новые карточки после сканирования появятся здесь</span>
+      </div>
+    );
+  }
 
   const assign = async (item: ListItem, role: string, list_type: string) => {
     setBusyId(item.id);
@@ -61,12 +71,14 @@ export function ModerationStrip({ token, items, onChanged, onOpen }: Props) {
 
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.04]">
-      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+      <button onClick={() => setCollapsed((v) => !v)} className="w-full flex items-center gap-2 px-4 py-2.5 text-left">
         <Icon name="Clock" size={15} className="text-amber-400" />
         <span className="text-sm font-medium text-white">На модерации</span>
-        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200">{items.length}</span>
+        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500 text-black font-medium">{items.length}</span>
         <span className="text-[11px] text-white/40 ml-1 hidden sm:inline">Присвойте статус — карточка уйдёт в нужный список</span>
-      </div>
+        <Icon name="ChevronDown" size={15} className={`ml-auto text-white/40 transition-transform ${collapsed ? "" : "rotate-180"}`} />
+      </button>
+      {!collapsed && (
       <div className="flex gap-3 overflow-x-auto px-4 pb-4 pt-1">
         {items.map((i) => {
           const initials = (i.name || i.username || "?").slice(0, 2).toUpperCase();
@@ -126,6 +138,7 @@ export function ModerationStrip({ token, items, onChanged, onOpen }: Props) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
