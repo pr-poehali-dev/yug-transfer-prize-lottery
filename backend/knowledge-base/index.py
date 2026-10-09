@@ -16,6 +16,7 @@ CORS = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
 }
+KB_BOT_URL = 'https://functions.poehali.dev/ed74936b-d187-466b-bd49-74818d8cceab'
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 
 
@@ -230,6 +231,12 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
                 cur.execute(f"UPDATE {SCHEMA}.check_lists SET list_type='black', role='{new_role}', "
                             f"reason='{esc(reason[:3000])}', removed_at={removed}, updated_at=now() WHERE id={int(row[0])}")
         conn.commit()
+        if status in ('accepted', 'rejected'):
+            try:
+                import urllib.request
+                urllib.request.urlopen(f"{KB_BOT_URL}?action=complaint_decided&id={cid}&status={status}", timeout=4).read()
+            except Exception as e:
+                print(f'[KB] notify reporter failed: {type(e).__name__}')
         return resp(200, {'ok': True})
     return resp(405, {'error': 'method'})
 
@@ -475,3 +482,4 @@ def handler(event: dict, context) -> dict:
     finally:
         cur.close()
         conn.close()
+

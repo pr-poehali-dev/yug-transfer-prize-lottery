@@ -610,6 +610,12 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
                 'ok': bool(me), 'username': me.get('username', ''), 'webhook': wh.get('url', ''),
                 'error': me_res.get('description', '') if not me else ''})}
+        if action == 'complaint_decided':
+            cid = int(qs.get('id') or 0)
+            st = qs.get('status', '')
+            complaints.mark_group_message(tg_api, cid, '⛔️ В ЧС — из админки' if st == 'accepted' else '✖️ Отклонена — из админки')
+            complaints.notify_reporter(tg_api, cid)
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
         if action == 'test_complaint_topic':
             res = tg_api('sendMessage', {'chat_id': complaints.CHAT_CANDIDATES[0], 'message_thread_id': complaints.COMPLAINTS_THREAD_ID,
                                          'text': '✅ Сюда будут приходить новые жалобы из бота «База знаний».'}, timeout=4)
@@ -639,6 +645,9 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get('body') or '{}')
     callback = body.get('callback_query') or {}
+    if str(callback.get('data') or '').startswith('creject:'):
+        complaints.handle_reject_button(tg_api, callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if str(callback.get('data') or '').startswith('cblack:'):
         complaints.handle_black_button(tg_api, callback)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}

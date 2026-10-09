@@ -261,6 +261,12 @@ def notify_admin(tg_api, cid: int) -> None:
             thread = None
         if res.get('ok'):
             msg_id = (res.get('result') or {}).get('message_id')
+            c2 = db()
+            k2 = c2.cursor()
+            k2.execute(f"UPDATE {SCHEMA}.kb_complaints SET group_chat='{q(chat)}', group_msg_id={int(msg_id)} WHERE id={int(cid)}")
+            c2.commit()
+            k2.close()
+            c2.close()
             if plist:
                 media = [{'type': 'photo', 'media': p} for p in plist[:10]]
                 media[0]['caption'] = f"Фото к жалобе #{cid}"
@@ -278,7 +284,11 @@ def notify_admin(tg_api, cid: int) -> None:
 def admin_markup(cid: int, list_type: str = '') -> dict:
     rows = []
     if list_type != 'black':
-        rows.append([{'text': '⛔️ Отправить в ЧС', 'callback_data': f'cblack:{int(cid)}'}])
+        rows.append([{'text': '⛔️ Отправить в ЧС', 'callback_data': f'cblack:{int(cid)}'},
+                     {'text': '✖️ Отклонить', 'callback_data': f'creject:{int(cid)}'}])
+    else:
+        rows.append([{'text': '✅ Принять (уже в ЧС)', 'callback_data': f'cblack:{int(cid)}'},
+                     {'text': '✖️ Отклонить', 'callback_data': f'creject:{int(cid)}'}])
     rows.append([{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}])
     return {'inline_keyboard': rows}
 
@@ -344,3 +354,82 @@ def handle_black_button(tg_api, callback: dict) -> None:
         'reply_markup': {'inline_keyboard': [
             [{'text': f"⛔️ В ЧС — {by}", 'callback_data': 'noop'}],
             [{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}}, timeout=3)
+    notify_reporter(tg_api, cid)
+
+
+def notify_reporter(tg_api, cid: int) -> None:
+    """Пишет автору жалобы в личку о решении (один раз)."""
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT k.reporter_tg_id, k.status, k.reporter_notified, c.name, c.username, k.created_at "
+                    f"FROM {SCHEMA}.kb_complaints k LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id WHERE k.id={int(cid)}")
+        r = cur.fetchone()
+        if not r or r[2] or r[1] not in ('accepted', 'rejected'):
+            return
+        rep, status, _, name, un, created = r
+        who = (esc(name) or 'аккаунт') + (f" (@{esc(un)})" if un else '')
+        when = created.strftime('%d.%m.%Y') if created else ''
+        if status == 'accepted':
+            text = (f"✅ <b>Ваша жалоба #{cid} рассмотрена</b>\n\n"
+                    f"Жалоба от {when} на {who} подтверждена.\n⛔️ Аккаунт отправлен в <b>чёрный список</b>.\n\n"
+                    f"Спасибо, что помогаете делать работу безопаснее!")
+        else:
+            text = (f"ℹ️ <b>Ваша жалоба #{cid} рассмотрена</b>\n\n"
+                    f"Жалоба от {when} на {who} <b>отклонена</b> — информация не подтвердилась.\n\n"
+                    f"Если у вас есть новые доказательства, отправьте жалобу повторно.")
+        res = tg_api('sendMessage', {'chat_id': rep, 'text': text, 'parse_mode': 'HTML'}, timeout=3)
+        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET reporter_notified=TRUE WHERE id={int(cid)}")
+        conn.commit()
+        if not res.get('ok'):
+            print(f"[KB-BOT] reporter notify failed: {res.get('description', '')[:100]}")
+    finally:
+        cur.close()
+        conn.close()
+
+
+def mark_group_message(tg_api, cid: int, label: str) -> None:
+    """Меняет кнопки под уведомлением в группе на итог решения."""
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT group_chat, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={int(cid)}")
+    r = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not r or not r[0] or not r[1]:
+        return
+    tg_api('editMessageReplyMarkup', {
+        'chat_id': r[0], 'message_id': r[1],
+        'reply_markup': {'inline_keyboard': [[{'text': label, 'callback_data': 'noop'}],
+                                             [{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}}, timeout=3)
+
+
+def reject(cid: int, by: str) -> str:
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET status='rejected', admin_note='{q('Отклонена: ' + by)}', "
+                    f"updated_at=now() WHERE id={int(cid)} AND status='new' RETURNING id")
+        ok = cur.fetchone()
+        conn.commit()
+        return '✖️ Жалоба отклонена' if ok else 'Жалоба уже обработана'
+    finally:
+        cur.close()
+        conn.close()
+
+
+def handle_reject_button(tg_api, callback: dict) -> None:
+    user = callback.get('from') or {}
+    msg = callback.get('message') or {}
+    chat_id = (msg.get('chat') or {}).get('id')
+    cid = int(str(callback.get('data', '')).split(':')[1])
+    if not is_group_admin(tg_api, chat_id, user.get('id')):
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': True,
+                                       'text': 'Отклонить может только администратор группы.'}, timeout=2.2)
+        return
+    by = f"@{user['username']}" if user.get('username') else (user.get('first_name') or str(user.get('id')))
+    result = reject(cid, by)
+    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': result}, timeout=2.2)
+    if result.startswith('✖️'):
+        mark_group_message(tg_api, cid, f"✖️ Отклонена — {by}")
+        notify_reporter(tg_api, cid)
