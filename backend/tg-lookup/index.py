@@ -6,9 +6,9 @@ import os
 import json
 import uuid
 import asyncio
+import time
 import hashlib
 import psycopg2
-import boto3
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.users import GetFullUserRequest
@@ -57,6 +57,7 @@ def load_sessions(cur) -> list:
 
 
 def store_photo(raw: bytes) -> str:
+    import boto3
     key = f"check-lists/tg-{uuid.uuid4().hex}.jpg"
     s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
                       aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
@@ -79,9 +80,11 @@ async def resolve_phone(client, phone: str):
 
 
 async def lookup(session: str, username: str, phone: str = '') -> dict:
+    t0 = time.time()
     client = TelegramClient(StringSession(session), int(os.environ['TG_API_ID']), os.environ['TG_API_HASH'],
-                            connection_retries=1, timeout=8)
+                            connection_retries=1, retry_delay=0, timeout=8, receive_updates=False)
     await client.connect()
+    print(f'[TG-LOOKUP] connected in {time.time() - t0:.2f}s')
     try:
         if not await client.is_user_authorized():
             return {'retry': True, 'error': 'session not authorized'}
@@ -100,8 +103,9 @@ async def lookup(session: str, username: str, phone: str = '') -> dict:
         except Exception as e:
             print(f'[TG-LOOKUP] full user failed: {type(e).__name__}')
         photo_url, photo_uid = '', ''
-        if entity.photo and getattr(entity.photo, 'photo_id', None):
-            raw = await client.download_profile_photo(entity, file=bytes)
+        print(f'[TG-LOOKUP] entity in {time.time() - t0:.2f}s')
+        if entity.photo and getattr(entity.photo, 'photo_id', None) and time.time() - t0 < 2.5:
+            raw = await client.download_profile_photo(entity, file=bytes, download_big=False)
             if raw:
                 photo_url = store_photo(raw)
                 photo_uid = str(entity.photo.photo_id)
@@ -165,12 +169,29 @@ def handler(event: dict, context) -> dict:
         if not sessions:
             return resp(200, {'ok': False, 'error': 'Нет подключённого Telegram-аккаунта'})
         result = {'error': 'Не удалось получить данные'}
-        for s in sessions[:3]:
-            result = asyncio.run(lookup(s, '' if phone else username, phone))
+        started = time.time()
+        try:
+            budget = context.get_remaining_time_in_millis() / 1000 - 0.8
+        except Exception:
+            budget = 4.2
+        print(f'[TG-LOOKUP] budget {budget:.1f}s')
+        for s in sessions[:2]:
+            left = budget - (time.time() - started)
+            if left < 1.5:
+                break
+            try:
+                result = asyncio.run(asyncio.wait_for(lookup(s, '' if phone else username, phone), timeout=left))
+            except (asyncio.TimeoutError, OSError, ConnectionError) as e:
+                print(f'[TG-LOOKUP] session timeout: {type(e).__name__}')
+                result = {'retry': True, 'error': 'timeout'}
             if not result.get('retry'):
                 break
         if not result.get('tg_id'):
-            return resp(200, {'ok': False, 'error': result.get('error', 'Не найдено')})
+            err = result.get('error', 'Не найдено')
+            if err == 'timeout':
+                err = ('Telegram не успел ответить. Увеличьте таймаут функции tg-lookup до 30 секунд: '
+                       'Ядро → Функции → tg-lookup → Настройки')
+            return resp(200, {'ok': False, 'error': err, 'budget': round(budget, 1)})
         save_cache(cur, result)
         conn.commit()
         return resp(200, {'ok': True, **result})
