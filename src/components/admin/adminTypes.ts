@@ -5,6 +5,7 @@ export const POSTS_SESSION_KEY = "posts_token";
 export const ADMIN_POSTS_URL = "https://functions.poehali.dev/0813e498-5f2e-4090-b643-15c885d057c8";
 export const ADMIN_BOT_POSTS_URL = "https://functions.poehali.dev/9578d639-08e5-479c-938a-de950926d149";
 export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21";
+export const KNOWLEDGE_BASE_URL = "https://functions.poehali.dev/92d37448-fb0d-469a-8222-a627b1586394";
 
 export interface Post {
   id: number;
