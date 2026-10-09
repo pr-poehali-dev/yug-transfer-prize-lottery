@@ -6,6 +6,7 @@ export const ADMIN_POSTS_URL = "https://functions.poehali.dev/0813e498-5f2e-4090
 export const ADMIN_BOT_POSTS_URL = "https://functions.poehali.dev/9578d639-08e5-479c-938a-de950926d149";
 export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21";
 export const KNOWLEDGE_BASE_URL = "https://functions.poehali.dev/92d37448-fb0d-469a-8222-a627b1586394";
+export const KB_BOT_URL = "https://functions.poehali.dev/ed74936b-d187-466b-bd49-74818d8cceab";
 
 export interface Post {
   id: number;

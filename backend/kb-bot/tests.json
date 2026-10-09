@@ -1,0 +1,6 @@
+{
+  "tests": [
+    {"name": "OPTIONS CORS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+    {"name": "Status check", "method": "GET", "path": "/", "expectedStatus": 200}
+  ]
+}

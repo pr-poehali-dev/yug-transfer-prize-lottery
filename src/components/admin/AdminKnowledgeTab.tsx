@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
-import { KNOWLEDGE_BASE_URL } from "./adminTypes";
+import { KNOWLEDGE_BASE_URL, KB_BOT_URL } from "./adminTypes";
 
 interface KnowledgeItem {
   id: number;
@@ -28,6 +28,30 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
+  const [bot, setBot] = useState<{ username: string; webhook: string } | null>(null);
+  const [connecting, setConnecting] = useState(false);
+
+  const fetchBot = async () => {
+    try {
+      const res = await fetch(`${KB_BOT_URL}?action=bot_info`);
+      const data = await res.json();
+      setBot({ username: data.username || "", webhook: data.webhook || "" });
+    } catch { /* */ }
+  };
+
+  const connectBot = async () => {
+    setConnecting(true);
+    try {
+      const res = await fetch(`${KB_BOT_URL}?action=set_webhook&url=${encodeURIComponent(KB_BOT_URL)}`);
+      const data = await res.json();
+      if (data.ok) toast.success("Бот подключён");
+      else toast.error(data.description || "Не удалось подключить — проверьте токен бота");
+      fetchBot();
+    } catch {
+      toast.error("Не удалось подключить бота");
+    }
+    setConnecting(false);
+  };
 
   const fetchItems = async () => {
     try {
@@ -42,6 +66,7 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
 
   useEffect(() => {
     fetchItems();
+    fetchBot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -130,6 +155,29 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
 
       {expanded && (
         <div className="p-4 space-y-4">
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm">
+              <Icon name="Bot" size={15} className="text-sky-400" />
+              {bot?.username ? (
+                <span className="text-white">@{bot.username}</span>
+              ) : (
+                <span className="text-white/50">Бот не найден — добавьте токен KB_BOT_TOKEN</span>
+              )}
+              {bot?.username && (
+                <span className={`text-[11px] px-2 py-0.5 rounded-full ${bot.webhook === KB_BOT_URL ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                  {bot.webhook === KB_BOT_URL ? "подключён" : "не подключён"}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={connectBot}
+              disabled={connecting}
+              className="rounded-xl px-3 py-1.5 text-xs border border-white/10 text-white/80 hover:bg-white/5 disabled:opacity-60 flex items-center gap-1.5"
+            >
+              <Icon name={connecting ? "Loader2" : "Link"} size={13} className={connecting ? "animate-spin" : ""} />
+              {bot?.webhook === KB_BOT_URL ? "Переподключить" : "Подключить бота"}
+            </button>
+          </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
