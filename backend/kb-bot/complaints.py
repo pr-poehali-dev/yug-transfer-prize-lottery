@@ -253,6 +253,7 @@ def notify_admin(tg_api, cid: int) -> None:
     msg = '\n'.join(lines)
     markup = admin_markup(cid, lt)
     plist_media = [{'type': 'photo', 'media': p} for p in plist[:10]]
+    sent_ids = {}
 
     def send_to(chat, thread, with_buttons):
         payload = {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML', 'disable_web_page_preview': True,
@@ -268,6 +269,7 @@ def notify_admin(tg_api, cid: int) -> None:
             print(f"[KB-BOT] complaint to {chat} failed: {res.get('description', '')[:120]}")
             return None
         msg_id = (res.get('result') or {}).get('message_id')
+        sent_ids.setdefault(str(chat), []).append(msg_id)
         if plist_media:
             media = [dict(m) for m in plist_media]
             media[0]['caption'] = f"Фото к жалобе #{cid}"
@@ -275,7 +277,9 @@ def notify_admin(tg_api, cid: int) -> None:
                   'reply_parameters': {'message_id': msg_id, 'allow_sending_without_reply': True}}
             if thread:
                 mg['message_thread_id'] = thread
-            tg_api('sendMediaGroup', mg)
+            album = tg_api('sendMediaGroup', mg)
+            for m in (album.get('result') or []):
+                sent_ids[str(chat)].append(m.get('message_id'))
         return msg_id
 
     # 1) Группа для решений — с кнопками «Заносим в ЧС» / «Не обоснована».
@@ -289,7 +293,9 @@ def notify_admin(tg_api, cid: int) -> None:
     if msg_id:
         c2 = db()
         k2 = c2.cursor()
-        k2.execute(f"UPDATE {SCHEMA}.kb_complaints SET group_chat='{q(target_chat)}', group_msg_id={int(msg_id)} WHERE id={int(cid)}")
+        ids = ','.join(str(i) for i in sent_ids.get(str(target_chat), []) if i)
+        k2.execute(f"UPDATE {SCHEMA}.kb_complaints SET group_chat='{q(target_chat)}', group_msg_id={int(msg_id)}, "
+                   f"group_msgs='{q(target_chat)}|{ids}' WHERE id={int(cid)}")
         c2.commit()
         k2.close()
         c2.close()
@@ -363,10 +369,7 @@ def handle_black_button(tg_api, callback: dict) -> None:
     tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': result[:190]}, timeout=2.2)
     if 'не найден' in result:
         return
-    tg_api('editMessageReplyMarkup', {
-        'chat_id': chat_id, 'message_id': msg.get('message_id'),
-        'reply_markup': {'inline_keyboard': [
-            [{'text': f"⛔️ Занесён в ЧС — {by}", 'callback_data': 'noop'}]]}}, timeout=3)
+    publish_verdict(tg_api, cid, by)
     notify_reporter(tg_api, cid)
 
 
@@ -443,5 +446,76 @@ def handle_reject_button(tg_api, callback: dict) -> None:
     result = reject(cid, by)
     tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': result}, timeout=2.2)
     if result.startswith('✖️'):
-        mark_group_message(tg_api, cid, f"✖️ Не обоснована — {by}")
+        delete_group_messages(tg_api, cid)
         notify_reporter(tg_api, cid)
+
+
+def delete_group_messages(tg_api, cid: int) -> None:
+    """Удаляет из группы решений все сообщения по жалобе (текст и фото)."""
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT group_msgs, group_chat, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={int(cid)}")
+    r = cur.fetchone()
+    if not r:
+        cur.close()
+        conn.close()
+        return
+    chat, _, ids = (r[0] or '').partition('|')
+    id_list = [int(x) for x in ids.split(',') if x.strip().isdigit()]
+    if not chat and r[1] and r[2]:
+        chat, id_list = r[1], [int(r[2])]
+    if chat and id_list:
+        res = tg_api('deleteMessages', {'chat_id': chat, 'message_ids': id_list}, timeout=4)
+        if not res.get('ok'):
+            for mid in id_list:
+                tg_api('deleteMessage', {'chat_id': chat, 'message_id': mid}, timeout=3)
+    cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET group_msgs='', group_msg_id=NULL WHERE id={int(cid)}")
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def publish_verdict(tg_api, cid: int, by: str) -> None:
+    """После решения «в ЧС»: убираем сообщение с кнопками и публикуем итоговую карточку в группе ЧС."""
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT k.text, k.incident_date, k.photos, c.name, c.username, c.role, c.tg_id, c.phone, c.photo_url, k.item_id "
+                f"FROM {SCHEMA}.kb_complaints k LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id WHERE k.id={int(cid)}")
+    r = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not r:
+        return
+    text, inc, photos, name, un, role, tg_id, phone, avatar, item_id = r
+    delete_group_messages(tg_api, cid)
+    role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '👤 Участник')
+    lines = ["⛔️ <b>ЗАНЕСЁН В ЧЁРНЫЙ СПИСОК</b>", "",
+             f"{role_txt}: <b>{esc(name) or 'Без имени'}</b>"]
+    if un:
+        lines.append(f"🔗 @{esc(un)}")
+    if tg_id:
+        lines.append(f"🆔 <code>{tg_id}</code>")
+    if phone:
+        lines.append(f"📞 {esc(phone)}")
+    lines += ["", f"❗️ <b>За что:</b> {esc(text)[:700]}"]
+    if inc:
+        lines.append(f"📅 <b>Когда:</b> {inc.strftime('%d.%m.%Y')}")
+    cnt = complaints_count(item_id)
+    if cnt > 1:
+        lines.append(f"📣 Жалоб на него: <b>{cnt}</b>")
+    lines += ["", "⚠️ Не работайте с этим аккаунтом!", f"<i>Решение: {esc(by)}</i>"]
+    caption = '\n'.join(lines)[:1024]
+    chat = DECISION_CHAT
+    plist = [p for p in (photos or '').split('\n') if p]
+    media_urls = ([avatar] if avatar else []) + plist
+    if len(media_urls) > 1:
+        media = [{'type': 'photo', 'media': u} for u in media_urls[:10]]
+        media[0]['caption'] = caption
+        media[0]['parse_mode'] = 'HTML'
+        res = tg_api('sendMediaGroup', {'chat_id': chat, 'media': media})
+    elif media_urls:
+        res = tg_api('sendPhoto', {'chat_id': chat, 'photo': media_urls[0], 'caption': caption, 'parse_mode': 'HTML'})
+    else:
+        res = tg_api('sendMessage', {'chat_id': chat, 'text': caption, 'parse_mode': 'HTML'})
+    if not res.get('ok'):
+        print(f"[KB-BOT] verdict publish failed: {res.get('description', '')[:120]}")

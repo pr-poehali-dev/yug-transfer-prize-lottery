@@ -1,0 +1,2 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.kb_complaints ADD COLUMN IF NOT EXISTS group_msgs TEXT NOT NULL DEFAULT '';
+UPDATE t_p67171637_yug_transfer_prize_l.kb_complaints SET group_msgs = group_chat || '|' || group_msg_id WHERE group_msg_id IS NOT NULL AND group_msgs = '';

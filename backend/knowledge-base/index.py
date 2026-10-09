@@ -209,6 +209,7 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
     if method == 'PUT' and body.get('edit'):
         cid = int(body.get('id') or 0)
         sets = []
+        resend = bool(body.get('resend'))
         if 'text' in body:
             t = str(body.get('text') or '').strip()
             if len(t) < 3:
@@ -229,6 +230,15 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
         if not cur.fetchone():
             return resp(404, {'ok': False, 'error': 'not found'})
         conn.commit()
+        cur.execute(f"SELECT status, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={cid}")
+        st = cur.fetchone()
+        if st and st[0] == 'new' and st[1]:
+            # Жалоба ещё на рассмотрении в группе — обновляем там сообщение исправленной версией.
+            try:
+                import urllib.request
+                urllib.request.urlopen(f"{KB_BOT_URL}?action=complaint_to_group&id={cid}", timeout=12).read()
+            except Exception as e:
+                print(f'[KB] resend to group failed: {type(e).__name__}')
         return resp(200, {'ok': True})
     if method == 'PUT':
         cid = int(body.get('id') or 0)
@@ -259,7 +269,8 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
         if status in ('accepted', 'rejected'):
             try:
                 import urllib.request
-                urllib.request.urlopen(f"{KB_BOT_URL}?action=complaint_decided&id={cid}&status={status}", timeout=4).read()
+                black = '1' if body.get('to_black') else '0'
+                urllib.request.urlopen(f"{KB_BOT_URL}?action=complaint_decided&id={cid}&status={status}&black={black}", timeout=8).read()
             except Exception as e:
                 print(f'[KB] notify reporter failed: {type(e).__name__}')
         return resp(200, {'ok': True})

@@ -612,6 +612,7 @@ def handler(event: dict, context) -> dict:
                 'error': me_res.get('description', '') if not me else ''})}
         if action == 'complaint_to_group':
             cid = int(qs.get('id') or 0)
+            complaints.delete_group_messages(tg_api, cid)
             complaints.notify_admin(tg_api, cid)
             conn = psycopg2.connect(os.environ['DATABASE_URL'])
             cur = conn.cursor()
@@ -639,7 +640,12 @@ def handler(event: dict, context) -> dict:
         if action == 'complaint_decided':
             cid = int(qs.get('id') or 0)
             st = qs.get('status', '')
-            complaints.mark_group_message(tg_api, cid, '⛔️ Занесён в ЧС — из админки' if st == 'accepted' else '✖️ Не обоснована — из админки')
+            if st == 'accepted' and qs.get('black') == '1':
+                complaints.publish_verdict(tg_api, cid, 'администратор (админка)')
+            elif st == 'rejected':
+                complaints.delete_group_messages(tg_api, cid)
+            else:
+                complaints.mark_group_message(tg_api, cid, '✅ Принята — из админки')
             complaints.notify_reporter(tg_api, cid)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
         if action == 'test_complaint_topic':
