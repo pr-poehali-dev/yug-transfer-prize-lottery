@@ -101,12 +101,28 @@ function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
   };
 
   const scanOne = async (item: ListItem) => {
-    if (!item.tg_id) {
+    const hasQuery = item.username.length >= 4 || item.phone.replace(/\D/g, "").length >= 10;
+    if (!item.tg_id && !hasQuery) {
       await fillFromTelegram(item);
       return;
     }
     setScanningIds((s) => [...s, item.id]);
     try {
+      if (hasQuery) {
+        const d = await fetch(`${TG_LOOKUP_API}?rescan=${item.id}`, { headers: { "X-Admin-Token": token } })
+          .then((r) => r.json()).catch(() => ({}));
+        if (d.ok && d.scan) {
+          toast.success(d.scan.changes ? `Найдено изменений: ${d.scan.changes} — создан новый слой` : "Изменений нет");
+          onChanged();
+          setScanningIds((s) => s.filter((x) => x !== item.id));
+          return;
+        }
+        if (!item.tg_id) {
+          toast.error(d.error || "Не удалось получить данные из Telegram");
+          setScanningIds((s) => s.filter((x) => x !== item.id));
+          return;
+        }
+      }
       const [r] = await scan([item.id]);
       if (r?.status === "ok") toast.success(r.changes ? `Найдено изменений: ${r.changes}` : "Изменений нет");
       else toast.error(r?.error || "Не удалось просканировать");

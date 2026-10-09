@@ -374,6 +374,51 @@ def handle_batch(context) -> dict:
         conn.close()
 
 
+def apply_rescan(cur, item_id: int, d: dict) -> dict:
+    """Сравнивает свежие данные из Telegram с карточкой: изменения пишет в историю и создаёт новый слой."""
+    q = lambda v: str(v or '').replace("'", "''")
+    cur.execute(f"SELECT tg_id, name, username, bio, photo_url, photo_file_uid, phone FROM {SCHEMA}.check_lists WHERE id={int(item_id)}")
+    row = cur.fetchone()
+    if not row:
+        return {'status': 'not_found', 'changes': 0}
+    tg_id, name, username, bio, photo_url, photo_uid, phone = row
+    changes, sets = [], []
+
+    def track(field, old, new):
+        if new and (old or '') != new:
+            changes.append((field, old or '', new))
+            sets.append(f"{field}='{q(new)}'")
+
+    track('name', name, d.get('name'))
+    track('username', username, d.get('username'))
+    if (bio or '') != (d.get('bio') or ''):
+        changes.append(('bio', bio or '', d.get('bio') or ''))
+        sets.append(f"bio='{q(d.get('bio'))}'")
+    if not phone and d.get('phone'):
+        sets.append(f"phone='{q(d['phone'])}'")
+    if not tg_id and d.get('tg_id'):
+        sets.append(f"tg_id={int(d['tg_id'])}")
+    new_uid = str(d.get('photo_uid') or '')
+    if d.get('photo_url') and new_uid != (photo_uid or ''):
+        # Старые отметки фото от бота в другом формате — их просто заменяем, без ложного слоя.
+        if photo_uid and photo_uid.isdigit():
+            changes.append(('photo_url', photo_url or '', d['photo_url']))
+        sets += [f"photo_url='{q(d['photo_url'])}'", f"photo_file_uid='{q(new_uid)}'"]
+    for field, old, new in changes:
+        cur.execute(f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                    f"VALUES ({int(item_id)}, '{field}', '{q(old)}', '{q(new)}', 'scan')")
+    status = f"изменений: {len(changes)}" if changes else 'без изменений'
+    sets += ['last_scan_at=now()', f"scan_status='{status}'", 'updated_at=now()']
+    cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
+    if changes:
+        fields = ','.join(dict.fromkeys(f for f, _, _ in changes))
+        cur.execute(f"INSERT INTO {SCHEMA}.check_list_snapshots "
+                    f"(item_id, tg_id, name, username, phone, bio, photo_url, source, changed_fields) "
+                    f"SELECT id, tg_id, name, username, phone, bio, photo_url, 'scan', '{fields}' "
+                    f"FROM {SCHEMA}.check_lists WHERE id={int(item_id)}")
+    return {'status': 'ok', 'changes': len(changes), 'fields': [f for f, _, _ in changes]}
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -455,6 +500,16 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return resp(200, {'probe': res, 'sessions': dcs})
 
+    rescan_id = int(qs.get('rescan') or 0) if str(qs.get('rescan') or '').isdigit() else 0
+    if rescan_id:
+        c0 = psycopg2.connect(os.environ['DATABASE_URL'])
+        k0 = c0.cursor()
+        k0.execute(f"SELECT username, phone FROM {SCHEMA}.check_lists WHERE id={rescan_id}")
+        r0 = k0.fetchone()
+        c0.close()
+        if not r0:
+            return resp(404, {'ok': False, 'error': 'Карточка не найдена'})
+        qs = {'username': r0[0] or '', 'phone': '' if r0[0] else (r0[1] or '')}
     username = clean_username(qs.get('username', ''))
     phone = ''.join(ch for ch in str(qs.get('phone') or '') if ch.isdigit())
     if len(phone) == 11 and phone[0] == '8':
@@ -496,6 +551,8 @@ def handler(event: dict, context) -> dict:
                        if not os.environ.get('TG_PROXY') else 'Прокси TG_PROXY не отвечает — проверьте его данные')
             return resp(200, {'ok': False, 'error': err, 'budget': round(budget, 1)})
         save_cache(cur, result)
+        if rescan_id:
+            result['scan'] = apply_rescan(cur, rescan_id, result)
         conn.commit()
         return resp(200, {'ok': True, **result})
     finally:
