@@ -23,7 +23,7 @@ CORS = {
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}], [{'text': BUTTON_SUB}], [{'text': BUTTON_CHECK_DRIVER}, {'text': BUTTON_CHECK_DISP}]], 'resize_keyboard': True, 'is_persistent': True}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}], [{'text': BUTTON_SUB}], [{'text': BUTTON_CHECK_DRIVER}, {'text': BUTTON_CHECK_DISP}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
@@ -177,6 +177,32 @@ def run_check(chat_id, kind: str, query: str) -> None:
                            'disable_web_page_preview': True, 'reply_markup': MAIN_KEYBOARD})
 
 
+def run_search(chat_id, query: str) -> None:
+    q = query.strip().replace("'", "''").replace('%', '')
+    if len(q) < 2:
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Выберите пункт меню 👇', 'reply_markup': MAIN_KEYBOARD})
+        return
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT title, content FROM {SCHEMA}.knowledge_base "
+            f"WHERE (title || ' ' || category || ' ' || content) ILIKE '%{q}%' ORDER BY id LIMIT 5")
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+    if not rows:
+        text = f'🔍 По запросу «{esc_html(query.strip())}» ничего не найдено.'
+    else:
+        parts = [f'🔍 Найдено по запросу «{esc_html(query.strip())}»:']
+        for title, content in rows:
+            parts.append(f'\n<b>{esc_html(title)}</b>\n{esc_html(content)[:1500]}')
+        text = '\n'.join(parts)
+    tg_api('sendMessage', {'chat_id': chat_id, 'text': text[:4000], 'parse_mode': 'HTML',
+                           'disable_web_page_preview': True, 'reply_markup': MAIN_KEYBOARD})
+
+
 def esc_html(s: str) -> str:
     return (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
@@ -247,8 +273,10 @@ def handler(event: dict, context) -> dict:
         run_check(chat_id, reply_kind, text)
     elif text == BUTTON_SUB or text.lower() in ('моя подписка', '/sub'):
         send_subscription(chat_id, (message.get('from') or {}).get('id') or chat_id)
-    else:
+    elif text.startswith('/'):
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Выберите пункт меню 👇',
                                'reply_markup': MAIN_KEYBOARD})
+    else:
+        run_search(chat_id, text)
 
     return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
