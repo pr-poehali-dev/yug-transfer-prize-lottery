@@ -610,6 +610,12 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
                 'ok': bool(me), 'username': me.get('username', ''), 'webhook': wh.get('url', ''),
                 'error': me_res.get('description', '') if not me else ''})}
+        if action == 'test_complaint_chat':
+            out = {}
+            for chat in complaints.CHAT_CANDIDATES:
+                res = tg_api('getChat', {'chat_id': chat}, timeout=3)
+                out[chat] = (res.get('result') or {}).get('title') or res.get('description', '')[:80]
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(out, ensure_ascii=False)}
         if action == 'private_commands':
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(private_only_commands())}
         if action == 'set_webhook':
@@ -636,12 +642,17 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     member_upd = body.get('chat_member') or {}
+    if member_upd and str((member_upd.get('chat') or {}).get('id')) in complaints.CHAT_CANDIDATES:
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if member_upd:
         save_tg_user((member_upd.get('new_chat_member') or {}).get('user') or {}, 'group')
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     message = body.get('message') or {}
     chat = message.get('chat') or {}
+    if str(chat.get('id')) in complaints.CHAT_CANDIDATES:
+        # Служебная группа жалоб — только отправляем туда, участников не собираем.
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     save_tg_user(message.get('from') or {}, 'group' if chat.get('type') in ('group', 'supergroup') else 'bot')
     fwd = message.get('forward_from') or {}
     if fwd:
@@ -655,7 +666,7 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     if complaints.handle_message(tg_api, tg_download, store_photo, message, MAIN_KEYBOARD,
-                                 lambda cid: print(f'[KB-BOT] new complaint #{cid}')):
+                                 lambda cid: complaints.notify_admin(tg_api, cid)):
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     reply_text = ((message.get('reply_to_message') or {}).get('text') or '')

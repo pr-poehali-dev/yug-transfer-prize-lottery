@@ -201,3 +201,64 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
                                'text': 'Пришлите фото или нажмите «✅ Отправить жалобу».'})
         return True
     return False
+
+
+ADMIN_URL = 'https://ug-transfer.online/posts'
+CHAT_CANDIDATES = ['-1002146850254']
+
+
+def notify_admin(tg_api, cid: int) -> None:
+    """Новая жалоба уходит в служебную группу администраторов: текст, дата, фото и кнопка в админку."""
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT k.text, k.incident_date, k.photos, k.reporter_tg_id, k.reporter_username, k.reporter_name, "
+                    f"k.created_at, c.name, c.username, c.role, c.list_type, c.tg_id, k.item_id "
+                    f"FROM {SCHEMA}.kb_complaints k LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id WHERE k.id={int(cid)}")
+        r = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+    if not r:
+        return
+    text, inc, photos, rep_id, rep_un, rep_name, created, name, un, role, lt, tg_id, item_id = r
+    role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '👤 Роль не указана')
+    lt_txt = {'white': '✅ белый список', 'black': '⛔️ чёрный список', 'pending': '🕓 на модерации'}.get(lt, '')
+    cnt = complaints_count(item_id)
+    reporter = f"@{esc(rep_un)}" if rep_un else f'<a href="tg://user?id={rep_id}">{esc(rep_name) or rep_id}</a>'
+    lines = [
+        f"🚨 <b>Новая жалоба #{cid}</b>",
+        "",
+        f"На: <b>{esc(name) or 'Без имени'}</b>" + (f" @{esc(un)}" if un else ""),
+    ]
+    if tg_id:
+        lines.append(f"🆔 <code>{tg_id}</code>")
+    lines.append(f"{role_txt} · {lt_txt}" if lt_txt else role_txt)
+    if cnt > 1:
+        lines.append(f"📣 Всего жалоб на него: <b>{cnt}</b>")
+    lines += [
+        "",
+        f"📝 <b>Что произошло:</b>\n{esc(text)[:1500]}",
+        f"📅 <b>Когда:</b> {inc.strftime('%d.%m.%Y') if inc else '—'}",
+        f"🙋 <b>Пожаловался:</b> {reporter} (ID <code>{rep_id}</code>)",
+    ]
+    plist = [p for p in (photos or '').split('\n') if p]
+    if plist:
+        lines.append(f"📎 Фото: {len(plist)}")
+    msg = '\n'.join(lines)
+    markup = {'inline_keyboard': [[{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}
+    env_chat = os.environ.get('KB_COMPLAINTS_CHAT_ID', '').strip()
+    for chat in ([env_chat] if env_chat else []) + CHAT_CANDIDATES:
+        res = tg_api('sendMessage', {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML',
+                                     'disable_web_page_preview': True, 'reply_markup': markup})
+        if res.get('ok'):
+            msg_id = (res.get('result') or {}).get('message_id')
+            if plist:
+                media = [{'type': 'photo', 'media': p} for p in plist[:10]]
+                media[0]['caption'] = f"Фото к жалобе #{cid}"
+                tg_api('sendMediaGroup', {'chat_id': chat, 'media': media,
+                                          'reply_parameters': {'message_id': msg_id, 'allow_sending_without_reply': True}})
+            print(f'[KB-BOT] complaint #{cid} sent to {chat}')
+            return
+        print(f"[KB-BOT] complaint notify to {chat} failed: {res.get('description', '')[:120]}")
+
