@@ -17,7 +17,8 @@ interface Complaint {
   group_msg_id?: number | null;
   admin_note: string;
   created_at: string;
-  target: { name: string; username: string; role: string; list_type: string; photo_url: string; tg_id: number | null };
+  target: { name: string; username: string; role: string; list_type: string; photo_url: string; tg_id: number | null;
+    phone?: string; note?: string; bio?: string };
   stats: { total: number; accepted: number; reporters: number };
 }
 
@@ -150,7 +151,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {items.map((c) => (
             <div key={c.id} className="rounded-xl border border-white/10 bg-[#14141c] p-3 space-y-3">
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 cursor-pointer" onClick={() => setEditing(c)} title="Открыть карточку">
                 <div className="w-12 h-12 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {c.target.photo_url
                     ? <img src={c.target.photo_url} alt="" className="w-full h-full object-cover" />
@@ -166,7 +167,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                   </div>
                   {c.item_id && c.stats.total > 0 && (
                     <button
-                      onClick={() => { setItemFilter({ id: c.item_id as number, name: c.target.name || `@${c.target.username}` }); setFilter(""); }}
+                      onClick={(e) => { e.stopPropagation(); setItemFilter({ id: c.item_id as number, name: c.target.name || `@${c.target.username}` }); setFilter(""); }}
                       className={`mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
                         c.stats.total > 1 ? "bg-red-500/20 text-red-200 hover:bg-red-500/30" : "bg-white/10 text-white/60 hover:bg-white/15"
                       }`}
@@ -181,7 +182,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS[c.status].cls}`}>
                     {STATUS[c.status].label}
                   </span>
-                  <button onClick={() => setEditing(c)} title="Редактировать"
+                  <button onClick={(e) => { e.stopPropagation(); setEditing(c); }} title="Редактировать"
                     className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] border border-white/10 text-white/70 hover:text-white hover:bg-white/5">
                     <Icon name="Pencil" size={11} />Изменить
                   </button>

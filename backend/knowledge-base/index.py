@@ -182,6 +182,10 @@ def handle_subs_stats(cur, qs: dict) -> dict:
     }, 'by_month': by_month, 'payments': payments, 'subscribers': subscribers})
 
 
+def repr_sql(v) -> str:
+    return f"'{esc(v)}'"
+
+
 def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
     """Жалобы из бота: список, принятие (с переносом в чёрный список) и отклонение."""
     if method == 'GET':
@@ -195,14 +199,15 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
             f"(SELECT count(*) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status IN ('new','accepted','rejected')), "
             f"(SELECT count(*) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status = 'accepted'), "
             f"(SELECT count(DISTINCT x.reporter_tg_id) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status IN ('new','accepted','rejected')), "
-            f"k.group_msg_id "
+            f"k.group_msg_id, c.phone, c.bio, c.note, c.reason "
             f"FROM {SCHEMA}.kb_complaints k LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id "
             f"{where} ORDER BY k.created_at DESC LIMIT 300")
         items = [{'id': r[0], 'item_id': r[1], 'reporter_tg_id': r[2], 'reporter_username': r[3], 'reporter_name': r[4],
                   'text': r[5], 'incident_date': r[6], 'photos': [p for p in (r[7] or '').split('\n') if p],
                   'status': r[8], 'admin_note': r[9], 'created_at': r[10],
                   'target': {'name': r[11] or '', 'username': r[12] or '', 'role': r[13] or '', 'list_type': r[14] or '',
-                             'photo_url': r[15] or '', 'tg_id': r[16]},
+                             'photo_url': r[15] or '', 'tg_id': r[16], 'phone': r[21] or '', 'bio': r[22] or '',
+                             'note': r[23] or '', 'reason': r[24] or ''},
                   'stats': {'total': r[17], 'accepted': r[18], 'reporters': r[19]}, 'group_msg_id': r[20]} for r in cur.fetchall()]
         cur.execute(f"SELECT count(*) FROM {SCHEMA}.kb_complaints WHERE status='new'")
         return resp(200, {'ok': True, 'items': items, 'new_count': cur.fetchone()[0]})
@@ -224,6 +229,50 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
             sets.append(f"photos='{esc(chr(10).join(ph))}'")
         if 'admin_note' in body:
             sets.append(f"admin_note='{esc(str(body.get('admin_note') or '')[:1000])}'")
+        tgt = body.get('target') or {}
+        if tgt:
+            cur.execute(f"SELECT c.id FROM {SCHEMA}.kb_complaints k JOIN {SCHEMA}.check_lists c ON c.id=k.item_id WHERE k.id={cid}")
+            tr = cur.fetchone()
+            if tr:
+                cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists WHERE id={tr[0]}")
+                old = row_to_item(cur.fetchone())
+                upd = {}
+                for f in ('name', 'username', 'phone', 'note', 'photo_url'):
+                    if f in tgt:
+                        v = str(tgt.get(f) or '').strip()
+                        if f == 'username':
+                            v = v.replace('https://t.me/', '').strip('/').lstrip('@')
+                        if f == 'phone':
+                            v = clean_phone(v)
+                        upd[f] = v
+                if 'tg_id' in tgt:
+                    upd['tg_id'] = parse_tg_id(tgt.get('tg_id'))
+                if tgt.get('role') in ('driver', 'dispatcher'):
+                    upd['role'] = tgt['role']
+                if upd.get('tg_id') or upd.get('username'):
+                    cond = []
+                    if upd.get('tg_id'):
+                        cond.append(f"tg_id={int(upd['tg_id'])}")
+                    if upd.get('username'):
+                        cond.append(f"lower(username)=lower('{esc(upd['username'])}')")
+                    cur.execute(f"SELECT id, name FROM {SCHEMA}.check_lists WHERE ({' OR '.join(cond)}) AND id<>{tr[0]} LIMIT 1")
+                    dup = cur.fetchone()
+                    if dup:
+                        return resp(409, {'ok': False, 'error': f"Такой аккаунт уже есть в базе: {dup[1] or '#' + str(dup[0])}"})
+                sql_sets = []
+                for k, v in upd.items():
+                    ov = '' if old.get(k) is None else str(old.get(k))
+                    nv = '' if v is None else str(v)
+                    if ov == nv:
+                        continue
+                    cur.execute(f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                                f"VALUES ({tr[0]}, '{k}', '{esc(ov)}', '{esc(nv)}', 'manual')")
+                    sql_sets.append(f"{k}={'NULL' if v is None else (str(int(v)) if k == 'tg_id' else repr_sql(v))}")
+                if sql_sets:
+                    cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sql_sets)}, updated_at=now() WHERE id={tr[0]}")
+                    changed = [k for k in SNAP_FIELDS if any(x.startswith(k + '=') for x in sql_sets)]
+                    if changed:
+                        add_snapshot(cur, tr[0], 'manual', changed)
         if body.get('role') in ('driver', 'dispatcher'):
             cur.execute(f"SELECT c.id, c.role FROM {SCHEMA}.kb_complaints k JOIN {SCHEMA}.check_lists c ON c.id=k.item_id WHERE k.id={cid}")
             rr = cur.fetchone()
@@ -239,9 +288,9 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
                 except Exception:
                     pass
                 return resp(200, {'ok': True})
-        if not sets:
+        if not sets and not tgt:
             return resp(400, {'ok': False, 'error': 'Нечего сохранять'})
-        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET {', '.join(sets)}, updated_at=now() WHERE id={cid} RETURNING id")
+        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET {', '.join(sets + ['updated_at=now()'])} WHERE id={cid} RETURNING id")
         if not cur.fetchone():
             return resp(404, {'ok': False, 'error': 'not found'})
         conn.commit()
