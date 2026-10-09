@@ -21,7 +21,7 @@ interface Props {
 
 const emptyForm = { title: "", category: "", content: "" };
 
-export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
+export function AdminKnowledgeTab({ token, expanded }: Props) {
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -125,37 +125,26 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
     "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-purple-400/60";
 
   return (
-    <div className="card-glow rounded-2xl overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
-      >
-        <div className="flex items-center gap-2">
-          <Icon name="BookOpen" size={15} className="text-emerald-400" />
-          <span className="text-sm font-medium text-white">База знаний</span>
-          <span className="text-[11px] text-white/40">· {items.length}</span>
-        </div>
-        <Icon
-          name="ChevronDown"
-          size={16}
-          className={`text-white/50 transition-transform ${expanded ? "rotate-180" : ""}`}
-        />
-      </button>
-
+    <div>
       {expanded && (
-        <div className="p-4 space-y-4">
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+              <Icon name="BookOpen" size={20} className="text-emerald-400" />
+            </div>
+            <h1 className="text-xl md:text-2xl font-semibold text-white">База знаний</h1>
           {bot?.username && (
             <a
               href={`https://t.me/${bot.username}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 text-sm text-white/80 hover:text-white"
+              className="ml-auto inline-flex items-center gap-2 text-sm text-white/70 hover:text-white rounded-xl border border-white/10 px-3 py-1.5"
             >
               <Icon name="Bot" size={15} className="text-sky-400" />
               @{bot.username}
             </a>
           )}
+          </div>
           <CheckListsTiles key={tilesKey} token={token} onOpenChange={setListOpen} />
           {!listOpen && (<>
           <div className="flex flex-col sm:flex-row gap-2">
