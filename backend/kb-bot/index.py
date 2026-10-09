@@ -15,7 +15,8 @@ BUTTON_GROUPS = '📋 Список групп'
 BUTTON_SUB = '💳 Моя подписка'
 BUTTON_CHECK_DRIVER = '🚗 Проверить водителя'
 BUTTON_CHECK_DISP = '🎧 Проверить диспетчера'
-CHECKS_ANY = {'prompt': 'Проверка', 'who': 'Аккаунт', 'role': ''}
+BUTTON_CHECK = '🔎 Проверить по базе'
+CHECKS_ANY = {'prompt': 'Проверка по базе водителей и диспетчеров', 'who': 'Аккаунт', 'role': ''}
 CHECKS = {
     'driver': {'button': BUTTON_CHECK_DRIVER, 'prompt': 'Проверка водителя', 'category': 'водител', 'who': 'Водитель', 'role': 'driver'},
     'disp': {'button': BUTTON_CHECK_DISP, 'prompt': 'Проверка диспетчера', 'category': 'диспетчер', 'who': 'Диспетчер', 'role': 'dispatcher'},
@@ -28,7 +29,7 @@ CORS = {
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}], [{'text': BUTTON_SUB}], [{'text': BUTTON_CHECK_DRIVER}, {'text': BUTTON_CHECK_DISP}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
@@ -131,7 +132,7 @@ def handle_renew(callback: dict) -> None:
 
 
 def ask_check(chat_id, kind: str) -> None:
-    c = CHECKS[kind]
+    c = CHECKS.get(kind) or CHECKS_ANY
     tg_api('sendMessage', {
         'chat_id': chat_id,
         'text': f"🔎 {c['prompt']}\n\nОтправьте ответом на это сообщение @username, Telegram ID или номер телефона.",
@@ -230,7 +231,7 @@ def run_check(chat_id, kind: str, query: str) -> None:
                 conds.append(f"tg_id = {int(known[0])}")
         role_cond = f"role = '{c['role']}' AND " if c['role'] else "list_type <> 'pending' AND "
         cur.execute(
-            f"SELECT list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, id "
+            f"SELECT list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, id, role "
             f"FROM {SCHEMA}.check_lists "
             f"WHERE {role_cond}({' OR '.join(conds)}) "
             f"ORDER BY CASE list_type WHEN 'black' THEN 0 ELSE 1 END, id DESC LIMIT 5")
@@ -240,27 +241,29 @@ def run_check(chat_id, kind: str, query: str) -> None:
         conn.close()
 
     shown = esc_html(query.strip())
-    black = [r for r in rows if r[0] == 'black']
-    white = [r for r in rows if r[0] == 'white']
-    if black:
-        head = f"⛔️ {c['who']} <b>{shown}</b> в ЧЁРНОМ списке!"
-        found = black
-    elif white:
-        head = f"✅ {c['who']} <b>{shown}</b> в белом списке — проверен."
-        found = white
-    else:
-        head = f"❔ {c['who']} <b>{shown}</b> не найден в наших списках.\n\nБудьте внимательны при работе."
-        found = []
+    found = [r for r in rows if r[0] in ('black', 'white')]
     if not found:
+        head = (f"❔ <b>{shown}</b> не найден в нашей базе водителей и диспетчеров.\n\n"
+                f"⚠️ Аккаунт не проверен — будьте внимательны при работе.")
         tg_api('sendMessage', {'chat_id': chat_id, 'text': head, 'parse_mode': 'HTML',
                                'reply_markup': MAIN_KEYBOARD})
         return
-    for idx, r in enumerate(found[:3]):
-        send_card(chat_id, r, head if idx == 0 else '')
+    found.sort(key=lambda r: 0 if r[0] == 'black' else 1)
+    for r in found[:3]:
+        send_card(chat_id, r, verdict(r))
+
+
+def verdict(r) -> str:
+    """Итог проверки: кто это (водитель/диспетчер) и можно ли с ним работать."""
+    list_type, role = r[0], (r[10] if len(r) > 10 else '')
+    who = {'driver': '🚗 Это ВОДИТЕЛЬ', 'dispatcher': '🎧 Это ДИСПЕТЧЕР'}.get(role, '👤 Аккаунт')
+    if list_type == 'black':
+        return f"⛔️ <b>ЧЁРНЫЙ СПИСОК</b>\n{who}\n\n❌ Работать НЕ рекомендуем!"
+    return f"✅ <b>БЕЛЫЙ СПИСОК</b>\n{who}\n\n👍 Проверен — с ним можно работать."
 
 
 def card_text(r, head: str) -> str:
-    list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, item_id = r
+    list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, item_id = r[:10]
     lines = [head, ''] if head else []
     lines.append(f"👤 <b>{esc_html(name) or 'Без имени'}</b>")
     if tg_id:
@@ -604,10 +607,12 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     reply_text = ((message.get('reply_to_message') or {}).get('text') or '')
-    reply_kind = next((k for k, c in CHECKS.items() if c['prompt'] in reply_text), '')
+    reply_kind = 'any' if CHECKS_ANY['prompt'] in reply_text else next((k for k, c in CHECKS.items() if c['prompt'] in reply_text), '')
 
     if text == BUTTON_GROUPS or text.lower() in ('список групп', '/groups'):
         send_groups(chat_id)
+    elif text == BUTTON_CHECK or text.lower() in ('проверить', '/check'):
+        ask_check(chat_id, 'any')
     elif text == BUTTON_CHECK_DRIVER:
         ask_check(chat_id, 'driver')
     elif text == BUTTON_CHECK_DISP:
