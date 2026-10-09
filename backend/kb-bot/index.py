@@ -1,6 +1,7 @@
 """Telegram-бот базы знаний: по /start показывает кнопку «Список групп» и присылает список из базы знаний."""
 import os
 import json
+import time
 import ssl
 import http.client
 import concurrent.futures
@@ -22,7 +23,7 @@ TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token, X-Cron-Secret',
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
@@ -475,9 +476,51 @@ def handle_scan(event: dict) -> dict:
     return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'results': results})}
 
 
+def handle_daily_scan(event: dict, context) -> dict:
+    """Ежедневный обход всех карточек: сначала давно не сканированные, пока хватает времени."""
+    headers = event.get('headers') or {}
+    qs = event.get('queryStringParameters') or {}
+    secret = os.environ.get('CRON_SECRET', '')
+    given = headers.get('X-Cron-Secret') or headers.get('x-cron-secret') or qs.get('secret') or ''
+    if not secret or given != secret:
+        return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
+    started = time.time()
+    try:
+        budget = context.get_remaining_time_in_millis() / 1000 - 3
+    except Exception:
+        budget = 2.5
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT id FROM {SCHEMA}.check_lists WHERE tg_id IS NOT NULL "
+                    f"AND (last_scan_at IS NULL OR last_scan_at < now() - interval '20 hours') "
+                    f"ORDER BY last_scan_at NULLS FIRST, id LIMIT 300")
+        ids = [r[0] for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+    done, changed, errors = 0, 0, 0
+    for i in range(0, len(ids), 4):
+        if time.time() - started > budget:
+            break
+        chunk = ids[i:i + 4]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            for r in pool.map(scan_item, chunk):
+                done += 1
+                changed += r.get('changes', 0) or 0
+                errors += 1 if r.get('status') == 'error' else 0
+    left = len(ids) - done
+    print(f'[KB-BOT] daily scan: done={done} changes={changed} errors={errors} left={left}')
+    return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(
+        {'ok': True, 'scanned': done, 'changes': changed, 'errors': errors, 'left': left})}
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
+
+    if (event.get('queryStringParameters') or {}).get('action') == 'daily_scan':
+        return handle_daily_scan(event, context)
 
     if event.get('httpMethod') == 'GET':
         qs = event.get('queryStringParameters') or {}

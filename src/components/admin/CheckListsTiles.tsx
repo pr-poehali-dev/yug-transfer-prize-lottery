@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
-import { LISTS, LISTS_API, SCAN_API, TG_LOOKUP_API, ListDef, ListItem, inputCls } from "./lists/listTypes";
+import { LISTS, LISTS_API, SCAN_API, TG_LOOKUP_API, LOOKUP_API, ListDef, ListItem, inputCls } from "./lists/listTypes";
 import { PersonCard } from "./lists/PersonCard";
 import { PersonEditDialog } from "./lists/PersonEditDialog";
 import { LayersDialog } from "./lists/LayersDialog";
@@ -57,6 +57,27 @@ function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
       const res = await fetch(`${TG_LOOKUP_API}?${q}`, { headers: { "X-Admin-Token": token } });
       const d = await res.json().catch(() => ({}));
       if (!d.ok) {
+        const cacheQ = item.username || (digits.length >= 10 ? digits : "");
+        const c = cacheQ
+          ? await fetch(`${LOOKUP_API}&q=${encodeURIComponent(cacheQ)}`, { headers: { "X-Admin-Token": token } })
+              .then((r) => r.json()).catch(() => ({}))
+          : {};
+        if (c.found) {
+          await fetch(LISTS_API, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+            body: JSON.stringify({
+              id: item.id, role: item.role, list_type: item.list_type, name: item.name || c.name,
+              username: item.username || c.username, phone: item.phone, tg_id: c.tg_id, photo_url: item.photo_url,
+              note: item.note, reason: item.reason, removed_at: item.removed_at,
+            }),
+          });
+          const [r] = await scan([item.id]);
+          if (r?.status === "ok") toast.success("Данные обновлены через бота");
+          else toast.error(r?.error || "Бот не видит этот аккаунт");
+          onChanged();
+          return;
+        }
         toast.error(d.error || "Не удалось получить данные из Telegram");
         return;
       }
@@ -80,7 +101,7 @@ function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
   };
 
   const scanOne = async (item: ListItem) => {
-    if (!item.tg_id || !item.photo_url) {
+    if (!item.tg_id) {
       await fillFromTelegram(item);
       return;
     }

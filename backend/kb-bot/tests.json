@@ -1,6 +1,22 @@
 {
   "tests": [
-    {"name": "OPTIONS CORS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
-    {"name": "Status check", "method": "GET", "path": "/", "expectedStatus": 200}
+    {
+      "name": "OPTIONS CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Status check",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Daily scan without secret",
+      "method": "GET",
+      "path": "/?action=daily_scan",
+      "expectedStatus": 401
+    }
   ]
 }
