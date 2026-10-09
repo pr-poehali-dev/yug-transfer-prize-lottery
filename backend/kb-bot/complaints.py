@@ -256,7 +256,7 @@ def notify_admin(tg_api, cid: int) -> None:
 
     def send_to(chat, thread, with_buttons):
         payload = {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML', 'disable_web_page_preview': True,
-                   'reply_markup': markup if with_buttons else {'inline_keyboard': [[{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}}
+                   **({'reply_markup': markup} if with_buttons else {})}
         if thread:
             payload['message_thread_id'] = thread
         res = tg_api('sendMessage', payload)
@@ -304,7 +304,6 @@ def admin_markup(cid: int, list_type: str = '') -> dict:
     else:
         rows.append([{'text': '⛔️ Подтвердить (уже в ЧС)', 'callback_data': f'cblack:{int(cid)}'},
                      {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
-    rows.append([{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}])
     return {'inline_keyboard': rows}
 
 
@@ -367,8 +366,7 @@ def handle_black_button(tg_api, callback: dict) -> None:
     tg_api('editMessageReplyMarkup', {
         'chat_id': chat_id, 'message_id': msg.get('message_id'),
         'reply_markup': {'inline_keyboard': [
-            [{'text': f"⛔️ Занесён в ЧС — {by}", 'callback_data': 'noop'}],
-            [{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}}, timeout=3)
+            [{'text': f"⛔️ Занесён в ЧС — {by}", 'callback_data': 'noop'}]]}}, timeout=3)
     notify_reporter(tg_api, cid)
 
 
@@ -415,8 +413,7 @@ def mark_group_message(tg_api, cid: int, label: str) -> None:
         return
     tg_api('editMessageReplyMarkup', {
         'chat_id': r[0], 'message_id': r[1],
-        'reply_markup': {'inline_keyboard': [[{'text': label, 'callback_data': 'noop'}],
-                                             [{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}}, timeout=3)
+        'reply_markup': {'inline_keyboard': [[{'text': label, 'callback_data': 'noop'}]]}}, timeout=3)
 
 
 def reject(cid: int, by: str) -> str:

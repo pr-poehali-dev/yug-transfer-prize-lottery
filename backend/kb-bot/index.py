@@ -623,6 +623,19 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(
                 {'ok': bool(r[1]), 'where': where,
                  'error': '' if r[1] else 'Бот не смог отправить — добавьте @mew_zbot админом в группу ЧС'}, ensure_ascii=False)}
+        if action == 'complaint_refresh_buttons':
+            cid = int(qs.get('id') or 0)
+            conn = psycopg2.connect(os.environ['DATABASE_URL'])
+            cur = conn.cursor()
+            cur.execute(f"SELECT k.group_chat, k.group_msg_id, k.status, c.list_type FROM {SCHEMA}.kb_complaints k "
+                        f"LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id WHERE k.id={cid}")
+            r = cur.fetchone()
+            conn.close()
+            res = {}
+            if r and r[0] and r[1] and r[2] == 'new':
+                res = tg_api('editMessageReplyMarkup', {'chat_id': r[0], 'message_id': r[1],
+                                                        'reply_markup': complaints.admin_markup(cid, r[3] or '')}, timeout=3)
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': res.get('ok'), 'error': res.get('description', '')}, ensure_ascii=False)}
         if action == 'complaint_decided':
             cid = int(qs.get('id') or 0)
             st = qs.get('status', '')
