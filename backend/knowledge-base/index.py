@@ -190,14 +190,18 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
             where += f" AND k.item_id={int(qs['item'])}"
         cur.execute(
             f"SELECT k.id, k.item_id, k.reporter_tg_id, k.reporter_username, k.reporter_name, k.text, k.incident_date, "
-            f"k.photos, k.status, k.admin_note, k.created_at, c.name, c.username, c.role, c.list_type, c.photo_url, c.tg_id "
+            f"k.photos, k.status, k.admin_note, k.created_at, c.name, c.username, c.role, c.list_type, c.photo_url, c.tg_id, "
+            f"(SELECT count(*) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status IN ('new','accepted','rejected')), "
+            f"(SELECT count(*) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status = 'accepted'), "
+            f"(SELECT count(DISTINCT x.reporter_tg_id) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status IN ('new','accepted','rejected')) "
             f"FROM {SCHEMA}.kb_complaints k LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id "
             f"{where} ORDER BY k.created_at DESC LIMIT 300")
         items = [{'id': r[0], 'item_id': r[1], 'reporter_tg_id': r[2], 'reporter_username': r[3], 'reporter_name': r[4],
                   'text': r[5], 'incident_date': r[6], 'photos': [p for p in (r[7] or '').split('\n') if p],
                   'status': r[8], 'admin_note': r[9], 'created_at': r[10],
                   'target': {'name': r[11] or '', 'username': r[12] or '', 'role': r[13] or '', 'list_type': r[14] or '',
-                             'photo_url': r[15] or '', 'tg_id': r[16]}} for r in cur.fetchall()]
+                             'photo_url': r[15] or '', 'tg_id': r[16]},
+                  'stats': {'total': r[17], 'accepted': r[18], 'reporters': r[19]}} for r in cur.fetchall()]
         cur.execute(f"SELECT count(*) FROM {SCHEMA}.kb_complaints WHERE status='new'")
         return resp(200, {'ok': True, 'items': items, 'new_count': cur.fetchone()[0]})
     if method == 'PUT':

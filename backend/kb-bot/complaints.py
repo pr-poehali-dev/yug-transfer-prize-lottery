@@ -71,6 +71,18 @@ def esc(s) -> str:
     return str(s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
+def complaints_count(item_id) -> int:
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.kb_complaints WHERE item_id={int(item_id or 0)} "
+                    f"AND status IN ('new', 'accepted')")
+        return cur.fetchone()[0]
+    finally:
+        cur.close()
+        conn.close()
+
+
 def target_info(row, item_id) -> str:
     """Кто это по нашей базе: роль и статус. Статус меняет только администратор."""
     name, username, role, list_type, tg_id = row
@@ -83,6 +95,9 @@ def target_info(row, item_id) -> str:
     if tg_id:
         lines.append(f"🆔 <code>{tg_id}</code>")
     lines.append(f"{role_txt} · {status_txt}" if status_txt else role_txt)
+    cnt = complaints_count(item_id)
+    if cnt:
+        lines.append(f"📣 Жалоб уже поступило: <b>{cnt}</b>")
     if list_type == 'black':
         lines.append("\nℹ️ Аккаунт уже в чёрном списке. Ваша жалоба будет добавлена к его истории.")
     else:

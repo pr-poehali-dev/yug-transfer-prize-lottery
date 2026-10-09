@@ -16,6 +16,7 @@ interface Complaint {
   admin_note: string;
   created_at: string;
   target: { name: string; username: string; role: string; list_type: string; photo_url: string; tg_id: number | null };
+  stats: { total: number; accepted: number; reporters: number };
 }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -32,11 +33,13 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [itemFilter, setItemFilter] = useState<{ id: number; name: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${COMPLAINTS_API}${filter ? `&status=${filter}` : ""}`, { headers: { "X-Admin-Token": token } });
+      const qs = `${filter ? `&status=${filter}` : ""}${itemFilter ? `&item=${itemFilter.id}` : ""}`;
+      const res = await fetch(`${COMPLAINTS_API}${qs}`, { headers: { "X-Admin-Token": token } });
       const d = await res.json();
       if (d.ok) setItems(d.items || []);
     } catch {
@@ -48,7 +51,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, token]);
+  }, [filter, token, itemFilter]);
 
   const decide = async (c: Complaint, status: "accepted" | "rejected", toBlack = false) => {
     setBusy(c.id);
@@ -91,6 +94,16 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
         ))}
       </div>
 
+      {itemFilter && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/[0.06] px-3 py-2 text-xs text-white/80">
+          <Icon name="Filter" size={12} className="text-red-300" />
+          Все жалобы на: <b className="text-white">{itemFilter.name}</b>
+          <button onClick={() => setItemFilter(null)} className="ml-auto text-white/50 hover:text-white flex items-center gap-1">
+            <Icon name="X" size={12} />Сбросить
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="py-10 text-center text-white/40"><Icon name="Loader2" size={20} className="animate-spin inline" /></div>
       ) : !items.length ? (
@@ -110,9 +123,21 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                   <div className="text-white/50 truncate">
                     {c.target.username ? `@${c.target.username} · ` : ""}{c.target.tg_id ? `ID ${c.target.tg_id}` : ""}
                   </div>
-                  <div className="text-white/40">
+                  <div className={c.target.list_type === "black" ? "text-red-300" : "text-white/40"}>
                     {ROLE[c.target.role] || "Роль не указана"} · {LIST[c.target.list_type] || "—"}
                   </div>
+                  {c.item_id && c.stats.total > 0 && (
+                    <button
+                      onClick={() => { setItemFilter({ id: c.item_id as number, name: c.target.name || `@${c.target.username}` }); setFilter(""); }}
+                      className={`mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                        c.stats.total > 1 ? "bg-red-500/20 text-red-200 hover:bg-red-500/30" : "bg-white/10 text-white/60 hover:bg-white/15"
+                      }`}
+                      title="Показать все жалобы на этот аккаунт"
+                    >
+                      <Icon name="Megaphone" fallback="AlertTriangle" size={10} />
+                      Жалоб: {c.stats.total} · принято {c.stats.accepted} · от {c.stats.reporters} чел.
+                    </button>
+                  )}
                 </div>
                 <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS[c.status].cls}`}>
                   {STATUS[c.status].label}

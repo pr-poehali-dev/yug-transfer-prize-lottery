@@ -312,6 +312,10 @@ def card_text(r, head: str) -> str:
             lines.append(f"\n⛔️ <b>За что:</b> {esc_html(reason)[:800]}")
         if removed_at:
             lines.append(f"📅 <b>Когда удалён:</b> {removed_at.strftime('%d.%m.%Y')}")
+    if list_type == 'black':
+        cnt = complaints.complaints_count(item_id)
+        if cnt:
+            lines.append(f"📣 Жалоб от участников: <b>{cnt}</b>")
     if note:
         lines.append(f"\n📝 {esc_html(note)[:800]}")
     hist = load_history(item_id)
