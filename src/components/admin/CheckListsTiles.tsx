@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { LISTS, LISTS_API, SCAN_API, ListDef, ListItem, inputCls } from "./lists/listTypes";
 import { PersonCard } from "./lists/PersonCard";
 import { PersonEditDialog } from "./lists/PersonEditDialog";
+import { SubscriptionsPage } from "./lists/SubscriptionsPage";
+import { GroupsPage } from "./lists/GroupsPage";
 
 interface ListPageProps {
   token: string;
@@ -166,6 +168,9 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  if (open === "groups") return <GroupsPage token={token} onBack={() => setOpen(null)} />;
+  if (open === "subs") return <SubscriptionsPage token={token} onBack={() => setOpen(null)} />;
+
   if (current) {
     return (
       <ListPage
@@ -207,6 +212,31 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
           </button>
         );
       })}
+      {([
+        { key: "groups", title: "Список групп", sub: "Группы для бота", icon: "MessagesSquare", tone: "sky" },
+        { key: "subs", title: "Моя подписка", sub: "Оплаты, доход, статистика", icon: "CreditCard", tone: "violet" },
+      ] as const).map((t) => (
+        <button
+          key={t.key}
+          onClick={() => setOpen(t.key)}
+          className={`group text-left rounded-2xl border p-4 md:p-5 min-h-[120px] flex flex-col justify-between transition-all hover:-translate-y-0.5 ${
+            t.tone === "sky"
+              ? "border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.12]"
+              : "border-violet-500/25 bg-violet-500/[0.06] hover:bg-violet-500/[0.12]"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${t.tone === "sky" ? "bg-sky-500/15" : "bg-violet-500/15"}`}>
+              <Icon name={t.icon} size={20} className={t.tone === "sky" ? "text-sky-400" : "text-violet-400"} />
+            </div>
+            <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-white/70 transition-colors" />
+          </div>
+          <div className="mt-3">
+            <div className="text-sm md:text-base font-medium text-white leading-snug">{t.title}</div>
+            <div className="text-xs text-white/50 mt-0.5">{t.sub}</div>
+          </div>
+        </button>
+      ))}
     </div>
   );
 }
