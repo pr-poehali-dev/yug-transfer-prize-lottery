@@ -6,6 +6,9 @@ GET — список статей. POST — создать. PUT — обнови
 import os
 import json
 import hashlib
+import base64
+import uuid
+import boto3
 import psycopg2
 
 CORS = {
@@ -67,12 +70,58 @@ def handle_lookup(cur, qs: dict) -> dict:
     return resp(200, {'ok': True, 'found': True, 'tg_id': row[0], 'username': row[1], 'name': row[2]})
 
 
+LIST_FIELDS = "id, role, list_type, name, username, phone, note, created_at, tg_id, photo_url, bio, reason, removed_at, last_scan_at, scan_status, updated_at"
+FIELD_LABELS = {'name': 'Имя', 'username': 'Username', 'phone': 'Телефон', 'tg_id': 'Telegram ID',
+                'note': 'Комментарий', 'reason': 'Причина', 'removed_at': 'Дата удаления',
+                'photo_url': 'Фото', 'list_type': 'Список', 'role': 'Роль'}
+
+
+def row_to_item(r) -> dict:
+    keys = [k.strip() for k in LIST_FIELDS.split(',')]
+    return dict(zip(keys, r))
+
+
+def parse_date(v):
+    v = str(v or '').strip()[:10]
+    if len(v) == 10 and v[4] == '-' and v[7] == '-' and v.replace('-', '').isdigit():
+        return v
+    return None
+
+
+def upload_photo(body: dict) -> dict:
+    data = body.get('file') or ''
+    if ',' in data:
+        data = data.split(',', 1)[1]
+    raw = base64.b64decode(data)
+    ctype = body.get('content_type') or 'image/jpeg'
+    ext = {'image/png': 'png', 'image/webp': 'webp'}.get(ctype, 'jpg')
+    key = f"check-lists/{uuid.uuid4().hex}.{ext}"
+    s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
+                      aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                      aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+    s3.put_object(Bucket='files', Key=key, Body=raw, ContentType=ctype)
+    url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+    return resp(200, {'ok': True, 'url': url})
+
+
+def handle_history(cur, qs: dict) -> dict:
+    item_id = int(qs.get('id') or 0)
+    cur.execute(f"SELECT field, old_value, new_value, source, changed_at FROM {SCHEMA}.check_list_history "
+                f"WHERE item_id={item_id} ORDER BY changed_at DESC, id DESC LIMIT 200")
+    items = [{'field': r[0], 'label': FIELD_LABELS.get(r[0], r[0]), 'old': r[1], 'new': r[2],
+              'source': r[3], 'changed_at': r[4]} for r in cur.fetchall()]
+    return resp(200, {'ok': True, 'items': items})
+
+
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
     if method == 'GET':
-        cur.execute(f"SELECT id, role, list_type, name, username, phone, note, created_at, tg_id "
-                    f"FROM {SCHEMA}.check_lists ORDER BY id DESC")
-        items = [{'id': r[0], 'role': r[1], 'list_type': r[2], 'name': r[3], 'username': r[4],
-                  'phone': r[5], 'note': r[6], 'created_at': r[7], 'tg_id': r[8]} for r in cur.fetchall()]
+        cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists ORDER BY id DESC")
+        items = [row_to_item(r) for r in cur.fetchall()]
+        cur.execute(f"SELECT item_id, count(*) FROM {SCHEMA}.check_list_history "
+                    f"WHERE source='scan' GROUP BY item_id")
+        changes = dict(cur.fetchall())
+        for it in items:
+            it['changes'] = changes.get(it['id'], 0)
         return resp(200, {'ok': True, 'items': items})
 
     if method in ('POST', 'PUT'):
@@ -89,25 +138,53 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
             tg_id = tg_id or found[0]
             username = username or found[1]
             name = name or found[2]
-        tg_sql = str(tg_id) if tg_id else 'NULL'
-        vals = (esc(name), esc(username), esc(clean_phone(body.get('phone'))), esc(body.get('note')))
+        new = {
+            'role': role, 'list_type': lt, 'name': name, 'username': username,
+            'phone': clean_phone(body.get('phone')), 'note': str(body.get('note') or ''),
+            'reason': str(body.get('reason') or ''), 'photo_url': str(body.get('photo_url') or ''),
+            'tg_id': tg_id, 'removed_at': parse_date(body.get('removed_at')),
+        }
+
+        def sql_val(k):
+            v = new[k]
+            if v is None:
+                return 'NULL'
+            if k == 'tg_id':
+                return str(int(v))
+            return f"'{esc(v)}'"
+
+        cols = list(new.keys())
         if method == 'POST':
             cur.execute(
-                f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id) "
-                f"VALUES ('{role}', '{lt}', '{vals[0]}', '{vals[1]}', '{vals[2]}', '{vals[3]}', {tg_sql}) RETURNING id")
+                f"INSERT INTO {SCHEMA}.check_lists ({', '.join(cols)}) "
+                f"VALUES ({', '.join(sql_val(k) for k in cols)}) RETURNING id")
             new_id = cur.fetchone()[0]
             conn.commit()
             return resp(200, {'ok': True, 'id': new_id, 'tg_id': tg_id})
+
         item_id = int(body.get('id') or 0)
+        cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists WHERE id={item_id}")
+        old_row = cur.fetchone()
+        if not old_row:
+            return resp(404, {'error': 'not found'})
+        old = row_to_item(old_row)
+        for k in cols:
+            ov = '' if old.get(k) is None else str(old.get(k))
+            nv = '' if new[k] is None else str(new[k])
+            if ov != nv:
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                    f"VALUES ({item_id}, '{k}', '{esc(ov)}', '{esc(nv)}', 'manual')")
         cur.execute(
-            f"UPDATE {SCHEMA}.check_lists SET role='{role}', list_type='{lt}', name='{vals[0]}', "
-            f"username='{vals[1]}', phone='{vals[2]}', note='{vals[3]}', tg_id={tg_sql}, "
+            f"UPDATE {SCHEMA}.check_lists SET {', '.join(f'{k}={sql_val(k)}' for k in cols)}, "
             f"updated_at=now() WHERE id={item_id}")
         conn.commit()
         return resp(200, {'ok': True, 'tg_id': tg_id})
 
     if method == 'DELETE':
-        cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={int(qs.get('id') or 0)}")
+        item_id = int(qs.get('id') or 0)
+        cur.execute(f"DELETE FROM {SCHEMA}.check_list_history WHERE item_id={item_id}")
+        cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={item_id}")
         conn.commit()
         return resp(200, {'ok': True})
 
@@ -127,9 +204,14 @@ def handler(event: dict, context) -> dict:
     qs = event.get('queryStringParameters') or {}
     body = json.loads(event.get('body') or '{}') if method in ('POST', 'PUT') else {}
 
+    if qs.get('entity') == 'upload_photo' and method == 'POST':
+        return upload_photo(body)
+
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
+        if qs.get('entity') == 'history':
+            return handle_history(cur, qs)
         if qs.get('entity') == 'lookup':
             return handle_lookup(cur, qs)
         if qs.get('entity') == 'lists':

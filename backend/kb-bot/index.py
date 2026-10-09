@@ -4,6 +4,9 @@ import json
 import ssl
 import http.client
 import concurrent.futures
+import hashlib
+import uuid
+import boto3
 import psycopg2
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
@@ -19,7 +22,7 @@ TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
@@ -208,7 +211,8 @@ def run_check(chat_id, kind: str, query: str) -> None:
             if known:
                 conds.append(f"tg_id = {int(known[0])}")
         cur.execute(
-            f"SELECT list_type, name, username, phone, note, tg_id FROM {SCHEMA}.check_lists "
+            f"SELECT list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, id "
+            f"FROM {SCHEMA}.check_lists "
             f"WHERE role = '{c['role']}' AND ({' OR '.join(conds)}) "
             f"ORDER BY CASE list_type WHEN 'black' THEN 0 ELSE 1 END, id DESC LIMIT 5")
         rows = cur.fetchall()
@@ -228,22 +232,68 @@ def run_check(chat_id, kind: str, query: str) -> None:
     else:
         head = f"❔ {c['who']} <b>{shown}</b> не найден в наших списках.\n\nБудьте внимательны при работе."
         found = []
-    parts = [head]
-    for _, name, username, phone, note, tg_id in found:
-        line = []
-        if name:
-            line.append(f"👤 {esc_html(name)}")
-        if username:
-            line.append(f"🔗 @{esc_html(username)}")
-        if tg_id:
-            line.append(f"🆔 <code>{tg_id}</code>")
-        if phone:
-            line.append(f"📞 {esc_html(phone)}")
-        if note:
-            line.append(f"📝 {esc_html(note)[:1000]}")
-        if line:
-            parts.append('\n' + '\n'.join(line))
-    tg_api('sendMessage', {'chat_id': chat_id, 'text': '\n'.join(parts)[:4000], 'parse_mode': 'HTML',
+    if not found:
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': head, 'parse_mode': 'HTML',
+                               'reply_markup': MAIN_KEYBOARD})
+        return
+    for idx, r in enumerate(found[:3]):
+        send_card(chat_id, r, head if idx == 0 else '')
+
+
+def card_text(r, head: str) -> str:
+    list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, item_id = r
+    lines = [head, ''] if head else []
+    lines.append(f"👤 <b>{esc_html(name) or 'Без имени'}</b>")
+    if tg_id:
+        lines.append(f"🆔 ID: <code>{tg_id}</code>")
+    if phone:
+        lines.append(f"📞 {esc_html(phone)}")
+    if username:
+        lines.append(f"🔗 @{esc_html(username)}")
+    if list_type == 'black':
+        if reason:
+            lines.append(f"\n⛔️ <b>За что:</b> {esc_html(reason)[:800]}")
+        if removed_at:
+            lines.append(f"📅 <b>Когда удалён:</b> {removed_at.strftime('%d.%m.%Y')}")
+    if note:
+        lines.append(f"\n📝 {esc_html(note)[:800]}")
+    hist = load_history(item_id)
+    if hist:
+        lines.append('\n🔄 <b>Изменения в аккаунте:</b>')
+        for field, old, new, changed_at in hist:
+            lines.append(f"• {changed_at.strftime('%d.%m.%Y')} {FIELD_NAMES.get(field, field)}: "
+                         f"{esc_html(old) or '—'} → {esc_html(new) or '—'}")
+    return '\n'.join(lines)
+
+
+FIELD_NAMES = {'name': 'имя', 'username': 'username', 'bio': 'описание', 'photo_url': 'фото', 'phone': 'телефон'}
+
+
+def load_history(item_id) -> list:
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT field, left(old_value, 60), left(new_value, 60), changed_at "
+                    f"FROM {SCHEMA}.check_list_history WHERE item_id={int(item_id)} AND source='scan' "
+                    f"ORDER BY changed_at DESC LIMIT 5")
+        return [(f, '' if f == 'photo_url' else o, 'обновлено' if f == 'photo_url' else n, d)
+                for f, o, n, d in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def send_card(chat_id, r, head: str) -> None:
+    text = card_text(r, head)
+    photo_url = r[6]
+    if photo_url and len(text) <= 1024:
+        res = tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo_url, 'caption': text,
+                                   'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD})
+        if res.get('ok'):
+            return
+    if photo_url:
+        tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo_url})
+    tg_api('sendMessage', {'chat_id': chat_id, 'text': text[:4000], 'parse_mode': 'HTML',
                            'disable_web_page_preview': True, 'reply_markup': MAIN_KEYBOARD})
 
 
@@ -292,6 +342,132 @@ def send_groups(chat_id) -> None:
                                'disable_web_page_preview': True, 'reply_markup': MAIN_KEYBOARD})
 
 
+def verify_admin(token: str) -> bool:
+    if not token:
+        return False
+    a = hashlib.sha256(f"{os.environ.get('ADMIN_LOGIN', '')}:{os.environ.get('ADMIN_PASSWORD', '')}:admin_secret_2026".encode()).hexdigest()
+    pl = os.environ.get('POSTS_LOGIN', '')
+    p = hashlib.sha256(f"{pl}:{os.environ.get('POSTS_PASSWORD', '')}:posts_secret_2026".encode()).hexdigest()
+    return token == a or (bool(pl) and token == p)
+
+
+def tg_download(file_id: str) -> bytes:
+    info = tg_api('getFile', {'file_id': file_id}, timeout=3)
+    path = (info.get('result') or {}).get('file_path')
+    if not path:
+        return b''
+    token = os.environ.get('KB_BOT_TOKEN', '')
+    host = LAST_OK['host'] or 'api.telegram.org'
+    ctx = ssl.create_default_context()
+    if host != 'api.telegram.org':
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    conn = http.client.HTTPSConnection(host, 443, timeout=4, context=ctx)
+    try:
+        conn.request('GET', f'/file/bot{token}/{path}', headers={'Host': 'api.telegram.org'})
+        return conn.getresponse().read()
+    finally:
+        conn.close()
+
+
+def store_photo(raw: bytes) -> str:
+    key = f"check-lists/scan-{uuid.uuid4().hex}.jpg"
+    s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
+                      aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                      aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+    s3.put_object(Bucket='files', Key=key, Body=raw, ContentType='image/jpeg')
+    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+
+
+def fetch_profile(tg_id: int) -> dict:
+    """Текущие данные аккаунта из Telegram. Работает для тех, кого бот «видел»."""
+    res = tg_api('getChat', {'chat_id': tg_id}, timeout=3)
+    if not res.get('ok'):
+        return {'error': res.get('description') or 'нет связи с Telegram'}
+    ch = res.get('result') or {}
+    photo = ch.get('photo') or {}
+    return {
+        'name': ' '.join(x for x in [ch.get('first_name', ''), ch.get('last_name', '')] if x).strip(),
+        'username': ch.get('username', '') or '',
+        'bio': ch.get('bio', '') or '',
+        'photo_uid': photo.get('big_file_unique_id', '') or '',
+        'photo_file_id': photo.get('big_file_id', '') or '',
+    }
+
+
+def scan_item(item_id: int) -> dict:
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT tg_id, name, username, bio, photo_url, photo_file_uid, last_scan_at "
+                    f"FROM {SCHEMA}.check_lists WHERE id={int(item_id)}")
+        row = cur.fetchone()
+        if not row:
+            return {'id': item_id, 'status': 'not_found'}
+        tg_id, name, username, bio, photo_url, photo_uid, last_scan = row
+        if not tg_id:
+            cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), scan_status='нет Telegram ID' WHERE id={int(item_id)}")
+            conn.commit()
+            return {'id': item_id, 'status': 'no_id'}
+
+        prof = fetch_profile(int(tg_id))
+        if prof.get('error'):
+            st = 'аккаунт недоступен боту' if 'not found' in prof['error'].lower() else prof['error'][:100]
+            cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), scan_status='{st.replace(chr(39), chr(39) * 2)}' WHERE id={int(item_id)}")
+            conn.commit()
+            return {'id': item_id, 'status': 'error', 'error': st}
+
+        first_scan = last_scan is None
+        changes = []
+        sets = []
+
+        def track(field, old, new):
+            if (old or '') != (new or ''):
+                if not first_scan:
+                    changes.append((field, old or '', new or ''))
+                sets.append(f"{field}='{(new or '').replace(chr(39), chr(39) * 2)}'")
+
+        if prof['name'] and not (first_scan and name):
+            track('name', name, prof['name'])
+        track('username', username, prof['username'])
+        track('bio', bio, prof['bio'])
+        if prof['photo_uid'] and prof['photo_uid'] != photo_uid:
+            raw = tg_download(prof['photo_file_id'])
+            if raw:
+                new_url = store_photo(raw)
+                if photo_uid and not first_scan:
+                    changes.append(('photo_url', photo_url or '', new_url))
+                sets.append(f"photo_url='{new_url}'")
+                sets.append(f"photo_file_uid='{prof['photo_uid']}'")
+
+        for field, old, new in changes:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                f"VALUES ({int(item_id)}, '{field}', '{old.replace(chr(39), chr(39) * 2)}', "
+                f"'{new.replace(chr(39), chr(39) * 2)}', 'scan')")
+        status = f"изменений: {len(changes)}" if changes else 'без изменений'
+        sets += ['last_scan_at=now()', f"scan_status='{status}'"]
+        cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
+        conn.commit()
+        return {'id': item_id, 'status': 'ok', 'changes': len(changes)}
+    finally:
+        cur.close()
+        conn.close()
+
+
+def handle_scan(event: dict) -> dict:
+    headers = event.get('headers') or {}
+    if not verify_admin(headers.get('X-Admin-Token') or headers.get('x-admin-token') or ''):
+        return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
+    body = json.loads(event.get('body') or '{}')
+    ids = [int(x) for x in (body.get('ids') or [])][:4]
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        for r in pool.map(scan_item, ids):
+            results.append(r)
+    return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'results': results})}
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -315,6 +491,10 @@ def handler(event: dict, context) -> dict:
                 tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}]}, timeout=2.2)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(res)}
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
+
+    qs = event.get('queryStringParameters') or {}
+    if qs.get('action') == 'scan':
+        return handle_scan(event)
 
     body = json.loads(event.get('body') or '{}')
     callback = body.get('callback_query') or {}

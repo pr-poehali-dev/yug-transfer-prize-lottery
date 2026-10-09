@@ -29,6 +29,7 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const [bot, setBot] = useState<{ username: string; webhook: string } | null>(null);
   const fetchBot = async () => {
     try {
@@ -151,7 +152,8 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
               @{bot.username}
             </a>
           )}
-          <CheckListsTiles token={token} />
+          <CheckListsTiles token={token} onOpenChange={setListOpen} />
+          {!listOpen && (<>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
@@ -273,6 +275,7 @@ export function AdminKnowledgeTab({ token, expanded, onToggle }: Props) {
               ))}
             </div>
           )}
+          </>)}
         </div>
       )}
     </div>

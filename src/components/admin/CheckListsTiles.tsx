@@ -1,233 +1,159 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
-import { KNOWLEDGE_BASE_URL } from "./adminTypes";
+import { LISTS, LISTS_API, SCAN_API, ListDef, ListItem, inputCls } from "./lists/listTypes";
+import { PersonCard } from "./lists/PersonCard";
+import { PersonEditDialog } from "./lists/PersonEditDialog";
 
-type Role = "driver" | "dispatcher";
-type ListType = "white" | "black";
-
-interface ListItem {
-  id: number;
-  role: Role;
-  list_type: ListType;
-  name: string;
-  username: string;
-  phone: string;
-  note: string;
-  tg_id: number | null;
-}
-
-const LISTS: { role: Role; list_type: ListType; title: string; icon: string; color: string }[] = [
-  { role: "dispatcher", list_type: "white", title: "Белый список диспетчеров", icon: "ShieldCheck", color: "text-emerald-400" },
-  { role: "dispatcher", list_type: "black", title: "Чёрный список диспетчеров", icon: "ShieldX", color: "text-red-400" },
-  { role: "driver", list_type: "white", title: "Белый список водителей", icon: "ShieldCheck", color: "text-emerald-400" },
-  { role: "driver", list_type: "black", title: "Чёрный список водителей", icon: "ShieldX", color: "text-red-400" },
-];
-
-const API = `${KNOWLEDGE_BASE_URL}?entity=lists`;
-const emptyForm = { name: "", username: "", phone: "", note: "", tg_id: "" };
-const inputCls =
-  "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-purple-400/60";
-
-interface ListBlockProps {
+interface ListPageProps {
   token: string;
-  def: (typeof LISTS)[number];
+  def: ListDef;
   items: ListItem[];
-  onToggle: () => void;
+  onBack: () => void;
   onChanged: () => void;
 }
 
-function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
+function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<ListItem | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [scanningIds, setScanningIds] = useState<number[]>([]);
+  const [scanAll, setScanAll] = useState<{ done: number; total: number } | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase().replace(/^@/, "");
     if (!q) return items;
+    const digits = q.replace(/\D/g, "");
     return items.filter((i) =>
-      [i.name, i.username, i.phone, i.note, String(i.tg_id ?? "")].some((v) => v.toLowerCase().includes(q)) ||
-      (q.replace(/\D/g, "").length >= 6 && i.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")))
+      [i.name, i.username, i.phone, i.note, i.reason, String(i.tg_id ?? "")].some((v) => v.toLowerCase().includes(q)) ||
+      (digits.length >= 6 && i.phone.replace(/\D/g, "").includes(digits))
     );
   }, [items, search]);
 
-  const reset = () => {
-    setForm(emptyForm);
-    setEditingId(null);
-    setShowForm(false);
+  const scan = async (ids: number[]) => {
+    const res = await fetch(SCAN_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      body: JSON.stringify({ ids }),
+    });
+    const d = await res.json();
+    return (d.results || []) as { id: number; status: string; changes?: number; error?: string }[];
   };
 
-  const save = async () => {
-    if (!form.name.trim() && !form.username.trim() && !form.phone.trim() && !form.tg_id.trim()) {
-      toast.error("Укажите @username, Telegram ID или телефон");
+  const scanOne = async (item: ListItem) => {
+    if (!item.tg_id) {
+      toast.error("У карточки нет Telegram ID — сканировать нечего");
       return;
     }
-    setSaving(true);
+    setScanningIds((s) => [...s, item.id]);
     try {
-      const payload = { ...form, role: def.role, list_type: def.list_type };
-      const res = await fetch(API, {
-        method: editingId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        toast.success(editingId ? "Сохранено" : "Добавлено", {
-          description: data.tg_id ? `Telegram ID: ${data.tg_id}` : "Telegram ID пока не найден — подтянется автоматически",
-        });
-        reset();
-        onChanged();
-      } else toast.error("Не удалось сохранить");
+      const [r] = await scan([item.id]);
+      if (r?.status === "ok") toast.success(r.changes ? `Найдено изменений: ${r.changes}` : "Изменений нет");
+      else toast.error(r?.error || "Не удалось просканировать");
+      onChanged();
     } catch {
-      toast.error("Не удалось сохранить");
+      toast.error("Не удалось просканировать");
     }
-    setSaving(false);
+    setScanningIds((s) => s.filter((x) => x !== item.id));
   };
 
-  const lookup = async (q: string) => {
-    const v = q.trim();
-    if (v.replace(/^@/, "").length < 3) return;
-    try {
-      const res = await fetch(`${KNOWLEDGE_BASE_URL}?entity=lookup&q=${encodeURIComponent(v)}`, {
-        headers: { "X-Admin-Token": token },
-      });
-      const data = await res.json();
-      if (data.found) {
-        setForm((f) => ({
-          ...f,
-          tg_id: f.tg_id || String(data.tg_id),
-          username: f.username || data.username || "",
-          name: f.name || data.name || "",
-        }));
-      }
-    } catch { /* */ }
-  };
-
-  const remove = (id: number) => {
-    toast("Удалить из списка?", {
-      action: {
-        label: "Удалить",
-        onClick: async () => {
-          await fetch(`${API}&id=${id}`, { method: "DELETE", headers: { "X-Admin-Token": token } });
-          toast.success("Удалено");
-          onChanged();
-        },
-      },
-      cancel: { label: "Отмена", onClick: () => {} },
-    });
-  };
-
-  const edit = (i: ListItem) => {
-    setEditingId(i.id);
-    setForm({ name: i.name, username: i.username, phone: i.phone, note: i.note, tg_id: i.tg_id ? String(i.tg_id) : "" });
-    setShowForm(true);
+  const scanAllItems = async () => {
+    const ids = items.filter((i) => i.tg_id).map((i) => i.id);
+    if (!ids.length) {
+      toast.error("Нет карточек с Telegram ID");
+      return;
+    }
+    let changes = 0;
+    setScanAll({ done: 0, total: ids.length });
+    for (let i = 0; i < ids.length; i += 4) {
+      const chunk = ids.slice(i, i + 4);
+      try {
+        const res = await scan(chunk);
+        changes += res.reduce((a, r) => a + (r.changes || 0), 0);
+      } catch { /* */ }
+      setScanAll({ done: Math.min(i + 4, ids.length), total: ids.length });
+    }
+    setScanAll(null);
+    onChanged();
+    toast.success("Сканирование завершено", { description: `Изменений найдено: ${changes}` });
   };
 
   return (
-    <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onToggle}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm border border-white/10 text-white/70 hover:text-white hover:bg-white/5"
-            >
-              <Icon name="ArrowLeft" size={14} />Назад
-            </button>
-            <Icon name={def.icon} size={18} className={def.color} />
-            <span className="text-base font-medium text-white">{def.title}</span>
-            <span className="text-xs text-white/40">· {items.length}</span>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-1">
-              <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск: @username, ID, телефон, имя" className={`${inputCls} pl-9`} />
-            </div>
-            {!showForm && (
-              <button
-                onClick={() => { setForm(emptyForm); setEditingId(null); setShowForm(true); }}
-                className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center justify-center gap-2"
-              >
-                <Icon name="Plus" size={15} />Добавить
-              </button>
-            )}
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm border border-white/10 text-white/70 hover:text-white hover:bg-white/5"
+        >
+          <Icon name="ArrowLeft" size={14} />Назад
+        </button>
+        <Icon name={def.icon} size={18} className={def.color} />
+        <span className="text-base font-medium text-white">{def.title}</span>
+        <span className="text-xs text-white/40">· {items.length}</span>
+      </div>
 
-          {showForm && (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  onBlur={(e) => !form.tg_id && lookup(e.target.value)}
-                  placeholder="@username" className={inputCls} />
-                <input value={form.tg_id} onChange={(e) => setForm({ ...form, tg_id: e.target.value.replace(/\D/g, "") })}
-                  onBlur={(e) => lookup(e.target.value)}
-                  inputMode="numeric" placeholder="Telegram ID" className={inputCls} />
-                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Имя" className={inputCls} />
-                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="Телефон" className={inputCls} />
-              </div>
-              <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
-                placeholder={def.list_type === "black" ? "Причина: например, кинул на предоплату" : "Комментарий"}
-                rows={3} className={`${inputCls} resize-y`} />
-              <div className="flex gap-2">
-                <button onClick={save} disabled={saving}
-                  className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-60 flex items-center gap-2">
-                  <Icon name={saving ? "Loader2" : "Check"} size={15} className={saving ? "animate-spin" : ""} />
-                  Сохранить
-                </button>
-                <button onClick={reset}
-                  className="rounded-xl px-4 py-2 text-sm border border-white/10 text-white/70 hover:bg-white/5">
-                  Отмена
-                </button>
-              </div>
-            </div>
-          )}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск: @username, ID, телефон, имя" className={`${inputCls} pl-9`} />
+        </div>
+        <button
+          onClick={scanAllItems}
+          disabled={!!scanAll}
+          className="rounded-xl px-4 py-2 text-sm border border-white/10 text-white/80 hover:bg-white/5 flex items-center justify-center gap-2 disabled:opacity-60"
+        >
+          <Icon name={scanAll ? "Loader2" : "ScanSearch"} fallback="RefreshCw" size={15} className={scanAll ? "animate-spin" : ""} />
+          {scanAll ? `Сканирую ${scanAll.done}/${scanAll.total}` : "Сканировать всех"}
+        </button>
+        <button
+          onClick={() => { setEditing(null); setDialogOpen(true); }}
+          className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center justify-center gap-2"
+        >
+          <Icon name="Plus" size={15} />Добавить
+        </button>
+      </div>
 
-          {filtered.length === 0 ? (
-            <div className="text-sm text-white/50 py-4 text-center">
-              {items.length ? "Ничего не найдено" : "Список пуст"}
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {filtered.map((i) => (
-                <div key={i.id} className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 flex items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
-                      {i.name && <span className="text-white">{i.name}</span>}
-                      {i.username && <span className="text-sky-300">@{i.username}</span>}
-                      {i.tg_id ? (
-                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-white/10 text-white/70 font-mono">ID {i.tg_id}</span>
-                      ) : (
-                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">ID не найден</span>
-                      )}
-                      {i.phone && <span className="text-white/70">{i.phone}</span>}
-                    </div>
-                    {i.note && <div className="text-xs text-white/50 mt-0.5 whitespace-pre-wrap">{i.note}</div>}
-                  </div>
-                  <button onClick={() => edit(i)} className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/5" title="Изменить">
-                    <Icon name="Pencil" size={14} />
-                  </button>
-                  <button onClick={() => remove(i.id)} className="p-1.5 rounded-lg text-white/50 hover:text-red-400 hover:bg-white/5" title="Удалить">
-                    <Icon name="Trash2" size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+      {filtered.length === 0 ? (
+        <div className="text-sm text-white/50 py-10 text-center">{items.length ? "Ничего не найдено" : "Список пуст"}</div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {filtered.map((i) => (
+            <PersonCard
+              key={i.id}
+              item={i}
+              scanning={scanningIds.includes(i.id)}
+              onEdit={() => { setEditing(i); setDialogOpen(true); }}
+              onScan={() => scanOne(i)}
+            />
+          ))}
+        </div>
+      )}
+
+      <PersonEditDialog
+        token={token}
+        def={def}
+        item={editing}
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onSaved={onChanged}
+      />
     </div>
   );
 }
 
-export function CheckListsTiles({ token }: { token: string }) {
+export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpenChange?: (open: boolean) => void }) {
   const [items, setItems] = useState<ListItem[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpenState] = useState<string | null>(null);
+  const setOpen = (v: string | null) => {
+    setOpenState(v);
+    onOpenChange?.(!!v);
+  };
   const current = LISTS.find((d) => `${d.role}-${d.list_type}` === open) || null;
 
   const load = async () => {
     try {
-      const res = await fetch(API, { headers: { "X-Admin-Token": token } });
+      const res = await fetch(LISTS_API, { headers: { "X-Admin-Token": token } });
       const data = await res.json();
       if (data.ok) setItems(data.items || []);
     } catch {
@@ -240,49 +166,47 @@ export function CheckListsTiles({ token }: { token: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  if (current) {
+    return (
+      <ListPage
+        token={token}
+        def={current}
+        items={items.filter((i) => i.role === current.role && i.list_type === current.list_type)}
+        onBack={() => setOpen(null)}
+        onChanged={load}
+      />
+    );
+  }
+
   return (
-    <div>
-        <div>
-          {current ? (
-            <ListBlock
-              token={token}
-              def={current}
-              items={items.filter((i) => i.role === current.role && i.list_type === current.list_type)}
-              onToggle={() => setOpen(null)}
-              onChanged={load}
-            />
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {LISTS.map((def) => {
-                const key = `${def.role}-${def.list_type}`;
-                const count = items.filter((i) => i.role === def.role && i.list_type === def.list_type).length;
-                const black = def.list_type === "black";
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setOpen(key)}
-                    className={`group text-left rounded-2xl border p-4 md:p-5 min-h-[120px] flex flex-col justify-between transition-all hover:-translate-y-0.5 ${
-                      black
-                        ? "border-red-500/25 bg-red-500/[0.06] hover:bg-red-500/[0.12]"
-                        : "border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${black ? "bg-red-500/15" : "bg-emerald-500/15"}`}>
-                        <Icon name={def.role === "driver" ? "Car" : "Headset"} fallback="Users" size={20} className={def.color} />
-                      </div>
-                      <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-white/70 transition-colors" />
-                    </div>
-                    <div className="mt-3">
-                      <div className="text-sm md:text-base font-medium text-white leading-snug">{def.title}</div>
-                      <div className="text-xs text-white/50 mt-0.5">{count} чел.</div>
-                    </div>
-                  </button>
-                );
-              })}
+    <div className="grid grid-cols-2 gap-3">
+      {LISTS.map((def) => {
+        const key = `${def.role}-${def.list_type}`;
+        const count = items.filter((i) => i.role === def.role && i.list_type === def.list_type).length;
+        const black = def.list_type === "black";
+        return (
+          <button
+            key={key}
+            onClick={() => setOpen(key)}
+            className={`group text-left rounded-2xl border p-4 md:p-5 min-h-[120px] flex flex-col justify-between transition-all hover:-translate-y-0.5 ${
+              black
+                ? "border-red-500/25 bg-red-500/[0.06] hover:bg-red-500/[0.12]"
+                : "border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12]"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${black ? "bg-red-500/15" : "bg-emerald-500/15"}`}>
+                <Icon name={def.role === "driver" ? "Car" : "Headset"} fallback="Users" size={20} className={def.color} />
+              </div>
+              <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-white/70 transition-colors" />
             </div>
-          )}
-        </div>
+            <div className="mt-3">
+              <div className="text-sm md:text-base font-medium text-white leading-snug">{def.title}</div>
+              <div className="text-xs text-white/50 mt-0.5">{count} чел.</div>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
