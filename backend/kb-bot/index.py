@@ -129,37 +129,87 @@ def ask_check(chat_id, kind: str) -> None:
     c = CHECKS[kind]
     tg_api('sendMessage', {
         'chat_id': chat_id,
-        'text': f"🔎 {c['prompt']}\n\nОтправьте ответом на это сообщение @username или номер телефона.",
-        'reply_markup': {'force_reply': True, 'input_field_placeholder': '@username или телефон'},
+        'text': f"🔎 {c['prompt']}\n\nОтправьте ответом на это сообщение @username, Telegram ID или номер телефона.",
+        'reply_markup': {'force_reply': True, 'input_field_placeholder': '@username, ID или телефон'},
     })
 
 
-def normalize_query(q: str) -> str:
+def classify_query(q: str):
+    """Определяет, что прислали: ('id', 123), ('phone', '9181234567') или ('username', 'name')."""
     q = q.strip()
-    digits = ''.join(ch for ch in q if ch.isdigit())
-    if len(digits) >= 10 and len(digits) >= len(q.replace(' ', '')) - 4:
-        return digits[-10:]
-    return q.lstrip('@').lower()
+    if q.startswith('https://t.me/'):
+        q = q[len('https://t.me/'):].strip('/')
+    if q.startswith('@'):
+        return 'username', q[1:].lower()
+    compact = q.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    if compact.lstrip('+').isdigit():
+        digits = compact.lstrip('+')
+        if compact.startswith('+') or (len(digits) == 11 and digits[0] in '78') or len(digits) == 10 and digits[0] == '9':
+            return 'phone', digits[-10:]
+        return 'id', int(digits)
+    return 'username', q.lower()
 
 
-def run_check(chat_id, kind: str, query: str) -> None:
-    c = CHECKS[kind]
-    q = normalize_query(query)
-    if len(q) < 3:
-        tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Слишком короткий запрос. Попробуйте ещё раз.',
-                               'reply_markup': MAIN_KEYBOARD})
+def save_tg_user(user: dict, source: str) -> None:
+    """Запоминаем Telegram ID, @username и имя каждого, кого видит бот."""
+    if not user or user.get('is_bot') or not user.get('id'):
         return
-    qe = q.replace("'", "''").replace('%', '')
-    if q.isdigit():
-        cond = f"regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%{qe}'"
-    else:
-        cond = f"(lower(username) = '{qe}' OR name ILIKE '%{qe}%')"
+    un = str(user.get('username') or '').replace("'", "''")
+    fn = str(user.get('first_name') or '').replace("'", "''")
+    ln = str(user.get('last_name') or '').replace("'", "''")
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
         cur.execute(
-            f"SELECT list_type, name, username, phone, note FROM {SCHEMA}.check_lists "
-            f"WHERE role = '{c['role']}' AND {cond} "
+            f"INSERT INTO {SCHEMA}.tg_users (tg_id, username, first_name, last_name, source) "
+            f"VALUES ({int(user['id'])}, '{un}', '{fn}', '{ln}', '{source}') "
+            f"ON CONFLICT (tg_id) DO UPDATE SET username=EXCLUDED.username, first_name=EXCLUDED.first_name, "
+            f"last_name=EXCLUDED.last_name, updated_at=now()")
+        if un:
+            cur.execute(
+                f"UPDATE {SCHEMA}.check_lists SET tg_id={int(user['id'])} "
+                f"WHERE tg_id IS NULL AND lower(username)=lower('{un}')")
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def run_check(chat_id, kind: str, query: str) -> None:
+    c = CHECKS[kind]
+    kind_q, q = classify_query(query)
+    if kind_q == 'username' and len(q) < 3:
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Слишком короткий запрос. Попробуйте ещё раз.',
+                               'reply_markup': MAIN_KEYBOARD})
+        return
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        known = None
+        if kind_q == 'id':
+            cur.execute(f"SELECT tg_id, username FROM {SCHEMA}.tg_users WHERE tg_id={q}")
+            known = cur.fetchone()
+        elif kind_q == 'username':
+            qe = q.replace("'", "''")
+            cur.execute(f"SELECT tg_id, username FROM {SCHEMA}.tg_users WHERE lower(username)='{qe}' "
+                        f"ORDER BY updated_at DESC LIMIT 1")
+            known = cur.fetchone()
+
+        conds = []
+        if kind_q == 'id':
+            conds.append(f"tg_id = {q}")
+            if known and known[1]:
+                conds.append(f"lower(username) = lower('{known[1].replace(chr(39), chr(39) * 2)}')")
+        elif kind_q == 'phone':
+            conds.append(f"right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}'")
+        else:
+            qe = q.replace("'", "''")
+            conds.append(f"lower(username) = '{qe}'")
+            if known:
+                conds.append(f"tg_id = {int(known[0])}")
+        cur.execute(
+            f"SELECT list_type, name, username, phone, note, tg_id FROM {SCHEMA}.check_lists "
+            f"WHERE role = '{c['role']}' AND ({' OR '.join(conds)}) "
             f"ORDER BY CASE list_type WHEN 'black' THEN 0 ELSE 1 END, id DESC LIMIT 5")
         rows = cur.fetchall()
     finally:
@@ -179,12 +229,14 @@ def run_check(chat_id, kind: str, query: str) -> None:
         head = f"❔ {c['who']} <b>{shown}</b> не найден в наших списках.\n\nБудьте внимательны при работе."
         found = []
     parts = [head]
-    for _, name, username, phone, note in found:
+    for _, name, username, phone, note, tg_id in found:
         line = []
         if name:
             line.append(f"👤 {esc_html(name)}")
         if username:
             line.append(f"🔗 @{esc_html(username)}")
+        if tg_id:
+            line.append(f"🆔 <code>{tg_id}</code>")
         if phone:
             line.append(f"📞 {esc_html(phone)}")
         if note:
@@ -258,7 +310,7 @@ def handler(event: dict, context) -> dict:
             url = qs.get('url', '')
             if not url:
                 return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'url required'})}
-            res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'callback_query']}, timeout=2.2)
+            res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'callback_query', 'chat_member']}, timeout=2.2)
             if res.get('ok'):
                 tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}]}, timeout=2.2)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(res)}
@@ -270,8 +322,19 @@ def handler(event: dict, context) -> dict:
         handle_renew(callback)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
+    member_upd = body.get('chat_member') or {}
+    if member_upd:
+        save_tg_user((member_upd.get('new_chat_member') or {}).get('user') or {}, 'group')
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+
     message = body.get('message') or {}
     chat = message.get('chat') or {}
+    save_tg_user(message.get('from') or {}, 'group' if chat.get('type') in ('group', 'supergroup') else 'bot')
+    fwd = message.get('forward_from') or {}
+    if fwd:
+        save_tg_user(fwd, 'forward')
+    for m in message.get('new_chat_members') or []:
+        save_tg_user(m, 'group')
     chat_id = chat.get('id')
     text = (message.get('text') or '').strip()
 

@@ -14,6 +14,7 @@ interface ListItem {
   username: string;
   phone: string;
   note: string;
+  tg_id: number | null;
 }
 
 const LISTS: { role: Role; list_type: ListType; title: string; icon: string; color: string }[] = [
@@ -24,7 +25,7 @@ const LISTS: { role: Role; list_type: ListType; title: string; icon: string; col
 ];
 
 const API = `${KNOWLEDGE_BASE_URL}?entity=lists`;
-const emptyForm = { name: "", username: "", phone: "", note: "" };
+const emptyForm = { name: "", username: "", phone: "", note: "", tg_id: "" };
 const inputCls =
   "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-purple-400/60";
 
@@ -47,7 +48,8 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
     const q = search.trim().toLowerCase().replace(/^@/, "");
     if (!q) return items;
     return items.filter((i) =>
-      [i.name, i.username, i.phone, i.note].some((v) => v.toLowerCase().includes(q))
+      [i.name, i.username, i.phone, i.note, String(i.tg_id ?? "")].some((v) => v.toLowerCase().includes(q)) ||
+      (q.replace(/\D/g, "").length >= 6 && i.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")))
     );
   }, [items, search]);
 
@@ -58,8 +60,8 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
   };
 
   const save = async () => {
-    if (!form.name.trim() && !form.username.trim() && !form.phone.trim()) {
-      toast.error("Укажите имя, @username или телефон");
+    if (!form.name.trim() && !form.username.trim() && !form.phone.trim() && !form.tg_id.trim()) {
+      toast.error("Укажите @username, Telegram ID или телефон");
       return;
     }
     setSaving(true);
@@ -72,7 +74,9 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
       });
       const data = await res.json();
       if (data.ok) {
-        toast.success(editingId ? "Сохранено" : "Добавлено");
+        toast.success(editingId ? "Сохранено" : "Добавлено", {
+          description: data.tg_id ? `Telegram ID: ${data.tg_id}` : "Telegram ID пока не найден — подтянется автоматически",
+        });
         reset();
         onChanged();
       } else toast.error("Не удалось сохранить");
@@ -80,6 +84,25 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
       toast.error("Не удалось сохранить");
     }
     setSaving(false);
+  };
+
+  const lookup = async (q: string) => {
+    const v = q.trim();
+    if (v.replace(/^@/, "").length < 3) return;
+    try {
+      const res = await fetch(`${KNOWLEDGE_BASE_URL}?entity=lookup&q=${encodeURIComponent(v)}`, {
+        headers: { "X-Admin-Token": token },
+      });
+      const data = await res.json();
+      if (data.found) {
+        setForm((f) => ({
+          ...f,
+          tg_id: f.tg_id || String(data.tg_id),
+          username: f.username || data.username || "",
+          name: f.name || data.name || "",
+        }));
+      }
+    } catch { /* */ }
   };
 
   const remove = (id: number) => {
@@ -98,7 +121,7 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
 
   const edit = (i: ListItem) => {
     setEditingId(i.id);
-    setForm({ name: i.name, username: i.username, phone: i.phone, note: i.note });
+    setForm({ name: i.name, username: i.username, phone: i.phone, note: i.note, tg_id: i.tg_id ? String(i.tg_id) : "" });
     setShowForm(true);
   };
 
@@ -119,7 +142,7 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
             <div className="relative flex-1">
               <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
               <input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск: имя, @username, телефон" className={`${inputCls} pl-9`} />
+                placeholder="Поиск: @username, ID, телефон, имя" className={`${inputCls} pl-9`} />
             </div>
             {!showForm && (
               <button
@@ -133,11 +156,15 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
 
           {showForm && (
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2">
-              <div className="grid sm:grid-cols-3 gap-2">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
+                  onBlur={(e) => !form.tg_id && lookup(e.target.value)}
+                  placeholder="@username" className={inputCls} />
+                <input value={form.tg_id} onChange={(e) => setForm({ ...form, tg_id: e.target.value.replace(/\D/g, "") })}
+                  onBlur={(e) => lookup(e.target.value)}
+                  inputMode="numeric" placeholder="Telegram ID" className={inputCls} />
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="Имя" className={inputCls} />
-                <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  placeholder="@username" className={inputCls} />
                 <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="Телефон" className={inputCls} />
               </div>
@@ -170,6 +197,11 @@ function ListBlock({ token, def, items, onToggle, onChanged }: ListBlockProps) {
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
                       {i.name && <span className="text-white">{i.name}</span>}
                       {i.username && <span className="text-sky-300">@{i.username}</span>}
+                      {i.tg_id ? (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-white/10 text-white/70 font-mono">ID {i.tg_id}</span>
+                      ) : (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">ID не найден</span>
+                      )}
                       {i.phone && <span className="text-white/70">{i.phone}</span>}
                     </div>
                     {i.note && <div className="text-xs text-white/50 mt-0.5 whitespace-pre-wrap">{i.note}</div>}

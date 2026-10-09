@@ -42,33 +42,69 @@ def clean_phone(v) -> str:
     return ''.join(ch for ch in str(v or '') if ch.isdigit() or ch == '+')
 
 
+def parse_tg_id(v):
+    digits = ''.join(ch for ch in str(v or '') if ch.isdigit())
+    return int(digits) if digits and len(digits) <= 15 else None
+
+
+def resolve_tg(cur, tg_id, username: str):
+    """Ищет аккаунт в справочнике Telegram-пользователей по ID или @username."""
+    if tg_id:
+        cur.execute(f"SELECT tg_id, username, trim(first_name || ' ' || last_name) FROM {SCHEMA}.tg_users WHERE tg_id={int(tg_id)}")
+    elif username:
+        cur.execute(f"SELECT tg_id, username, trim(first_name || ' ' || last_name) FROM {SCHEMA}.tg_users "
+                    f"WHERE lower(username)=lower('{esc(username)}') ORDER BY updated_at DESC LIMIT 1")
+    else:
+        return None
+    return cur.fetchone()
+
+
+def handle_lookup(cur, qs: dict) -> dict:
+    q = str(qs.get('q') or '').strip().lstrip('@')
+    row = resolve_tg(cur, parse_tg_id(q) if q.isdigit() else None, '' if q.isdigit() else q)
+    if not row:
+        return resp(200, {'ok': True, 'found': False})
+    return resp(200, {'ok': True, 'found': True, 'tg_id': row[0], 'username': row[1], 'name': row[2]})
+
+
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
     if method == 'GET':
-        cur.execute(f"SELECT id, role, list_type, name, username, phone, note, created_at "
+        cur.execute(f"SELECT id, role, list_type, name, username, phone, note, created_at, tg_id "
                     f"FROM {SCHEMA}.check_lists ORDER BY id DESC")
         items = [{'id': r[0], 'role': r[1], 'list_type': r[2], 'name': r[3], 'username': r[4],
-                  'phone': r[5], 'note': r[6], 'created_at': r[7]} for r in cur.fetchall()]
+                  'phone': r[5], 'note': r[6], 'created_at': r[7], 'tg_id': r[8]} for r in cur.fetchall()]
         return resp(200, {'ok': True, 'items': items})
 
     if method in ('POST', 'PUT'):
         role, lt = body.get('role'), body.get('list_type')
         if role not in ROLES or lt not in LIST_TYPES:
             return resp(400, {'error': 'bad role or list_type'})
-        username = esc(str(body.get('username') or '').strip().lstrip('@'))
-        vals = (esc(body.get('name')), username, esc(clean_phone(body.get('phone'))), esc(body.get('note')))
+        username = str(body.get('username') or '').strip().lstrip('@')
+        if username.startswith('https://t.me/'):
+            username = username[len('https://t.me/'):].strip('/')
+        tg_id = parse_tg_id(body.get('tg_id'))
+        name = str(body.get('name') or '')
+        found = resolve_tg(cur, tg_id, username)
+        if found:
+            tg_id = tg_id or found[0]
+            username = username or found[1]
+            name = name or found[2]
+        tg_sql = str(tg_id) if tg_id else 'NULL'
+        vals = (esc(name), esc(username), esc(clean_phone(body.get('phone'))), esc(body.get('note')))
         if method == 'POST':
             cur.execute(
-                f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note) "
-                f"VALUES ('{role}', '{lt}', '{vals[0]}', '{vals[1]}', '{vals[2]}', '{vals[3]}') RETURNING id")
+                f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id) "
+                f"VALUES ('{role}', '{lt}', '{vals[0]}', '{vals[1]}', '{vals[2]}', '{vals[3]}', {tg_sql}) RETURNING id")
             new_id = cur.fetchone()[0]
             conn.commit()
-            return resp(200, {'ok': True, 'id': new_id})
+            return resp(200, {'ok': True, 'id': new_id, 'tg_id': tg_id})
         item_id = int(body.get('id') or 0)
         cur.execute(
             f"UPDATE {SCHEMA}.check_lists SET role='{role}', list_type='{lt}', name='{vals[0]}', "
-            f"username='{vals[1]}', phone='{vals[2]}', note='{vals[3]}', updated_at=now() WHERE id={item_id}")
+            f"username='{vals[1]}', phone='{vals[2]}', note='{vals[3]}', tg_id={tg_sql}, "
+            f"updated_at=now() WHERE id={item_id}")
         conn.commit()
-        return resp(200, {'ok': True})
+        return resp(200, {'ok': True, 'tg_id': tg_id})
 
     if method == 'DELETE':
         cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={int(qs.get('id') or 0)}")
@@ -94,6 +130,8 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
+        if qs.get('entity') == 'lookup':
+            return handle_lookup(cur, qs)
         if qs.get('entity') == 'lists':
             return handle_lists(cur, conn, method, qs, body)
 
