@@ -8,6 +8,7 @@ interface Props {
   items: ListItem[];
   onChanged: () => void;
   onOpen: (item: ListItem) => void;
+  onBack: () => void;
 }
 
 const SHORT: Record<string, string> = {
@@ -17,21 +18,26 @@ const SHORT: Record<string, string> = {
   "driver-black": "Чёрный · водитель",
 };
 
-export function ModerationStrip({ token, items, onChanged, onOpen }: Props) {
+export function ModerationRow({ count, onOpen }: { count: number; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="group w-full rounded-xl border border-amber-500/25 bg-amber-500/[0.05] hover:bg-amber-500/[0.1] px-4 py-2.5 flex items-center gap-2 text-left transition-colors"
+    >
+      <Icon name="Clock" size={15} className="text-amber-400" />
+      <span className="text-sm font-medium text-white">На модерации</span>
+      <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${count ? "bg-amber-500 text-black" : "bg-white/10 text-white/50"}`}>{count}</span>
+      <span className="text-[11px] text-white/40 ml-1 hidden sm:inline truncate">
+        {count ? "Присвойте статус — карточка уйдёт в нужный список" : "Новые карточки после сканирования появятся здесь"}
+      </span>
+      <Icon name="ChevronRight" size={16} className="ml-auto shrink-0 text-white/30 group-hover:text-white/70 transition-colors" />
+    </button>
+  );
+}
+
+export function ModerationPage({ token, items, onChanged, onOpen, onBack }: Props) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [menuId, setMenuId] = useState<number | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
-
-  if (!items.length) {
-    return (
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-4 py-2.5 flex items-center gap-2">
-        <Icon name="Clock" size={15} className="text-amber-400" />
-        <span className="text-sm font-medium text-white">На модерации</span>
-        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50">0</span>
-        <span className="text-xs text-white/40 ml-auto truncate">Новые карточки после сканирования появятся здесь</span>
-      </div>
-    );
-  }
 
   const assign = async (item: ListItem, role: string, list_type: string) => {
     setBusyId(item.id);
@@ -70,21 +76,28 @@ export function ModerationStrip({ token, items, onChanged, onOpen }: Props) {
   };
 
   return (
-    <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.04]">
-      <button onClick={() => setCollapsed((v) => !v)} className="w-full flex items-center gap-2 px-4 py-2.5 text-left">
-        <Icon name="Clock" size={15} className="text-amber-400" />
-        <span className="text-sm font-medium text-white">На модерации</span>
-        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500 text-black font-medium">{items.length}</span>
-        <span className="text-[11px] text-white/40 ml-1 hidden sm:inline">Присвойте статус — карточка уйдёт в нужный список</span>
-        <Icon name="ChevronDown" size={15} className={`ml-auto text-white/40 transition-transform ${collapsed ? "" : "rotate-180"}`} />
-      </button>
-      {!collapsed && (
-      <div className="flex gap-3 overflow-x-auto px-4 pb-4 pt-1">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={onBack}
+          className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm border border-white/10 text-white/70 hover:text-white hover:bg-white/5">
+          <Icon name="ArrowLeft" size={14} />Назад
+        </button>
+        <Icon name="Clock" size={18} className="text-amber-400" />
+        <span className="text-base font-medium text-white">На модерации</span>
+        <span className="text-xs text-white/40">· {items.length}</span>
+      </div>
+      <div className="text-xs text-white/40">Присвойте статус — карточка уйдёт в нужный список.</div>
+      {!items.length && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] py-10 text-center text-sm text-white/40">
+          Новых карточек нет
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {items.map((i) => {
           const initials = (i.name || i.username || "?").slice(0, 2).toUpperCase();
           const busy = busyId === i.id;
           return (
-            <div key={i.id} className="relative shrink-0 w-[230px] rounded-xl border border-white/10 bg-[#14141c] p-2.5">
+            <div key={i.id} className="relative rounded-xl border border-white/10 bg-[#14141c] p-2.5">
               <div className="flex gap-2.5">
                 <button onClick={() => onOpen(i)} className="w-14 h-14 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {i.photo_url ? (
@@ -138,9 +151,8 @@ export function ModerationStrip({ token, items, onChanged, onOpen }: Props) {
           );
         })}
       </div>
-      )}
     </div>
   );
 }
 
-export default ModerationStrip;
+export default ModerationPage;

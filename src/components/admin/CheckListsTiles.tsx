@@ -5,7 +5,7 @@ import { LISTS, LISTS_API, SCAN_API, TG_LOOKUP_API, LOOKUP_API, ListDef, ListIte
 import { PersonCard } from "./lists/PersonCard";
 import { PersonEditDialog } from "./lists/PersonEditDialog";
 import { LayersDialog } from "./lists/LayersDialog";
-import { ModerationStrip } from "./lists/ModerationStrip";
+import { ModerationRow, ModerationPage } from "./lists/ModerationStrip";
 import { SubscriptionsPage } from "./lists/SubscriptionsPage";
 import { GroupsPage } from "./lists/GroupsPage";
 
@@ -231,6 +231,25 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  const modDialog = (
+    <PersonEditDialog
+      token={token}
+      def={{ role: "", list_type: "pending", title: "На модерации", icon: "Clock", color: "text-amber-400" }}
+      item={modItem}
+      open={!!modItem}
+      onClose={() => setModItem(null)}
+      onSaved={load}
+    />
+  );
+
+  if (open === "moderation") {
+    return (
+      <>
+        <ModerationPage token={token} items={pendingItems} onChanged={load} onOpen={setModItem} onBack={() => setOpen(null)} />
+        {modDialog}
+      </>
+    );
+  }
   if (open === "groups") return <GroupsPage token={token} onBack={() => setOpen(null)} />;
   if (open === "subs") return <SubscriptionsPage token={token} onBack={() => setOpen(null)} />;
 
@@ -248,15 +267,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
 
   return (
     <div className="space-y-3">
-    <ModerationStrip token={token} items={pendingItems} onChanged={load} onOpen={setModItem} />
-    <PersonEditDialog
-      token={token}
-      def={{ role: "", list_type: "pending", title: "На модерации", icon: "Clock", color: "text-amber-400" }}
-      item={modItem}
-      open={!!modItem}
-      onClose={() => setModItem(null)}
-      onSaved={load}
-    />
+    <ModerationRow count={pendingItems.length} onOpen={() => setOpen("moderation")} />
     <div className="grid grid-cols-2 gap-3">
       {LISTS.map((def) => {
         const key = `${def.role}-${def.list_type}`;
