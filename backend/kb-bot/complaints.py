@@ -46,7 +46,7 @@ def start(tg_api, callback: dict) -> None:
     conn = db()
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT name, username, role FROM {SCHEMA}.check_lists WHERE id={item_id}")
+        cur.execute(f"SELECT name, username, role, list_type, tg_id FROM {SCHEMA}.check_lists WHERE id={item_id}")
         row = cur.fetchone()
         if not row:
             tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Карточка не найдена.'})
@@ -60,11 +60,34 @@ def start(tg_api, callback: dict) -> None:
     finally:
         cur.close()
         conn.close()
-    who = row[0] or (f"@{row[1]}" if row[1] else f"#{item_id}")
     tg_api('sendMessage', {
         'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': CANCEL_KB,
-        'text': f"⚠️ <b>Жалоба на {who}</b>\n\nШаг 1 из 3. Опишите коротко, <b>что произошло</b>.\n"
+        'text': f"⚠️ <b>Жалоба</b>\n\n{target_info(row, item_id)}\n\n"
+                f"Шаг 1 из 3. Опишите коротко, <b>что произошло</b>.\n"
                 f"Например: «не приехал на заказ, телефон отключил»."})
+
+
+def esc(s) -> str:
+    return str(s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+def target_info(row, item_id) -> str:
+    """Кто это по нашей базе: роль и статус. Статус меняет только администратор."""
+    name, username, role, list_type, tg_id = row
+    role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '👤 Роль не определена')
+    status_txt = {'white': '✅ в белом списке', 'black': '⛔️ в ЧЁРНОМ списке',
+                  'pending': '🕓 на проверке у модераторов'}.get(list_type, '')
+    lines = [f"На: <b>{esc(name) or 'Без имени'}</b>"]
+    if username:
+        lines.append(f"🔗 @{esc(username)}")
+    if tg_id:
+        lines.append(f"🆔 <code>{tg_id}</code>")
+    lines.append(f"{role_txt} · {status_txt}" if status_txt else role_txt)
+    if list_type == 'black':
+        lines.append("\nℹ️ Аккаунт уже в чёрном списке. Ваша жалоба будет добавлена к его истории.")
+    else:
+        lines.append("\nℹ️ Статус меняет только администратор после проверки жалобы.")
+    return '\n'.join(lines)
 
 
 def parse_date(text: str):
@@ -146,8 +169,17 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
             return True
         if msg in ('✅ Отправить жалобу', '⏭ Без фото'):
             upd("status='new', step='done'")
+            info = ''
+            conn = db()
+            cur = conn.cursor()
+            cur.execute(f"SELECT name, username, role, list_type, tg_id FROM {SCHEMA}.check_lists WHERE id={int(item_id or 0)}")
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            if row:
+                info = '\n\n' + target_info(row, item_id).split('\n\nℹ️')[0]
             tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': main_kb, 'parse_mode': 'HTML',
-                                   'text': '✅ <b>Жалоба отправлена.</b>\nСпасибо! Мы проверим информацию и примем меры.'})
+                                   'text': f'✅ <b>Жалоба отправлена.</b>{info}\n\nСпасибо! Администратор проверит информацию и примет решение.'})
             notify(cid)
             return True
         tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': PHOTO_KB,
