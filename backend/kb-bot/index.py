@@ -8,6 +8,7 @@ import psycopg2
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 BUTTON_GROUPS = '📋 Список групп'
+BUTTON_SUB = '💳 Моя подписка'
 TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -15,7 +16,7 @@ CORS = {
     'Access-Control-Allow-Headers': 'Content-Type',
 }
 LAST_OK = {'host': ''}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}]], 'resize_keyboard': True, 'is_persistent': True}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}], [{'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
@@ -69,6 +70,30 @@ def load_groups() -> list:
     finally:
         cur.close()
         conn.close()
+
+
+def send_subscription(chat_id, user_id) -> None:
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT active_until, active_until > NOW() FROM {SCHEMA}.driver_subs "
+            f"WHERE tg_user_id = {int(user_id)}")
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+    if not row or not row[0]:
+        text = '💳 <b>Моя подписка</b>\n\nУ вас пока нет подписки.'
+    elif row[1]:
+        until = row[0].strftime('%d.%m.%Y %H:%M')
+        text = f'💳 <b>Моя подписка</b>\n\n✅ Активна\n📅 Действует до: <b>{until}</b>'
+    else:
+        until = row[0].strftime('%d.%m.%Y')
+        text = f'💳 <b>Моя подписка</b>\n\n❌ Закончилась {until}'
+    tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML',
+                           'reply_markup': MAIN_KEYBOARD})
 
 
 def esc_html(s: str) -> str:
@@ -125,6 +150,8 @@ def handler(event: dict, context) -> dict:
 
     if text == BUTTON_GROUPS or text.lower() in ('список групп', '/groups'):
         send_groups(chat_id)
+    elif text == BUTTON_SUB or text.lower() in ('моя подписка', '/sub'):
+        send_subscription(chat_id, (message.get('from') or {}).get('id') or chat_id)
     else:
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Выберите пункт меню 👇',
                                'reply_markup': MAIN_KEYBOARD})
