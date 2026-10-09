@@ -12,8 +12,8 @@ BUTTON_SUB = '💳 Моя подписка'
 BUTTON_CHECK_DRIVER = '🚗 Проверить водителя'
 BUTTON_CHECK_DISP = '🎧 Проверить диспетчера'
 CHECKS = {
-    'driver': {'button': BUTTON_CHECK_DRIVER, 'prompt': 'Проверка водителя', 'category': 'водител', 'who': 'Водитель'},
-    'disp': {'button': BUTTON_CHECK_DISP, 'prompt': 'Проверка диспетчера', 'category': 'диспетчер', 'who': 'Диспетчер'},
+    'driver': {'button': BUTTON_CHECK_DRIVER, 'prompt': 'Проверка водителя', 'category': 'водител', 'who': 'Водитель', 'role': 'driver'},
+    'disp': {'button': BUTTON_CHECK_DISP, 'prompt': 'Проверка диспетчера', 'category': 'диспетчер', 'who': 'Диспетчер', 'role': 'dispatcher'},
 }
 TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
 CORS = {
@@ -149,31 +149,49 @@ def run_check(chat_id, kind: str, query: str) -> None:
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Слишком короткий запрос. Попробуйте ещё раз.',
                                'reply_markup': MAIN_KEYBOARD})
         return
-    qe = q.replace("'", "''").replace('%', '').replace('_', '\\_')
-    digits_expr = "regexp_replace(title || ' ' || content, '[^0-9]', '', 'g')"
-    cond = (f"{digits_expr} LIKE '%{qe}%'" if q.isdigit()
-            else f"(title || ' ' || content) ILIKE '%{qe}%'")
+    qe = q.replace("'", "''").replace('%', '')
+    if q.isdigit():
+        cond = f"regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%{qe}'"
+    else:
+        cond = f"(lower(username) = '{qe}' OR name ILIKE '%{qe}%')"
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
         cur.execute(
-            f"SELECT title, category, content FROM {SCHEMA}.knowledge_base "
-            f"WHERE category ILIKE '%{c['category']}%' AND {cond} ORDER BY id LIMIT 5")
+            f"SELECT list_type, name, username, phone, note FROM {SCHEMA}.check_lists "
+            f"WHERE role = '{c['role']}' AND {cond} "
+            f"ORDER BY CASE list_type WHEN 'black' THEN 0 ELSE 1 END, id DESC LIMIT 5")
         rows = cur.fetchall()
     finally:
         cur.close()
         conn.close()
 
     shown = esc_html(query.strip())
-    if not rows:
-        text = (f"✅ {c['who']} <b>{shown}</b> не найден в нашей базе.\n\n"
-                f"Жалоб и отметок по нему нет.")
+    black = [r for r in rows if r[0] == 'black']
+    white = [r for r in rows if r[0] == 'white']
+    if black:
+        head = f"⛔️ {c['who']} <b>{shown}</b> в ЧЁРНОМ списке!"
+        found = black
+    elif white:
+        head = f"✅ {c['who']} <b>{shown}</b> в белом списке — проверен."
+        found = white
     else:
-        parts = [f"⚠️ {c['who']} <b>{shown}</b> найден в базе:"]
-        for title, category, content in rows:
-            parts.append(f"\n<b>{esc_html(title)}</b>\n{esc_html(content)[:1500]}")
-        text = '\n'.join(parts)
-    tg_api('sendMessage', {'chat_id': chat_id, 'text': text[:4000], 'parse_mode': 'HTML',
+        head = f"❔ {c['who']} <b>{shown}</b> не найден в наших списках.\n\nБудьте внимательны при работе."
+        found = []
+    parts = [head]
+    for _, name, username, phone, note in found:
+        line = []
+        if name:
+            line.append(f"👤 {esc_html(name)}")
+        if username:
+            line.append(f"🔗 @{esc_html(username)}")
+        if phone:
+            line.append(f"📞 {esc_html(phone)}")
+        if note:
+            line.append(f"📝 {esc_html(note)[:1000]}")
+        if line:
+            parts.append('\n' + '\n'.join(line))
+    tg_api('sendMessage', {'chat_id': chat_id, 'text': '\n'.join(parts)[:4000], 'parse_mode': 'HTML',
                            'disable_web_page_preview': True, 'reply_markup': MAIN_KEYBOARD})
 
 
