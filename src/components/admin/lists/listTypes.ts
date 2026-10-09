@@ -77,6 +77,7 @@ export const LOOKUP_API = `${KNOWLEDGE_BASE_URL}?entity=lookup`;
 export const UPLOAD_API = `${KNOWLEDGE_BASE_URL}?entity=upload_photo`;
 export const SCAN_API = `${KB_BOT_URL}?action=scan`;
 export const TG_LOOKUP_API = TG_LOOKUP_URL;
+export const COMPLAINTS_API = `${KNOWLEDGE_BASE_URL}?entity=complaints`;
 export const BULK_IMPORT_API = `${KNOWLEDGE_BASE_URL}?entity=bulk_import`;
 
 export const inputCls =

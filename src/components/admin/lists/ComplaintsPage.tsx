@@ -1,0 +1,180 @@
+import { useEffect, useState } from "react";
+import Icon from "@/components/ui/icon";
+import { toast } from "sonner";
+import { COMPLAINTS_API, fmtDate } from "./listTypes";
+
+interface Complaint {
+  id: number;
+  item_id: number | null;
+  reporter_tg_id: number;
+  reporter_username: string;
+  reporter_name: string;
+  text: string;
+  incident_date: string | null;
+  photos: string[];
+  status: "new" | "accepted" | "rejected";
+  admin_note: string;
+  created_at: string;
+  target: { name: string; username: string; role: string; list_type: string; photo_url: string; tg_id: number | null };
+}
+
+const STATUS: Record<string, { label: string; cls: string }> = {
+  new: { label: "Новая", cls: "bg-amber-500 text-black" },
+  accepted: { label: "Принята", cls: "bg-red-500/80 text-white" },
+  rejected: { label: "Отклонена", cls: "bg-white/15 text-white/70" },
+};
+const ROLE: Record<string, string> = { driver: "Водитель", dispatcher: "Диспетчер" };
+const LIST: Record<string, string> = { white: "белый список", black: "чёрный список", pending: "на модерации" };
+
+export function ComplaintsPage({ token, onBack }: { token: string; onBack: () => void }) {
+  const [items, setItems] = useState<Complaint[]>([]);
+  const [filter, setFilter] = useState<"new" | "accepted" | "rejected" | "">("new");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${COMPLAINTS_API}${filter ? `&status=${filter}` : ""}`, { headers: { "X-Admin-Token": token } });
+      const d = await res.json();
+      if (d.ok) setItems(d.items || []);
+    } catch {
+      toast.error("Не удалось загрузить жалобы");
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, token]);
+
+  const decide = async (c: Complaint, status: "accepted" | "rejected", toBlack = false) => {
+    setBusy(c.id);
+    try {
+      const res = await fetch(COMPLAINTS_API, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ id: c.id, status, to_black: toBlack }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success(toBlack ? "Жалоба принята, аккаунт в чёрном списке" : status === "accepted" ? "Жалоба принята" : "Жалоба отклонена");
+        load();
+      } else toast.error("Не удалось сохранить");
+    } catch {
+      toast.error("Не удалось сохранить");
+    }
+    setBusy(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={onBack}
+          className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm border border-white/10 text-white/70 hover:text-white hover:bg-white/5">
+          <Icon name="ArrowLeft" size={14} />Назад
+        </button>
+        <Icon name="ShieldAlert" size={18} className="text-red-400" />
+        <span className="text-base font-medium text-white">Жалобы</span>
+        <span className="text-xs text-white/40">· {items.length}</span>
+      </div>
+
+      <div className="flex gap-1 overflow-x-auto">
+        {([["new", "Новые"], ["accepted", "Принятые"], ["rejected", "Отклонённые"], ["", "Все"]] as const).map(([k, l]) => (
+          <button key={k || "all"} onClick={() => setFilter(k)}
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs border ${filter === k
+              ? "border-red-400/60 bg-red-500/15 text-red-200" : "border-white/10 text-white/60 hover:bg-white/5"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="py-10 text-center text-white/40"><Icon name="Loader2" size={20} className="animate-spin inline" /></div>
+      ) : !items.length ? (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] py-10 text-center text-sm text-white/40">Жалоб нет</div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {items.map((c) => (
+            <div key={c.id} className="rounded-xl border border-white/10 bg-[#14141c] p-3 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
+                  {c.target.photo_url
+                    ? <img src={c.target.photo_url} alt="" className="w-full h-full object-cover" />
+                    : <Icon name="User" size={18} className="text-white/30" />}
+                </div>
+                <div className="flex-1 min-w-0 text-xs space-y-0.5">
+                  <div className="text-sm font-semibold text-white truncate">На: {c.target.name || "Без имени"}</div>
+                  <div className="text-white/50 truncate">
+                    {c.target.username ? `@${c.target.username} · ` : ""}{c.target.tg_id ? `ID ${c.target.tg_id}` : ""}
+                  </div>
+                  <div className="text-white/40">
+                    {ROLE[c.target.role] || "Роль не указана"} · {LIST[c.target.list_type] || "—"}
+                  </div>
+                </div>
+                <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS[c.status].cls}`}>
+                  {STATUS[c.status].label}
+                </span>
+              </div>
+
+              <div className="rounded-lg bg-white/[0.03] border border-white/5 p-2.5 space-y-1.5">
+                <div className="text-sm text-white whitespace-pre-wrap break-words">{c.text || "—"}</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/50">
+                  <span className="flex items-center gap-1"><Icon name="Calendar" size={11} />Когда: {c.incident_date ? fmtDate(c.incident_date) : "—"}</span>
+                  <span className="flex items-center gap-1"><Icon name="Clock" size={11} />Подана: {fmtDate(c.created_at, true)}</span>
+                </div>
+              </div>
+
+              {c.photos.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto">
+                  {c.photos.map((p) => (
+                    <button key={p} onClick={() => setPreview(p)} className="w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-white/10">
+                      <img src={p} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5 text-[11px] text-white/60">
+                <Icon name="UserRound" fallback="User" size={12} />
+                Пожаловался:
+                <a href={c.reporter_username ? `https://t.me/${c.reporter_username}` : `tg://user?id=${c.reporter_tg_id}`}
+                  target="_blank" rel="noreferrer" className="text-sky-300 hover:underline truncate">
+                  {c.reporter_name || "—"}{c.reporter_username ? ` @${c.reporter_username}` : ""}
+                </a>
+                <span className="text-white/30 font-mono">ID {c.reporter_tg_id}</span>
+              </div>
+
+              {c.status === "new" && (
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button disabled={busy === c.id} onClick={() => decide(c, "accepted", true)}
+                    className="rounded-lg bg-red-500/80 hover:bg-red-500 text-white text-[11px] py-2 disabled:opacity-60">
+                    В чёрный список
+                  </button>
+                  <button disabled={busy === c.id} onClick={() => decide(c, "accepted")}
+                    className="rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[11px] py-2 disabled:opacity-60">
+                    Принять
+                  </button>
+                  <button disabled={busy === c.id} onClick={() => decide(c, "rejected")}
+                    className="rounded-lg border border-white/10 hover:bg-white/5 text-white/70 text-[11px] py-2 disabled:opacity-60">
+                    Отклонить
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {preview && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
+          <img src={preview} alt="" className="max-w-full max-h-full rounded-xl" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default ComplaintsPage;

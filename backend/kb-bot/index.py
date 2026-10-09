@@ -9,6 +9,7 @@ import hashlib
 import uuid
 import boto3
 import psycopg2
+import complaints
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 BUTTON_GROUPS = '📋 Список групп'
@@ -342,15 +343,16 @@ def load_history(item_id) -> list:
 def send_card(chat_id, r, head: str) -> None:
     text = card_text(r, head)
     photo_url = r[6]
+    markup = complaints.complain_button(r[9])
     if photo_url and len(text) <= 1024:
         res = tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo_url, 'caption': text,
-                                   'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD})
+                                   'parse_mode': 'HTML', 'reply_markup': markup})
         if res.get('ok'):
             return
     if photo_url:
         tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo_url})
     tg_api('sendMessage', {'chat_id': chat_id, 'text': text[:4000], 'parse_mode': 'HTML',
-                           'disable_web_page_preview': True, 'reply_markup': MAIN_KEYBOARD})
+                           'disable_web_page_preview': True, 'reply_markup': markup})
 
 
 def run_search(chat_id, query: str) -> None:
@@ -617,6 +619,9 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get('body') or '{}')
     callback = body.get('callback_query') or {}
+    if str(callback.get('data') or '').startswith('complain:'):
+        complaints.start(tg_api, callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if callback.get('data') == 'renew_sub':
         handle_renew(callback)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
@@ -638,6 +643,10 @@ def handler(event: dict, context) -> dict:
     text = (message.get('text') or '').strip()
 
     if not chat_id or chat.get('type') != 'private':
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+
+    if complaints.handle_message(tg_api, tg_download, store_photo, message, MAIN_KEYBOARD,
+                                 lambda cid: print(f'[KB-BOT] new complaint #{cid}')):
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     reply_text = ((message.get('reply_to_message') or {}).get('text') or '')

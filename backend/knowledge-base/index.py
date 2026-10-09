@@ -181,6 +181,55 @@ def handle_subs_stats(cur, qs: dict) -> dict:
     }, 'by_month': by_month, 'payments': payments, 'subscribers': subscribers})
 
 
+def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
+    """Жалобы из бота: список, принятие (с переносом в чёрный список) и отклонение."""
+    if method == 'GET':
+        st = str(qs.get('status') or '')
+        where = f"WHERE k.status='{esc(st)}'" if st in ('new', 'accepted', 'rejected') else "WHERE k.status IN ('new','accepted','rejected')"
+        if str(qs.get('item') or '').isdigit():
+            where += f" AND k.item_id={int(qs['item'])}"
+        cur.execute(
+            f"SELECT k.id, k.item_id, k.reporter_tg_id, k.reporter_username, k.reporter_name, k.text, k.incident_date, "
+            f"k.photos, k.status, k.admin_note, k.created_at, c.name, c.username, c.role, c.list_type, c.photo_url, c.tg_id "
+            f"FROM {SCHEMA}.kb_complaints k LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id "
+            f"{where} ORDER BY k.created_at DESC LIMIT 300")
+        items = [{'id': r[0], 'item_id': r[1], 'reporter_tg_id': r[2], 'reporter_username': r[3], 'reporter_name': r[4],
+                  'text': r[5], 'incident_date': r[6], 'photos': [p for p in (r[7] or '').split('\n') if p],
+                  'status': r[8], 'admin_note': r[9], 'created_at': r[10],
+                  'target': {'name': r[11] or '', 'username': r[12] or '', 'role': r[13] or '', 'list_type': r[14] or '',
+                             'photo_url': r[15] or '', 'tg_id': r[16]}} for r in cur.fetchall()]
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.kb_complaints WHERE status='new'")
+        return resp(200, {'ok': True, 'items': items, 'new_count': cur.fetchone()[0]})
+    if method == 'PUT':
+        cid = int(body.get('id') or 0)
+        status = body.get('status')
+        if status not in ('accepted', 'rejected', 'new'):
+            return resp(400, {'error': 'bad status'})
+        note = esc(str(body.get('admin_note') or '')[:1000])
+        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET status='{status}', admin_note='{note}', updated_at=now() "
+                    f"WHERE id={cid} RETURNING item_id, text, incident_date")
+        row = cur.fetchone()
+        if not row:
+            return resp(404, {'error': 'not found'})
+        if status == 'accepted' and body.get('to_black') and row[0]:
+            role = body.get('role') if body.get('role') in ROLES and body.get('role') else None
+            cur.execute(f"SELECT list_type, role, reason FROM {SCHEMA}.check_lists WHERE id={int(row[0])}")
+            cur_item = cur.fetchone()
+            if cur_item:
+                new_role = role or cur_item[1] or 'driver'
+                reason = (cur_item[2] + '\n' if cur_item[2] else '') + (row[1] or '')
+                for field, old, new in (('list_type', cur_item[0], 'black'), ('role', cur_item[1], new_role)):
+                    if old != new:
+                        cur.execute(f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                                    f"VALUES ({int(row[0])}, '{field}', '{esc(old)}', '{esc(new)}', 'complaint')")
+                removed = f"'{row[2].isoformat()}'" if row[2] else 'removed_at'
+                cur.execute(f"UPDATE {SCHEMA}.check_lists SET list_type='black', role='{new_role}', "
+                            f"reason='{esc(reason[:3000])}', removed_at={removed}, updated_at=now() WHERE id={int(row[0])}")
+        conn.commit()
+        return resp(200, {'ok': True})
+    return resp(405, {'error': 'method'})
+
+
 def handle_bulk_import(cur, conn, body: dict) -> dict:
     """Массовая загрузка @username в «На модерации»: дубликаты пропускаются, известные ID подставляются."""
     import re
@@ -326,6 +375,8 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
+        if qs.get('entity') == 'complaints':
+            return handle_complaints(cur, conn, method, qs, body)
         if qs.get('entity') == 'bulk_import' and method == 'POST':
             return handle_bulk_import(cur, conn, body)
         if qs.get('entity') == 'subs':

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
-import { LISTS, LISTS_API, SCAN_API, TG_LOOKUP_API, LOOKUP_API, ListDef, ListItem, inputCls } from "./lists/listTypes";
+import { LISTS, LISTS_API, COMPLAINTS_API, SCAN_API, TG_LOOKUP_API, LOOKUP_API, ListDef, ListItem, inputCls } from "./lists/listTypes";
 import { PersonCard } from "./lists/PersonCard";
 import { PersonEditDialog } from "./lists/PersonEditDialog";
 import { LayersDialog } from "./lists/LayersDialog";
 import { ModerationRow, ModerationPage } from "./lists/ModerationStrip";
 import { SubscriptionsPage } from "./lists/SubscriptionsPage";
 import { GroupsPage } from "./lists/GroupsPage";
+import { ComplaintsPage } from "./lists/ComplaintsPage";
 
 interface ListPageProps {
   token: string;
@@ -231,12 +232,15 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   const current = LISTS.find((d) => `${d.role}-${d.list_type}` === open) || null;
   const [modItem, setModItem] = useState<ListItem | null>(null);
   const pendingItems = items.filter((i) => i.list_type === "pending");
+  const [complaintsNew, setComplaintsNew] = useState(0);
 
   const load = async () => {
     try {
       const res = await fetch(LISTS_API, { headers: { "X-Admin-Token": token } });
       const data = await res.json();
       if (data.ok) setItems(data.items || []);
+      fetch(`${COMPLAINTS_API}&status=new`, { headers: { "X-Admin-Token": token } })
+        .then((r) => r.json()).then((c) => c.ok && setComplaintsNew(c.new_count || 0)).catch(() => {});
     } catch {
       toast.error("Не удалось загрузить списки");
     }
@@ -266,6 +270,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
       </>
     );
   }
+  if (open === "complaints") return <ComplaintsPage token={token} onBack={() => { setOpen(null); load(); }} />;
   if (open === "groups") return <GroupsPage token={token} onBack={() => setOpen(null)} />;
   if (open === "subs") return <SubscriptionsPage token={token} onBack={() => setOpen(null)} />;
 
@@ -284,6 +289,16 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   return (
     <div className="space-y-3">
     <ModerationRow count={pendingItems.length} onOpen={() => setOpen("moderation")} />
+    <button
+      onClick={() => setOpen("complaints")}
+      className="group w-full rounded-xl border border-red-500/25 bg-red-500/[0.05] hover:bg-red-500/[0.1] px-4 py-2.5 flex items-center gap-2 text-left transition-colors"
+    >
+      <Icon name="ShieldAlert" size={15} className="text-red-400" />
+      <span className="text-sm font-medium text-white">Жалобы</span>
+      <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${complaintsNew ? "bg-red-500 text-white" : "bg-white/10 text-white/50"}`}>{complaintsNew}</span>
+      <span className="text-[11px] text-white/40 ml-1 hidden sm:inline truncate">Претензии от водителей и диспетчеров из бота</span>
+      <Icon name="ChevronRight" size={16} className="ml-auto shrink-0 text-white/30 group-hover:text-white/70 transition-colors" />
+    </button>
     <div className="grid grid-cols-2 gap-3">
       {LISTS.map((def) => {
         const key = `${def.role}-${def.list_type}`;
