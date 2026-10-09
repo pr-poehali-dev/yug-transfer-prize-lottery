@@ -231,14 +231,17 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   };
   const current = LISTS.find((d) => `${d.role}-${d.list_type}` === open) || null;
   const [modItem, setModItem] = useState<ListItem | null>(null);
-  const pendingItems = items.filter((i) => i.list_type === "pending");
+  const [pendingCount, setPendingCount] = useState(0);
   const [complaintsNew, setComplaintsNew] = useState(0);
 
   const load = async () => {
     try {
       const res = await fetch(LISTS_API, { headers: { "X-Admin-Token": token } });
       const data = await res.json();
-      if (data.ok) setItems(data.items || []);
+      if (data.ok) {
+        setItems(data.items || []);
+        setPendingCount(data.pending_count || 0);
+      }
       fetch(`${COMPLAINTS_API}&status=new`, { headers: { "X-Admin-Token": token } })
         .then((r) => r.json()).then((c) => c.ok && setComplaintsNew(c.new_count || 0)).catch(() => {});
     } catch {
@@ -265,7 +268,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   if (open === "moderation") {
     return (
       <>
-        <ModerationPage token={token} items={pendingItems} onChanged={load} onOpen={setModItem} onBack={() => setOpen(null)} />
+        <ModerationPage token={token} onChanged={load} onOpen={setModItem} onBack={() => setOpen(null)} />
         {modDialog}
       </>
     );
@@ -288,7 +291,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
 
   return (
     <div className="space-y-3">
-    <ModerationRow count={pendingItems.length} onOpen={() => setOpen("moderation")} />
+    <ModerationRow count={pendingCount} onOpen={() => setOpen("moderation")} />
     <button
       onClick={() => setOpen("complaints")}
       className="group w-full rounded-xl border border-red-500/25 bg-red-500/[0.05] hover:bg-red-500/[0.1] px-4 py-2.5 flex items-center gap-2 text-left transition-colors"

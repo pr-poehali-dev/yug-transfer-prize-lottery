@@ -263,10 +263,53 @@ def handle_bulk_import(cur, conn, body: dict) -> dict:
                       'skipped': len(names) - added, 'matched_ids': matched})
 
 
+def handle_pending(cur, qs: dict) -> dict:
+    """Карточки «На модерации» постранично: поиск и фильтры считаются на сервере (их десятки тысяч)."""
+    base = "list_type = 'pending'"
+    conds = [base]
+    f = qs.get('filter') or 'all'
+    if f == 'new':
+        conds.append("last_scan_at IS NULL")
+    elif f == 'ok':
+        conds.append("scan_status = 'ok'")
+    elif f == 'miss':
+        conds.append("last_scan_at IS NOT NULL AND scan_status <> 'ok'")
+    text = str(qs.get('q') or '').strip().lstrip('@').replace('%', '')
+    if text:
+        t = esc(text.lower())
+        digits = ''.join(ch for ch in text if ch.isdigit())
+        parts = [f"lower(name) LIKE '%{t}%'", f"lower(username) LIKE '%{t}%'", f"lower(bio) LIKE '%{t}%'"]
+        if digits and len(digits) >= 5:
+            parts += [f"tg_id::text LIKE '%{digits}%'", f"regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%{digits}%'"]
+        conds.append(f"({' OR '.join(parts)})")
+    where = ' AND '.join(conds)
+    offset = max(0, int(qs.get('offset') or 0)) if str(qs.get('offset') or '0').isdigit() else 0
+    limit = min(120, int(qs.get('limit') or 60)) if str(qs.get('limit') or '60').isdigit() else 60
+    cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists WHERE {where} ORDER BY id DESC OFFSET {offset} LIMIT {limit}")
+    items = [row_to_item(r) for r in cur.fetchall()]
+    for it in items:
+        it['changes'] = 0
+        it['layers'] = 1
+        it['last_change'] = None
+    cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists WHERE {where}")
+    total = cur.fetchone()[0]
+    cur.execute(f"SELECT count(*), count(*) FILTER (WHERE last_scan_at IS NULL), "
+                f"count(*) FILTER (WHERE scan_status = 'ok'), "
+                f"count(*) FILTER (WHERE last_scan_at IS NOT NULL AND scan_status <> 'ok') "
+                f"FROM {SCHEMA}.check_lists WHERE {base}")
+    a, n, ok, miss = cur.fetchone()
+    return resp(200, {'ok': True, 'items': items, 'total': total,
+                      'counts': {'all': a, 'new': n, 'ok': ok, 'miss': miss}})
+
+
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
+    if method == 'GET' and qs.get('list_type') == 'pending':
+        return handle_pending(cur, qs)
     if method == 'GET':
-        cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists ORDER BY id DESC")
+        cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists WHERE list_type <> 'pending' ORDER BY id DESC")
         items = [row_to_item(r) for r in cur.fetchall()]
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists WHERE list_type = 'pending'")
+        pending_count = cur.fetchone()[0]
         cur.execute(f"SELECT item_id, count(*) FROM {SCHEMA}.check_list_history "
                     f"WHERE source='scan' GROUP BY item_id")
         changes = dict(cur.fetchall())
@@ -280,7 +323,7 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
             it['changes'] = changes.get(it['id'], 0)
             it['layers'] = layers.get(it['id'], 1)
             it['last_change'] = last.get(it['id'])
-        return resp(200, {'ok': True, 'items': items})
+        return resp(200, {'ok': True, 'items': items, 'pending_count': pending_count})
 
     if method in ('POST', 'PUT'):
         role, lt = body.get('role'), body.get('list_type')
