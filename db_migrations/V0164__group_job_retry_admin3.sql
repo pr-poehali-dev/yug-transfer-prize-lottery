@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.group_scan_jobs SET mode='members', status='running', q_index=0, q_offset=0, session_hash='' WHERE id=1;

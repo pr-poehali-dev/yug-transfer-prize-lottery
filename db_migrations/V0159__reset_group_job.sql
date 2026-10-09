@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.group_scan_jobs SET q_index=0, q_offset=0, fetched=0, added=0, skipped=0 WHERE id=1;
