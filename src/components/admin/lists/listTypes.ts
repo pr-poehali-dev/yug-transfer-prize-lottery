@@ -1,7 +1,7 @@
 import { KNOWLEDGE_BASE_URL, KB_BOT_URL, TG_LOOKUP_URL } from "../adminTypes";
 
-export type Role = "driver" | "dispatcher";
-export type ListType = "white" | "black";
+export type Role = "driver" | "dispatcher" | "";
+export type ListType = "white" | "black" | "pending";
 
 export interface ListItem {
   id: number;

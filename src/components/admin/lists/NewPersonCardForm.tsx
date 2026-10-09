@@ -16,13 +16,16 @@ const lineCls =
 
 export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
   const [form, setForm] = useState(empty);
-  const [listKey, setListKey] = useState(`${LISTS[0].role}-${LISTS[0].list_type}`);
+  const [listKey, setListKey] = useState("pending");
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const def = LISTS.find((d) => `${d.role}-${d.list_type}` === listKey) || LISTS[0];
-  const black = def.list_type === "black";
+  const pending = listKey === "pending";
+  const def = LISTS.find((d) => `${d.role}-${d.list_type}` === listKey);
+  const black = def?.list_type === "black";
+  const target = def ? { role: def.role, list_type: def.list_type } : { role: "", list_type: "pending" };
+  const targetTitle = def ? def.title : "На модерации";
   const phoneDigits = form.phone.replace(/\D/g, "");
   const uname = form.username.trim().replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?]/)[0];
   const canScan = uname.length >= 4 || phoneDigits.length >= 10;
@@ -43,17 +46,22 @@ export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
         toast.error(d.error || (res.status >= 500 ? "Telegram не ответил вовремя" : "Не удалось получить данные"));
         return;
       }
-      setForm((f) => ({
-        ...f,
-        name: d.name || f.name,
-        username: d.username || f.username,
+      const next = {
+        ...form,
+        name: d.name || form.name,
+        username: d.username || form.username,
         tg_id: String(d.tg_id),
-        phone: f.phone || d.phone || "",
-        photo_url: d.photo_url || f.photo_url,
-        note: f.note || d.bio || "",
-      }));
+        phone: form.phone || d.phone || "",
+        photo_url: d.photo_url || form.photo_url,
+        note: form.note || d.bio || "",
+      };
+      setForm(next);
       setScanned(true);
-      toast.success("Данные подтянуты из Telegram");
+      if (pending) {
+        await save(next);
+      } else {
+        toast.success("Данные подтянуты из Telegram");
+      }
     } catch {
       toast.error("Не удалось связаться с Telegram");
     } finally {
@@ -61,8 +69,8 @@ export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
     }
   };
 
-  const save = async () => {
-    if (!form.name.trim() && !uname && !phoneDigits && !form.tg_id) {
+  const save = async (data = form) => {
+    if (!data.name.trim() && !uname && !phoneDigits && !data.tg_id) {
       toast.error("Укажите @username или номер телефона");
       return;
     }
@@ -71,11 +79,11 @@ export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
       const res = await fetch(LISTS_API, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ ...form, role: def.role, list_type: def.list_type }),
+        body: JSON.stringify({ ...data, ...target }),
       });
       const d = await res.json();
       if (d.ok) {
-        toast.success(`Добавлено: ${def.title}`);
+        toast.success(`Добавлено: ${targetTitle}`, pending ? { description: "Присвойте статус в строке «На модерации»" } : undefined);
         setForm(empty);
         setScanned(false);
         onSaved();
@@ -98,6 +106,14 @@ export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-1.5">
+        <button
+          onClick={() => setListKey("pending")}
+          className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5 ${
+            pending ? "border-amber-500/50 bg-amber-500/20 text-amber-200" : "border-white/10 text-white/50 hover:text-white"
+          }`}
+        >
+          <Icon name="Clock" size={12} />На модерацию
+        </button>
         {LISTS.map((d) => {
           const k = `${d.role}-${d.list_type}`;
           const active = k === listKey;
@@ -122,10 +138,10 @@ export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
         <div className="relative pt-1.5 pr-1.5 w-full sm:w-60 shrink-0">
           <div
             className={`absolute top-0 right-0 left-1.5 bottom-1.5 rounded-2xl border ${
-              black ? "border-red-500/25 bg-red-500/[0.06]" : "border-emerald-500/25 bg-emerald-500/[0.06]"
+              pending ? "border-amber-500/25 bg-amber-500/[0.06]" : black ? "border-red-500/25 bg-red-500/[0.06]" : "border-emerald-500/25 bg-emerald-500/[0.06]"
             }`}
           />
-          <div className={`relative rounded-2xl border bg-[#14141c] overflow-hidden ${black ? "border-red-500/30" : "border-emerald-500/30"}`}>
+          <div className={`relative rounded-2xl border bg-[#14141c] overflow-hidden ${pending ? "border-amber-500/30" : black ? "border-red-500/30" : "border-emerald-500/30"}`}>
             <div className="relative aspect-square bg-white/5">
               {form.photo_url ? (
                 <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
@@ -184,6 +200,7 @@ export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
             <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2.5 text-xs text-sky-200 flex gap-2">
               <Icon name="Info" size={14} className="shrink-0 mt-0.5" />
               Впишите в карточку @username или номер телефона — появится кнопка «Сканировать», и данные подтянутся из Telegram.
+              {pending && " После сканирования карточка сама уйдёт на модерацию."}
             </div>
           )}
           {black && (
@@ -200,7 +217,7 @@ export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
           <textarea value={form.note} onChange={set("note")} rows={black ? 2 : 4}
             placeholder="Комментарий" className={`${inputCls} resize-y`} />
           <div className="flex gap-2">
-            <button onClick={save} disabled={saving || scanning}
+            <button onClick={() => save()} disabled={saving || scanning}
               className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-60 flex items-center gap-2">
               <Icon name={saving ? "Loader2" : "Check"} size={15} className={saving ? "animate-spin" : ""} />
               Сохранить

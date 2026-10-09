@@ -37,8 +37,8 @@ def esc(v) -> str:
     return str(v or '').replace("'", "''")
 
 
-ROLES = ('driver', 'dispatcher')
-LIST_TYPES = ('white', 'black')
+ROLES = ('driver', 'dispatcher', '')
+LIST_TYPES = ('white', 'black', 'pending')
 
 
 def clean_phone(v) -> str:
@@ -202,7 +202,8 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
 
     if method in ('POST', 'PUT'):
         role, lt = body.get('role'), body.get('list_type')
-        if role not in ROLES or lt not in LIST_TYPES:
+        role = role or ''
+        if role not in ROLES or lt not in LIST_TYPES or (lt != 'pending' and not role):
             return resp(400, {'error': 'bad role or list_type'})
         username = str(body.get('username') or '').strip().lstrip('@')
         if username.startswith('https://t.me/'):

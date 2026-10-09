@@ -3,7 +3,7 @@ import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
-  HistoryItem, ListDef, ListItem, HISTORY_API, LISTS_API, LOOKUP_API, UPLOAD_API, TG_LOOKUP_API, inputCls, fmtDate,
+  LISTS, HistoryItem, ListDef, ListItem, HISTORY_API, LISTS_API, LOOKUP_API, UPLOAD_API, TG_LOOKUP_API, inputCls, fmtDate,
 } from "./listTypes";
 
 interface Props {
@@ -24,8 +24,10 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [fetching, setFetching] = useState(false);
   const [fetchedFor, setFetchedFor] = useState("");
+  const [status, setStatus] = useState(`${def.role}-${def.list_type}`);
   const fileRef = useRef<HTMLInputElement>(null);
-  const black = def.list_type === "black";
+  const target = LISTS.find((l) => `${l.role}-${l.list_type}` === status);
+  const black = (target?.list_type ?? def.list_type) === "black";
 
   useEffect(() => {
     if (!open) return;
@@ -35,12 +37,13 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
       photo_url: item.photo_url,
     } : empty);
     setHistory([]);
+    setStatus(`${def.role}-${def.list_type}`);
     setFetchedFor(item?.username?.toLowerCase() || "");
     if (item) {
       fetch(`${HISTORY_API}&id=${item.id}`, { headers: { "X-Admin-Token": token } })
         .then((r) => r.json()).then((d) => d.ok && setHistory(d.items || [])).catch(() => {});
     }
-  }, [open, item, token]);
+  }, [open, item, token, def.role, def.list_type]);
 
   const lookup = async (q: string) => {
     if (q.trim().replace(/^@/, "").length < 3) return;
@@ -133,7 +136,11 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
       if (got) data = got;
     }
     try {
-      const payload = { ...data, role: def.role, list_type: def.list_type };
+      const payload = {
+        ...data,
+        role: target ? target.role : def.role,
+        list_type: target ? target.list_type : def.list_type,
+      };
       const res = await fetch(LISTS_API, {
         method: item ? "PUT" : "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
@@ -250,6 +257,33 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
               </label>
             </div>
           )}
+
+          <div className="space-y-1.5">
+            <div className="text-xs text-white/50">Статус</div>
+            <div className="flex flex-wrap gap-1.5">
+              {def.list_type === "pending" && (
+                <button type="button" onClick={() => setStatus(`${def.role}-${def.list_type}`)}
+                  className={`text-xs px-2.5 py-1 rounded-full border ${!target ? "border-amber-500/50 bg-amber-500/20 text-amber-200" : "border-white/10 text-white/50 hover:text-white"}`}>
+                  На модерации
+                </button>
+              )}
+              {LISTS.map((l) => {
+                const k = `${l.role}-${l.list_type}`;
+                const active = k === status;
+                const b = l.list_type === "black";
+                return (
+                  <button key={k} type="button" onClick={() => setStatus(k)}
+                    className={`text-xs px-2.5 py-1 rounded-full border ${
+                      active
+                        ? b ? "border-red-500/50 bg-red-500/20 text-red-200" : "border-emerald-500/50 bg-emerald-500/20 text-emerald-200"
+                        : "border-white/10 text-white/50 hover:text-white"
+                    }`}>
+                    {l.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <textarea value={form.note} onChange={set("note")} rows={2} placeholder="Комментарий" className={`${inputCls} resize-y`} />
 

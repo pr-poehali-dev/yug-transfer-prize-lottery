@@ -5,6 +5,7 @@ import { LISTS, LISTS_API, SCAN_API, ListDef, ListItem, inputCls } from "./lists
 import { PersonCard } from "./lists/PersonCard";
 import { PersonEditDialog } from "./lists/PersonEditDialog";
 import { LayersDialog } from "./lists/LayersDialog";
+import { ModerationStrip } from "./lists/ModerationStrip";
 import { SubscriptionsPage } from "./lists/SubscriptionsPage";
 import { GroupsPage } from "./lists/GroupsPage";
 
@@ -157,6 +158,8 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     onOpenChange?.(!!v);
   };
   const current = LISTS.find((d) => `${d.role}-${d.list_type}` === open) || null;
+  const [modItem, setModItem] = useState<ListItem | null>(null);
+  const pendingItems = items.filter((i) => i.list_type === "pending");
 
   const load = async () => {
     try {
@@ -189,6 +192,16 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   }
 
   return (
+    <div className="space-y-3">
+    <ModerationStrip token={token} items={pendingItems} onChanged={load} onOpen={setModItem} />
+    <PersonEditDialog
+      token={token}
+      def={{ role: "", list_type: "pending", title: "На модерации", icon: "Clock", color: "text-amber-400" }}
+      item={modItem}
+      open={!!modItem}
+      onClose={() => setModItem(null)}
+      onSaved={load}
+    />
     <div className="grid grid-cols-2 gap-3">
       {LISTS.map((def) => {
         const key = `${def.role}-${def.list_type}`;
@@ -242,6 +255,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
           </div>
         </button>
       ))}
+    </div>
     </div>
   );
 }
