@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { KNOWLEDGE_BASE_URL, KB_BOT_URL } from "./adminTypes";
 import { CheckListsTiles } from "./CheckListsTiles";
 import { NewPersonCardForm } from "./lists/NewPersonCardForm";
+import { detectQuery } from "./lists/listTypes";
 
 interface KnowledgeItem {
   id: number;
@@ -32,6 +33,16 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
   const [openId, setOpenId] = useState<number | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [showCardForm, setShowCardForm] = useState(false);
+  const [prefill, setPrefill] = useState<{ value: string; nonce: number } | null>(null);
+  const searchDetected = detectQuery(search);
+
+  const openCardFromSearch = () => {
+    if (!searchDetected) return;
+    resetForm();
+    setPrefill({ value: search, nonce: Date.now() });
+    setShowCardForm(true);
+    setSearch("");
+  };
   const [tilesKey, setTilesKey] = useState(0);
   const [bot, setBot] = useState<{ username: string; webhook: string } | null>(null);
   const fetchBot = async () => {
@@ -153,9 +164,28 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск по базе знаний"
-                className={`${inputCls} pl-9`}
+                onKeyDown={(e) => e.key === "Enter" && openCardFromSearch()}
+                onPaste={(e) => {
+                  const t = e.clipboardData.getData("text");
+                  if (detectQuery(t) && !search.trim()) {
+                    e.preventDefault();
+                    resetForm();
+                    setPrefill({ value: t, nonce: Date.now() });
+                    setShowCardForm(true);
+                  }
+                }}
+                placeholder="Поиск или вставьте @username, номер, ID, ссылку t.me"
+                className={`${inputCls} pl-9 ${searchDetected ? "pr-36" : ""}`}
               />
+              {searchDetected && (
+                <button
+                  onClick={openCardFromSearch}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-medium px-2.5 py-1 flex items-center gap-1"
+                >
+                  <Icon name="UserPlus" size={12} />
+                  {searchDetected.field === "phone" ? "Номер → карточка" : searchDetected.field === "tg_id" ? "ID → карточка" : "@ → карточка"}
+                </button>
+              )}
             </div>
             {!showForm && !showCardForm && (
               <button
@@ -170,8 +200,9 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
           {showCardForm && (
             <NewPersonCardForm
               token={token}
-              onSaved={() => { setShowCardForm(false); setTilesKey((k) => k + 1); }}
-              onCancel={() => setShowCardForm(false)}
+              prefill={prefill}
+              onSaved={() => { setShowCardForm(false); setPrefill(null); setTilesKey((k) => k + 1); }}
+              onCancel={() => { setShowCardForm(false); setPrefill(null); }}
             />
           )}
 

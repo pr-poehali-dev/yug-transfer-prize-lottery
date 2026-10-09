@@ -1,21 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
-import { LISTS, LISTS_API, TG_LOOKUP_API, inputCls } from "./listTypes";
+import { LISTS, LISTS_API, TG_LOOKUP_API, inputCls, detectQuery } from "./listTypes";
 
 interface Props {
   token: string;
   onSaved: () => void;
   onCancel: () => void;
+  prefill?: { value: string; nonce: number } | null;
 }
+
 
 const empty = { name: "", username: "", phone: "", tg_id: "", photo_url: "", note: "", reason: "", removed_at: "" };
 
 const lineCls =
   "w-full bg-transparent border-0 border-b border-white/10 px-0 py-1 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-sky-400/60";
 
-export function NewPersonCardForm({ token, onSaved, onCancel }: Props) {
+export function NewPersonCardForm({ token, onSaved, onCancel, prefill }: Props) {
   const [form, setForm] = useState(empty);
+
+  useEffect(() => {
+    if (!prefill) return;
+    const det = detectQuery(prefill.value);
+    if (!det) return;
+    setForm({ ...empty, [det.field]: det.value });
+    setScanned(false);
+  }, [prefill]);
   const [listKey, setListKey] = useState("pending");
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);

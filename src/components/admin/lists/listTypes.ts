@@ -89,3 +89,19 @@ export const fmtDate = (v: string | null | undefined, withTime = false) => {
     ? d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
     : d.toLocaleDateString("ru-RU");
 };
+
+export function detectQuery(raw: string): { field: "username" | "phone" | "tg_id"; value: string } | null {
+  const v = raw.trim();
+  if (!v) return null;
+  const link = v.match(/^(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{4,})/i);
+  if (link) return { field: "username", value: link[1] };
+  if (v.startsWith("@")) return { field: "username", value: v.slice(1) };
+  const compact = v.replace(/[\s\-()]/g, "");
+  if (/^\+?\d{5,15}$/.test(compact)) {
+    const d = compact.replace("+", "");
+    const isPhone = compact.startsWith("+") || (d.length === 11 && /^[78]/.test(d)) || (d.length === 10 && d.startsWith("9"));
+    return isPhone ? { field: "phone", value: compact.startsWith("+") ? compact : `+${d.length === 10 ? "7" + d : d.replace(/^8/, "7")}` } : { field: "tg_id", value: d };
+  }
+  if (/^[A-Za-z][A-Za-z0-9_]{3,}$/.test(v)) return { field: "username", value: v };
+  return null;
+}
