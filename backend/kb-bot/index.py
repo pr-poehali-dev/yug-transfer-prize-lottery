@@ -3,6 +3,7 @@ import os
 import json
 import ssl
 import http.client
+import concurrent.futures
 import psycopg2
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
@@ -13,28 +14,47 @@ CORS = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
 }
+LAST_OK = {'host': ''}
 MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}]], 'resize_keyboard': True, 'is_persistent': True}
 
 
-def tg_api(method: str, payload: dict, timeout: int = 6) -> dict:
-    """Запрос к Telegram: из облака часть адресов недоступна, перебираем рабочие."""
+def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
     token = os.environ.get('KB_BOT_TOKEN', '')
+    ctx = ssl.create_default_context()
+    if host != 'api.telegram.org':
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    conn = http.client.HTTPSConnection(host, 443, timeout=timeout, context=ctx)
+    try:
+        conn.request('POST', f'/bot{token}/{method}', body=data,
+                     headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
+        return json.loads(conn.getresponse().read())
+    finally:
+        conn.close()
+
+
+def tg_api(method: str, payload: dict, timeout: float = 3.5) -> dict:
+    """Запрос к Telegram сразу по всем адресам параллельно — берём первый ответ."""
     data = json.dumps(payload).encode()
-    for host in TG_HOSTS:
-        ctx = ssl.create_default_context()
-        if host != 'api.telegram.org':
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-        conn = http.client.HTTPSConnection(host, 443, timeout=timeout, context=ctx)
-        try:
-            conn.request('POST', f'/bot{token}/{method}', body=data,
-                         headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
-            return json.loads(conn.getresponse().read())
-        except Exception as e:
-            print(f'[KB-BOT] {method} via {host} failed: {type(e).__name__}')
-        finally:
-            conn.close()
-    return {}
+    hosts = [LAST_OK['host']] if LAST_OK['host'] else TG_HOSTS
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(TG_HOSTS))
+    futures = {pool.submit(_call, h, method, data, timeout): h for h in hosts}
+    result = {}
+    try:
+        for fut in concurrent.futures.as_completed(futures, timeout=timeout + 0.3):
+            try:
+                result = fut.result()
+                LAST_OK['host'] = futures[fut]
+                break
+            except Exception as e:
+                print(f'[KB-BOT] {method} via {futures[fut]} failed: {type(e).__name__}')
+    except concurrent.futures.TimeoutError:
+        print(f'[KB-BOT] {method} timeout on all hosts')
+    pool.shutdown(wait=False, cancel_futures=True)
+    if not result and LAST_OK['host'] and hosts != TG_HOSTS:
+        LAST_OK['host'] = ''
+        return tg_api(method, payload, timeout)
+    return result
 
 
 def load_groups() -> list:
@@ -78,16 +98,19 @@ def handler(event: dict, context) -> dict:
         qs = event.get('queryStringParameters') or {}
         action = qs.get('action', '')
         if action == 'bot_info':
-            me = tg_api('getMe', {}).get('result', {})
-            wh = tg_api('getWebhookInfo', {}).get('result', {})
+            me_res = tg_api('getMe', {}, timeout=2.2)
+            me = me_res.get('result', {})
+            wh = tg_api('getWebhookInfo', {}, timeout=2.2).get('result', {}) if me else {}
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
-                'ok': True, 'username': me.get('username', ''), 'webhook': wh.get('url', '')})}
+                'ok': bool(me), 'username': me.get('username', ''), 'webhook': wh.get('url', ''),
+                'error': me_res.get('description', '') if not me else ''})}
         if action == 'set_webhook':
             url = qs.get('url', '')
             if not url:
                 return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'url required'})}
-            res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message']})
-            tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}]})
+            res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message']}, timeout=2.2)
+            if res.get('ok'):
+                tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}]}, timeout=2.2)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(res)}
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 
