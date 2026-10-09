@@ -153,6 +153,35 @@ def handler(event: dict, context) -> dict:
         return resp(401, {'error': 'Unauthorized'})
 
     qs = event.get('queryStringParameters') or {}
+    if qs.get('action') == 'diag':
+        import socket
+        import concurrent.futures as cf
+        targets = [(ip, port) for ip in ['149.154.175.53', '149.154.167.51', '149.154.175.100', '149.154.167.91',
+                                         '91.108.56.130', '149.154.167.220', '149.154.167.99']
+                   for port in (443, 80, 5222)]
+
+        def probe(t):
+            t0 = time.time()
+            try:
+                sock = socket.create_connection(t, timeout=4)
+                sock.close()
+                return f"{t[0]}:{t[1]} ok {time.time() - t0:.2f}s"
+            except Exception as e:
+                return f"{t[0]}:{t[1]} {type(e).__name__}"
+        with cf.ThreadPoolExecutor(max_workers=21) as pool:
+            res = list(pool.map(probe, targets))
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        dcs = []
+        for sess in load_sessions(cur)[:3]:
+            try:
+                ss = StringSession(sess)
+                dcs.append(f"dc{ss.dc_id} {ss.server_address}:{ss.port}")
+            except Exception as e:
+                dcs.append(type(e).__name__)
+        conn.close()
+        return resp(200, {'probe': res, 'sessions': dcs})
+
     username = clean_username(qs.get('username', ''))
     phone = ''.join(ch for ch in str(qs.get('phone') or '') if ch.isdigit())
     if len(phone) == 11 and phone[0] == '8':
