@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { LISTS, LISTS_API, SCAN_API, ListDef, ListItem, inputCls } from "./lists/listTypes";
 import { PersonCard } from "./lists/PersonCard";
 import { PersonEditDialog } from "./lists/PersonEditDialog";
+import { LayersDialog } from "./lists/LayersDialog";
 import { SubscriptionsPage } from "./lists/SubscriptionsPage";
 import { GroupsPage } from "./lists/GroupsPage";
 
@@ -19,6 +20,7 @@ function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<ListItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [layersItem, setLayersItem] = useState<ListItem | null>(null);
   const [scanningIds, setScanningIds] = useState<number[]>([]);
   const [scanAll, setScanAll] = useState<{ done: number; total: number } | null>(null);
 
@@ -127,10 +129,13 @@ function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
               scanning={scanningIds.includes(i.id)}
               onEdit={() => { setEditing(i); setDialogOpen(true); }}
               onScan={() => scanOne(i)}
+              onLayers={() => setLayersItem(i)}
             />
           ))}
         </div>
       )}
+
+      <LayersDialog token={token} item={layersItem} open={!!layersItem} onClose={() => setLayersItem(null)} />
 
       <PersonEditDialog
         token={token}

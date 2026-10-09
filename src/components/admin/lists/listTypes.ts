@@ -20,7 +20,31 @@ export interface ListItem {
   scan_status: string;
   updated_at: string | null;
   changes: number;
+  layers: number;
+  last_change: { fields: string[]; at: string; source: string } | null;
 }
+
+export interface Snapshot {
+  id: number;
+  tg_id: number | null;
+  name: string;
+  username: string;
+  phone: string;
+  bio: string;
+  photo_url: string;
+  source: string;
+  changed: string[];
+  created_at: string;
+}
+
+export const FIELD_LABELS: Record<string, string> = {
+  name: "имя",
+  username: "username",
+  phone: "телефон",
+  tg_id: "ID",
+  photo_url: "фото",
+  bio: "описание",
+};
 
 export interface HistoryItem {
   field: string;
@@ -48,6 +72,7 @@ export const LISTS: ListDef[] = [
 
 export const LISTS_API = `${KNOWLEDGE_BASE_URL}?entity=lists`;
 export const HISTORY_API = `${KNOWLEDGE_BASE_URL}?entity=history`;
+export const SNAPSHOTS_API = `${KNOWLEDGE_BASE_URL}?entity=snapshots`;
 export const LOOKUP_API = `${KNOWLEDGE_BASE_URL}?entity=lookup`;
 export const UPLOAD_API = `${KNOWLEDGE_BASE_URL}?entity=upload_photo`;
 export const SCAN_API = `${KB_BOT_URL}?action=scan`;

@@ -448,6 +448,13 @@ def scan_item(item_id: int) -> dict:
         status = f"изменений: {len(changes)}" if changes else 'без изменений'
         sets += ['last_scan_at=now()', f"scan_status='{status}'"]
         cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
+        if changes:
+            fields = ','.join(dict.fromkeys(f for f, _, _ in changes))
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.check_list_snapshots "
+                f"(item_id, tg_id, name, username, phone, bio, photo_url, source, changed_fields) "
+                f"SELECT id, tg_id, name, username, phone, bio, photo_url, 'scan', '{fields}' "
+                f"FROM {SCHEMA}.check_lists WHERE id={int(item_id)}")
         conn.commit()
         return {'id': item_id, 'status': 'ok', 'changes': len(changes)}
     finally:

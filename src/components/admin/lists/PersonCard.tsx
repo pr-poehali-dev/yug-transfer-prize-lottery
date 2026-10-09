@@ -1,24 +1,41 @@
 import Icon from "@/components/ui/icon";
-import { ListItem, fmtDate } from "./listTypes";
+import { ListItem, FIELD_LABELS, fmtDate } from "./listTypes";
 
 interface Props {
   item: ListItem;
   scanning: boolean;
   onEdit: () => void;
   onScan: () => void;
+  onLayers: () => void;
 }
 
-export function PersonCard({ item, scanning, onEdit, onScan }: Props) {
+export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) {
   const black = item.list_type === "black";
   const initials = (item.name || item.username || "?").replace("@", "").slice(0, 2).toUpperCase();
+  const layers = Math.max(1, item.layers || 1);
+  const behind = Math.min(layers - 1, 4);
+  const offset = 6;
 
   return (
-    <div className="relative pt-2 pr-2">
-      <div
-        className={`absolute inset-0 top-0 left-2 rounded-2xl border ${
-          black ? "border-red-500/20 bg-red-500/[0.05]" : "border-emerald-500/20 bg-emerald-500/[0.05]"
-        }`}
-      />
+    <div className="relative" style={{ paddingTop: Math.max(behind, 1) * offset, paddingRight: Math.max(behind, 1) * offset }}>
+      {Array.from({ length: Math.max(behind, 1) }).map((_, i) => {
+        const depth = Math.max(behind, 1) - i;
+        return (
+          <div
+            key={i}
+            className={`absolute rounded-2xl border ${
+              black ? "border-red-500/25 bg-red-500/[0.06]" : "border-emerald-500/25 bg-emerald-500/[0.06]"
+            }`}
+            style={{
+              top: (Math.max(behind, 1) - depth) * offset,
+              right: (Math.max(behind, 1) - depth) * offset,
+              left: depth * offset,
+              bottom: depth * offset,
+              opacity: 1 - (depth - 1) * 0.18,
+            }}
+          />
+        );
+      })}
       <div
         className={`relative rounded-2xl border bg-[#14141c] overflow-hidden flex flex-col h-full ${
           black ? "border-red-500/30" : "border-emerald-500/30"
@@ -75,6 +92,21 @@ export function PersonCard({ item, scanning, onEdit, onScan }: Props) {
             </div>
           )}
         </div>
+
+        <button
+          onClick={onLayers}
+          className={`mx-3 mb-2 rounded-xl px-2.5 py-2 text-left text-[11px] flex items-center gap-2 transition-colors ${
+            item.last_change ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-200" : "bg-white/[0.04] hover:bg-white/[0.08] text-white/50"
+          }`}
+        >
+          <Icon name="Layers" size={13} className="shrink-0" />
+          <span className="flex-1 min-w-0 truncate">
+            {item.last_change
+              ? `${fmtDate(item.last_change.at)}: ${item.last_change.fields.map((f) => FIELD_LABELS[f] || f).join(", ")}`
+              : "Изменений нет"}
+          </span>
+          <span className="shrink-0 text-white/40">{layers} сл.</span>
+        </button>
 
         <button
           onClick={onEdit}

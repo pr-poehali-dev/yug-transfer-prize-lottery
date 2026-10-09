@@ -104,6 +104,26 @@ def upload_photo(body: dict) -> dict:
     return resp(200, {'ok': True, 'url': url})
 
 
+SNAP_FIELDS = ('name', 'username', 'phone', 'tg_id', 'photo_url')
+
+
+def add_snapshot(cur, item_id: int, source: str, changed: list) -> None:
+    cur.execute(
+        f"INSERT INTO {SCHEMA}.check_list_snapshots (item_id, tg_id, name, username, phone, bio, photo_url, source, changed_fields) "
+        f"SELECT id, tg_id, name, username, phone, bio, photo_url, '{source}', '{esc(','.join(changed))}' "
+        f"FROM {SCHEMA}.check_lists WHERE id={int(item_id)}")
+
+
+def handle_snapshots(cur, qs: dict) -> dict:
+    item_id = int(qs.get('id') or 0)
+    cur.execute(f"SELECT id, tg_id, name, username, phone, bio, photo_url, source, changed_fields, created_at "
+                f"FROM {SCHEMA}.check_list_snapshots WHERE item_id={item_id} ORDER BY created_at DESC, id DESC LIMIT 100")
+    items = [{'id': r[0], 'tg_id': r[1], 'name': r[2], 'username': r[3], 'phone': r[4], 'bio': r[5],
+              'photo_url': r[6], 'source': r[7], 'changed': [x for x in (r[8] or '').split(',') if x],
+              'created_at': r[9]} for r in cur.fetchall()]
+    return resp(200, {'ok': True, 'items': items})
+
+
 def handle_history(cur, qs: dict) -> dict:
     item_id = int(qs.get('id') or 0)
     cur.execute(f"SELECT field, old_value, new_value, source, changed_at FROM {SCHEMA}.check_list_history "
@@ -168,8 +188,16 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
         cur.execute(f"SELECT item_id, count(*) FROM {SCHEMA}.check_list_history "
                     f"WHERE source='scan' GROUP BY item_id")
         changes = dict(cur.fetchall())
+        cur.execute(f"SELECT item_id, count(*) FROM {SCHEMA}.check_list_snapshots GROUP BY item_id")
+        layers = dict(cur.fetchall())
+        cur.execute(f"SELECT DISTINCT ON (item_id) item_id, changed_fields, created_at, source "
+                    f"FROM {SCHEMA}.check_list_snapshots WHERE changed_fields <> '' "
+                    f"ORDER BY item_id, created_at DESC, id DESC")
+        last = {r[0]: {'fields': [x for x in r[1].split(',') if x], 'at': r[2], 'source': r[3]} for r in cur.fetchall()}
         for it in items:
             it['changes'] = changes.get(it['id'], 0)
+            it['layers'] = layers.get(it['id'], 1)
+            it['last_change'] = last.get(it['id'])
         return resp(200, {'ok': True, 'items': items})
 
     if method in ('POST', 'PUT'):
@@ -207,6 +235,7 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
                 f"INSERT INTO {SCHEMA}.check_lists ({', '.join(cols)}) "
                 f"VALUES ({', '.join(sql_val(k) for k in cols)}) RETURNING id")
             new_id = cur.fetchone()[0]
+            add_snapshot(cur, new_id, 'created', [])
             conn.commit()
             return resp(200, {'ok': True, 'id': new_id, 'tg_id': tg_id})
 
@@ -226,12 +255,17 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
         cur.execute(
             f"UPDATE {SCHEMA}.check_lists SET {', '.join(f'{k}={sql_val(k)}' for k in cols)}, "
             f"updated_at=now() WHERE id={item_id}")
+        snap_changed = [k for k in SNAP_FIELDS
+                        if ('' if old.get(k) is None else str(old.get(k))) != ('' if new[k] is None else str(new[k]))]
+        if snap_changed:
+            add_snapshot(cur, item_id, 'manual', snap_changed)
         conn.commit()
         return resp(200, {'ok': True, 'tg_id': tg_id})
 
     if method == 'DELETE':
         item_id = int(qs.get('id') or 0)
         cur.execute(f"DELETE FROM {SCHEMA}.check_list_history WHERE item_id={item_id}")
+        cur.execute(f"DELETE FROM {SCHEMA}.check_list_snapshots WHERE item_id={item_id}")
         cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={item_id}")
         conn.commit()
         return resp(200, {'ok': True})
@@ -260,6 +294,8 @@ def handler(event: dict, context) -> dict:
     try:
         if qs.get('entity') == 'subs':
             return handle_subs_stats(cur, qs)
+        if qs.get('entity') == 'snapshots':
+            return handle_snapshots(cur, qs)
         if qs.get('entity') == 'history':
             return handle_history(cur, qs)
         if qs.get('entity') == 'lookup':
