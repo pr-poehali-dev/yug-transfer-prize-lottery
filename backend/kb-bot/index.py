@@ -639,6 +639,12 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get('body') or '{}')
     callback = body.get('callback_query') or {}
+    if str(callback.get('data') or '').startswith('cblack:'):
+        complaints.handle_black_button(tg_api, callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+    if callback.get('data') == 'noop':
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': 'Уже обработано'}, timeout=2.2)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if str(callback.get('data') or '').startswith('complain:'):
         complaints.start(tg_api, callback)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}

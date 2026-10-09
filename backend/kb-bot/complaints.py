@@ -247,7 +247,7 @@ def notify_admin(tg_api, cid: int) -> None:
     if plist:
         lines.append(f"📎 Фото: {len(plist)}")
     msg = '\n'.join(lines)
-    markup = {'inline_keyboard': [[{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}
+    markup = admin_markup(cid, lt)
     env_chat = os.environ.get('KB_COMPLAINTS_CHAT_ID', '').strip()
     for chat in ([env_chat] if env_chat else []) + CHAT_CANDIDATES:
         payload = {'chat_id': chat, 'text': msg[:4000], 'parse_mode': 'HTML',
@@ -273,3 +273,74 @@ def notify_admin(tg_api, cid: int) -> None:
             return
         print(f"[KB-BOT] complaint notify to {chat} failed: {res.get('description', '')[:120]}")
 
+
+
+def admin_markup(cid: int, list_type: str = '') -> dict:
+    rows = []
+    if list_type != 'black':
+        rows.append([{'text': '⛔️ Отправить в ЧС', 'callback_data': f'cblack:{int(cid)}'}])
+    rows.append([{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}])
+    return {'inline_keyboard': rows}
+
+
+def is_group_admin(tg_api, chat_id, user_id) -> bool:
+    res = tg_api('getChatMember', {'chat_id': chat_id, 'user_id': user_id}, timeout=3)
+    return (res.get('result') or {}).get('status') in ('administrator', 'creator')
+
+
+def to_black(cid: int, by: str) -> str:
+    """Принимает жалобу и переносит аккаунт в чёрный список. Возвращает итог для кнопки."""
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT item_id, text, incident_date, status FROM {SCHEMA}.kb_complaints WHERE id={int(cid)}")
+        k = cur.fetchone()
+        if not k:
+            return 'Жалоба не найдена'
+        item_id, text, inc, status = k
+        cur.execute(f"SELECT list_type, role, reason, name FROM {SCHEMA}.check_lists WHERE id={int(item_id or 0)}")
+        c = cur.fetchone()
+        if not c:
+            return 'Аккаунт не найден в базе'
+        if c[0] == 'black':
+            cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET status='accepted', admin_note='{q(by)}', updated_at=now() "
+                        f"WHERE id={int(cid)} AND status='new'")
+            conn.commit()
+            return 'Аккаунт уже в чёрном списке'
+        role = c[1] or 'driver'
+        reason = ((c[2] + '\n') if c[2] else '') + (text or '')
+        for field, old, new in (('list_type', c[0], 'black'), ('role', c[1], role)):
+            if old != new:
+                cur.execute(f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                            f"VALUES ({int(item_id)}, '{field}', '{q(old)}', '{q(new)}', 'complaint')")
+        removed = f"'{inc.isoformat()}'" if inc else 'CURRENT_DATE'
+        cur.execute(f"UPDATE {SCHEMA}.check_lists SET list_type='black', role='{role}', reason='{q(reason[:3000])}', "
+                    f"removed_at={removed}, updated_at=now() WHERE id={int(item_id)}")
+        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET status='accepted', admin_note='{q('В ЧС из группы: ' + by)}', "
+                    f"updated_at=now() WHERE id={int(cid)}")
+        conn.commit()
+        return f"⛔️ {c[3] or 'Аккаунт'} отправлен в чёрный список"
+    finally:
+        cur.close()
+        conn.close()
+
+
+def handle_black_button(tg_api, callback: dict) -> None:
+    user = callback.get('from') or {}
+    msg = callback.get('message') or {}
+    chat_id = (msg.get('chat') or {}).get('id')
+    cid = int(str(callback.get('data', '')).split(':')[1])
+    if not is_group_admin(tg_api, chat_id, user.get('id')):
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': True,
+                                       'text': 'Отправить в ЧС может только администратор группы.'}, timeout=2.2)
+        return
+    by = f"@{user['username']}" if user.get('username') else (user.get('first_name') or str(user.get('id')))
+    result = to_black(cid, by)
+    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': result[:190]}, timeout=2.2)
+    if 'не найден' in result:
+        return
+    tg_api('editMessageReplyMarkup', {
+        'chat_id': chat_id, 'message_id': msg.get('message_id'),
+        'reply_markup': {'inline_keyboard': [
+            [{'text': f"⛔️ В ЧС — {by}", 'callback_data': 'noop'}],
+            [{'text': '🛠 Открыть в админке', 'url': ADMIN_URL}]]}}, timeout=3)
