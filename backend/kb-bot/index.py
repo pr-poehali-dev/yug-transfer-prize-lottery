@@ -9,6 +9,12 @@ import psycopg2
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 BUTTON_GROUPS = '📋 Список групп'
 BUTTON_SUB = '💳 Моя подписка'
+BUTTON_CHECK_DRIVER = '🚗 Проверить водителя'
+BUTTON_CHECK_DISP = '🎧 Проверить диспетчера'
+CHECKS = {
+    'driver': {'button': BUTTON_CHECK_DRIVER, 'prompt': 'Проверка водителя', 'category': 'водител', 'who': 'Водитель'},
+    'disp': {'button': BUTTON_CHECK_DISP, 'prompt': 'Проверка диспетчера', 'category': 'диспетчер', 'who': 'Диспетчер'},
+}
 TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -17,7 +23,7 @@ CORS = {
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}], [{'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_GROUPS}], [{'text': BUTTON_SUB}], [{'text': BUTTON_CHECK_DRIVER}, {'text': BUTTON_CHECK_DISP}]], 'resize_keyboard': True, 'is_persistent': True}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
@@ -119,6 +125,58 @@ def handle_renew(callback: dict) -> None:
                            'reply_markup': MAIN_KEYBOARD})
 
 
+def ask_check(chat_id, kind: str) -> None:
+    c = CHECKS[kind]
+    tg_api('sendMessage', {
+        'chat_id': chat_id,
+        'text': f"🔎 {c['prompt']}\n\nОтправьте ответом на это сообщение @username или номер телефона.",
+        'reply_markup': {'force_reply': True, 'input_field_placeholder': '@username или телефон'},
+    })
+
+
+def normalize_query(q: str) -> str:
+    q = q.strip()
+    digits = ''.join(ch for ch in q if ch.isdigit())
+    if len(digits) >= 10 and len(digits) >= len(q.replace(' ', '')) - 4:
+        return digits[-10:]
+    return q.lstrip('@').lower()
+
+
+def run_check(chat_id, kind: str, query: str) -> None:
+    c = CHECKS[kind]
+    q = normalize_query(query)
+    if len(q) < 3:
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Слишком короткий запрос. Попробуйте ещё раз.',
+                               'reply_markup': MAIN_KEYBOARD})
+        return
+    qe = q.replace("'", "''").replace('%', '').replace('_', '\\_')
+    digits_expr = "regexp_replace(title || ' ' || content, '[^0-9]', '', 'g')"
+    cond = (f"{digits_expr} LIKE '%{qe}%'" if q.isdigit()
+            else f"(title || ' ' || content) ILIKE '%{qe}%'")
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT title, category, content FROM {SCHEMA}.knowledge_base "
+            f"WHERE category ILIKE '%{c['category']}%' AND {cond} ORDER BY id LIMIT 5")
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+    shown = esc_html(query.strip())
+    if not rows:
+        text = (f"✅ {c['who']} <b>{shown}</b> не найден в нашей базе.\n\n"
+                f"Жалоб и отметок по нему нет.")
+    else:
+        parts = [f"⚠️ {c['who']} <b>{shown}</b> найден в базе:"]
+        for title, category, content in rows:
+            parts.append(f"\n<b>{esc_html(title)}</b>\n{esc_html(content)[:1500]}")
+        text = '\n'.join(parts)
+    tg_api('sendMessage', {'chat_id': chat_id, 'text': text[:4000], 'parse_mode': 'HTML',
+                           'disable_web_page_preview': True, 'reply_markup': MAIN_KEYBOARD})
+
+
 def esc_html(s: str) -> str:
     return (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
@@ -176,8 +234,17 @@ def handler(event: dict, context) -> dict:
     if not chat_id or chat.get('type') != 'private':
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
+    reply_text = ((message.get('reply_to_message') or {}).get('text') or '')
+    reply_kind = next((k for k, c in CHECKS.items() if c['prompt'] in reply_text), '')
+
     if text == BUTTON_GROUPS or text.lower() in ('список групп', '/groups'):
         send_groups(chat_id)
+    elif text == BUTTON_CHECK_DRIVER:
+        ask_check(chat_id, 'driver')
+    elif text == BUTTON_CHECK_DISP:
+        ask_check(chat_id, 'disp')
+    elif reply_kind:
+        run_check(chat_id, reply_kind, text)
     elif text == BUTTON_SUB or text.lower() in ('моя подписка', '/sub'):
         send_subscription(chat_id, (message.get('from') or {}).get('id') or chat_id)
     else:
