@@ -359,6 +359,13 @@ def handle_batch(context, scope: str = 'all') -> dict:
         blocked = {r[0] for r in cur.fetchall()}
         sessions = [x for x in load_sessions(cur) if sess_key(x) not in blocked]
         sessions.sort(key=lambda x: 0 if StringSession(x).dc_id == 2 else 1)
+        # Если у бота нет своего свободного аккаунта — последний свободный оставляем для живых запросов из бота.
+        bot_free = [k for k in bot_session_keys(cur) if k not in blocked]
+        reserved = False
+        if not bot_free and sessions:
+            sessions = sessions[:-1]
+            reserved = True
+            print('[TG-LOOKUP] batch: last free account reserved for bot')
         print(f'[TG-LOOKUP] batch sessions {len(sessions)}, blocked {len(blocked)}')
         workers = sessions[:4]
         where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
@@ -398,7 +405,8 @@ def handle_batch(context, scope: str = 'all') -> dict:
         paused, resume_in = cur.fetchone()
         accounts = len(load_sessions(cur))
         return resp(200, {'ok': True, **total, 'left': left, 'accounts': accounts, 'paused': paused,
-                          'all_paused': accounts > 0 and paused >= accounts, 'resume_in': resume_in})
+                          'all_paused': (accounts > 0 and paused >= accounts) or (reserved and not workers),
+                          'reserved': reserved and not workers, 'resume_in': resume_in})
     finally:
         cur.close()
         conn.close()

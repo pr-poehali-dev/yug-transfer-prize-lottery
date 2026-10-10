@@ -43,6 +43,11 @@ async function runScan(token: string, onChanged: () => void) {
       left = d.left || 0;
       setScan({ running: true, done, found, left });
       if (!left) break;
+      if (!d.done && d.reserved) {
+        setScan({ running: false, done, found, left, note: "Свободен только 1 аккаунт — он оставлен для поиска в боте" });
+        onChanged();
+        return;
+      }
       if (!d.done && d.all_paused) {
         const m = Math.ceil((d.resume_in || 0) / 60);
         const when = m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`;
