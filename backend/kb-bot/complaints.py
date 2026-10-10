@@ -1,5 +1,6 @@
 """Жалобы на водителей и диспетчеров из бота: пошаговый сбор описания, даты и фото."""
 import os
+import time
 import re
 from datetime import date, datetime, timedelta
 import psycopg2
@@ -187,6 +188,10 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
         return True
 
     if step == 'text':
+        if ROLE_BY_TEXT.get(msg) or ROLE_BY_TEXT.get(msg.lower()) or msg in ('Сегодня', 'Вчера', '✅ Отправить жалобу', '⏭ Без фото'):
+            tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': CANCEL_KB,
+                                   'text': 'Опишите словами, <b>что произошло</b>.\nНапример: «не приехал на заказ, телефон отключил».'})
+            return True
         if len(msg) < 5:
             tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Опишите ситуацию чуть подробнее (хотя бы одно предложение).',
                                    'reply_markup': CANCEL_KB})
@@ -271,7 +276,7 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
     if not r:
         return
     text, inc, photos, rep_id, rep_un, rep_name, created, name, un, role, lt, tg_id, item_id, avatar = r
-    role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '❓ Роль не определена — выберите кнопкой ниже')
+    role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '❓ Роль не указана')
     lt_txt = {'white': '✅ белый список', 'black': '⛔️ чёрный список', 'pending': '🕓 на модерации'}.get(lt, '')
     cnt = complaints_count(item_id)
     reporter = f"@{esc(rep_un)}" if rep_un else f'<a href="tg://user?id={rep_id}">{esc(rep_name) or rep_id}</a>'
@@ -287,7 +292,7 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         lines.append(f"📣 Всего жалоб на него: <b>{cnt}</b>")
     lines += [
         "",
-        f"📝 <b>Что произошло:</b>\n{esc(text)[:1500]}",
+        f"📝 <b>Что произошло:</b>\n{esc(text)[:1500] or '—'}",
         f"📅 <b>Когда:</b> {inc.strftime('%d.%m.%Y') if inc else '—'}",
         f"🙋 <b>Пожаловался:</b> {reporter} (ID <code>{rep_id}</code>)",
     ]
@@ -322,8 +327,9 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
 
         res = call(thread)
         if not res.get('ok') and thread:
-            res = call(None)
-            thread = None
+            # Только в тему «жалобы»: при сбое повторяем туда же, в General не отправляем.
+            time.sleep(0.5)
+            res = call(thread)
         if not res.get('ok') and first_photo and first_photo != NO_AVATAR:
             print(f"[KB-BOT] complaint avatar failed: {res.get('description', '')[:120]}")
             first_photo = NO_AVATAR
@@ -383,11 +389,8 @@ def decision_markup(cid: int, list_type: str = '') -> dict:
 
 
 def admin_markup(cid: int, list_type: str = '', role: str = '') -> dict:
-    """Кнопки решения. Роль ставится прямо здесь: выбранная отмечена галочкой."""
-    rows = [[
-        {'text': ('✅ ' if role == 'driver' else '') + '🚗 Водитель', 'callback_data': f'crole:{int(cid)}:driver'},
-        {'text': ('✅ ' if role == 'dispatcher' else '') + '🎧 Диспетчер', 'callback_data': f'crole:{int(cid)}:dispatcher'},
-    ]]
+    """Кнопки решения по жалобе: отправить в группу ЧС или отклонить."""
+    rows = []
     rows.append([{'text': '📤 Отправить в группу ЧС', 'callback_data': f'csend:{int(cid)}'},
                  {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
     return {'inline_keyboard': rows}

@@ -1443,6 +1443,20 @@ def _handler(event: dict, context) -> dict:
                 complaints.mark_group_message(tg_api, cid, '✅ Принята — из админки')
             complaints.notify_reporter(tg_api, cid)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
+        if action == 'repost_complaints':
+            c3 = psycopg2.connect(os.environ['DATABASE_URL'])
+            k3 = c3.cursor()
+            k3.execute(f"SELECT id FROM {SCHEMA}.kb_complaints WHERE need_repost AND status='new'")
+            done = []
+            for (cid,) in k3.fetchall():
+                complaints.delete_group_messages(tg_api, cid)
+                complaints.notify_admin(tg_api, cid)
+                k3.execute(f"UPDATE {SCHEMA}.kb_complaints SET need_repost=false WHERE id={int(cid)}")
+                c3.commit()
+                done.append(cid)
+            k3.close()
+            c3.close()
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'reposted': done})}
         if action == 'test_complaint_topic':
             res = tg_api('sendMessage', {'chat_id': complaints.COPY_CHAT, 'message_thread_id': complaints.COMPLAINTS_THREAD_ID,
                                          'text': '✅ Сюда будут приходить новые жалобы из бота «База знаний».'}, timeout=4)
