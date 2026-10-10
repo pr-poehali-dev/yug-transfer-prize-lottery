@@ -166,6 +166,20 @@ function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPagePr
     setScanningIds((s) => s.filter((x) => x !== item.id));
   };
 
+  const deleteItem = async (item: ListItem) => {
+    if (!confirm(`Удалить карточку «${item.name || item.username || item.tg_id || "без имени"}» из базы?`)) return;
+    try {
+      const r = await fetch(`${LISTS_API}&id=${item.id}`, { method: "DELETE", headers: { "X-Admin-Token": token } });
+      if (!r.ok) throw new Error();
+      setItems((prev) => prev.filter((x) => x.id !== item.id));
+      setTotal((t) => Math.max(0, t - 1));
+      onParentChanged();
+      toast.success("Карточка удалена");
+    } catch {
+      toast.error("Не удалось удалить карточку");
+    }
+  };
+
   const scanAllItems = async () => {
     const ids = items.filter((i) => i.tg_id).map((i) => i.id);
     if (!ids.length) {
@@ -234,6 +248,7 @@ function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPagePr
               scanning={scanningIds.includes(i.id)}
               onEdit={() => { setEditing(i); setDialogOpen(true); }}
               onScan={() => scanOne(i)}
+              onDelete={() => deleteItem(i)}
               onLayers={() => setLayersItem(i)}
             />
           ))}

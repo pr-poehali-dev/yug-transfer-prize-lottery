@@ -303,14 +303,14 @@ def fill_from_cache(cur, conn, rows: list) -> list:
             continue
         q = lambda v: str(v or '').replace("'", "''")
         try:
+            cur.execute("SAVEPOINT fc")
             cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), scan_status='ok', tg_id=COALESCE(tg_id, {int(k[1])}), "
                         f"name=CASE WHEN name='' THEN '{q(k[2])}' ELSE name END, "
                         f"phone=CASE WHEN phone='' THEN '{q(k[3])}' ELSE phone END WHERE id={int(row_id)}")
-            conn.commit()
         except psycopg2.errors.UniqueViolation:
-            conn.rollback()
+            cur.execute("ROLLBACK TO SAVEPOINT fc")
             cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={int(row_id)} AND list_type='pending'")
-            conn.commit()
+    conn.commit()
     return left
 
 

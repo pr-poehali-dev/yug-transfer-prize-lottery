@@ -7,9 +7,10 @@ interface Props {
   onEdit: () => void;
   onScan: () => void;
   onLayers: () => void;
+  onDelete: () => void;
 }
 
-export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) {
+export function PersonCard({ item, scanning, onEdit, onScan, onLayers, onDelete }: Props) {
   const black = item.list_type === "black";
   const layers = Math.max(1, item.layers || 1);
   const behind = Math.min(layers - 1, 4);
@@ -58,6 +59,13 @@ export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) 
             className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center text-white/80 hover:text-white disabled:opacity-60"
           >
             <Icon name={scanning ? "Loader2" : "ScanSearch"} fallback="RefreshCw" size={15} className={scanning ? "animate-spin" : ""} />
+          </button>
+          <button
+            onClick={onDelete}
+            title="Удалить карточку из базы"
+            className="absolute top-12 right-2 w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center text-white/60 hover:text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            <Icon name="Trash2" size={14} />
           </button>
         </div>
 

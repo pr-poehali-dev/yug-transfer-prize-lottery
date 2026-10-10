@@ -32,13 +32,13 @@ export function useScanState() {
 async function runScan(token: string, onChanged: () => void) {
   if (scanState?.running) return;
   stopFlag = false;
-  let done = 0, found = 0, idle = 0, left = 0;
+  let done = 0, found = 0, idle = 0, left = -1, err = "";
   const setScan = setScanGlobal;
-  setScan({ running: true, done, found, left });
+  setScan({ running: true, done, found, left: 0 });
   while (!stopFlag) {
     try {
       const d = await fetch(`${TG_LOOKUP_API}?action=batch&scope=all`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
-      if (!d.ok) break;
+      if (!d.ok) { err = d.error || "сервер не ответил"; break; }
       done += d.done || 0;
       found += d.found || 0;
       left = d.left || 0;
@@ -63,18 +63,21 @@ async function runScan(token: string, onChanged: () => void) {
       }
       if (!d.done) {
         idle += 1;
-        if (idle >= 3) break;
+        if (idle >= 3) { err = "аккаунты не смогли проверить ни одной карточки"; break; }
         await new Promise((r) => setTimeout(r, 20000));
       } else idle = 0;
       if (done % 200 < (d.done || 0)) onChanged();
     } catch {
       idle += 1;
-      if (idle >= 3) break;
+      if (idle >= 3) { err = "сервер не отвечает"; break; }
       await new Promise((r) => setTimeout(r, 5000));
     }
   }
-  setScan({ running: false, done, found, left, note: left ? "Остановлено — можно продолжить" : "База обновлена" });
-  if (!left) toast.success("Глобальное сканирование завершено");
+  const finished = left === 0 && !err;
+  const note = finished ? "База обновлена" : stopFlag ? "Остановлено — можно продолжить" : `Прервано: ${err || "ошибка"} — можно продолжить`;
+  setScan({ running: false, done, found, left: Math.max(0, left), note });
+  if (finished) toast.success("Глобальное сканирование завершено");
+  else if (!stopFlag) toast.error(`Сканирование прервано: ${err || "ошибка"}`);
   onChanged();
 }
 
