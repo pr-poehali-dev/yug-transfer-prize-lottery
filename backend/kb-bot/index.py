@@ -78,8 +78,48 @@ def tg_api(method: str, payload: dict, timeout: float = 3.5) -> dict:
         LAST_OK['host'] = ''
         return tg_api(method, payload, timeout)
     if method in ('sendMessage', 'sendPhoto', 'sendMediaGroup') and result.get('ok'):
-        track_sent(payload.get('chat_id'), result.get('result'))
+        markup = payload.get('reply_markup')
+        if isinstance(markup, str):
+            try:
+                markup = json.loads(markup)
+            except ValueError:
+                markup = None
+        if isinstance(markup, dict) and markup.get('keyboard'):
+            keep_keyboard_msg(payload.get('chat_id'), result.get('result'))
+        else:
+            track_sent(payload.get('chat_id'), result.get('result'))
     return result
+
+
+def keep_keyboard_msg(chat_id, res) -> None:
+    """Сообщение с нижним меню не стираем при очистке — иначе Telegram прячет кнопки.
+    Держим только одно такое сообщение: прошлое удаляем."""
+    try:
+        cid = int(chat_id)
+        mid = int((res or {}).get('message_id') or 0)
+    except (TypeError, ValueError, AttributeError):
+        return
+    if cid <= 0 or not mid:
+        return
+    SCREEN['need_kb'] = False
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    old = 0
+    try:
+        cur.execute(f"SELECT kb_msg_id, start_msg_id FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={cid}")
+        r = cur.fetchone()
+        old = int((r[0] if r else 0) or 0)
+        anchor = int((r[1] if r else 0) or 0)
+        cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET kb_msg_id={mid} WHERE tg_user_id={cid}")
+        conn.commit()
+    except Exception as e:
+        print(f'[KB-BOT] keep keyboard failed: {type(e).__name__}')
+        anchor = 0
+    finally:
+        cur.close()
+        conn.close()
+    if old and old != mid and old != anchor:
+        track_sent(cid, {'message_id': old})
 
 
 def track_sent(chat_id, res) -> None:
@@ -111,7 +151,7 @@ def track_sent(chat_id, res) -> None:
         conn.close()
 
 
-SCREEN = {'rec': None}
+SCREEN = {'rec': None, 'need_kb': False}
 
 
 def screen_clear(uid: int, chat_id, extra: list) -> dict:
@@ -120,21 +160,28 @@ def screen_clear(uid: int, chat_id, extra: list) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT screen_msgs, start_msg_id FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
+        cur.execute(f"SELECT screen_msgs, start_msg_id, kb_msg_id FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
         r = cur.fetchone()
         ids = [int(x) for x in ((r[0] if r else '') or '').split(',') if x.strip().isdigit()]
         anchor = int((r[1] if r else 0) or 0)
+        kb_mid = int((r[2] if r else 0) or 0)
         if ids:
             cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET screen_msgs='' WHERE tg_user_id={int(uid)}")
             conn.commit()
     finally:
         cur.close()
         conn.close()
-    ids = [i for i in ids + [i for i in extra if i] if i != anchor]
+    ids = [i for i in ids + [i for i in extra if i] if i not in (anchor, kb_mid)]
+    if not kb_mid:
+        SCREEN['need_kb'] = True
     return {'ids': ids[-100:], 'chat_id': chat_id, 'anchor': anchor, 'ok': not ids}
 
 
 def screen_save(uid: int, job: dict = None) -> None:
+    if SCREEN.get('need_kb') and job and job.get('chat_id'):
+        SCREEN['need_kb'] = False
+        tg_api('sendMessage', {'chat_id': job['chat_id'], 'text': '📋 Меню 👇', 'reply_markup': MAIN_KEYBOARD},
+               timeout=2.5)
     ids = [i for i in (SCREEN['rec'] or []) if not job or i != job.get('anchor')]
     new_ids = list(ids)
     SCREEN['rec'] = None
