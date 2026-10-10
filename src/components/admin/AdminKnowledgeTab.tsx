@@ -129,7 +129,6 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
     <div>
       {expanded && (
         <div className="space-y-5">
-          <CheckListsTiles key={tilesKey} token={token} onOpenChange={setListOpen} />
           {!listOpen && (<>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
@@ -222,6 +221,11 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
             </div>
           )}
 
+          </>)}
+          <div className={listOpen ? "" : "min-h-[calc(100vh-15rem)] flex flex-col justify-center"}>
+            <CheckListsTiles key={tilesKey} token={token} onOpenChange={setListOpen} />
+          </div>
+          {!listOpen && search.trim() && (<>
           {loading ? (
             <div className="text-sm text-white/50 py-6 text-center">Загрузка…</div>
           ) : filtered.length === 0 ? (
