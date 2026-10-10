@@ -85,7 +85,7 @@ def load_groups() -> list:
     try:
         cur.execute(
             f"SELECT title, content FROM {SCHEMA}.knowledge_base "
-            f"WHERE category ILIKE '%групп%' OR title ILIKE '%групп%' ORDER BY id")
+            f"WHERE category ~* '(г|Г)рупп' OR category IN ('Группы', 'группы', 'ГРУППЫ') ORDER BY id")
         return cur.fetchall()
     finally:
         cur.close()
