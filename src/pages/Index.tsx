@@ -46,7 +46,6 @@ export default function Index() {
         @keyframes twinkle { 0%,100% { opacity: .2 } 50% { opacity: 1 } }
         @keyframes drift { from { transform: scale(1.05) translate(0,0) } to { transform: scale(1.15) translate(-2%,-1%) } }
         @keyframes orbit { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
-        @keyframes floaty { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
       `}</style>
 
       <img src={BG} alt="" className="absolute inset-0 w-full h-full object-cover object-left opacity-95"
@@ -58,7 +57,7 @@ export default function Index() {
             animation: `twinkle ${s.dur}s ease-in-out ${s.delay}s infinite` }} />
       ))}
 
-      <div className="relative w-full max-w-sm" style={{ animation: "floaty 6s ease-in-out infinite" }}>
+      <div className="relative w-full max-w-sm">
         <div className="pointer-events-none absolute left-1/2 top-1/2 w-[440px] h-[440px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/5"
           style={{ animation: "orbit 30s linear infinite" }}>
           <span className="absolute -top-1 left-1/2 w-2 h-2 rounded-full bg-fuchsia-400 shadow-[0_0_12px_4px_rgba(232,121,249,0.6)]" />
@@ -66,12 +65,8 @@ export default function Index() {
 
         <form onSubmit={submit}
           className="relative rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-7 shadow-[0_0_60px_-10px_rgba(168,85,247,0.45)]">
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-14 h-14 rounded-2xl grad-btn flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(236,72,153,0.5)]">
-              <Icon name="Rocket" size={26} className="text-white" />
-            </div>
-            <h1 className="text-xl font-semibold tracking-wide">Вход в панель</h1>
-            <p className="text-xs text-white/40 mt-1">Центр управления</p>
+          <div className="flex justify-center -mt-2 mb-4">
+            <img src="/kb-logo.png" alt="База знаний" className="w-40 h-auto drop-shadow-[0_0_25px_rgba(217,70,239,0.45)]" />
           </div>
 
           <div className="space-y-3">
