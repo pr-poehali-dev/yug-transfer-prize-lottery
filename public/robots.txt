@@ -27,5 +27,4 @@ Disallow: /posts
 Disallow: /cabinet
 Disallow: /tg-search
 
-Host: https://moy-transfer.ru
-Sitemap: https://moy-transfer.ru/sitemap.xml
+Host: https://baza-info.online

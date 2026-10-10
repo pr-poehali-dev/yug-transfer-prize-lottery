@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-const SITE = "https://moy-transfer.ru";
+const SITE = "https://baza-info.online";
 
 const NOINDEX_PREFIXES = ["/admin", "/posts", "/cabinet", "/dispatch", "/tg-search"];
 
