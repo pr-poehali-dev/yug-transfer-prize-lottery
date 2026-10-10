@@ -381,26 +381,17 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const editingPublished = editId !== null && posts.find(p => p.id === editId)?.status === "published";
 
   return (
-    <div className="card-glow rounded-2xl overflow-hidden">
-      <button
-        type="button"
-        onClick={toggleExpanded}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/10"
-      >
-        <div className="flex items-center gap-2">
-          <Icon name="Send" size={15} className="text-purple-400" />
-          <span className="text-sm font-medium text-white">Посты в канал</span>
-          <span className="text-[11px] text-white/40">· {posts.length}</span>
+    <div>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center">
+          <Icon name="Send" size={20} className="text-violet-400" />
         </div>
-        <Icon
-          name="ChevronDown"
-          size={16}
-          className={`text-white/50 transition-transform ${formExpanded ? "rotate-180" : ""}`}
-        />
-      </button>
+        <h1 className="text-xl md:text-2xl font-semibold text-white">Посты в канал</h1>
+        <span className="text-sm text-white/40">{posts.length}</span>
+      </div>
 
       {formExpanded && (
-        <div className="p-4 space-y-4">
+        <div className="space-y-4">
           <PostForm
             form={form}
             editId={editId}

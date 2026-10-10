@@ -64,7 +64,7 @@ export function PostForm({
   }, [form.button2_text, form.button2_url]);
 
   return (
-    <div className="card-glow rounded-2xl overflow-hidden">
+    <div className="space-card rounded-2xl border border-white/10 overflow-hidden">
       {editId && (
         <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/10">
           <span className="text-xs text-purple-300 flex items-center gap-1">
