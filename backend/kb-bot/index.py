@@ -19,7 +19,8 @@ BUTTON_SUB = '💳 Моя подписка'
 BUTTON_CHECK_DRIVER = '🚗 Проверить водителя'
 BUTTON_CHECK_DISP = '🎧 Проверить диспетчера'
 BUTTON_CHECK = '🔎 Проверить по базе'
-BUTTON_COMPLAIN = '⚠️ Отправить жалобу'
+BUTTON_COMPLAIN = '⚠️ Отправить жалобу в ЧС'
+BUTTON_COMPLAIN_OLD = '⚠️ Отправить жалобу'
 BUTTON_ORDERS = '🚖 Поиск заказов'
 ORDERS_URL = 'https://t.me/OneTMM_Bot?start=ref_6072837543'
 COMPLAIN_PROMPT = 'На кого жалоба?'
@@ -635,7 +636,7 @@ def run_complaint_target(chat_id, user: dict, query: str) -> None:
     kind_q, q = classify_query(query)
     if kind_q == 'username' and (len(q) < 3 or ' ' in q):
         tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': MAIN_KEYBOARD,
-                               'text': 'Не понял, на кого жалоба. Нажмите «⚠️ Отправить жалобу» и пришлите @username, ID или телефон.'})
+                               'text': 'Не понял, на кого жалоба. Нажмите «⚠️ Отправить жалобу в ЧС» и пришлите @username, ID или телефон.'})
         return
     item_id = find_card_id(kind_q, q)
     if not item_id:
@@ -1218,9 +1219,9 @@ def handler(event: dict, context) -> dict:
         tg_api('sendMessage', {
             'chat_id': chat_id, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
             'text': '🚖 <b>Поиск заказов</b>',
-            'reply_markup': {'inline_keyboard': [[{'text': '🔔 Включить мониторинг', 'url': ORDERS_URL}]]}})
+            'reply_markup': {'inline_keyboard': [[{'text': 'Включить мониторинг', 'url': ORDERS_URL}]]}})
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
-    if text == BUTTON_COMPLAIN or text.lower() in ('/complain', 'жалоба', 'пожаловаться'):
+    if text in (BUTTON_COMPLAIN, BUTTON_COMPLAIN_OLD) or text.lower() in ('/complain', 'жалоба', 'пожаловаться'):
         ask_complaint_target(chat_id)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if COMPLAIN_PROMPT in reply_text and text:
