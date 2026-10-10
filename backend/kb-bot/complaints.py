@@ -9,6 +9,9 @@ MAX_PHOTOS = 5
 
 CANCEL_KB = {'keyboard': [[{'text': '❌ Отменить жалобу'}]], 'resize_keyboard': True}
 DATE_KB = {'keyboard': [[{'text': 'Сегодня'}, {'text': 'Вчера'}], [{'text': '❌ Отменить жалобу'}]], 'resize_keyboard': True}
+ROLE_KB = {'keyboard': [[{'text': '🚗 Водитель'}, {'text': '🎧 Диспетчер'}], [{'text': '❌ Отменить жалобу'}]],
+           'resize_keyboard': True}
+ROLE_BY_TEXT = {'🚗 Водитель': 'driver', '🎧 Диспетчер': 'dispatcher', 'водитель': 'driver', 'диспетчер': 'dispatcher'}
 PHOTO_KB = {'keyboard': [[{'text': '✅ Отправить жалобу'}], [{'text': '⏭ Без фото'}], [{'text': '❌ Отменить жалобу'}]],
             'resize_keyboard': True}
 
@@ -54,12 +57,20 @@ def start(tg_api, callback: dict) -> None:
         cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET status='cancelled' "
                     f"WHERE reporter_tg_id={int(user['id'])} AND status='draft'")
         name = ' '.join(x for x in [user.get('first_name', ''), user.get('last_name', '')] if x).strip()
-        cur.execute(f"INSERT INTO {SCHEMA}.kb_complaints (item_id, reporter_tg_id, reporter_username, reporter_name) "
-                    f"VALUES ({item_id}, {int(user['id'])}, '{q(user.get('username'))}', '{q(name)}')")
+        need_role = not row[2]
+        cur.execute(f"INSERT INTO {SCHEMA}.kb_complaints (item_id, reporter_tg_id, reporter_username, reporter_name, step) "
+                    f"VALUES ({item_id}, {int(user['id'])}, '{q(user.get('username'))}', '{q(name)}', "
+                    f"'{'role' if need_role else 'text'}')")
         conn.commit()
     finally:
         cur.close()
         conn.close()
+    if need_role:
+        tg_api('sendMessage', {
+            'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': ROLE_KB,
+            'text': f"⚠️ <b>Жалоба</b>\n\n{target_info(row, item_id)}\n\n"
+                    f"<b>Кто это?</b> Выберите кнопкой ниже: водитель или диспетчер."})
+        return
     tg_api('sendMessage', {
         'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': CANCEL_KB,
         'text': f"⚠️ <b>Жалоба</b>\n\n{target_info(row, item_id)}\n\n"
@@ -145,6 +156,29 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
         upd("status='cancelled'")
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Жалоба отменена.', 'reply_markup': main_kb})
         return msg != '/start'
+
+    if step == 'role':
+        role = ROLE_BY_TEXT.get(msg) or ROLE_BY_TEXT.get(msg.lower())
+        if not role:
+            tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': ROLE_KB,
+                                   'text': 'Выберите кнопкой: 🚗 Водитель или 🎧 Диспетчер.'})
+            return True
+        conn = db()
+        cur = conn.cursor()
+        cur.execute(f"SELECT role FROM {SCHEMA}.check_lists WHERE id={int(item_id or 0)}")
+        cr = cur.fetchone()
+        if cr is not None and not cr[0]:
+            cur.execute(f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
+                        f"VALUES ({int(item_id)}, 'role', '', '{role}', 'complaint')")
+            cur.execute(f"UPDATE {SCHEMA}.check_lists SET role='{role}', updated_at=now() WHERE id={int(item_id)}")
+            conn.commit()
+        cur.close()
+        conn.close()
+        upd("step='text'")
+        tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': CANCEL_KB,
+                               'text': 'Шаг 1 из 3. Опишите коротко, <b>что произошло</b>.\n'
+                                       'Например: «не приехал на заказ, телефон отключил».'})
+        return True
 
     if step == 'text':
         if len(msg) < 5:
