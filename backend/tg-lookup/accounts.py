@@ -103,6 +103,36 @@ async def sign_in(make_client, cur, conn, phone_raw: str, code: str, password: s
     return {'ok': True, 'label': title}
 
 
+async def logout_account(make_client, cur, conn, acc_id: int, main: bool) -> dict:
+    """Завершает сессию в Telegram (аккаунт пропадёт из «Активных сеансов») и убирает его из сканера."""
+    import asyncio
+    if main:
+        cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_session WHERE coalesce(session_string,'') <> '' LIMIT 1")
+    else:
+        cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_accounts WHERE id={int(acc_id)}")
+    row = cur.fetchone()
+    if not row:
+        return {'ok': False, 'error': 'Аккаунт не найден'}
+    logged_out = False
+    try:
+        client = make_client(row[0])
+        await asyncio.wait_for(client.connect(), timeout=8)
+        try:
+            logged_out = bool(await asyncio.wait_for(client.log_out(), timeout=6))
+        finally:
+            if client.is_connected():
+                await client.disconnect()
+    except Exception as e:
+        print(f'[TG-LOOKUP] logout {acc_id}: {type(e).__name__}: {str(e)[:150]}')
+    if main:
+        cur.execute(f"UPDATE {SCHEMA}.tg_user_session SET session_string='' WHERE session_string='{_q(row[0])}'")
+    else:
+        cur.execute(f"DELETE FROM {SCHEMA}.tg_user_accounts WHERE id={int(acc_id)}")
+    cur.execute(f"DELETE FROM {SCHEMA}.tg_session_flood WHERE session_hash='{_key(row[0])}'")
+    conn.commit()
+    return {'ok': True, 'logged_out': logged_out}
+
+
 def delete_account(cur, conn, acc_id: int) -> dict:
     cur.execute(f"DELETE FROM {SCHEMA}.tg_user_accounts WHERE id={int(acc_id)}")
     conn.commit()

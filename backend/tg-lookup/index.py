@@ -885,7 +885,10 @@ def handler(event: dict, context) -> dict:
             if op == 'delete':
                 return resp(200, accounts.delete_account(cur, conn, int(body.get('id') or 0)))
             try:
-                if op == 'send_code':
+                if op == 'logout':
+                    out = asyncio.run(asyncio.wait_for(accounts.logout_account(make_client, cur, conn, int(body.get('id') or 0),
+                                                                               bool(body.get('main'))), timeout=20))
+                elif op == 'send_code':
                     out = asyncio.run(asyncio.wait_for(accounts.send_code(make_client, cur, conn, body.get('phone', '')), timeout=20))
                 elif op == 'sign_in':
                     out = asyncio.run(asyncio.wait_for(accounts.sign_in(make_client, cur, conn, body.get('phone', ''),

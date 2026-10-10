@@ -92,9 +92,20 @@ export function ScanAccounts({ token }: { token: string }) {
     setBusy(false);
   };
 
-  const remove = async (a: Account) => {
-    if (!confirm(`Отключить аккаунт «${a.label}» от сканера?`)) return;
-    await call({ op: "delete", id: a.id });
+  const [outId, setOutId] = useState<string>("");
+
+  const logout = async (a: Account) => {
+    if (!confirm(`Разлогинить «${a.label}»?\n\nСессия сканера будет завершена в Telegram, аккаунт перестанет участвовать в сканировании. Подключить снова можно через «Добавить аккаунт».`)) return;
+    const k = `${a.main ? "m" : a.id}`;
+    setOutId(k);
+    try {
+      const d = await call({ op: "logout", id: a.id, main: !!a.main });
+      if (d.ok) toast.success(d.logged_out ? "Аккаунт разлогинен" : "Аккаунт убран из сканера");
+      else toast.error(d.error || "Не удалось разлогинить");
+    } catch {
+      toast.error("Не удалось разлогинить");
+    }
+    setOutId("");
     load();
   };
 
@@ -162,11 +173,16 @@ export function ScanAccounts({ token }: { token: string }) {
                   {a.phone ? ` · ${a.phone}` : ""}
                 </div>
               </div>
-              {!a.main && (
-                <button onClick={() => remove(a)} className="text-white/30 hover:text-red-300 shrink-0" title="Отключить">
-                  <Icon name="X" size={14} />
-                </button>
-              )}
+              <button
+                onClick={() => logout(a)}
+                disabled={outId === `${a.main ? "m" : a.id}`}
+                className="shrink-0 rounded-md px-2 py-1 text-[11px] border border-white/10 text-white/60 hover:text-red-200 hover:border-red-400/40 hover:bg-red-500/10 flex items-center gap-1 disabled:opacity-60"
+                title="Завершить сессию сканера в Telegram"
+              >
+                <Icon name={outId === `${a.main ? "m" : a.id}` ? "Loader2" : "LogOut"} size={12}
+                  className={outId === `${a.main ? "m" : a.id}` ? "animate-spin" : ""} />
+                Выйти
+              </button>
             </div>
           ))}
         </div>
