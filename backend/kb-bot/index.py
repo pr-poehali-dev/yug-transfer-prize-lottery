@@ -77,11 +77,38 @@ def tg_api(method: str, payload: dict, timeout: float = 3.5) -> dict:
     if not result and LAST_OK['host'] and hosts != TG_HOSTS:
         LAST_OK['host'] = ''
         return tg_api(method, payload, timeout)
-    if SCREEN['rec'] is not None and method in ('sendMessage', 'sendPhoto') and result.get('ok'):
-        mid = (result.get('result') or {}).get('message_id')
-        if mid:
-            SCREEN['rec'].append(int(mid))
+    if method in ('sendMessage', 'sendPhoto', 'sendMediaGroup') and result.get('ok'):
+        track_sent(payload.get('chat_id'), result.get('result'))
     return result
+
+
+def track_sent(chat_id, res) -> None:
+    """Запоминаем каждое сообщение бота в личке, чтобы при переходе в другой раздел его стереть."""
+    try:
+        cid = int(chat_id)
+    except (TypeError, ValueError):
+        return
+    if cid <= 0:
+        return
+    items = res if isinstance(res, list) else [res or {}]
+    ids = [int(m['message_id']) for m in items if isinstance(m, dict) and m.get('message_id')]
+    if not ids:
+        return
+    if SCREEN['rec'] is not None:
+        SCREEN['rec'].extend(ids)
+        return
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET screen_msgs="
+                    f"right(trim(both ',' from screen_msgs || ',' || '{','.join(str(i) for i in ids)}'), 900) "
+                    f"WHERE tg_user_id={cid}")
+        conn.commit()
+    except Exception as e:
+        print(f'[KB-BOT] track sent failed: {type(e).__name__}')
+    finally:
+        cur.close()
+        conn.close()
 
 
 SCREEN = {'rec': None}
@@ -423,13 +450,11 @@ def handle_buy(callback: dict) -> None:
 def notify_paid(res: dict) -> None:
     if res.get('new') and res.get('chat_id'):
         plan = payments.PLANS.get(res.get('plan'), {})
-        rec, SCREEN['rec'] = SCREEN['rec'], None
         sent = tg_api('sendMessage', {'chat_id': res['chat_id'], 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD,
                                'text': f"✅ <b>Ваш платёж зачислен!</b>\n\n"
                                        f"Подписка на <b>{plan.get('title', '')}</b> активна.\n"
                                        f"📅 Действует до: <b>{res.get('until', '')}</b>\n\n"
                                        '🚖 Хороших дорог и щедрых пассажиров!'}, timeout=4)
-        SCREEN['rec'] = rec
         if sent.get('ok') and res.get('pid'):
             payments.mark_notified(res['pid'])
 
@@ -1300,7 +1325,6 @@ def handler(event: dict, context) -> dict:
 
     if not text.startswith('/start'):
         start_trial(message.get('from') or {})
-    check_pending(int((message.get('from') or {}).get('id') or 0))
     if complaints.handle_message(tg_api, tg_download, store_photo, message, MAIN_KEYBOARD,
                                  lambda cid: complaints.notify_admin(tg_api, cid)):
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
@@ -1309,6 +1333,7 @@ def handler(event: dict, context) -> dict:
     SCREEN['rec'] = []
     job = screen_clear(menu_uid, chat_id, [int(message.get('message_id') or 0)])
     try:
+        check_pending(menu_uid)
         return handle_private(message, chat_id, text)
     finally:
         screen_save(menu_uid, job)
