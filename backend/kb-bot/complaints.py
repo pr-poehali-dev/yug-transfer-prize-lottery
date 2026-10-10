@@ -221,11 +221,24 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
                                        'reply_markup': PHOTO_KB})
                 return True
             raw = tg_download(message['photo'][-1]['file_id'])
-            if raw:
-                plist.append(store_photo(raw))
-                upd(f"photos='{q(chr(10).join(plist))}'")
+            url = store_photo(raw) if raw else ''
+            c1 = db()
+            k1 = c1.cursor()
+            if url:
+                # Дописываем фото к уже сохранённым (даже если жалобу успели отправить — фото останется в админке).
+                k1.execute(f"UPDATE {SCHEMA}.kb_complaints SET photos=trim(both chr(10) from coalesce(photos,'') || chr(10) || '{q(url)}'), "
+                           f"updated_at=now() WHERE id={int(cid)}")
+            k1.execute(f"SELECT status, photos FROM {SCHEMA}.kb_complaints WHERE id={int(cid)}")
+            st = k1.fetchone() or ('', '')
+            c1.commit()
+            k1.close()
+            c1.close()
+            if st[0] != 'draft':
+                # Жалобу уже отправили — больше ничего не предлагаем.
+                return True
+            n = len([p for p in (st[1] or '').split('\n') if p])
             tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': PHOTO_KB,
-                                   'text': f'📎 Фото добавлено ({len(plist)}/{MAX_PHOTOS}). Можно ещё или нажмите «✅ Отправить жалобу».'})
+                                   'text': f'📎 Фото добавлено ({n}/{MAX_PHOTOS}). Можно ещё или нажмите «✅ Отправить жалобу».'})
             return True
         if msg in ('✅ Отправить жалобу', '⏭ Без фото'):
             # Отправляем только один раз: повторное нажатие или повтор от Telegram ничего не дублирует.
