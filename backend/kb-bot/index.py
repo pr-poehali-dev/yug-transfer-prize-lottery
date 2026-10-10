@@ -1217,9 +1217,8 @@ def handler(event: dict, context) -> dict:
     if text == BUTTON_ORDERS or text.lower() in ('/orders', 'поиск заказов', 'заказы'):
         tg_api('sendMessage', {
             'chat_id': chat_id, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
-            'text': '🚖 <b>Поиск заказов</b>\n\nСвежие заказы на трансферы для водителей и диспетчеров — '
-                    'в нашем боте-партнёре. Нажмите кнопку ниже, чтобы перейти.',
-            'reply_markup': {'inline_keyboard': [[{'text': '🚖 Перейти к заказам', 'url': ORDERS_URL}]]}})
+            'text': '🚖 <b>Поиск заказов</b>',
+            'reply_markup': {'inline_keyboard': [[{'text': '🔔 Включить мониторинг', 'url': ORDERS_URL}]]}})
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if text == BUTTON_COMPLAIN or text.lower() in ('/complain', 'жалоба', 'пожаловаться'):
         ask_complaint_target(chat_id)
