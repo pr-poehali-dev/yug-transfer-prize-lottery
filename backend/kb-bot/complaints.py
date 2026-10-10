@@ -6,6 +6,7 @@ import psycopg2
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 MAX_PHOTOS = 5
+NO_AVATAR = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ce9fc4b-5704-4dfd-8b7f-595e27e6da6f.jpg'
 
 CANCEL_KB = {'keyboard': [[{'text': '❌ Отменить жалобу'}]], 'resize_keyboard': True}
 DATE_KB = {'keyboard': [[{'text': 'Сегодня'}, {'text': 'Вчера'}], [{'text': '❌ Отменить жалобу'}]], 'resize_keyboard': True}
@@ -252,7 +253,7 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
     cur = conn.cursor()
     try:
         cur.execute(f"SELECT k.text, k.incident_date, k.photos, k.reporter_tg_id, k.reporter_username, k.reporter_name, "
-                    f"k.created_at, c.name, c.username, c.role, c.list_type, c.tg_id, k.item_id "
+                    f"k.created_at, c.name, c.username, c.role, c.list_type, c.tg_id, k.item_id, c.photo_url "
                     f"FROM {SCHEMA}.kb_complaints k LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id WHERE k.id={int(cid)}")
         r = cur.fetchone()
     finally:
@@ -260,7 +261,7 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         conn.close()
     if not r:
         return
-    text, inc, photos, rep_id, rep_un, rep_name, created, name, un, role, lt, tg_id, item_id = r
+    text, inc, photos, rep_id, rep_un, rep_name, created, name, un, role, lt, tg_id, item_id, avatar = r
     role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '❓ Роль не определена — выберите кнопкой ниже')
     lt_txt = {'white': '✅ белый список', 'black': '⛔️ чёрный список', 'pending': '🕓 на модерации'}.get(lt, '')
     cnt = complaints_count(item_id)
@@ -282,13 +283,14 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         f"🙋 <b>Пожаловался:</b> {reporter} (ID <code>{rep_id}</code>)",
     ]
     plist = [p for p in (photos or '').split('\n') if p]
-    if len(plist) > 1:
-        lines.append(f"📎 Ещё фото: {len(plist) - 1} (ниже)")
+    if plist:
+        lines.append(f"📎 Скриншоты к жалобе: {len(plist)} (ниже)")
     msg = '\n'.join(lines)
     markup = decision_markup(cid, lt) if to_decision else admin_markup(cid, lt, role or '')
     if to_decision:
         msg = msg.replace(f"🚨 <b>Новая жалоба #{cid}</b>", f"⚖️ <b>Жалоба #{cid} — нужно решение</b>")
-    plist_media = [{'type': 'photo', 'media': p} for p in plist[:10]]
+    # Главное фото — квадратная аватарка (или заглушка): сообщение ровное, кнопки не сжимаются.
+    plist_media = [{'type': 'photo', 'media': avatar or NO_AVATAR}] + [{'type': 'photo', 'media': p} for p in plist[:10]]
     sent_ids = {}
 
     def send_to(chat, thread, with_buttons):
@@ -312,6 +314,10 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         if not res.get('ok') and thread:
             res = call(None)
             thread = None
+        if not res.get('ok') and first_photo and first_photo != NO_AVATAR:
+            print(f"[KB-BOT] complaint avatar failed: {res.get('description', '')[:120]}")
+            first_photo = NO_AVATAR
+            res = call(thread)
         if not res.get('ok') and first_photo:
             print(f"[KB-BOT] complaint photo failed: {res.get('description', '')[:120]}")
             first_photo = None
@@ -321,14 +327,21 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
             return None
         msg_id = (res.get('result') or {}).get('message_id')
         sent_ids.setdefault(str(chat), []).append(msg_id)
-        rest = plist_media[1:] if first_photo else plist_media
+        rest = plist_media[1:]
         if rest:
             mg = {'chat_id': chat, 'media': [dict(m) for m in rest],
                   'reply_parameters': {'message_id': msg_id, 'allow_sending_without_reply': True}}
             if thread:
                 mg['message_thread_id'] = thread
-            album = tg_api('sendMediaGroup', mg)
-            for m in (album.get('result') or []):
+            if len(rest) == 1:
+                one = {k: v for k, v in mg.items() if k != 'media'}
+                one['photo'] = rest[0]['media']
+                album = tg_api('sendPhoto', one)
+                res_list = [album.get('result')] if album.get('result') else []
+            else:
+                album = tg_api('sendMediaGroup', mg)
+                res_list = album.get('result') or []
+            for m in res_list:
                 sent_ids[str(chat)].append(m.get('message_id'))
         return msg_id
 
@@ -607,7 +620,7 @@ def publish_verdict(tg_api, cid: int, by: str) -> None:
     caption = '\n'.join(lines)[:1024]
     chat = DECISION_CHAT
     plist = [p for p in (photos or '').split('\n') if p]
-    media_urls = ([avatar] if avatar else []) + plist
+    media_urls = [avatar or NO_AVATAR] + plist
     if len(media_urls) > 1:
         media = [{'type': 'photo', 'media': u} for u in media_urls[:10]]
         media[0]['caption'] = caption
