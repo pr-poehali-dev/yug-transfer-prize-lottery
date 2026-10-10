@@ -170,15 +170,19 @@ def handle_subs_stats(cur, qs: dict) -> dict:
                  'note': r[5] or '', 'payment_id': r[6] or '', 'created_at': r[7], 'active_until': r[8]}
                 for r in cur.fetchall()]
 
-    cur.execute(f"SELECT tg_user_id, username, first_name, active_until FROM {SCHEMA}.kb_subscriptions "
-                f"ORDER BY active_until DESC NULLS LAST LIMIT 500")
-    subscribers = [{'tg_id': r[0], 'username': r[1] or '', 'name': r[2] or '', 'active_until': r[3]}
-                   for r in cur.fetchall()]
+    cur.execute(f"SELECT tg_user_id, username, first_name, active_until, is_trial, created_at FROM {SCHEMA}.kb_subscriptions "
+                f"ORDER BY created_at DESC LIMIT 500")
+    subscribers = [{'tg_id': r[0], 'username': r[1] or '', 'name': r[2] or '', 'active_until': r[3],
+                    'is_trial': bool(r[4]), 'created_at': r[5]} for r in cur.fetchall()]
+    cur.execute(f"SELECT count(*) FILTER (WHERE is_trial AND active_until > now()), "
+                f"count(*) FILTER (WHERE created_at > now() - interval '1 day') FROM {SCHEMA}.kb_subscriptions")
+    trial_active, new_today = cur.fetchone()
 
     return resp(200, {'ok': True, 'month': month, 'stats': {
         'month_count': m_cnt, 'month_sum': float(m_sum), 'month_users': m_users,
         'all_count': all_cnt, 'all_sum': float(all_sum),
         'active': active, 'total_subs': total_subs, 'expiring': expiring,
+        'trial_active': trial_active, 'new_today': new_today,
     }, 'by_month': by_month, 'payments': payments, 'subscribers': subscribers})
 
 

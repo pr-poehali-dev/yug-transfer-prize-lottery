@@ -19,6 +19,8 @@ interface Subscriber {
   username: string;
   name: string;
   active_until: string | null;
+  is_trial?: boolean;
+  created_at?: string;
 }
 
 interface Data {
@@ -32,6 +34,8 @@ interface Data {
     active: number;
     total_subs: number;
     expiring: number;
+    trial_active?: number;
+    new_today?: number;
   };
   by_month: { month: string; count: number; sum: number }[];
   payments: Payment[];
@@ -125,13 +129,15 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
         <div className="text-sm text-white/50 py-10 text-center">Загрузка…</div>
       ) : data ? (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <Stat icon="Wallet" color="text-emerald-400" label="Доход за месяц" value={rub(data.stats.month_sum)}
               hint={`${data.stats.month_count} оплат`} />
             <Stat icon="UserCheck" color="text-sky-400" label="Оплатили в месяце" value={String(data.stats.month_users)}
               hint="человек" />
             <Stat icon="BadgeCheck" color="text-violet-400" label="Активных подписок" value={String(data.stats.active)}
-              hint={data.stats.expiring ? `${data.stats.expiring} истекают за 3 дня` : `из ${data.stats.total_subs} всего`} />
+              hint={`из них на тесте: ${data.stats.trial_active ?? 0}`} />
+            <Stat icon="UserPlus" color="text-sky-400" label="Запустили бота" value={String(data.stats.total_subs)}
+              hint={`за сутки: ${data.stats.new_today ?? 0}`} />
             <Stat icon="TrendingUp" color="text-amber-400" label="Доход за всё время" value={rub(data.stats.all_sum)}
               hint={`${data.stats.all_count} оплат`} />
           </div>
@@ -208,8 +214,13 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
                         <div className="text-sm text-white truncate">
                           {s.name || "Без имени"} {s.username && <span className="text-sky-300">@{s.username}</span>}
                         </div>
-                        <div className="text-[11px] text-white/40">ID {s.tg_id}</div>
+                        <div className="text-[11px] text-white/40">
+                          ID {s.tg_id}{s.created_at ? ` · запустил бота ${fmtDate(s.created_at)}` : ""}
+                        </div>
                       </div>
+                      {s.is_trial && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full shrink-0 bg-sky-500/15 text-sky-300">🎁 Тест</span>
+                      )}
                       <span className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${active ? "bg-emerald-500/15 text-emerald-300" : "bg-white/10 text-white/50"}`}>
                         {active ? `до ${fmtDate(s.active_until)}` : s.active_until ? `истекла ${fmtDate(s.active_until)}` : "нет"}
                       </span>
