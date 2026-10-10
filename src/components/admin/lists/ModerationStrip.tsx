@@ -156,7 +156,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
     let idle = 0;
     while (!stopRef.current) {
       try {
-        const res = await fetch(`${TG_LOOKUP_API}?action=batch`, { headers: { "X-Admin-Token": token } });
+        const res = await fetch(`${TG_LOOKUP_API}?action=batch&scope=pending`, { headers: { "X-Admin-Token": token } });
         const d = await res.json();
         if (!d.ok) break;
         done += d.done;

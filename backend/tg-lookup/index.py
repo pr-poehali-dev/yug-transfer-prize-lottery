@@ -323,6 +323,8 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
                 # Тот же человек уже есть в базе под другим username — дубль с модерации убираем.
                 conn.rollback()
                 cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={int(row_id)} AND list_type='pending'")
+                if not cur.rowcount:
+                    cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), scan_status='дубль другой карточки' WHERE id={int(row_id)}")
                 conn.commit()
                 stats['dupes'] = stats.get('dupes', 0) + 1
             stats['done'] += 1
@@ -331,7 +333,7 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
     return stats
 
 
-def handle_batch(context) -> dict:
+def handle_batch(context, scope: str = 'all') -> dict:
     started = time.time()
     try:
         budget = context.get_remaining_time_in_millis() / 1000 - 2
@@ -348,8 +350,9 @@ def handle_batch(context) -> dict:
         sessions.sort(key=lambda x: 0 if StringSession(x).dc_id == 2 else 1)
         print(f'[TG-LOOKUP] batch sessions {len(sessions)}, blocked {len(blocked)}')
         workers = sessions[:4]
-        cur.execute(f"SELECT id, username FROM {SCHEMA}.check_lists WHERE list_type='pending' AND username <> '' "
-                    f"AND last_scan_at IS NULL ORDER BY id DESC LIMIT {12 * max(1, len(workers))}")
+        where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
+        cur.execute(f"SELECT id, username FROM {SCHEMA}.check_lists WHERE {where} "
+                    f"ORDER BY (list_type='pending') DESC, id DESC LIMIT {12 * max(1, len(workers))}")
         rows = cur.fetchall()
         stats = [{'done': 0, 'found': 0, 'missing': 0, 'flood': 0} for _ in workers]
 
@@ -377,7 +380,7 @@ def handle_batch(context) -> dict:
                             f"('{sess_key(sess)}', now() + interval '{int(st['flood']) + 30} seconds') "
                             f"ON CONFLICT (session_hash) DO UPDATE SET until_at = EXCLUDED.until_at")
                 conn.commit()
-        cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists WHERE list_type='pending' AND username <> '' AND last_scan_at IS NULL")
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists WHERE {where}")
         left = cur.fetchone()[0]
         cur.execute(f"SELECT count(*), coalesce(extract(epoch from min(until_at) - now()), 0)::int "
                     f"FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
@@ -862,7 +865,7 @@ def handler(event: dict, context) -> dict:
     if qs.get('action') == 'auto':
         return handle_auto(context)
     if qs.get('action') == 'batch':
-        return handle_batch(context)
+        return handle_batch(context, qs.get('scope') or 'all')
     if qs.get('action') == 'group':
         return handle_group(qs, context)
     if is_cron:

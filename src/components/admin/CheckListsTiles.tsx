@@ -9,6 +9,7 @@ import { ModerationPage } from "./lists/ModerationStrip";
 import { SubscriptionsPage } from "./lists/SubscriptionsPage";
 import { GroupsPage } from "./lists/GroupsPage";
 import { ComplaintsPage } from "./lists/ComplaintsPage";
+import { GlobalScanBar } from "./lists/GlobalScanBar";
 
 interface ListPageProps {
   token: string;
@@ -350,6 +351,8 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   ];
 
   return (
+    <div className="space-y-3">
+    <GlobalScanBar token={token} onChanged={load} />
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {tiles.map((t) => {
         const c = toneMap[t.tone];
@@ -376,6 +379,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
           </button>
         );
       })}
+    </div>
     </div>
   );
 }
