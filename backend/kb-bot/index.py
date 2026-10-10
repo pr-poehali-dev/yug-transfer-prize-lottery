@@ -19,6 +19,8 @@ BUTTON_SUB = '💳 Моя подписка'
 BUTTON_CHECK_DRIVER = '🚗 Проверить водителя'
 BUTTON_CHECK_DISP = '🎧 Проверить диспетчера'
 BUTTON_CHECK = '🔎 Проверить по базе'
+BUTTON_COMPLAIN = '⚠️ Отправить жалобу'
+COMPLAIN_PROMPT = 'На кого жалоба?'
 CHECKS_ANY = {'prompt': 'Проверка по базе водителей и диспетчеров', 'who': 'Аккаунт', 'role': ''}
 CHECKS = {
     'driver': {'button': BUTTON_CHECK_DRIVER, 'prompt': 'Проверка водителя', 'category': 'водител', 'who': 'Водитель', 'role': 'driver'},
@@ -32,7 +34,7 @@ CORS = {
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_COMPLAIN}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
@@ -561,6 +563,67 @@ def add_to_moderation(kind_q: str, q, known, live: dict = None) -> None:
         conn.close()
 
 
+def ask_complaint_target(chat_id) -> None:
+    tg_api('sendMessage', {
+        'chat_id': chat_id, 'parse_mode': 'HTML',
+        'text': f"⚠️ <b>{COMPLAIN_PROMPT}</b>\n\nОтправьте ответом на это сообщение @username, Telegram ID, "
+                f"ссылку на профиль или номер телефона водителя / диспетчера.",
+        'reply_markup': {'force_reply': True, 'input_field_placeholder': '@username, ID или телефон'},
+    })
+
+
+def find_card_id(kind_q: str, q):
+    conds = []
+    if kind_q == 'id':
+        conds.append(f"tg_id = {int(q)}")
+    elif kind_q == 'phone':
+        conds.append(f"right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}'")
+    else:
+        conds.append(f"lower(username) = '{str(q).replace(chr(39), chr(39) * 2)}'")
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT id FROM {SCHEMA}.check_lists WHERE {' OR '.join(conds)} "
+                    f"ORDER BY CASE list_type WHEN 'black' THEN 0 WHEN 'white' THEN 1 ELSE 2 END, id LIMIT 1")
+        r = cur.fetchone()
+        return int(r[0]) if r else None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def run_complaint_target(chat_id, user: dict, query: str) -> None:
+    """Находит (или заводит на модерацию) карточку по запросу и запускает оформление жалобы."""
+    kind_q, q = classify_query(query)
+    if kind_q == 'username' and (len(q) < 3 or ' ' in q):
+        tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': MAIN_KEYBOARD,
+                               'text': 'Не понял, на кого жалоба. Нажмите «⚠️ Отправить жалобу» и пришлите @username, ID или телефон.'})
+        return
+    item_id = find_card_id(kind_q, q)
+    if not item_id:
+        known = None
+        if kind_q in ('id', 'username'):
+            conn = psycopg2.connect(os.environ['DATABASE_URL'])
+            cur = conn.cursor()
+            cond = f"tg_id={int(q)}" if kind_q == 'id' else f"lower(username)='{str(q).replace(chr(39), chr(39) * 2)}'"
+            cur.execute(f"SELECT tg_id, username FROM {SCHEMA}.tg_users WHERE {cond} ORDER BY updated_at DESC LIMIT 1")
+            known = cur.fetchone()
+            cur.close()
+            conn.close()
+        live = live_lookup(kind_q, q) if not known else {}
+        if live:
+            known = (int(live['tg_id']), live.get('username') or '')
+        add_to_moderation(kind_q, q, known, live)
+        item_id = find_card_id(kind_q, q)
+        if not item_id and known:
+            item_id = find_card_id('id', known[0])
+    if not item_id:
+        tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': MAIN_KEYBOARD,
+                               'text': 'Не удалось найти этот аккаунт. Проверьте @username, ID или телефон и попробуйте ещё раз.'})
+        return
+    complaints.start_for(tg_api, user, chat_id, item_id)
+
+
 def verdict(r) -> str:
     """Итог проверки: кто это (водитель/диспетчер) и можно ли с ним работать."""
     list_type, role = r[0], (r[10] if len(r) > 10 else '')
@@ -880,7 +943,7 @@ def private_only_commands() -> dict:
     res = {}
     for scope in ('default', 'all_group_chats', 'all_chat_administrators'):
         res[scope] = tg_api('deleteMyCommands', {'scope': {'type': scope}}, timeout=2.2).get('ok')
-    res['private'] = tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}, {'command': 'role', 'description': 'Сменить роль'}], 'scope': {'type': 'all_private_chats'}}, timeout=2.2).get('ok')
+    res['private'] = tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}, {'command': 'complain', 'description': 'Отправить жалобу'}, {'command': 'role', 'description': 'Сменить роль'}], 'scope': {'type': 'all_private_chats'}}, timeout=2.2).get('ok')
     return res
 
 
@@ -1033,6 +1096,12 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     reply_text = ((message.get('reply_to_message') or {}).get('text') or '')
+    if text == BUTTON_COMPLAIN or text.lower() in ('/complain', 'жалоба', 'пожаловаться'):
+        ask_complaint_target(chat_id)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+    if COMPLAIN_PROMPT in reply_text and text:
+        run_complaint_target(chat_id, message.get('from') or {}, text)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     reply_kind = 'any' if CHECKS_ANY['prompt'] in reply_text else next((k for k, c in CHECKS.items() if c['prompt'] in reply_text), '')
 
     uid = (message.get('from') or {}).get('id') or chat_id

@@ -47,6 +47,11 @@ def start(tg_api, callback: dict) -> None:
     chat_id = ((callback.get('message') or {}).get('chat') or {}).get('id') or user.get('id')
     item_id = int(str(callback.get('data', '')).split(':')[1])
     tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id')}, timeout=2.2)
+    start_for(tg_api, user, chat_id, item_id)
+
+
+def start_for(tg_api, user: dict, chat_id, item_id: int) -> None:
+    """Начинает оформление жалобы на карточку item_id."""
     conn = db()
     cur = conn.cursor()
     try:
