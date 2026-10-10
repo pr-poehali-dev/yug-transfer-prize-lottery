@@ -1,0 +1,1 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.kb_subscriptions ADD COLUMN IF NOT EXISTS screen_msgs TEXT NOT NULL DEFAULT '';

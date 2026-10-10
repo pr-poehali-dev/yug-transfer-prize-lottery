@@ -37,6 +37,7 @@ CORS = {
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
+MENU_BUTTONS = {BUTTON_CHECK, BUTTON_GROUPS, BUTTON_ORDERS, BUTTON_COMPLAIN, BUTTON_COMPLAIN_OLD, BUTTON_SUB}
 MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_ORDERS}], [{'text': BUTTON_COMPLAIN}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
 
 
@@ -76,7 +77,51 @@ def tg_api(method: str, payload: dict, timeout: float = 3.5) -> dict:
     if not result and LAST_OK['host'] and hosts != TG_HOSTS:
         LAST_OK['host'] = ''
         return tg_api(method, payload, timeout)
+    if SCREEN['rec'] is not None and method in ('sendMessage', 'sendPhoto') and result.get('ok'):
+        mid = (result.get('result') or {}).get('message_id')
+        if mid:
+            SCREEN['rec'].append(int(mid))
     return result
+
+
+SCREEN = {'rec': None}
+
+
+def screen_clear(uid: int, chat_id) -> None:
+    """Удаляет сообщения прошлого экрана (список групп, заказы, подписка и т.п.)."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT screen_msgs FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
+        r = cur.fetchone()
+        ids = [int(x) for x in ((r[0] if r else '') or '').split(',') if x.strip().isdigit()]
+        if ids:
+            cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET screen_msgs='' WHERE tg_user_id={int(uid)}")
+            conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+    if ids:
+        rec, SCREEN['rec'] = SCREEN['rec'], None
+        tg_api('deleteMessages', {'chat_id': chat_id, 'message_ids': ids[-100:]}, timeout=2.5)
+        SCREEN['rec'] = rec
+
+
+def screen_save(uid: int) -> None:
+    ids = SCREEN['rec'] or []
+    SCREEN['rec'] = None
+    if not ids:
+        return
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET screen_msgs="
+                    f"right(trim(both ',' from screen_msgs || ',' || '{','.join(str(i) for i in ids)}'), 900) "
+                    f"WHERE tg_user_id={int(uid)}")
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
 
 
 def load_groups() -> list:
@@ -1214,6 +1259,18 @@ def handler(event: dict, context) -> dict:
                                  lambda cid: complaints.notify_admin(tg_api, cid)):
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
+    menu_uid = int((message.get('from') or {}).get('id') or chat_id)
+    is_menu = text in MENU_BUTTONS or text.lower() in ('/orders', '/groups', '/sub', '/check', '/complain')
+    SCREEN['rec'] = [int(message['message_id'])] if message.get('message_id') else []
+    if is_menu:
+        screen_clear(menu_uid, chat_id)
+    try:
+        return handle_private(message, chat_id, text)
+    finally:
+        screen_save(menu_uid)
+
+
+def handle_private(message: dict, chat_id, text: str) -> dict:
     reply_text = ((message.get('reply_to_message') or {}).get('text') or '')
     if text == BUTTON_ORDERS or text.lower() in ('/orders', 'поиск заказов', 'заказы'):
         tg_api('sendMessage', {
