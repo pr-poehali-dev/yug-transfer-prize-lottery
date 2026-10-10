@@ -957,7 +957,7 @@ def handler(event: dict, context) -> dict:
         return handle_batch(context, qs.get('scope') or 'all')
     if qs.get('action') == 'group':
         return handle_group(qs, context)
-    if is_cron and not qs.get('username') and not qs.get('phone'):
+    if is_cron and not qs.get('username') and not qs.get('phone') and not qs.get('rescan'):
         return resp(400, {'error': 'only batch'})
 
     if qs.get('action') == 'accounts':

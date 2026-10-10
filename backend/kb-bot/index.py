@@ -709,11 +709,65 @@ def run_check(chat_id, kind: str, query: str) -> None:
                                'reply_markup': MAIN_KEYBOARD})
         return
     found.sort(key=lambda r: 0 if r[0] == 'black' else 1)
-    for r in found[:3]:
+    found = [enrich_card(r) for r in found[:3]]
+    for r in found:
         send_card(chat_id, r, verdict(r))
 
 
 LOOKUP_URL = 'https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a'
+CARD_COLS = "list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, id, role"
+
+
+def enrich_card(r):
+    """Если в карточке не хватает имени, ID, телефона или фото — дотягиваем:
+    сначала из своей базы (мгновенно), затем живым запросом в Telegram."""
+    name, username, phone, tg_id, photo, item_id = r[1], r[2], r[3], r[5], r[6], r[9]
+    if name and tg_id and phone and photo:
+        return r
+    e = lambda v: str(v or '').replace("'", "''")
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        conds = ([f"tg_id={int(tg_id)}"] if tg_id else []) + ([f"lower(username)=lower('{e(username)}')"] if username else [])
+        if conds:
+            cur.execute(f"SELECT tg_id, trim(coalesce(first_name,'') || ' ' || coalesce(last_name,'')), coalesce(phone,'') "
+                        f"FROM {SCHEMA}.tg_users WHERE {' OR '.join(conds)} ORDER BY updated_at DESC LIMIT 1")
+            u = cur.fetchone()
+            if u:
+                ph = ('+' + ''.join(ch for ch in u[2] if ch.isdigit())) if u[2] else ''
+                try:
+                    cur.execute(f"UPDATE {SCHEMA}.check_lists SET tg_id=COALESCE(tg_id, {int(u[0])}), "
+                                f"name=CASE WHEN name='' THEN '{e(u[1])}' ELSE name END, "
+                                f"phone=CASE WHEN phone='' THEN '{e(ph)}' ELSE phone END, updated_at=now() WHERE id={int(item_id)}")
+                    conn.commit()
+                except Exception as ex:
+                    conn.rollback()
+                    print(f'[KB-BOT] enrich from cache: {type(ex).__name__}')
+        cur.execute(f"SELECT last_scan_at > now() - interval '1 day', name, tg_id, photo_url FROM {SCHEMA}.check_lists WHERE id={int(item_id)}")
+        st = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+    need_live = st and not st[0] and (not st[1] or not st[2] or not st[3]) and (username or st[2])
+    if need_live:
+        left = min(12.0, DEADLINE['t'] - time.time() - 3) if DEADLINE['t'] else 0
+        if left >= 4:
+            import urllib.request
+            req = urllib.request.Request(f"{LOOKUP_URL}?rescan={int(item_id)}",
+                                         headers={'X-Cron-Secret': os.environ.get('CRON_SECRET', '')})
+            try:
+                with urllib.request.urlopen(req, timeout=left) as resp_:
+                    resp_.read()
+            except Exception as ex:
+                print(f'[KB-BOT] enrich live: {type(ex).__name__}')
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT {CARD_COLS} FROM {SCHEMA}.check_lists WHERE id={int(item_id)}")
+        return cur.fetchone() or r
+    finally:
+        cur.close()
+        conn.close()
 DEADLINE = {'t': 0.0}
 
 
