@@ -229,7 +229,11 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
             if row:
                 info = '\n\n' + target_info(row, item_id).split('\n\nℹ️')[0]
             tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': main_kb, 'parse_mode': 'HTML',
-                                   'text': f'✅ <b>Жалоба отправлена.</b>{info}\n\nСпасибо! Администратор проверит информацию и примет решение.'})
+                                   'disable_web_page_preview': True,
+                                   'text': f'✅ <b>Ваша жалоба #{cid} принята</b> и отправлена на модерацию.{info}\n\n'
+                                           '⚖️ Решение по жалобе будет опубликовано в группе '
+                                           '<a href="https://t.me/chernyi_spisok_transfer">ЧС Авто трансфера РФ</a>.\n'
+                                           'О результате мы также напишем вам сюда.'})
             notify(cid)
             return True
         tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': PHOTO_KB,
@@ -282,7 +286,8 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         f"📅 <b>Когда:</b> {inc.strftime('%d.%m.%Y') if inc else '—'}",
         f"🙋 <b>Пожаловался:</b> {reporter} (ID <code>{rep_id}</code>)",
     ]
-    plist = [p for p in (photos or '').split('\n') if p]
+    # В группу ЧС доказательства не отправляем — только аватарка; скриншоты остаются в теме «жалобы» и в админке.
+    plist = [] if to_decision else [p for p in (photos or '').split('\n') if p]
     if plist:
         lines.append(f"📎 Скриншоты к жалобе: {len(plist)} (ниже)")
     msg = '\n'.join(lines)
@@ -620,7 +625,7 @@ def publish_verdict(tg_api, cid: int, by: str) -> None:
     caption = '\n'.join(lines)[:1024]
     chat = DECISION_CHAT
     plist = [p for p in (photos or '').split('\n') if p]
-    media_urls = [avatar or NO_AVATAR] + plist
+    media_urls = [avatar or NO_AVATAR]
     if len(media_urls) > 1:
         media = [{'type': 'photo', 'media': u} for u in media_urls[:10]]
         media[0]['caption'] = caption
