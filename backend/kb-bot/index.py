@@ -104,11 +104,39 @@ def _tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False)
                 markup = json.loads(markup)
             except ValueError:
                 markup = None
-        if isinstance(markup, dict) and markup.get('keyboard'):
+        if isinstance(markup, dict) and markup.get('keyboard') == MAIN_KEYBOARD['keyboard']:
             keep_keyboard_msg(payload.get('chat_id'), result.get('result'))
         else:
             track_sent(payload.get('chat_id'), result.get('result'))
+            if isinstance(markup, dict) and (markup.get('force_reply') or markup.get('keyboard') or markup.get('remove_keyboard')):
+                keyboard_lost(payload.get('chat_id'))
     return result
+
+
+def keyboard_lost(chat_id) -> None:
+    """Запрос «ответьте на сообщение» или другая клавиатура скрывает главное меню.
+    Помечаем это — при следующем действии бот сам вернёт кнопки."""
+    try:
+        cid = int(chat_id)
+    except (TypeError, ValueError):
+        return
+    if cid <= 0:
+        return
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET "
+                    f"screen_msgs=CASE WHEN kb_msg_id IS NOT NULL AND kb_msg_id IS DISTINCT FROM start_msg_id "
+                    f"THEN right(trim(both ',' from coalesce(screen_msgs,'') || ',' || kb_msg_id::text), 900) ELSE screen_msgs END, "
+                    f"kb_msg_id=NULL WHERE tg_user_id={cid}")
+        conn.commit()
+    except Exception as e:
+        print(f'[KB-BOT] keyboard lost mark failed: {type(e).__name__}')
+    finally:
+        cur.close()
+        conn.close()
+    if SCREEN['rec'] is not None:
+        SCREEN['need_kb'] = False
 
 
 def keep_keyboard_msg(chat_id, res) -> None:
@@ -335,8 +363,20 @@ def send_single(chat_id, uid: int, payload: dict) -> None:
     res = tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', **payload})
     new_id = (res.get('result') or {}).get('message_id')
     old = swap_start_msg(uid, new_id) if new_id else 0
-    if old and old != new_id:
+    if old and old != new_id and old != keyboard_msg_id(uid):
         tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': old}, timeout=2.2)
+
+
+def keyboard_msg_id(uid) -> int:
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT kb_msg_id FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
+        r = cur.fetchone()
+        return int((r[0] if r else 0) or 0)
+    finally:
+        cur.close()
+        conn.close()
 
 
 def handle_my_role(callback: dict) -> None:
@@ -572,11 +612,44 @@ def handle_yookassa(event: dict) -> dict:
 
 def ask_check(chat_id, kind: str) -> None:
     c = CHECKS.get(kind) or CHECKS_ANY
+    set_await(chat_id, f'check:{kind}')
     tg_api('sendMessage', {
         'chat_id': chat_id,
-        'text': f"🔎 {c['prompt']}\n\nОтправьте ответом на это сообщение @username, Telegram ID или номер телефона.",
-        'reply_markup': {'force_reply': True, 'input_field_placeholder': '@username, ID или телефон'},
+        'text': f"🔎 {c['prompt']}\n\nОтправьте @username, Telegram ID или номер телефона.",
+        'reply_markup': MAIN_KEYBOARD,
     })
+
+
+def set_await(chat_id, what: str) -> None:
+    """Запоминаем, чего бот ждёт от человека — вместо «ответьте на сообщение», который прячет кнопки."""
+    try:
+        cid = int(chat_id)
+    except (TypeError, ValueError):
+        return
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET await_input='{what}' WHERE tg_user_id={cid}")
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def pop_await(uid) -> str:
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT await_input FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
+        r = cur.fetchone()
+        val = (r[0] if r else '') or ''
+        if val:
+            cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET await_input='' WHERE tg_user_id={int(uid)}")
+            conn.commit()
+        return val
+    finally:
+        cur.close()
+        conn.close()
 
 
 def classify_query(q: str):
@@ -845,11 +918,12 @@ def add_to_moderation(kind_q: str, q, known, live: dict = None) -> None:
 
 
 def ask_complaint_target(chat_id) -> None:
+    set_await(chat_id, 'complain')
     tg_api('sendMessage', {
         'chat_id': chat_id, 'parse_mode': 'HTML',
-        'text': f"⚠️ <b>{COMPLAIN_PROMPT}</b>\n\nОтправьте ответом на это сообщение @username, Telegram ID, "
+        'text': f"⚠️ <b>{COMPLAIN_PROMPT}</b>\n\nОтправьте @username, Telegram ID, "
                 f"ссылку на профиль или номер телефона водителя / диспетчера.",
-        'reply_markup': {'force_reply': True, 'input_field_placeholder': '@username, ID или телефон'},
+        'reply_markup': MAIN_KEYBOARD,
     })
 
 
@@ -1493,10 +1567,15 @@ def handle_private(message: dict, chat_id, text: str) -> dict:
     if text in (BUTTON_COMPLAIN, BUTTON_COMPLAIN_OLD) or text.lower() in ('/complain', 'жалоба', 'пожаловаться'):
         ask_complaint_target(chat_id)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
-    if COMPLAIN_PROMPT in reply_text and text:
+    waiting = pop_await((message.get('from') or {}).get('id') or chat_id) if text else ''
+    if text in MENU_BUTTONS or text == BUTTON_ROLE or text.startswith('/'):
+        waiting = ''
+    if (COMPLAIN_PROMPT in reply_text or waiting == 'complain') and text:
         run_complaint_target(chat_id, message.get('from') or {}, text)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     reply_kind = 'any' if CHECKS_ANY['prompt'] in reply_text else next((k for k, c in CHECKS.items() if c['prompt'] in reply_text), '')
+    if not reply_kind and waiting.startswith('check:'):
+        reply_kind = waiting.split(':', 1)[1] or 'any'
 
     uid = (message.get('from') or {}).get('id') or chat_id
     is_check_btn = text in (BUTTON_CHECK, BUTTON_CHECK_DRIVER, BUTTON_CHECK_DISP) or text.lower() in ('проверить', '/check')
