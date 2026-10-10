@@ -413,7 +413,29 @@ def handle_pending(cur, qs: dict) -> dict:
                       'counts': {'all': a, 'new': n, 'ok': ok, 'miss': miss}})
 
 
+def handle_people_search(cur, qs: dict) -> dict:
+    text = str(qs.get('q') or '').strip().replace('%', '')
+    if text.startswith('https://t.me/'):
+        text = text[len('https://t.me/'):].strip('/')
+    text = text.lstrip('@')
+    if len(text) < 2:
+        return resp(200, {'ok': True, 'items': []})
+    t = esc(text.lower())
+    digits = ''.join(ch for ch in text if ch.isdigit())
+    parts = [f"lower(username) = '{t}'", f"lower(name) LIKE '%{t}%'", f"lower(username) LIKE '{t}%'"]
+    if digits and len(digits) >= 5:
+        parts += [f"tg_id::text = '{digits}'", f"regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%{digits[-10:]}%'"]
+    rank = (f"CASE WHEN lower(username) = '{t}' THEN 0 "
+            + (f"WHEN tg_id::text = '{digits}' THEN 0 " if digits else '')
+            + "WHEN list_type <> 'pending' THEN 1 ELSE 2 END")
+    cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists WHERE {' OR '.join(parts)} "
+                f"ORDER BY {rank}, id DESC LIMIT 30")
+    return resp(200, {'ok': True, 'items': [row_to_item(r) for r in cur.fetchall()]})
+
+
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
+    if method == 'GET' and qs.get('search'):
+        return handle_people_search(cur, qs)
     if method == 'GET' and qs.get('list_type') == 'pending':
         return handle_pending(cur, qs)
     if method == 'GET':

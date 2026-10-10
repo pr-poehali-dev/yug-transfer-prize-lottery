@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { KNOWLEDGE_BASE_URL } from "./adminTypes";
 import { CheckListsTiles } from "./CheckListsTiles";
 import { NewPersonCardForm } from "./lists/NewPersonCardForm";
+import { PeopleSearchResults } from "./lists/PeopleSearchResults";
 import { detectQuery } from "./lists/listTypes";
 
 interface KnowledgeItem {
@@ -146,7 +147,7 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
                     setShowCardForm(true);
                   }
                 }}
-                placeholder="Поиск или вставьте @username, номер, ID, ссылку t.me"
+                placeholder="Найти человека: имя, @username, телефон, ID или ссылка t.me"
                 className={`${inputCls} pl-9 ${searchDetected ? "pr-36" : ""}`}
               />
               {searchDetected && (
@@ -222,17 +223,12 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
           )}
 
           </>)}
-          <div className={listOpen ? "" : "min-h-[calc(100vh-15rem)] flex flex-col justify-center"}>
+          <div className={listOpen ? "" : search.trim() ? "hidden" : "min-h-[calc(100vh-15rem)] flex flex-col justify-center"}>
             <CheckListsTiles key={tilesKey} token={token} onOpenChange={setListOpen} />
           </div>
           {!listOpen && search.trim() && (<>
-          {loading ? (
-            <div className="text-sm text-white/50 py-6 text-center">Загрузка…</div>
-          ) : filtered.length === 0 ? (
-            <div className="text-sm text-white/50 py-6 text-center">
-              {items.length ? "Ничего не найдено" : "Пока пусто — добавьте первую запись"}
-            </div>
-          ) : (
+          <PeopleSearchResults token={token} query={search} onChanged={() => setTilesKey((k) => k + 1)} />
+          {loading || filtered.length === 0 ? null : (
             <div className="space-y-2">
               {filtered.map((item) => (
                 <div key={item.id} className="rounded-xl border border-white/10 space-card">
