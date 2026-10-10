@@ -237,7 +237,7 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
             sets.append(f"text='{esc(t[:2000])}'")
         if 'incident_date' in body:
             d = parse_date(body.get('incident_date'))
-            dval = f"'{d.isoformat()}'" if d else 'NULL'
+            dval = f"'{d}'" if d else 'NULL'
             sets.append(f"incident_date={dval}")
         if 'photos' in body:
             ph = [str(p) for p in (body.get('photos') or []) if str(p).startswith('https://')][:10]

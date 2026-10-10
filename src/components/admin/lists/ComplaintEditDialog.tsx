@@ -123,7 +123,8 @@ export function ComplaintEditDialog({ token, complaint, onClose, onSaved }: Prop
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
         body: JSON.stringify({
-          id: complaint.id, edit: true, text, incident_date: date || null, photos, admin_note: note,
+          id: complaint.id, edit: true, text, incident_date: date || null, admin_note: note,
+          ...(JSON.stringify(photos) !== JSON.stringify(complaint.photos || []) ? { photos } : {}),
           target: complaint.target ? { ...tgt, role: tgt.role || undefined } : undefined,
         }),
       });
