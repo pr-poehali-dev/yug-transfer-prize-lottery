@@ -21,6 +21,7 @@ interface Subscriber {
   active_until: string | null;
   is_trial?: boolean;
   created_at?: string;
+  role?: string;
 }
 
 interface Data {
@@ -71,6 +72,7 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"payments" | "subscribers">("payments");
   const [search, setSearch] = useState("");
+  const [roleF, setRoleF] = useState<"all" | "driver" | "dispatcher" | "none">("all");
 
   useEffect(() => {
     setLoading(true);
@@ -91,10 +93,12 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
 
   const subs = useMemo(() => {
     const q = search.trim().toLowerCase().replace(/^@/, "");
-    const list = data?.subscribers || [];
+    const list = (data?.subscribers || []).filter((s) =>
+      roleF === "all" ? true : roleF === "none" ? !s.role : s.role === roleF);
     if (!q) return list;
     return list.filter((s) => [s.name, s.username, String(s.tg_id)].some((v) => v.toLowerCase().includes(q)));
-  }, [data, search]);
+  }, [data, search, roleF]);
+  const roleCount = (r: string) => (data?.subscribers || []).filter((s) => (r === "none" ? !s.role : s.role === r)).length;
 
   const pays = useMemo(() => {
     const q = search.trim().toLowerCase().replace(/^@/, "");
@@ -171,6 +175,17 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
                 </button>
               ))}
             </div>
+            {tab === "subscribers" && (
+              <div className="flex rounded-xl border border-white/10 p-1 overflow-x-auto">
+                {([["all", "Все", (data.subscribers || []).length], ["driver", "🚗 Водители", roleCount("driver")],
+                  ["dispatcher", "🎧 Диспетчеры", roleCount("dispatcher")], ["none", "Без роли", roleCount("none")]] as const).map(([k, l, n]) => (
+                  <button key={k} onClick={() => setRoleF(k)}
+                    className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${roleF === k ? "bg-white/10 text-white" : "text-white/50 hover:text-white"}`}>
+                    {l} <span className="text-white/40">{n}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="relative flex-1">
               <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск: имя, @username, ID"
@@ -218,6 +233,11 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
                           ID {s.tg_id}{s.created_at ? ` · запустил бота ${fmtDate(s.created_at)}` : ""}
                         </div>
                       </div>
+                      {s.role && (
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${s.role === "driver" ? "bg-amber-500/15 text-amber-300" : "bg-violet-500/15 text-violet-300"}`}>
+                          {s.role === "driver" ? "🚗 Водитель" : "🎧 Диспетчер"}
+                        </span>
+                      )}
                       {s.is_trial && (
                         <span className="text-[11px] px-2 py-0.5 rounded-full shrink-0 bg-sky-500/15 text-sky-300">🎁 Тест</span>
                       )}

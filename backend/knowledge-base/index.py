@@ -170,10 +170,10 @@ def handle_subs_stats(cur, qs: dict) -> dict:
                  'note': r[5] or '', 'payment_id': r[6] or '', 'created_at': r[7], 'active_until': r[8]}
                 for r in cur.fetchall()]
 
-    cur.execute(f"SELECT tg_user_id, username, first_name, active_until, is_trial, created_at FROM {SCHEMA}.kb_subscriptions "
-                f"ORDER BY created_at DESC LIMIT 500")
+    cur.execute(f"SELECT tg_user_id, username, first_name, active_until, is_trial, created_at, role FROM {SCHEMA}.kb_subscriptions "
+                f"ORDER BY created_at DESC LIMIT 1000")
     subscribers = [{'tg_id': r[0], 'username': r[1] or '', 'name': r[2] or '', 'active_until': r[3],
-                    'is_trial': bool(r[4]), 'created_at': r[5]} for r in cur.fetchall()]
+                    'is_trial': bool(r[4]), 'created_at': r[5], 'role': r[6] or ''} for r in cur.fetchall()]
     cur.execute(f"SELECT count(*) FILTER (WHERE is_trial AND active_until > now()), "
                 f"count(*) FILTER (WHERE created_at > now() - interval '1 day') FROM {SCHEMA}.kb_subscriptions")
     trial_active, new_today = cur.fetchone()
