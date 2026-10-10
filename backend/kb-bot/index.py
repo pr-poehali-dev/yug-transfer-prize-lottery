@@ -716,6 +716,29 @@ def save_tg_user(user: dict, source: str) -> None:
         conn.close()
 
 
+def log_search(chat_id, query: str, kind: str, result: str, r=None, live: dict = None) -> None:
+    """Пишет в журнал, кто и кого искал через бота (для статистики в админке)."""
+    q = lambda v: str(v or '').replace("'", "''")
+    item_id, name, un, tg = 'NULL', '', '', 'NULL'
+    if r:
+        item_id, name, un = str(int(r[9])), r[1] or '', r[2] or ''
+        tg = str(int(r[5])) if r[5] else 'NULL'
+    elif live:
+        name, un = live.get('name') or '', live.get('username') or ''
+        tg = str(int(live['tg_id'])) if live.get('tg_id') else 'NULL'
+    try:
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        cur.execute(f"INSERT INTO {SCHEMA}.kb_search_log (searcher_tg_id, query, kind, result, item_id, found_name, "
+                    f"found_username, found_tg_id) VALUES ({int(chat_id)}, '{q(query.strip()[:200])}', '{q(kind)}', "
+                    f"'{q(result)}', {item_id}, '{q(name[:200])}', '{q(un[:100])}', {tg})")
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"[KB-BOT] search log failed: {type(e).__name__}: {str(e)[:120]}")
+
+
 def run_check(chat_id, kind: str, query: str) -> None:
     c = CHECKS.get(kind) or CHECKS_ANY
     kind_q, q = classify_query(query)
@@ -772,6 +795,7 @@ def run_check(chat_id, kind: str, query: str) -> None:
         if live:
             known = (int(live['tg_id']), live.get('username') or '')
         add_to_moderation(kind_q, q, known, live)
+        log_search(chat_id, query, kind_q, 'unknown', None, live)
         head = (f"⚠️ <b>Будьте внимательны!</b>\n\n"
                 f"У нас ещё нет информации о данном участнике <b>{shown}</b>.\n"
                 f"Мы взяли его на проверку — данные появятся после модерации.")
@@ -789,6 +813,7 @@ def run_check(chat_id, kind: str, query: str) -> None:
                                'reply_markup': MAIN_KEYBOARD})
         return
     found.sort(key=lambda r: 0 if r[0] == 'black' else 1)
+    log_search(chat_id, query, kind_q, found[0][0], found[0])
     found = [enrich_card(r) for r in found[:3]]
     for r in found:
         send_card(chat_id, r, verdict(r))

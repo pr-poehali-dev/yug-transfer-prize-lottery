@@ -600,6 +600,37 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
     return resp(405, {'error': 'Method not allowed'})
 
 
+def handle_searches(cur, qs: dict) -> dict:
+    """Статистика поиска в боте: кто, кого и когда искал; топ запрашиваемых аккаунтов."""
+    days = max(1, min(365, int(qs.get('days') or 30)))
+    since = f"created_at > now() - interval '{days} days'"
+    L = f"{SCHEMA}.kb_search_log"
+    cur.execute(f"SELECT count(*), count(DISTINCT searcher_tg_id), count(*) FILTER (WHERE result='black'), "
+                f"count(*) FILTER (WHERE result='white'), count(*) FILTER (WHERE result='unknown'), "
+                f"count(*) FILTER (WHERE created_at > now() - interval '1 day') FROM {L} WHERE {since}")
+    t = cur.fetchone()
+    totals = {'total': t[0], 'searchers': t[1], 'black': t[2], 'white': t[3], 'unknown': t[4], 'today': t[5]}
+    cur.execute(f"SELECT coalesce(nullif(found_username,''), lower(query)) k, max(found_name), max(found_username), "
+                f"max(found_tg_id), max(item_id), count(*), count(DISTINCT searcher_tg_id), max(created_at), "
+                f"(array_agg(result ORDER BY created_at DESC))[1] "
+                f"FROM {L} WHERE {since} GROUP BY 1 ORDER BY 6 DESC, 8 DESC LIMIT 50")
+    top = [{'key': r[0], 'name': r[1], 'username': r[2], 'tg_id': r[3], 'item_id': r[4], 'count': r[5],
+            'searchers': r[6], 'last_at': r[7].isoformat(), 'result': r[8]} for r in cur.fetchall()]
+    cur.execute(f"SELECT l.searcher_tg_id, max(u.username), max(trim(u.first_name || ' ' || u.last_name)), count(*), max(l.created_at) "
+                f"FROM {L} l LEFT JOIN {SCHEMA}.tg_users u ON u.tg_id = l.searcher_tg_id WHERE l.{since} "
+                f"GROUP BY 1 ORDER BY 4 DESC LIMIT 30")
+    searchers = [{'tg_id': r[0], 'username': r[1] or '', 'name': r[2] or '', 'count': r[3], 'last_at': r[4].isoformat()}
+                 for r in cur.fetchall()]
+    cur.execute(f"SELECT l.id, l.created_at, l.query, l.result, l.found_name, l.found_username, l.found_tg_id, "
+                f"l.searcher_tg_id, u.username, trim(coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'')) "
+                f"FROM {L} l LEFT JOIN {SCHEMA}.tg_users u ON u.tg_id = l.searcher_tg_id "
+                f"ORDER BY l.id DESC LIMIT 100")
+    recent = [{'id': r[0], 'at': r[1].isoformat(), 'query': r[2], 'result': r[3], 'name': r[4], 'username': r[5],
+               'tg_id': r[6], 'searcher_id': r[7], 'searcher_username': r[8] or '', 'searcher_name': r[9] or ''}
+              for r in cur.fetchall()]
+    return resp(200, {'ok': True, 'days': days, 'totals': totals, 'top': top, 'searchers': searchers, 'recent': recent})
+
+
 def handler(event: dict, context) -> dict:
     dbpool.reset()
     if event.get('httpMethod') == 'OPTIONS':
@@ -624,6 +655,8 @@ def handler(event: dict, context) -> dict:
             return handle_complaints(cur, conn, method, qs, body)
         if qs.get('entity') == 'bulk_import' and method == 'POST':
             return handle_bulk_import(cur, conn, body)
+        if qs.get('entity') == 'searches':
+            return handle_searches(cur, qs)
         if qs.get('entity') == 'subs':
             return handle_subs_stats(cur, qs)
         if qs.get('entity') == 'snapshots':

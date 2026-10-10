@@ -10,6 +10,7 @@ import { SubscriptionsPage } from "./lists/SubscriptionsPage";
 import { GroupsPage } from "./lists/GroupsPage";
 import { ComplaintsPage } from "./lists/ComplaintsPage";
 import { GlobalScanPage, useScanState } from "./lists/GlobalScanBar";
+import { SearchStatsPage } from "./lists/SearchStatsPage";
 
 interface ListPageProps {
   token: string;
@@ -333,6 +334,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   if (open === "complaints") return <ComplaintsPage token={token} onBack={() => { setOpen(null); load(); }} />;
   if (open === "groups") return <GroupsPage token={token} onBack={() => setOpen(null)} />;
   if (open === "scan") return <GlobalScanPage token={token} onChanged={load} onBack={() => setOpen(null)} />;
+  if (open === "searches") return <SearchStatsPage token={token} onBack={() => setOpen(null)} />;
   if (open === "subs") return <SubscriptionsPage token={token} onBack={() => setOpen(null)} />;
 
   if (current) {
@@ -352,6 +354,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     emerald: { box: "border-emerald-400/30 hover:border-emerald-400/60 hover:shadow-[0_0_40px_-10px_rgba(52,211,153,0.6)]", icon: "bg-emerald-500/20", text: "text-emerald-300" },
     cyan: { box: "border-cyan-400/30 hover:border-cyan-400/60 hover:shadow-[0_0_40px_-10px_rgba(34,211,238,0.6)]", icon: "bg-cyan-500/20", text: "text-cyan-300" },
     sky: { box: "border-sky-400/30 hover:border-sky-400/60 hover:shadow-[0_0_40px_-10px_rgba(56,189,248,0.6)]", icon: "bg-sky-500/20", text: "text-sky-300" },
+    orange: { box: "border-orange-400/30 hover:border-orange-400/60 hover:shadow-[0_0_40px_-10px_rgba(251,146,60,0.6)]", icon: "bg-orange-500/20", text: "text-orange-300" },
     violet: { box: "border-violet-400/30 hover:border-violet-400/60 hover:shadow-[0_0_40px_-10px_rgba(167,139,250,0.6)]", icon: "bg-violet-500/20", text: "text-violet-300" },
   };
   const tiles: { key: string; title: string; sub: string; icon: string; tone: string; badge?: number }[] = [
@@ -370,6 +373,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
       key: "scan", title: "Глобальное сканирование", icon: "Radar", tone: "cyan",
       sub: scanState?.running ? `Идёт · осталось ${scanState.left}` : "Обновление базы и аккаунты сканера",
     },
+    { key: "searches", title: "Статистика поиска", sub: "Кого и кто искал в боте", icon: "ChartColumn", tone: "orange" },
   ];
 
   return (
