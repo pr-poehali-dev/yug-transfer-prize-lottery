@@ -660,6 +660,20 @@ def publish_verdict(tg_api, cid: int, by: str) -> None:
     if not r:
         return
     text, inc, photos, name, un, role, tg_id, phone, avatar, item_id = r
+    c2 = db()
+    k2 = c2.cursor()
+    k2.execute(f"SELECT group_chat, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={int(cid)}")
+    g = k2.fetchone() or ('', None)
+    k2.close()
+    c2.close()
+    if g[0] and str(g[0]) != COPY_CHAT and g[1]:
+        # Пост с жалобой в группе ЧС остаётся — убираем только кнопки решения.
+        res = tg_api('editMessageReplyMarkup', {'chat_id': g[0], 'message_id': int(g[1]),
+                                                'reply_markup': {'inline_keyboard': []}}, timeout=3)
+        if res.get('ok') or 'not modified' in str(res.get('description', '')):
+            return
+        print(f"[KB-BOT] verdict buttons remove failed: {str(res.get('description', ''))[:120]}")
+        return
     delete_group_messages(tg_api, cid)
     role_txt = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}.get(role, '👤 Участник')
     lines = ["⛔️ <b>ЗАНЕСЁН В ЧЁРНЫЙ СПИСОК</b>", "",
