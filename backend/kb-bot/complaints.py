@@ -296,14 +296,10 @@ def notify_admin(tg_api, cid: int) -> None:
                 sent_ids[str(chat)].append(m.get('message_id'))
         return msg_id
 
-    # 1) Группа для решений — с кнопками «Заносим в ЧС» / «Не обоснована».
-    decision_chat = os.environ.get('KB_COMPLAINTS_CHAT_ID', '').strip() or DECISION_CHAT
-    msg_id = send_to(decision_chat, None, True)
-    target_chat = decision_chat
-    # 2) Копия — в тему «жалобы». Если группа решений недоступна, кнопки будут здесь.
-    copy_id = send_to(COPY_CHAT, COMPLAINTS_THREAD_ID, not msg_id)
-    if not msg_id and copy_id:
-        msg_id, target_chat = copy_id, COPY_CHAT
+    # Новая жалоба — только в тему «жалобы» (уведомление с кнопками).
+    # В группу ЧС попадает лишь итоговая карточка — после решения администратора.
+    msg_id = send_to(COPY_CHAT, COMPLAINTS_THREAD_ID, True)
+    target_chat = COPY_CHAT
     if msg_id:
         c2 = db()
         k2 = c2.cursor()
