@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { LISTS, LISTS_API, COMPLAINTS_API, SCAN_API, TG_LOOKUP_API, LOOKUP_API, ListDef, ListItem, inputCls } from "./lists/listTypes";
@@ -13,28 +13,59 @@ import { ComplaintsPage } from "./lists/ComplaintsPage";
 interface ListPageProps {
   token: string;
   def: ListDef;
-  items: ListItem[];
   onBack: () => void;
   onChanged: () => void;
 }
 
-function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
+const LIST_PAGE = 60;
+
+function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPageProps) {
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [items, setItems] = useState<ListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const reqRef = useRef(0);
+
+  const fetchPage = async (offset: number, append: boolean) => {
+    const req = ++reqRef.current;
+    setLoading(true);
+    try {
+      const p = new URLSearchParams({ paged: "1", list_type: def.list_type, role: def.role, offset: String(offset), limit: String(LIST_PAGE) });
+      if (query) p.set("q", query);
+      const d = await fetch(`${LISTS_API}&${p}`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
+      if (req !== reqRef.current) return;
+      if (d.ok) {
+        setItems((prev) => (append ? [...prev, ...d.items] : d.items));
+        setTotal(d.total || 0);
+      }
+    } catch {
+      toast.error("Не удалось загрузить список");
+    }
+    if (req === reqRef.current) setLoading(false);
+  };
+
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    fetchPage(0, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, def.role, def.list_type]);
+
+  const onChanged = () => {
+    fetchPage(0, false);
+    onParentChanged();
+  };
   const [editing, setEditing] = useState<ListItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [layersItem, setLayersItem] = useState<ListItem | null>(null);
   const [scanningIds, setScanningIds] = useState<number[]>([]);
   const [scanAll, setScanAll] = useState<{ done: number; total: number } | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase().replace(/^@/, "");
-    if (!q) return items;
-    const digits = q.replace(/\D/g, "");
-    return items.filter((i) =>
-      [i.name, i.username, i.phone, i.note, i.reason, String(i.tg_id ?? "")].some((v) => v.toLowerCase().includes(q)) ||
-      (digits.length >= 6 && i.phone.replace(/\D/g, "").includes(digits))
-    );
-  }, [items, search]);
+  const filtered = items;
 
   const scan = async (ids: number[]) => {
     const res = await fetch(SCAN_API, {
@@ -166,7 +197,7 @@ function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
         </button>
         <Icon name={def.icon} size={18} className={def.color} />
         <span className="text-base font-medium text-white">{def.title}</span>
-        <span className="text-xs text-white/40">· {items.length}</span>
+        <span className="text-xs text-white/40">· {total}</span>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2">
@@ -192,7 +223,7 @@ function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-sm text-white/50 py-10 text-center">{items.length ? "Ничего не найдено" : "Список пуст"}</div>
+        <div className="text-sm text-white/50 py-10 text-center">{loading ? "Загрузка…" : query ? "Ничего не найдено" : "Список пуст"}</div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((i) => (
@@ -206,6 +237,13 @@ function ListPage({ token, def, items, onBack, onChanged }: ListPageProps) {
             />
           ))}
         </div>
+      )}
+
+      {items.length > 0 && items.length < total && (
+        <button onClick={() => fetchPage(items.length, true)} disabled={loading}
+          className="w-full rounded-xl border border-white/10 space-card py-3 text-sm text-white/70 hover:text-white disabled:opacity-60">
+          {loading ? "Загрузка…" : `Показать ещё (${total - items.length})`}
+        </button>
       )}
 
       <LayersDialog token={token} item={layersItem} open={!!layersItem} onClose={() => setLayersItem(null)} />
@@ -232,6 +270,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   const current = LISTS.find((d) => `${d.role}-${d.list_type}` === open) || null;
   const [modItem, setModItem] = useState<ListItem | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [listCounts, setListCounts] = useState<Record<string, number>>({});
   const [complaintsNew, setComplaintsNew] = useState(0);
 
   const load = async () => {
@@ -241,6 +280,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
       if (data.ok) {
         setItems(data.items || []);
         setPendingCount(data.pending_count || 0);
+        setListCounts(data.list_counts || {});
       }
       fetch(`${COMPLAINTS_API}&status=new`, { headers: { "X-Admin-Token": token } })
         .then((r) => r.json()).then((c) => c.ok && setComplaintsNew(c.new_count || 0)).catch(() => {});
@@ -282,7 +322,6 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
       <ListPage
         token={token}
         def={current}
-        items={items.filter((i) => i.role === current.role && i.list_type === current.list_type)}
         onBack={() => setOpen(null)}
         onChanged={load}
       />
@@ -302,7 +341,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     ...LISTS.map((def) => ({
       key: `${def.role}-${def.list_type}`,
       title: def.title,
-      sub: `${items.filter((i) => i.role === def.role && i.list_type === def.list_type).length} чел.`,
+      sub: `${listCounts[`${def.role}-${def.list_type}`] ?? items.filter((i) => i.role === def.role && i.list_type === def.list_type).length} чел.`,
       icon: def.role === "driver" ? "Car" : "Headset",
       tone: def.list_type === "black" ? "red" : "emerald",
     })),

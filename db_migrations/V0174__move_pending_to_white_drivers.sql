@@ -1,0 +1,3 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.check_lists ADD COLUMN IF NOT EXISTS auto_white BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE t_p67171637_yug_transfer_prize_l.check_lists SET list_type = 'white', role = 'driver', auto_white = TRUE, updated_at = now() WHERE list_type = 'pending';
+CREATE INDEX IF NOT EXISTS idx_check_lists_list_id ON t_p67171637_yug_transfer_prize_l.check_lists (list_type, role, id DESC);

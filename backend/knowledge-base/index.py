@@ -379,8 +379,11 @@ def handle_bulk_import(cur, conn, body: dict) -> dict:
 
 
 def handle_pending(cur, qs: dict) -> dict:
-    """Карточки «На модерации» постранично: поиск и фильтры считаются на сервере (их десятки тысяч)."""
-    base = "list_type = 'pending'"
+    """Карточки списка постранично: поиск и фильтры считаются на сервере (их десятки тысяч)."""
+    lt = qs.get('list_type') if qs.get('list_type') in LIST_TYPES else 'pending'
+    base = f"list_type = '{lt}'"
+    if lt != 'pending' and qs.get('role') in ('driver', 'dispatcher'):
+        base += f" AND role = '{qs['role']}'"
     conds = [base]
     f = qs.get('filter') or 'all'
     if f == 'new':
@@ -440,13 +443,15 @@ def handle_people_search(cur, qs: dict) -> dict:
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
     if method == 'GET' and qs.get('search'):
         return handle_people_search(cur, qs)
-    if method == 'GET' and qs.get('list_type') == 'pending':
+    if method == 'GET' and (qs.get('list_type') == 'pending' or qs.get('paged')):
         return handle_pending(cur, qs)
     if method == 'GET':
-        cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists WHERE list_type <> 'pending' ORDER BY id DESC")
+        cur.execute(f"SELECT {LIST_FIELDS} FROM {SCHEMA}.check_lists WHERE list_type <> 'pending' AND NOT auto_white ORDER BY id DESC")
         items = [row_to_item(r) for r in cur.fetchall()]
         cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists WHERE list_type = 'pending'")
         pending_count = cur.fetchone()[0]
+        cur.execute(f"SELECT role, list_type, count(*) FROM {SCHEMA}.check_lists WHERE list_type <> 'pending' GROUP BY 1, 2")
+        list_counts = {f"{r[0]}-{r[1]}": r[2] for r in cur.fetchall()}
         cur.execute(f"SELECT item_id, count(*) FROM {SCHEMA}.check_list_history "
                     f"WHERE source='scan' GROUP BY item_id")
         changes = dict(cur.fetchall())
@@ -460,7 +465,7 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
             it['changes'] = changes.get(it['id'], 0)
             it['layers'] = layers.get(it['id'], 1)
             it['last_change'] = last.get(it['id'])
-        return resp(200, {'ok': True, 'items': items, 'pending_count': pending_count})
+        return resp(200, {'ok': True, 'items': items, 'pending_count': pending_count, 'list_counts': list_counts})
 
     if method in ('POST', 'PUT'):
         role, lt = body.get('role'), body.get('list_type')

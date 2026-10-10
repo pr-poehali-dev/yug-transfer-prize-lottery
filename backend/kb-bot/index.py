@@ -169,6 +169,8 @@ def handle_my_role(callback: dict) -> None:
     cur = conn.cursor()
     try:
         cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET role='{role}', updated_at=now() WHERE tg_user_id={int(user['id'])}")
+        cur.execute(f"UPDATE {SCHEMA}.check_lists SET role='{role}', auto_white=FALSE, updated_at=now() "
+                    f"WHERE tg_id={int(user['id'])} AND auto_white AND list_type='white'")
         conn.commit()
     finally:
         cur.close()
