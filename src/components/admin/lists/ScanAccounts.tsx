@@ -10,6 +10,7 @@ interface Account {
   banned: boolean;
   paused_until?: string | null;
   main?: boolean;
+  purpose?: "bot" | "scan";
 }
 
 const API = `${TG_LOOKUP_API}?action=accounts`;
@@ -28,6 +29,7 @@ export function ScanAccounts({ token }: { token: string }) {
   const [label, setLabel] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
+  const [purpose, setPurpose] = useState<"bot" | "scan">("scan");
   const [busy, setBusy] = useState(false);
 
   const call = async (body?: object) => {
@@ -58,6 +60,7 @@ export function ScanAccounts({ token }: { token: string }) {
     setLabel("");
     setCode("");
     setPassword("");
+    setPurpose("scan");
   };
 
   const sendCode = async () => {
@@ -77,7 +80,7 @@ export function ScanAccounts({ token }: { token: string }) {
   const signIn = async () => {
     setBusy(true);
     try {
-      const d = await call({ op: "sign_in", phone, code: step === "password" ? "" : code, password, label });
+      const d = await call({ op: "sign_in", phone, code: step === "password" ? "" : code, password, label, purpose });
       if (d.ok) {
         toast.success(`Аккаунт подключён: ${d.label}`);
         reset();
@@ -109,6 +112,13 @@ export function ScanAccounts({ token }: { token: string }) {
     load();
   };
 
+  const togglePurpose = async (a: Account) => {
+    const next = a.purpose === "bot" ? "scan" : "bot";
+    await call({ op: "purpose", id: a.id, purpose: next });
+    toast.success(next === "bot" ? "Аккаунт работает только на поиск в боте" : "Аккаунт работает на сканер");
+    load();
+  };
+
   const free = items.filter((a) => !a.banned && !a.paused_until).length;
 
   return (
@@ -129,10 +139,20 @@ export function ScanAccounts({ token }: { token: string }) {
       {adding && (
         <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
           <div className="text-xs text-white/60">
-            {step === "phone" && "Введите номер Telegram-аккаунта — на него придёт код в приложении Telegram."}
+            {step === "phone" && "Введите номер Telegram-аккаунта — на него придёт код в приложении Telegram. Аккаунт «Только для бота» не участвует в сканировании и бережёт лимиты для поиска по запросам пользователей."}
             {step === "code" && `Введите код, который пришёл в Telegram на ${phone}.`}
             {step === "password" && "На аккаунте включён облачный пароль (двухэтапная проверка) — введите его."}
           </div>
+          {step === "phone" && (
+            <div className="flex rounded-lg border border-white/10 p-1 w-fit">
+              {([["scan", "Для сканера"], ["bot", "Только для бота"]] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setPurpose(k)}
+                  className={`px-3 py-1 rounded-md text-xs ${purpose === k ? "bg-white/10 text-white" : "text-white/50 hover:text-white"}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
           {step === "phone" && (
             <div className="flex flex-col sm:flex-row gap-2">
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 999 123-45-67" className={inputCls} />
@@ -167,7 +187,15 @@ export function ScanAccounts({ token }: { token: string }) {
             <div key={`${a.id}-${i}`} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 flex items-center gap-2 min-w-0">
               <span className={`w-2 h-2 rounded-full shrink-0 ${a.banned ? "bg-red-400" : a.paused_until ? "bg-amber-400" : "bg-emerald-400"}`} />
               <div className="min-w-0 flex-1">
-                <div className="text-xs text-white truncate">{a.label}</div>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-xs text-white truncate">{a.label}</span>
+                  {!a.main && (
+                    <button onClick={() => togglePurpose(a)} title="Переключить назначение"
+                      className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full ${a.purpose === "bot" ? "bg-violet-500/20 text-violet-200" : "bg-cyan-500/15 text-cyan-200"}`}>
+                      {a.purpose === "bot" ? "🤖 бот" : "сканер"}
+                    </button>
+                  )}
+                </div>
                 <div className="text-[11px] text-white/45 truncate">
                   {a.banned ? "заблокирован" : a.paused_until ? `пауза ещё ${pauseText(a.paused_until)}` : "готов к работе"}
                   {a.phone ? ` · ${a.phone}` : ""}

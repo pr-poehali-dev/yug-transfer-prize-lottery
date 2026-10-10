@@ -23,13 +23,14 @@ def _key(session: str) -> str:
 def list_accounts(cur) -> dict:
     cur.execute(f"SELECT session_hash, until_at FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
     flood = {r[0]: r[1] for r in cur.fetchall()}
-    cur.execute(f"SELECT id, label, phone, session_string, is_banned, last_used_at, created_at "
-                f"FROM {SCHEMA}.tg_user_accounts ORDER BY id")
+    cur.execute(f"SELECT id, label, phone, session_string, is_banned, last_used_at, created_at, purpose "
+                f"FROM {SCHEMA}.tg_user_accounts ORDER BY (purpose='bot') DESC, id")
     items = []
     for r in cur.fetchall():
         k = _key(r[3] or '')
         items.append({'id': r[0], 'label': r[1], 'phone': r[2] or '', 'banned': bool(r[4]),
-                      'paused_until': flood.get(k), 'last_used_at': r[5], 'created_at': r[6]})
+                      'paused_until': flood.get(k), 'last_used_at': r[5], 'created_at': r[6],
+                      'purpose': r[7] or 'scan'})
     cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_session WHERE coalesce(session_string,'') <> ''")
     main = [r[0] for r in cur.fetchall()]
     for i, s in enumerate(main):
@@ -60,7 +61,7 @@ async def send_code(make_client, cur, conn, phone_raw: str) -> dict:
     return {'ok': True, 'phone': phone}
 
 
-async def sign_in(make_client, cur, conn, phone_raw: str, code: str, password: str, label: str) -> dict:
+async def sign_in(make_client, cur, conn, phone_raw: str, code: str, password: str, label: str, purpose: str = 'scan') -> dict:
     from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, PhoneCodeExpiredError, PasswordHashInvalidError
     phone = _phone(phone_raw)
     cur.execute(f"SELECT session_string, phone_code_hash FROM {SCHEMA}.tg_login_pending WHERE phone='{_q(phone)}'")
@@ -96,8 +97,9 @@ async def sign_in(make_client, cur, conn, phone_raw: str, code: str, password: s
     title = label.strip() or name or phone
     if me.username:
         title += f' (@{me.username})'
-    cur.execute(f"INSERT INTO {SCHEMA}.tg_user_accounts (label, phone, session_string, is_active, needs_warmup) "
-                f"VALUES ('{_q(title)}', '{_q(phone)}', '{_q(sess)}', TRUE, FALSE)")
+    purpose = 'bot' if purpose == 'bot' else 'scan'
+    cur.execute(f"INSERT INTO {SCHEMA}.tg_user_accounts (label, phone, session_string, is_active, needs_warmup, purpose) "
+                f"VALUES ('{_q(title)}', '{_q(phone)}', '{_q(sess)}', TRUE, FALSE, '{purpose}')")
     cur.execute(f"DELETE FROM {SCHEMA}.tg_login_pending WHERE phone='{_q(phone)}'")
     conn.commit()
     return {'ok': True, 'label': title}
@@ -131,6 +133,13 @@ async def logout_account(make_client, cur, conn, acc_id: int, main: bool) -> dic
     cur.execute(f"DELETE FROM {SCHEMA}.tg_session_flood WHERE session_hash='{_key(row[0])}'")
     conn.commit()
     return {'ok': True, 'logged_out': logged_out}
+
+
+def set_purpose(cur, conn, acc_id: int, purpose: str) -> dict:
+    purpose = 'bot' if purpose == 'bot' else 'scan'
+    cur.execute(f"UPDATE {SCHEMA}.tg_user_accounts SET purpose='{purpose}' WHERE id={int(acc_id)}")
+    conn.commit()
+    return {'ok': True}
 
 
 def delete_account(cur, conn, acc_id: int) -> dict:

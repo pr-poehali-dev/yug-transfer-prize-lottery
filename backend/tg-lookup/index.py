@@ -46,14 +46,23 @@ def clean_username(v: str) -> str:
     return v.strip('/').lstrip('@').split('?')[0]
 
 
-def load_sessions(cur) -> list:
+def load_sessions(cur, purpose: str = 'scan') -> list:
+    """purpose='scan' — для сканирования базы (аккаунты бота не трогаем, их лимиты берегём для живых запросов);
+    purpose='bot' — для поиска по запросу: сначала аккаунты бота, затем остальные как запасные."""
+    order = "CASE WHEN purpose='bot' THEN 0 ELSE 1 END, " if purpose == 'bot' else ''
+    only = "AND purpose <> 'bot' " if purpose == 'scan' else ''
     cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_accounts "
-                f"WHERE coalesce(session_string, '') <> '' AND NOT coalesce(is_banned, FALSE) "
-                f"ORDER BY is_active DESC, last_used_at DESC NULLS LAST")
+                f"WHERE coalesce(session_string, '') <> '' AND NOT coalesce(is_banned, FALSE) {only}"
+                f"ORDER BY {order}is_active DESC, last_used_at DESC NULLS LAST")
     sessions = [r[0] for r in cur.fetchall()]
     cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_session WHERE coalesce(session_string, '') <> ''")
     sessions += [r[0] for r in cur.fetchall()]
     return sessions
+
+
+def bot_session_keys(cur) -> set:
+    cur.execute(f"SELECT session_string FROM {SCHEMA}.tg_user_accounts WHERE purpose='bot' AND coalesce(session_string,'') <> ''")
+    return {hashlib.sha256(r[0].encode()).hexdigest()[:24] for r in cur.fetchall()}
 
 
 def store_photo(raw: bytes) -> str:
@@ -870,7 +879,7 @@ def handler(event: dict, context) -> dict:
         return handle_batch(context, qs.get('scope') or 'all')
     if qs.get('action') == 'group':
         return handle_group(qs, context)
-    if is_cron:
+    if is_cron and not qs.get('username') and not qs.get('phone'):
         return resp(400, {'error': 'only batch'})
 
     if qs.get('action') == 'accounts':
@@ -884,6 +893,8 @@ def handler(event: dict, context) -> dict:
                 return resp(200, accounts.list_accounts(cur))
             if op == 'delete':
                 return resp(200, accounts.delete_account(cur, conn, int(body.get('id') or 0)))
+            if op == 'purpose':
+                return resp(200, accounts.set_purpose(cur, conn, int(body.get('id') or 0), body.get('purpose', '')))
             try:
                 if op == 'logout':
                     out = asyncio.run(asyncio.wait_for(accounts.logout_account(make_client, cur, conn, int(body.get('id') or 0),
@@ -893,7 +904,7 @@ def handler(event: dict, context) -> dict:
                 elif op == 'sign_in':
                     out = asyncio.run(asyncio.wait_for(accounts.sign_in(make_client, cur, conn, body.get('phone', ''),
                                                                         body.get('code', ''), body.get('password', ''),
-                                                                        body.get('label', '')), timeout=20))
+                                                                        body.get('label', ''), body.get('purpose', 'scan')), timeout=20))
                 else:
                     out = {'ok': False, 'error': 'unknown op'}
             except asyncio.TimeoutError:
@@ -1003,7 +1014,7 @@ def handler(event: dict, context) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
-        sessions = load_sessions(cur)
+        sessions = load_sessions(cur, 'bot')
         if not sessions:
             return resp(200, {'ok': False, 'error': 'Нет подключённого Telegram-аккаунта'})
         result = {'error': 'Не удалось получить данные'}
@@ -1016,7 +1027,9 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"SELECT session_hash FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
         blocked = {r[0] for r in cur.fetchall()}
         # Аккаунты, которые Telegram поставил на паузу, пропускаем — берём свободные.
-        sessions.sort(key=lambda x: (1 if sess_key(x) in blocked else 0, 0 if StringSession(x).dc_id == 2 else 1))
+        bot_keys = bot_session_keys(cur)
+        sessions.sort(key=lambda x: (1 if sess_key(x) in blocked else 0, 0 if sess_key(x) in bot_keys else 1,
+                                     0 if StringSession(x).dc_id == 2 else 1))
         tried = 0
         for s in sessions:
             left = budget - (time.time() - started)

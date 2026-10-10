@@ -1,0 +1,1 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.tg_user_accounts ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'scan';

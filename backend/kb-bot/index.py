@@ -409,16 +409,54 @@ def run_check(chat_id, kind: str, query: str) -> None:
     shown = esc_html(query.strip())
     found = [r for r in rows if r[0] in ('black', 'white')]
     if not found:
+        live = live_lookup(kind_q, q) if not known else {}
+        if live:
+            known = (int(live['tg_id']), live.get('username') or '')
         add_to_moderation(kind_q, q, known)
         head = (f"⚠️ <b>Будьте внимательны!</b>\n\n"
                 f"У нас ещё нет информации о данном участнике <b>{shown}</b>.\n"
                 f"Мы взяли его на проверку — данные появятся после модерации.")
+        if live:
+            info = [f"👤 {esc_html(live.get('name') or '—')}"]
+            if live.get('username'):
+                info.append(f"🔗 @{esc_html(live['username'])}")
+            info.append(f"🆔 <code>{int(live['tg_id'])}</code>")
+            if live.get('phone'):
+                info.append(f"📞 {esc_html(live['phone'])}")
+            if live.get('bio'):
+                info.append(f"📝 {esc_html(str(live['bio'])[:300])}")
+            head += "\n\n<b>Данные из Telegram:</b>\n" + "\n".join(info)
         tg_api('sendMessage', {'chat_id': chat_id, 'text': head, 'parse_mode': 'HTML',
                                'reply_markup': MAIN_KEYBOARD})
         return
     found.sort(key=lambda r: 0 if r[0] == 'black' else 1)
     for r in found[:3]:
         send_card(chat_id, r, verdict(r))
+
+
+LOOKUP_URL = 'https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a'
+DEADLINE = {'t': 0.0}
+
+
+def live_lookup(kind_q: str, q) -> dict:
+    """Живой поиск в Telegram через аккаунт бота (сканер), если человека ещё нет в базе."""
+    if kind_q not in ('username', 'phone'):
+        return {}
+    left = min(12.0, DEADLINE['t'] - time.time() - 1.5) if DEADLINE['t'] else 2.0
+    if left < 3:
+        return {}
+    import urllib.request
+    import urllib.parse
+    param = {'username': q} if kind_q == 'username' else {'phone': f'7{q}'}
+    req = urllib.request.Request(f"{LOOKUP_URL}?{urllib.parse.urlencode(param)}",
+                                 headers={'X-Cron-Secret': os.environ.get('CRON_SECRET', '')})
+    try:
+        with urllib.request.urlopen(req, timeout=left) as r:
+            d = json.loads(r.read().decode() or '{}')
+        return d if d.get('ok') and d.get('tg_id') else {}
+    except Exception as e:
+        print(f'[KB-BOT] live lookup: {type(e).__name__}')
+        return {}
 
 
 def add_to_moderation(kind_q: str, q, known) -> None:
@@ -761,6 +799,10 @@ def private_only_commands() -> dict:
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
+    try:
+        DEADLINE['t'] = time.time() + context.get_remaining_time_in_millis() / 1000
+    except Exception:
+        DEADLINE['t'] = time.time() + 4.5
 
     if (event.get('queryStringParameters') or {}).get('action') == 'daily_scan':
         return handle_daily_scan(event, context)
