@@ -11,6 +11,7 @@ import uuid
 import boto3
 import psycopg2
 import complaints
+import payments
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 BUTTON_GROUPS = '📋 Список групп'
@@ -275,26 +276,75 @@ def send_paywall(chat_id, what: str) -> None:
                                    'Оформите подписку, чтобы открыть доступ.'})
 
 
-def create_payment_url(user_id) -> str:
-    """Заглушка под ЮKassa: здесь будет создание платежа и возврат ссылки на оплату."""
-    return ''
+BOT_LINK = {'url': ''}
+
+
+def bot_link() -> str:
+    if not BOT_LINK['url']:
+        me = tg_api('getMe', {}, timeout=2.2).get('result') or {}
+        BOT_LINK['url'] = f"https://t.me/{me['username']}" if me.get('username') else 'https://t.me'
+    return BOT_LINK['url']
 
 
 def handle_renew(callback: dict) -> None:
     user_id = (callback.get('from') or {}).get('id')
     chat_id = ((callback.get('message') or {}).get('chat') or {}).get('id') or user_id
-    url = create_payment_url(user_id)
-    if url:
+    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id')}, timeout=2.2)
+    tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': payments.PLANS_MARKUP,
+                           'text': '💳 <b>Выберите тариф</b>\n\n'
+                                   'Подписка открывает список групп и поиск по базе.\n'
+                                   'Если подписка ещё действует — новый срок добавится к текущему.'})
+
+
+def handle_buy(callback: dict) -> None:
+    user_id = (callback.get('from') or {}).get('id')
+    chat_id = ((callback.get('message') or {}).get('chat') or {}).get('id') or user_id
+    plan_key = str(callback.get('data')).split(':', 1)[1]
+    if plan_key not in payments.PLANS:
         tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id')}, timeout=2.2)
-        tg_api('sendMessage', {'chat_id': chat_id, 'text': '💳 Перейдите к оплате подписки:',
-                               'reply_markup': {'inline_keyboard': [[{'text': 'Оплатить', 'url': url}]]}})
         return
-    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'),
-                                   'text': 'Онлайн-оплата скоро появится', 'show_alert': False}, timeout=2.2)
-    tg_api('sendMessage', {'chat_id': chat_id,
-                           'text': '🔧 Онлайн-оплата подписки скоро будет доступна.\n'
-                                   'Чтобы продлить подписку сейчас, напишите администратору.',
-                           'reply_markup': MAIN_KEYBOARD})
+    url, pid = payments.create(user_id, chat_id, plan_key, bot_link())
+    if not url:
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'),
+                                       'text': 'Оплата временно недоступна, попробуйте позже', 'show_alert': True}, timeout=2.2)
+        return
+    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id')}, timeout=2.2)
+    plan = payments.PLANS[plan_key]
+    tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML',
+                           'text': f"💳 Подписка на <b>{plan['title']}</b> — <b>{plan['price']} ₽</b>\n\n"
+                                   'Нажмите «Оплатить». После оплаты подписка включится автоматически.',
+                           'reply_markup': {'inline_keyboard': [
+                               [{'text': f"Оплатить {plan['price']} ₽", 'url': url}],
+                               [{'text': '✅ Я оплатил', 'callback_data': f'paid:{pid}'}]]}})
+
+
+def notify_paid(res: dict) -> None:
+    if res.get('new') and res.get('chat_id'):
+        plan = payments.PLANS.get(res.get('plan'), {})
+        tg_api('sendMessage', {'chat_id': res['chat_id'], 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD,
+                               'text': f"✅ Оплата получена — подписка на <b>{plan.get('title', '')}</b> активна.\n"
+                                       f"📅 Действует до: <b>{res.get('until', '')}</b>"})
+
+
+def handle_paid(callback: dict) -> None:
+    res = payments.confirm(str(callback.get('data')).split(':', 1)[1])
+    st = res.get('status')
+    if st == 'succeeded':
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'),
+                                       'text': f"Подписка активна до {res.get('until', '')}"}, timeout=2.2)
+        notify_paid(res)
+    else:
+        text = 'Платёж отменён — выберите тариф заново' if st == 'canceled' else 'Оплата ещё не поступила. Подождите минуту и нажмите снова.'
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': text, 'show_alert': True}, timeout=2.2)
+
+
+def handle_yookassa(event: dict) -> dict:
+    """Уведомление от ЮKassa: статус не доверяем, перепроверяем платёж через API."""
+    body = json.loads(event.get('body') or '{}')
+    pid = (body.get('object') or {}).get('id', '')
+    if pid:
+        notify_paid(payments.confirm(pid))
+    return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
 
 def ask_check(chat_id, kind: str) -> None:
@@ -908,6 +958,8 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 
     qs = event.get('queryStringParameters') or {}
+    if qs.get('action') == 'yookassa':
+        return handle_yookassa(event)
     if qs.get('action') == 'scan':
         return handle_scan(event)
 
@@ -930,6 +982,12 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if str(callback.get('data') or '').startswith('myrole:'):
         handle_my_role(callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+    if str(callback.get('data') or '').startswith('buy:'):
+        handle_buy(callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+    if str(callback.get('data') or '').startswith('paid:'):
+        handle_paid(callback)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if callback.get('data') == 'renew_sub':
         handle_renew(callback)
