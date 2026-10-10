@@ -202,6 +202,12 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                     className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] border border-white/10 text-white/70 hover:text-white hover:bg-white/5">
                     <Icon name="Pencil" size={11} />Изменить
                   </button>
+                  {c.status !== "new" && (
+                    <button disabled={busy === c.id} onClick={(e) => { e.stopPropagation(); remove(c); }} title="Удалить жалобу"
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] border border-red-500/30 text-red-300 hover:bg-red-500/10 disabled:opacity-60">
+                      <Icon name="Trash2" size={11} />Удалить
+                    </button>
+                  )}
                 </div>
               </div>
 
