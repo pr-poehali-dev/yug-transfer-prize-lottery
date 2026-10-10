@@ -239,7 +239,10 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
               )}
 
               {c.status === "new" && (
-                <button disabled={sending === c.id} onClick={() => sendToGroup(c)}
+                <button disabled={sending === c.id} onClick={() => {
+                  if (!c.target.role) { toast.error("Сначала выберите роль: водитель или диспетчер"); return; }
+                  sendToGroup(c);
+                }}
                   className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 text-xs py-2 flex items-center justify-center gap-1.5 disabled:opacity-60">
                   <Icon name={sending === c.id ? "Loader2" : "Send"} size={13} className={sending === c.id ? "animate-spin" : ""} />
                   {c.group_msg_id ? "Отправить в группу ЧС повторно" : "Отправить в группу ЧС на решение"}

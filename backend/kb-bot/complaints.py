@@ -212,7 +212,7 @@ COMPLAINTS_THREAD_ID = 10266
 CHAT_CANDIDATES = [DECISION_CHAT, COPY_CHAT]
 
 
-def notify_admin(tg_api, cid: int) -> None:
+def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
     """Новая жалоба уходит в служебную группу администраторов: текст, дата, фото и кнопка в админку."""
     conn = db()
     cur = conn.cursor()
@@ -251,7 +251,9 @@ def notify_admin(tg_api, cid: int) -> None:
     if len(plist) > 1:
         lines.append(f"📎 Ещё фото: {len(plist) - 1} (ниже)")
     msg = '\n'.join(lines)
-    markup = admin_markup(cid, lt, role or '')
+    markup = decision_markup(cid, lt) if to_decision else admin_markup(cid, lt, role or '')
+    if to_decision:
+        msg = msg.replace(f"🚨 <b>Новая жалоба #{cid}</b>", f"⚖️ <b>Жалоба #{cid} — нужно решение</b>")
     plist_media = [{'type': 'photo', 'media': p} for p in plist[:10]]
     sent_ids = {}
 
@@ -298,8 +300,12 @@ def notify_admin(tg_api, cid: int) -> None:
 
     # Новая жалоба — только в тему «жалобы» (уведомление с кнопками).
     # В группу ЧС попадает лишь итоговая карточка — после решения администратора.
-    msg_id = send_to(COPY_CHAT, COMPLAINTS_THREAD_ID, True)
-    target_chat = COPY_CHAT
+    if to_decision:
+        target_chat = os.environ.get('KB_COMPLAINTS_CHAT_ID', '').strip() or DECISION_CHAT
+        msg_id = send_to(target_chat, None, True)
+    else:
+        target_chat = COPY_CHAT
+        msg_id = send_to(COPY_CHAT, COMPLAINTS_THREAD_ID, True)
     if msg_id:
         c2 = db()
         k2 = c2.cursor()
@@ -310,6 +316,13 @@ def notify_admin(tg_api, cid: int) -> None:
         k2.close()
         c2.close()
         print(f'[KB-BOT] complaint #{cid} sent to {target_chat}')
+
+
+def decision_markup(cid: int, list_type: str = '') -> dict:
+    """Кнопки в группе ЧС: только решение."""
+    first = '⛔️ Подтвердить (уже в ЧС)' if list_type == 'black' else '⛔️ Заносим в ЧС'
+    return {'inline_keyboard': [[{'text': first, 'callback_data': f'cblack:{int(cid)}'},
+                                 {'text': '✖️ Жалоба не обоснована', 'callback_data': f'creject:{int(cid)}'}]]}
 
 
 def admin_markup(cid: int, list_type: str = '', role: str = '') -> dict:

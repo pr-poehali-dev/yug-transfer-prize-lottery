@@ -211,7 +211,7 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
             f"(SELECT count(*) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status IN ('new','accepted','rejected')), "
             f"(SELECT count(*) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status = 'accepted'), "
             f"(SELECT count(DISTINCT x.reporter_tg_id) FROM {SCHEMA}.kb_complaints x WHERE x.item_id = k.item_id AND x.status IN ('new','accepted','rejected')), "
-            f"k.group_msg_id, c.phone, c.bio, c.note, c.reason "
+            f"CASE WHEN k.group_chat <> '-1002146850254' THEN k.group_msg_id END, c.phone, c.bio, c.note, c.reason "
             f"FROM {SCHEMA}.kb_complaints k LEFT JOIN {SCHEMA}.check_lists c ON c.id = k.item_id "
             f"{where} ORDER BY k.created_at DESC LIMIT 300")
         items = [{'id': r[0], 'item_id': r[1], 'reporter_tg_id': r[2], 'reporter_username': r[3], 'reporter_name': r[4],
@@ -306,7 +306,7 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
         if not cur.fetchone():
             return resp(404, {'ok': False, 'error': 'not found'})
         conn.commit()
-        cur.execute(f"SELECT status, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={cid}")
+        cur.execute(f"SELECT status, CASE WHEN group_chat <> '-1002146850254' THEN group_msg_id END FROM {SCHEMA}.kb_complaints WHERE id={cid}")
         st = cur.fetchone()
         if st and st[0] == 'new' and st[1]:
             # Жалоба ещё на рассмотрении в группе — обновляем там сообщение исправленной версией.

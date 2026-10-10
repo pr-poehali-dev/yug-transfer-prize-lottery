@@ -908,8 +908,20 @@ def handler(event: dict, context) -> dict:
         if action == 'complaint_to_group':
             cid = int(qs.get('id') or 0)
             tg_api('getMe', {}, timeout=2.5)
-            complaints.delete_group_messages(tg_api, cid)
-            complaints.notify_admin(tg_api, cid)
+            conn = psycopg2.connect(os.environ['DATABASE_URL'])
+            cur = conn.cursor()
+            cur.execute(f"SELECT k.group_chat, c.role FROM {SCHEMA}.kb_complaints k "
+                        f"LEFT JOIN {SCHEMA}.check_lists c ON c.id=k.item_id WHERE k.id={cid}")
+            pr = cur.fetchone() or ('', '')
+            conn.close()
+            if not pr[1]:
+                return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(
+                    {'ok': False, 'error': 'Сначала выберите роль: водитель или диспетчер'}, ensure_ascii=False)}
+            if pr[0] == complaints.COPY_CHAT:
+                complaints.mark_group_message(tg_api, cid, '📤 Отправлено в группу ЧС на решение')
+            else:
+                complaints.delete_group_messages(tg_api, cid)
+            complaints.notify_admin(tg_api, cid, to_decision=True)
             conn = psycopg2.connect(os.environ['DATABASE_URL'])
             cur = conn.cursor()
             cur.execute(f"SELECT group_chat, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={cid}")
@@ -931,7 +943,8 @@ def handler(event: dict, context) -> dict:
             res = {}
             if r and r[0] and r[1] and r[2] == 'new':
                 res = tg_api('editMessageReplyMarkup', {'chat_id': r[0], 'message_id': r[1],
-                                                        'reply_markup': complaints.admin_markup(cid, r[3] or '', r[4] or '')}, timeout=3)
+                                                        'reply_markup': complaints.admin_markup(cid, r[3] or '', r[4] or '')
+                                                        if r[0] == complaints.COPY_CHAT else complaints.decision_markup(cid, r[3] or '')}, timeout=3)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': res.get('ok'), 'error': res.get('description', '')}, ensure_ascii=False)}
         if action == 'complaint_decided':
             cid = int(qs.get('id') or 0)
