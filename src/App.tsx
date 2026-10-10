@@ -31,14 +31,6 @@ function lazyWithReload<T extends ComponentType<unknown>>(factory: () => Promise
 
 const Index = lazyWithReload(() => import("./pages/Index"));
 const Posts = lazyWithReload(() => import("./pages/Posts"));
-const Privacy = lazyWithReload(() => import("./pages/Privacy"));
-const Offer = lazyWithReload(() => import("./pages/Offer"));
-const Directions = lazyWithReload(() => import("./pages/RoutesPage"));
-const RouteDetail = lazyWithReload(() => import("./pages/RouteDetailPage"));
-const Tariffs = lazyWithReload(() => import("./pages/TariffsPage"));
-const TariffDetail = lazyWithReload(() => import("./pages/TariffDetailPage"));
-const Contacts = lazyWithReload(() => import("./pages/ContactsPage"));
-const Bridge = lazyWithReload(() => import("./pages/BridgePage"));
 const TgSearch = lazyWithReload(() => import("./pages/TgSearch"));
 const NotFound = lazyWithReload(() => import("./pages/NotFound"));
 
@@ -57,14 +49,6 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/admin" element={<Posts />} />
           <Route path="/posts" element={<Posts />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/offer" element={<Offer />} />
-          <Route path="/directions" element={<Directions />} />
-          <Route path="/route/:slug" element={<RouteDetail />} />
-          <Route path="/tariffs" element={<Tariffs />} />
-          <Route path="/tariff/:slug" element={<TariffDetail />} />
-          <Route path="/contacts" element={<Contacts />} />
-          <Route path="/bridge" element={<Bridge />} />
           <Route path="/tg-search" element={<TgSearch />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
