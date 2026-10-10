@@ -87,8 +87,9 @@ def tg_api(method: str, payload: dict, timeout: float = 3.5) -> dict:
 SCREEN = {'rec': None}
 
 
-def screen_clear(uid: int, chat_id) -> None:
-    """Удаляет сообщения прошлого экрана (список групп, заказы, подписка и т.п.)."""
+def screen_clear(uid: int, chat_id, extra: list) -> dict:
+    """Удаляет прошлый экран бота и нажатие пользователя — в фоне, параллельно с ответом."""
+    import threading
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
@@ -101,15 +102,30 @@ def screen_clear(uid: int, chat_id) -> None:
     finally:
         cur.close()
         conn.close()
-    if ids:
-        rec, SCREEN['rec'] = SCREEN['rec'], None
-        tg_api('deleteMessages', {'chat_id': chat_id, 'message_ids': ids[-100:]}, timeout=2.5)
-        SCREEN['rec'] = rec
+    job = {'ids': (ids + [i for i in extra if i])[-100:], 'ok': False, 'thread': None}
+    if not job['ids']:
+        job['ok'] = True
+        return job
+
+    def run():
+        for _ in range(2):
+            res = tg_api('deleteMessages', {'chat_id': chat_id, 'message_ids': job['ids']}, timeout=3)
+            if res:
+                job['ok'] = True
+                return
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    job['thread'] = t
+    return job
 
 
-def screen_save(uid: int) -> None:
+def screen_save(uid: int, job: dict = None) -> None:
     ids = SCREEN['rec'] or []
     SCREEN['rec'] = None
+    if job and job.get('thread'):
+        job['thread'].join(timeout=max(0.5, min(6.5, DEADLINE['t'] - time.time() - 0.8)) if DEADLINE['t'] else 3)
+    if job and not job.get('ok'):
+        ids = job['ids'] + ids
     if not ids:
         return
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
@@ -1260,14 +1276,12 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     menu_uid = int((message.get('from') or {}).get('id') or chat_id)
-    is_menu = text in MENU_BUTTONS or text.lower() in ('/orders', '/groups', '/sub', '/check', '/complain')
-    SCREEN['rec'] = [int(message['message_id'])] if message.get('message_id') else []
-    if is_menu:
-        screen_clear(menu_uid, chat_id)
+    SCREEN['rec'] = []
+    job = screen_clear(menu_uid, chat_id, [int(message.get('message_id') or 0)])
     try:
         return handle_private(message, chat_id, text)
     finally:
-        screen_save(menu_uid)
+        screen_save(menu_uid, job)
 
 
 def handle_private(message: dict, chat_id, text: str) -> dict:
@@ -1309,7 +1323,7 @@ def handle_private(message: dict, chat_id, text: str) -> dict:
         tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': message.get('message_id')}, timeout=2.2)
         ask_role(chat_id, (message.get('from') or {}).get('id') or chat_id)
     elif text.split(' ')[0].split('@')[0] == '/start':
-        send_welcome(chat_id, message.get('from') or {}, message.get('message_id'))
+        send_welcome(chat_id, message.get('from') or {}, None)
     elif text.startswith('/'):
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Выберите пункт меню 👇',
                                'reply_markup': MAIN_KEYBOARD})
