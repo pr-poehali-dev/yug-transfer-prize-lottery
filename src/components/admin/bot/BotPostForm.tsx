@@ -46,7 +46,7 @@ export function BotPostForm({ token, editingId, form, setForm, saving, onSave, o
         <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
         {form.photo_url ? (
           <div className="flex items-center gap-3">
-            <img src={form.photo_url} alt="" className="w-20 h-20 object-cover rounded-xl border border-white/10" />
+            <img loading="lazy" decoding="async" src={form.photo_url} alt="" className="w-20 h-20 object-cover rounded-xl border border-white/10" />
             <div className="flex flex-col gap-1.5">
               <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 text-xs hover:bg-white/10 transition-colors disabled:opacity-50">
                 {uploading ? "Загрузка..." : "Заменить"}

@@ -393,9 +393,9 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
                   title={i.photo_url ? "Открыть карточку" : "Нажмите — подтянуть данные из Telegram"}
                   className="group/av relative w-14 h-14 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {i.photo_url ? (
-                    <img src={i.photo_url} alt="" className="w-full h-full object-cover" />
+                    <img loading="lazy" decoding="async" src={i.photo_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
+                    <img loading="lazy" decoding="async" src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
                   )}
                   {!i.photo_url && (
                     <span className={`absolute inset-0 flex items-center justify-center bg-sky-500/20 text-sky-200 transition-opacity ${

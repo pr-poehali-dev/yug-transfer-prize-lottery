@@ -8,8 +8,10 @@ import http.client
 import concurrent.futures
 import hashlib
 import uuid
-import boto3
 import psycopg2
+import dbpool
+
+dbpool.install()
 import complaints
 import payments
 
@@ -57,7 +59,22 @@ def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
         conn.close()
 
 
-def tg_api(method: str, payload: dict, timeout: float = 3.5) -> dict:
+BG = []
+BG_METHODS = ('deleteMessage', 'deleteMessages', 'answerCallbackQuery')
+
+
+def tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False) -> dict:
+    """Запрос к Telegram. Удаления и ответы на кнопки уходят в фоне — пользователь не ждёт их."""
+    if method in BG_METHODS and not _bg:
+        import threading
+        t = threading.Thread(target=tg_api, args=(method, payload, min(timeout, 2.5), True), daemon=True)
+        t.start()
+        BG.append(t)
+        return {'ok': True}
+    return _tg_api(method, payload, timeout, _bg)
+
+
+def _tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False) -> dict:
     """Запрос к Telegram сразу по всем адресам параллельно — берём первый ответ."""
     data = json.dumps(payload).encode()
     hosts = [LAST_OK['host']] if LAST_OK['host'] else TG_HOSTS
@@ -77,7 +94,9 @@ def tg_api(method: str, payload: dict, timeout: float = 3.5) -> dict:
     pool.shutdown(wait=False, cancel_futures=True)
     if not result and LAST_OK['host'] and hosts != TG_HOSTS:
         LAST_OK['host'] = ''
-        return tg_api(method, payload, timeout)
+        if _bg:
+            return result
+        return _tg_api(method, payload, timeout, _bg)
     if method in ('sendMessage', 'sendPhoto', 'sendMediaGroup') and result.get('ok'):
         markup = payload.get('reply_markup')
         if isinstance(markup, str):
@@ -189,7 +208,7 @@ def screen_save(uid: int, job: dict = None) -> None:
     if job and job['ids'] and new_ids:
         left = (DEADLINE['t'] - time.time() - 0.5) if DEADLINE['t'] else 3
         if left > 0.8:
-            res = tg_api('deleteMessages', {'chat_id': job['chat_id'], 'message_ids': job['ids']}, timeout=min(3, left))
+            res = _tg_api('deleteMessages', {'chat_id': job['chat_id'], 'message_ids': job['ids']}, timeout=min(3, left))
             job['ok'] = bool(res)
     if job and not job.get('ok'):
         ids = job['ids'] + ids
@@ -499,14 +518,23 @@ def notify_paid(res: dict) -> None:
             payments.mark_notified(res['pid'])
 
 
+PENDING_SEEN = {}
+
+
 def check_pending(uid: int = 0) -> int:
     """Подстраховка к уведомлениям ЮKassa: сверяем неоплаченные платежи за последние сутки."""
+    if uid:
+        now = time.time()
+        if now - PENDING_SEEN.get(uid, 0) < 45:
+            return 0
+        PENDING_SEEN[uid] = now
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
         who = f"AND tg_user_id={int(uid)} " if uid else ''
+        fresh = "interval '30 minutes'" if uid else "interval '1 day'"
         cur.execute(f"SELECT payment_id FROM {SCHEMA}.kb_payments WHERE status='pending' {who}"
-                    f"AND created_at > now() - interval '1 day' ORDER BY id DESC LIMIT {2 if uid else 30}")
+                    f"AND created_at > now() - {fresh} ORDER BY id DESC LIMIT {1 if uid else 30}")
         pids = [r[0] for r in cur.fetchall()]
     finally:
         cur.close()
@@ -634,7 +662,7 @@ def run_check(chat_id, kind: str, query: str) -> None:
             if known and known[1]:
                 conds.append(f"lower(username) = lower('{known[1].replace(chr(39), chr(39) * 2)}')")
         elif kind_q == 'phone':
-            conds.append(f"right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}'")
+            conds.append(f"(phone <> '' AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}')")
         else:
             qe = q.replace("'", "''")
             conds.append(f"lower(username) = '{qe}'")
@@ -723,7 +751,7 @@ def add_to_moderation(kind_q: str, q, known, live: dict = None) -> None:
         if username:
             conds.append(f"lower(username)=lower('{e(username)}')")
         if kind_q == 'phone':
-            conds.append(f"right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}'")
+            conds.append(f"(phone <> '' AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}')")
         if not conds:
             return
         cur.execute(f"SELECT id FROM {SCHEMA}.check_lists WHERE {' OR '.join(conds)} ORDER BY id LIMIT 1")
@@ -770,7 +798,7 @@ def find_card_id(kind_q: str, q):
     if kind_q == 'id':
         conds.append(f"tg_id = {int(q)}")
     elif kind_q == 'phone':
-        conds.append(f"right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}'")
+        conds.append(f"(phone <> '' AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}')")
     else:
         conds.append(f"lower(username) = '{str(q).replace(chr(39), chr(39) * 2)}'")
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
@@ -1013,6 +1041,7 @@ def tg_download(file_id: str) -> bytes:
 
 def store_photo(raw: bytes) -> str:
     key = f"check-lists/scan-{uuid.uuid4().hex}.jpg"
+    import boto3
     s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
                       aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
                       aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
@@ -1217,6 +1246,20 @@ def private_only_commands() -> dict:
 
 
 def handler(event: dict, context) -> dict:
+    BG.clear()
+    try:
+        return _handler(event, context)
+    finally:
+        for t in list(BG):
+            left = (DEADLINE['t'] - time.time() - 0.3) if DEADLINE['t'] else 2.5
+            if left <= 0:
+                break
+            t.join(timeout=min(left, 2.8))
+        BG.clear()
+
+
+def _handler(event: dict, context) -> dict:
+    dbpool.reset()
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
     try:

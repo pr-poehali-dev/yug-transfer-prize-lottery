@@ -158,8 +158,8 @@ export function ComplaintEditDialog({ token, complaint, onClose, onSaved }: Prop
                 <button onClick={() => avatarRef.current?.click()} disabled={uploading}
                   className="relative w-20 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10 shrink-0 group">
                   {tgt.photo_url
-                    ? <img src={tgt.photo_url} alt="" className="w-full h-full object-cover" />
-                    : <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />}
+                    ? <img loading="lazy" decoding="async" src={tgt.photo_url} alt="" className="w-full h-full object-cover" />
+                    : <img loading="lazy" decoding="async" src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />}
                   <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white">
                     Сменить
                   </span>
@@ -204,7 +204,7 @@ export function ComplaintEditDialog({ token, complaint, onClose, onSaved }: Prop
             <div className="flex flex-wrap gap-2">
               {photos.map((p) => (
                 <div key={p} className="relative w-20 h-20 rounded-lg overflow-hidden border border-white/10">
-                  <img src={p} alt="" className="w-full h-full object-cover" />
+                  <img loading="lazy" decoding="async" src={p} alt="" className="w-full h-full object-cover" />
                   <button onClick={() => setPhotos((list) => list.filter((x) => x !== p))}
                     className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-red-500">
                     <Icon name="X" size={12} />

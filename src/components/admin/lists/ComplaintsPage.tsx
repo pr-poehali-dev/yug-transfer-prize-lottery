@@ -154,8 +154,8 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
               <div className="flex items-start gap-3 cursor-pointer" onClick={() => setEditing(c)} title="Открыть карточку">
                 <div className="w-12 h-12 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {c.target.photo_url
-                    ? <img src={c.target.photo_url} alt="" className="w-full h-full object-cover" />
-                    : <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />}
+                    ? <img loading="lazy" decoding="async" src={c.target.photo_url} alt="" className="w-full h-full object-cover" />
+                    : <img loading="lazy" decoding="async" src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />}
                 </div>
                 <div className="flex-1 min-w-0 text-xs space-y-0.5">
                   <div className="text-sm font-semibold text-white truncate">На: {c.target.name || "Без имени"}</div>
@@ -208,7 +208,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                 <div className="flex gap-2 overflow-x-auto">
                   {c.photos.map((p) => (
                     <button key={p} onClick={() => setPreview(p)} className="w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-white/10">
-                      <img src={p} alt="" className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={p} alt="" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -277,7 +277,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
 
       {preview && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
-          <img src={preview} alt="" className="max-w-full max-h-full rounded-xl" />
+          <img loading="lazy" decoding="async" src={preview} alt="" className="max-w-full max-h-full rounded-xl" />
         </div>
       )}
     </div>

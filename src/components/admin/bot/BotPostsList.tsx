@@ -82,7 +82,7 @@ export function BotPostsList({
             const isNext = sched?.index === 0;
             return (
             <div key={post.id} className={`flex gap-4 p-4 rounded-xl border transition-colors ${isNext ? "border-emerald-500/30 bg-emerald-500/5" : "border-white/8 bg-white/3"}`}>
-              <img src={post.photo_url} alt="" className="w-20 h-20 object-cover rounded-lg border border-white/10 flex-shrink-0" />
+              <img loading="lazy" decoding="async" src={post.photo_url} alt="" className="w-20 h-20 object-cover rounded-lg border border-white/10 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">

@@ -8,8 +8,10 @@ import json
 import hashlib
 import base64
 import uuid
-import boto3
 import psycopg2
+import dbpool
+
+dbpool.install()
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -97,6 +99,7 @@ def upload_photo(body: dict) -> dict:
     ctype = body.get('content_type') or 'image/jpeg'
     ext = {'image/png': 'png', 'image/webp': 'webp'}.get(ctype, 'jpg')
     key = f"check-lists/{uuid.uuid4().hex}.{ext}"
+    import boto3
     s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
                       aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
                       aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
@@ -591,6 +594,7 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
 
 
 def handler(event: dict, context) -> dict:
+    dbpool.reset()
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
 

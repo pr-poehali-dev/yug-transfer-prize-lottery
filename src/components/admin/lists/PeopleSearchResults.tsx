@@ -60,8 +60,8 @@ export function PeopleSearchResults({ token, query, onChanged }: { token: string
                 className="rounded-xl border border-white/10 space-card p-2.5 flex items-center gap-3 text-left hover:border-white/25 transition-colors">
                 <div className="w-11 h-11 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {i.photo_url
-                    ? <img src={i.photo_url} alt="" className="w-full h-full object-cover" />
-                    : <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />}
+                    ? <img loading="lazy" decoding="async" src={i.photo_url} alt="" className="w-full h-full object-cover" />
+                    : <img loading="lazy" decoding="async" src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm text-white truncate">{i.name || "Без имени"}</div>

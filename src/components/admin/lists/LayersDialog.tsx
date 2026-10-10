@@ -87,7 +87,7 @@ export function LayersDialog({ token, item, open, onClose }: Props) {
                       <div className="flex gap-3">
                         <div className={`w-16 h-16 rounded-lg overflow-hidden bg-white/5 shrink-0 flex items-center justify-center ${ch.has("photo_url") ? "ring-2 ring-amber-400" : ""}`}>
                           {l.photo_url ? (
-                            <img src={l.photo_url} alt="" className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={l.photo_url} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <Icon name="User" size={22} className="text-white/30" />
                           )}

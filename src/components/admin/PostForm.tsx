@@ -128,7 +128,7 @@ export function PostForm({
           <label className="text-[11px] text-white/50 mb-1 block">Фото <span className="text-white/20">(необязательно)</span></label>
           {form.photo_url ? (
             <div className="relative rounded-lg overflow-hidden border border-white/10">
-              <img src={form.photo_url} alt="" className="w-full max-h-32 object-cover" />
+              <img loading="lazy" decoding="async" src={form.photo_url} alt="" className="w-full max-h-32 object-cover" />
               <button
                 onClick={() => onFormChange({ photo_url: "" })}
                 className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center text-white/70 hover:text-white transition-colors"

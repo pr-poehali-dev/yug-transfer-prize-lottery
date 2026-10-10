@@ -42,9 +42,9 @@ export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) 
       >
         <div className="relative aspect-square bg-white/5">
           {item.photo_url ? (
-            <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
+            <img loading="lazy" decoding="async" src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
           ) : (
-<img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
+<img loading="lazy" decoding="async" src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
           )}
           {item.changes > 0 && (
             <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-black font-medium flex items-center gap-1">

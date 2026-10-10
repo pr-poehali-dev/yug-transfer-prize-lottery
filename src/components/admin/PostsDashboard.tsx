@@ -36,7 +36,7 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
                 <Icon name="ArrowLeft" size={14} />Назад
               </button>
             )}
-            <img src="/favicon-kb.png" alt="" className="w-9 h-9 rounded-lg shadow-[0_0_18px_rgba(217,70,239,0.45)]" />
+            <img loading="lazy" decoding="async" src="/favicon-kb.png" alt="" className="w-9 h-9 rounded-lg shadow-[0_0_18px_rgba(217,70,239,0.45)]" />
             <span className="font-oswald text-lg font-bold text-white tracking-wide">База знаний</span>
           </div>
           <div className="flex items-center gap-3">

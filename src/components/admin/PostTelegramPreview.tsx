@@ -37,7 +37,7 @@ export function PostTelegramPreview({ title = "", text, photo_url, button_text, 
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl rounded-tl-sm overflow-hidden bg-[#182533]">
               {photo_url && (
-                <img src={photo_url} alt="" className="w-full max-h-48 object-cover" />
+                <img loading="lazy" decoding="async" src={photo_url} alt="" className="w-full max-h-48 object-cover" />
               )}
               {fullText && (
                 <div className="px-3 py-2">

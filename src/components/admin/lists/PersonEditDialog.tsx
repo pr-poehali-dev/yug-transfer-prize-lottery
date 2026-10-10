@@ -191,9 +191,9 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
           <div className="flex items-center gap-3">
             <div className="w-20 h-20 rounded-xl bg-white/5 overflow-hidden flex items-center justify-center shrink-0">
               {form.photo_url ? (
-                <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={form.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
-                <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
               )}
             </div>
             <div className="flex flex-col gap-1.5">
@@ -304,9 +304,9 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
                       </div>
                       {h.field === "photo_url" ? (
                         <div className="flex items-center gap-2 mt-1">
-                          {h.old ? <img src={h.old} alt="" className="w-8 h-8 rounded object-cover opacity-60" /> : <span className="text-white/30">—</span>}
+                          {h.old ? <img loading="lazy" decoding="async" src={h.old} alt="" className="w-8 h-8 rounded object-cover opacity-60" /> : <span className="text-white/30">—</span>}
                           <Icon name="ArrowRight" size={12} className="text-white/40" />
-                          {h.new ? <img src={h.new} alt="" className="w-8 h-8 rounded object-cover" /> : <span className="text-white/30">—</span>}
+                          {h.new ? <img loading="lazy" decoding="async" src={h.new} alt="" className="w-8 h-8 rounded object-cover" /> : <span className="text-white/30">—</span>}
                         </div>
                       ) : (
                         <div className="text-white/80 break-words">

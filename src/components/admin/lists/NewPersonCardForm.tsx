@@ -173,9 +173,9 @@ export function NewPersonCardForm({ token, onSaved, onCancel, prefill }: Props) 
           <div className={`relative rounded-2xl border space-card overflow-hidden ${pending ? "border-amber-500/30" : black ? "border-red-500/30" : "border-emerald-500/30"}`}>
             <div className="relative aspect-square bg-white/5">
               {form.photo_url ? (
-                <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={form.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
-<img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
+<img loading="lazy" decoding="async" src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
               )}
               {scanning && (
                 <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2 text-xs text-sky-200">

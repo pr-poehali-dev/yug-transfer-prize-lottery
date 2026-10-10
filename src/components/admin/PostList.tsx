@@ -85,7 +85,7 @@ export function PostList({
                 <div className="shrink-0">
                   {post.photo_url && !post.photo_url.startsWith("data:") ? (
                     <div className="w-14 h-14 rounded-xl overflow-hidden border border-white/10">
-                      <img src={post.photo_url} alt="" className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={post.photo_url} alt="" className="w-full h-full object-cover" />
                     </div>
                   ) : (
                     <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
