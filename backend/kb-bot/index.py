@@ -131,6 +131,32 @@ def get_role(uid: int) -> str:
         conn.close()
 
 
+def swap_start_msg(uid: int, new_id) -> int:
+    """Запоминает id нового приветствия и возвращает id прошлого, чтобы его удалить."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT start_msg_id FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
+        r = cur.fetchone()
+        old = (r[0] if r else 0) or 0
+        cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET start_msg_id={int(new_id) if new_id else 'NULL'} "
+                    f"WHERE tg_user_id={int(uid)}")
+        conn.commit()
+        return int(old)
+    finally:
+        cur.close()
+        conn.close()
+
+
+def send_single(chat_id, uid: int, payload: dict) -> None:
+    """Отправляет одно сообщение бота вместо прошлого: старое приветствие удаляется."""
+    res = tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', **payload})
+    new_id = (res.get('result') or {}).get('message_id')
+    old = swap_start_msg(uid, new_id) if new_id else 0
+    if old and old != new_id:
+        tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': old}, timeout=2.2)
+
+
 def handle_my_role(callback: dict) -> None:
     role = str(callback.get('data') or '').split(':', 1)[1]
     user = callback.get('from') or {}
@@ -138,7 +164,7 @@ def handle_my_role(callback: dict) -> None:
     chat_id = (msg.get('chat') or {}).get('id') or user.get('id')
     if role not in ROLE_NAMES or not user.get('id'):
         return
-    start_trial(user)
+    until, _ = start_trial(user)
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
@@ -149,41 +175,45 @@ def handle_my_role(callback: dict) -> None:
         conn.close()
     tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': 'Роль сохранена'}, timeout=2.2)
     if msg.get('message_id'):
-        tg_api('editMessageReplyMarkup', {'chat_id': chat_id, 'message_id': msg['message_id'],
-                                          'reply_markup': {'inline_keyboard': [[{'text': f'✅ {ROLE_NAMES[role]}', 'callback_data': 'noop'}]]}})
-    tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD,
-                           'text': f'Готово! Ваша роль: <b>{ROLE_NAMES[role]}</b>.\n\n'
-                                   'Отправьте @username, номер телефона или ID — и бот покажет, что о человеке известно.\n'
-                                   'Сменить роль: /role'})
+        tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']}, timeout=2.2)
+    till = f'\n🎁 Доступ до: <b>{until.strftime("%d.%m.%Y %H:%M")}</b>' if until else ''
+    send_single(chat_id, user['id'], {
+        'reply_markup': MAIN_KEYBOARD,
+        'text': f'✅ Ваша роль: <b>{ROLE_NAMES[role]}</b>{till}\n\n'
+                '🔎 Отправьте @username, номер телефона или ID — бот покажет, что о человеке известно.',
+    })
 
 
-def ask_role(chat_id) -> None:
-    tg_api('sendMessage', {'chat_id': chat_id, 'text': '👤 <b>Выберите свою роль:</b>', 'parse_mode': 'HTML',
-                           'reply_markup': ROLE_MARKUP})
+def ask_role(chat_id, uid: int) -> None:
+    send_single(chat_id, uid, {'text': '👤 <b>Выберите свою роль:</b>', 'reply_markup': ROLE_MARKUP})
 
 
-def send_welcome(chat_id, user: dict) -> None:
+def send_welcome(chat_id, user: dict, start_msg_id=None) -> None:
+    uid = int(user.get('id') or 0)
+    if start_msg_id:
+        tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': start_msg_id}, timeout=2.2)
     until, fresh = start_trial(user)
     name = esc_html(user.get('first_name') or '')
     hello = f'👋 Здравствуйте{", " + name if name else ""}!'
-    if fresh and until:
-        text = (f'{hello}\n\n'
-                '🔎 Система поиска и проверки водителей и диспетчеров работает <b>по подписке</b>.\n\n'
-                f'🎁 У вас есть <b>{TRIAL_DAYS} дня бесплатно</b>, чтобы протестировать наш сервис.\n'
-                f'📅 Тестовый период действует до: <b>{until.strftime("%d.%m.%Y %H:%M")}</b>')
-    elif until and until > datetime.datetime.now():
-        text = (f'{hello}\n\n✅ Ваша подписка активна до <b>{until.strftime("%d.%m.%Y %H:%M")}</b>.\n\n'
-                'Отправьте @username, номер телефона или ID для проверки.')
-    else:
-        text = (f'{hello}\n\n🔎 Система поиска работает <b>по подписке</b>.\n'
-                '⏳ Ваш тестовый период уже закончился — продлите подписку, чтобы продолжить пользоваться поиском.')
-        tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': RENEW_MARKUP})
-        tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Меню 👇', 'reply_markup': MAIN_KEYBOARD})
+    role = get_role(uid)
+    active = bool(until and until > datetime.datetime.now())
+    if not active and not fresh:
+        send_single(chat_id, uid, {'reply_markup': RENEW_MARKUP,
+                                   'text': f'{hello}\n\n🔎 Поиск работает <b>по подписке</b>.\n'
+                                           '⏳ Тестовый период закончился — продлите подписку, чтобы продолжить.'})
         return
-    has_role = bool(get_role(user.get('id') or 0))
-    tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD})
-    if not has_role:
-        ask_role(chat_id)
+    till = until.strftime("%d.%m.%Y %H:%M") if until else ''
+    if not role:
+        send_single(chat_id, uid, {'reply_markup': ROLE_MARKUP, 'text': (
+            f'{hello}\n\n'
+            '🔎 Система поиска водителей и диспетчеров работает <b>по подписке</b>.\n'
+            f'🎁 У вас <b>{TRIAL_DAYS} дня бесплатно</b> — до <b>{till}</b>.\n\n'
+            '👤 <b>Выберите свою роль:</b>')})
+        return
+    send_single(chat_id, uid, {'reply_markup': MAIN_KEYBOARD, 'text': (
+        f'{hello} Ваша роль: <b>{ROLE_NAMES.get(role, role)}</b>\n'
+        f'✅ Доступ до: <b>{till}</b>\n\n'
+        '🔎 Отправьте @username, номер телефона или ID для проверки.')})
 
 
 def send_subscription(chat_id, user_id) -> None:
@@ -853,9 +883,10 @@ def handler(event: dict, context) -> dict:
     elif text == BUTTON_SUB or text.lower() in ('моя подписка', '/sub'):
         send_subscription(chat_id, (message.get('from') or {}).get('id') or chat_id)
     elif text.split('@')[0] == '/role':
-        ask_role(chat_id)
+        tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': message.get('message_id')}, timeout=2.2)
+        ask_role(chat_id, (message.get('from') or {}).get('id') or chat_id)
     elif text.split(' ')[0].split('@')[0] == '/start':
-        send_welcome(chat_id, message.get('from') or {})
+        send_welcome(chat_id, message.get('from') or {}, message.get('message_id'))
     elif text.startswith('/'):
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Выберите пункт меню 👇',
                                'reply_markup': MAIN_KEYBOARD})
