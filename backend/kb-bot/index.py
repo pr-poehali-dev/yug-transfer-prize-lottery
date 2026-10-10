@@ -102,7 +102,7 @@ def _tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False)
         if _bg:
             return result
         return _tg_api(method, payload, timeout, _bg)
-    if not result and not _bg and method in ('sendMessage', 'sendPhoto') and is_private_chat(payload.get('chat_id')):
+    if not result and not _bg and method == 'sendMessage' and is_private_chat(payload.get('chat_id')):
         FALLBACK.append((method, payload))
     if method in ('sendMessage', 'sendPhoto', 'sendMediaGroup') and result.get('ok'):
         markup = payload.get('reply_markup')
@@ -1055,8 +1055,12 @@ def send_card(chat_id, r, head: str) -> None:
         text = text[:1000].rsplit('\n', 1)[0] + '\n…'
     for photo in dict.fromkeys([photo_url, NO_PHOTO_URL]):
         res = tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo, 'caption': text,
-                                   'parse_mode': 'HTML', 'reply_markup': markup})
+                                   'parse_mode': 'HTML', 'reply_markup': markup}, timeout=7)
         if res.get('ok'):
+            return
+        if not res:
+            # Telegram долго качает фото и не успел ответить — карточка, скорее всего, уже дошла. Повтор дал бы дубль.
+            print(f'[KB-BOT] card photo: no answer from Telegram, no retry')
             return
     tg_api('sendMessage', {'chat_id': chat_id, 'text': text[:4000], 'parse_mode': 'HTML',
                            'disable_web_page_preview': True, 'reply_markup': markup})
