@@ -1,0 +1,2 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.kb_complaints ADD COLUMN IF NOT EXISTS send_attempts integer NOT NULL DEFAULT 0;
+UPDATE t_p67171637_yug_transfer_prize_l.kb_complaints SET send_attempts = 1 WHERE group_msg_id IS NOT NULL OR status <> 'new';

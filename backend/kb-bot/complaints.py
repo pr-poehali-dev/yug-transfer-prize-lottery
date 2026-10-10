@@ -252,6 +252,7 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
             c0.close()
             if not first:
                 return True
+            notify(cid)
             info = ''
             conn = db()
             cur = conn.cursor()
@@ -267,7 +268,6 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
                                            '⚖️ Решение по жалобе будет опубликовано в группе '
                                            '<a href="https://t.me/chernyi_spisok_transfer">ЧС Авто трансфера РФ</a>.\n'
                                            'О результате мы также напишем вам сюда.'})
-            notify(cid)
             return True
         tg_api('sendMessage', {'chat_id': chat_id, 'reply_markup': PHOTO_KB,
                                'text': 'Пришлите фото или нажмите «✅ Отправить жалобу».'})
@@ -350,10 +350,16 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
                 p['message_thread_id'] = th
             return tg_api(method, p)
 
+        c0 = db()
+        k0 = c0.cursor()
+        k0.execute(f"UPDATE {SCHEMA}.kb_complaints SET send_attempts=send_attempts+1 WHERE id={int(cid)}")
+        c0.commit()
+        k0.close()
+        c0.close()
         res = call(thread)
         if not res:
-            # Telegram не ответил вовремя — сообщение, скорее всего, уже дошло. Повтор дал бы дубль.
-            print(f"[KB-BOT] complaint to {chat}: no answer from Telegram, no retry")
+            # Telegram не ответил — жалобу дошлём позже автоматически (если она так и не появилась в группе).
+            print(f"[KB-BOT] complaint #{cid} to {chat}: no answer from Telegram, will retry later")
             return None
         if not res.get('ok') and first_photo and first_photo != NO_AVATAR:
             print(f"[KB-BOT] complaint avatar failed: {res.get('description', '')[:120]}")
@@ -404,6 +410,22 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         k2.close()
         c2.close()
         print(f'[KB-BOT] complaint #{cid} sent to {target_chat}')
+
+
+def retry_unsent(tg_api) -> int:
+    """Дошлёт в тему «Жалобы» жалобы, которые не ушли из-за сбоя связи с Telegram (до 3 попыток)."""
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT id FROM {SCHEMA}.kb_complaints WHERE status='new' AND group_msg_id IS NULL "
+                f"AND coalesce(group_msgs,'')='' AND send_attempts < 3 AND updated_at < now() - interval '40 seconds' "
+                f"ORDER BY id LIMIT 1")
+    r = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not r:
+        return 0
+    notify_admin(tg_api, int(r[0]))
+    return int(r[0])
 
 
 def decision_markup(cid: int, list_type: str = '') -> dict:

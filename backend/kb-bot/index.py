@@ -1402,6 +1402,14 @@ def handler(event: dict, context) -> dict:
     FALLBACK.clear()
     try:
         resp = _handler(event, context)
+        left = (DEADLINE['t'] - time.time()) if DEADLINE['t'] else 0
+        if left > 5:
+            try:
+                sent = complaints.retry_unsent(tg_api)
+                if sent:
+                    print(f'[KB-BOT] complaint #{sent} re-sent to topic')
+            except Exception as e:
+                print(f'[KB-BOT] retry unsent failed: {type(e).__name__}')
         if FALLBACK and isinstance(resp, dict) and resp.get('body') == 'ok':
             # Telegram не ответил на отправку — отдаём сообщение прямо в ответе на вебхук, чтобы человек его получил.
             m, p = FALLBACK[-1]
