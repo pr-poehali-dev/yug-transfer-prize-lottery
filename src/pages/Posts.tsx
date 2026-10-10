@@ -1,22 +1,16 @@
-import { useState } from "react";
-import { AdminLogin } from "@/components/admin/AdminLogin";
+import { useEffect, useState } from "react";
 import { PostsDashboard } from "@/components/admin/PostsDashboard";
 import { POSTS_SESSION_KEY } from "@/components/admin/adminTypes";
 
 export default function Posts() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(POSTS_SESSION_KEY) || "");
+  const [token] = useState(() => sessionStorage.getItem(POSTS_SESSION_KEY) || "");
 
-  const handleLogout = () => { sessionStorage.removeItem(POSTS_SESSION_KEY); setToken(""); window.location.href = "/"; };
+  useEffect(() => {
+    if (!token) window.location.replace("/");
+  }, [token]);
 
-  if (!token)
-    return (
-      <AdminLogin
-        scope="posts"
-        title="Посты в канал"
-        subtitle="Доступ только по отдельному паролю"
-        sessionKey={POSTS_SESSION_KEY}
-        onSuccess={(t) => setToken(t)}
-      />
-    );
+  const handleLogout = () => { sessionStorage.removeItem(POSTS_SESSION_KEY); window.location.href = "/"; };
+
+  if (!token) return null;
   return <PostsDashboard token={token} onLogout={handleLogout} />;
 }
