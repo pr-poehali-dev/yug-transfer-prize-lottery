@@ -69,10 +69,6 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
         </div>
       ) : (
         <div className="max-w-5xl mx-auto px-4 md:px-6 py-10 md:py-16">
-          <div className="text-center mb-8 md:mb-12">
-            <h1 className="font-oswald text-3xl md:text-4xl font-bold text-white tracking-wide drop-shadow-[0_0_20px_rgba(217,70,239,0.4)]">Центр управления</h1>
-            <p className="text-sm text-white/50 mt-2">Выберите раздел</p>
-          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {tiles.map((t) => {
               const c = toneCls[t.tone];
