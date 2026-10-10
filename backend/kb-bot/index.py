@@ -115,42 +115,34 @@ SCREEN = {'rec': None}
 
 
 def screen_clear(uid: int, chat_id, extra: list) -> dict:
-    """Удаляет прошлый экран бота и нажатие пользователя — в фоне, параллельно с ответом."""
-    import threading
+    """Готовит список сообщений прошлого экрана. Удаляем их ПОСЛЕ ответа и никогда не трогаем
+    закреплённое приветствие — иначе чат пустеет и Telegram показывает кнопку «Старт»."""
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT screen_msgs FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
+        cur.execute(f"SELECT screen_msgs, start_msg_id FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
         r = cur.fetchone()
         ids = [int(x) for x in ((r[0] if r else '') or '').split(',') if x.strip().isdigit()]
+        anchor = int((r[1] if r else 0) or 0)
         if ids:
             cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET screen_msgs='' WHERE tg_user_id={int(uid)}")
             conn.commit()
     finally:
         cur.close()
         conn.close()
-    job = {'ids': (ids + [i for i in extra if i])[-100:], 'ok': False, 'thread': None}
-    if not job['ids']:
-        job['ok'] = True
-        return job
-
-    def run():
-        for _ in range(2):
-            res = tg_api('deleteMessages', {'chat_id': chat_id, 'message_ids': job['ids']}, timeout=3)
-            if res:
-                job['ok'] = True
-                return
-    t = threading.Thread(target=run, daemon=True)
-    t.start()
-    job['thread'] = t
-    return job
+    ids = [i for i in ids + [i for i in extra if i] if i != anchor]
+    return {'ids': ids[-100:], 'chat_id': chat_id, 'anchor': anchor, 'ok': not ids}
 
 
 def screen_save(uid: int, job: dict = None) -> None:
-    ids = SCREEN['rec'] or []
+    ids = [i for i in (SCREEN['rec'] or []) if not job or i != job.get('anchor')]
+    new_ids = list(ids)
     SCREEN['rec'] = None
-    if job and job.get('thread'):
-        job['thread'].join(timeout=max(0.5, min(6.5, DEADLINE['t'] - time.time() - 0.8)) if DEADLINE['t'] else 3)
+    if job and job['ids'] and new_ids:
+        left = (DEADLINE['t'] - time.time() - 0.5) if DEADLINE['t'] else 3
+        if left > 0.8:
+            res = tg_api('deleteMessages', {'chat_id': job['chat_id'], 'message_ids': job['ids']}, timeout=min(3, left))
+            job['ok'] = bool(res)
     if job and not job.get('ok'):
         ids = job['ids'] + ids
     if not ids:
