@@ -906,32 +906,9 @@ def handler(event: dict, context) -> dict:
                 'ok': bool(me), 'username': me.get('username', ''), 'webhook': wh.get('url', ''),
                 'error': me_res.get('description', '') if not me else ''})}
         if action == 'complaint_to_group':
-            cid = int(qs.get('id') or 0)
             tg_api('getMe', {}, timeout=2.5)
-            conn = psycopg2.connect(os.environ['DATABASE_URL'])
-            cur = conn.cursor()
-            cur.execute(f"SELECT k.group_chat, c.role FROM {SCHEMA}.kb_complaints k "
-                        f"LEFT JOIN {SCHEMA}.check_lists c ON c.id=k.item_id WHERE k.id={cid}")
-            pr = cur.fetchone() or ('', '')
-            conn.close()
-            if not pr[1]:
-                return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(
-                    {'ok': False, 'error': 'Сначала выберите роль: водитель или диспетчер'}, ensure_ascii=False)}
-            if pr[0] == complaints.COPY_CHAT:
-                complaints.mark_group_message(tg_api, cid, '📤 Отправлено в группу ЧС на решение')
-            else:
-                complaints.delete_group_messages(tg_api, cid)
-            complaints.notify_admin(tg_api, cid, to_decision=True)
-            conn = psycopg2.connect(os.environ['DATABASE_URL'])
-            cur = conn.cursor()
-            cur.execute(f"SELECT group_chat, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={cid}")
-            r = cur.fetchone() or ('', None)
-            conn.close()
-            where = {complaints.DECISION_CHAT: 'группу «ЧС Авто трансфера РФ»',
-                     complaints.COPY_CHAT: 'тему «жалобы» в «Заявки юг-трансфер»'}.get(r[0], '')
-            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(
-                {'ok': bool(r[1]), 'where': where,
-                 'error': '' if r[1] else 'Бот не смог отправить — добавьте @mew_zbot админом в группу ЧС'}, ensure_ascii=False)}
+            res = complaints.send_to_decision(tg_api, int(qs.get('id') or 0))
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(res, ensure_ascii=False)}
         if action == 'complaint_refresh_buttons':
             cid = int(qs.get('id') or 0)
             conn = psycopg2.connect(os.environ['DATABASE_URL'])
@@ -998,6 +975,9 @@ def handler(event: dict, context) -> dict:
     callback = body.get('callback_query') or {}
     if str(callback.get('data') or '').startswith('crole:'):
         complaints.handle_role_button(tg_api, callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+    if str(callback.get('data') or '').startswith('csend:'):
+        complaints.handle_send_button(tg_api, callback)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if str(callback.get('data') or '').startswith('creject:'):
         complaints.handle_reject_button(tg_api, callback)

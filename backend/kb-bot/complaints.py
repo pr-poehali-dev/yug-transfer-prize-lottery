@@ -365,8 +365,7 @@ def admin_markup(cid: int, list_type: str = '', role: str = '') -> dict:
         {'text': ('✅ ' if role == 'driver' else '') + '🚗 Водитель', 'callback_data': f'crole:{int(cid)}:driver'},
         {'text': ('✅ ' if role == 'dispatcher' else '') + '🎧 Диспетчер', 'callback_data': f'crole:{int(cid)}:dispatcher'},
     ]]
-    first = '⛔️ Подтвердить (уже в ЧС)' if list_type == 'black' else '⛔️ Заносим в ЧС'
-    rows.append([{'text': first, 'callback_data': f'cblack:{int(cid)}'},
+    rows.append([{'text': '📤 Отправить в группу ЧС', 'callback_data': f'csend:{int(cid)}'},
                  {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
     return {'inline_keyboard': rows}
 
@@ -620,3 +619,46 @@ def publish_verdict(tg_api, cid: int, by: str) -> None:
         res = tg_api('sendMessage', {'chat_id': chat, 'text': caption, 'parse_mode': 'HTML'})
     if not res.get('ok'):
         print(f"[KB-BOT] verdict publish failed: {res.get('description', '')[:120]}")
+
+
+def send_to_decision(tg_api, cid: int) -> dict:
+    """Переносит жалобу на решение в группу ЧС: уведомление в теме помечается, в ЧС уходит сообщение с 2 кнопками."""
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT k.group_chat, c.role, k.status FROM {SCHEMA}.kb_complaints k "
+                f"LEFT JOIN {SCHEMA}.check_lists c ON c.id=k.item_id WHERE k.id={int(cid)}")
+    pr = cur.fetchone() or ('', '', '')
+    cur.close()
+    conn.close()
+    if pr[2] != 'new':
+        return {'ok': False, 'error': 'Жалоба уже рассмотрена'}
+    if not pr[1]:
+        return {'ok': False, 'error': 'Сначала выберите роль: водитель или диспетчер'}
+    if pr[0] == COPY_CHAT:
+        mark_group_message(tg_api, cid, '📤 Отправлено в группу ЧС на решение')
+    else:
+        delete_group_messages(tg_api, cid)
+    notify_admin(tg_api, cid, to_decision=True)
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT group_chat, group_msg_id FROM {SCHEMA}.kb_complaints WHERE id={int(cid)}")
+    r = cur.fetchone() or ('', None)
+    cur.close()
+    conn.close()
+    ok = bool(r[1]) and r[0] != COPY_CHAT
+    return {'ok': ok, 'where': 'группу «ЧС Авто трансфера РФ»' if ok else '',
+            'error': '' if ok else 'Бот не смог отправить — добавьте его админом в группу ЧС'}
+
+
+def handle_send_button(tg_api, callback: dict) -> None:
+    user = callback.get('from') or {}
+    chat_id = ((callback.get('message') or {}).get('chat') or {}).get('id')
+    cid = int(str(callback.get('data', '')).split(':')[1])
+    if not is_group_admin(tg_api, chat_id, user.get('id')):
+        tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': True,
+                                       'text': 'Отправлять в ЧС может только администратор группы.'}, timeout=2.2)
+        return
+    res = send_to_decision(tg_api, cid)
+    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': not res['ok'],
+                                   'text': ('📤 Отправлено в группу ЧС на решение' if res['ok'] else res['error'])[:190]},
+           timeout=2.2)
