@@ -412,7 +412,7 @@ def run_check(chat_id, kind: str, query: str) -> None:
         live = live_lookup(kind_q, q) if not known else {}
         if live:
             known = (int(live['tg_id']), live.get('username') or '')
-        add_to_moderation(kind_q, q, known)
+        add_to_moderation(kind_q, q, known, live)
         head = (f"⚠️ <b>Будьте внимательны!</b>\n\n"
                 f"У нас ещё нет информации о данном участнике <b>{shown}</b>.\n"
                 f"Мы взяли его на проверку — данные появятся после модерации.")
@@ -459,11 +459,16 @@ def live_lookup(kind_q: str, q) -> dict:
         return {}
 
 
-def add_to_moderation(kind_q: str, q, known) -> None:
-    """Неизвестный аккаунт из запроса сразу попадает «На модерацию». Дубли не создаются."""
+def add_to_moderation(kind_q: str, q, known, live: dict = None) -> None:
+    """Неизвестный аккаунт из запроса сразу попадает «На модерацию» — сразу с данными из Telegram, если они найдены.
+    Если карточка уже есть, пустые поля дополняются, ничего не затирается."""
+    live = live or {}
+    e = lambda v: str(v or '').replace("'", "''")
     tg_id = int(q) if kind_q == 'id' else (int(known[0]) if known else None)
     username = (known[1] if known and known[1] else '') if kind_q == 'id' else (q if kind_q == 'username' else '')
-    phone = f"+7{q}" if kind_q == 'phone' else ''
+    username = (live.get('username') or username or '').lstrip('@')
+    phone = live.get('phone') or (f"+7{q}" if kind_q == 'phone' else '')
+    name, bio, photo, photo_uid = live.get('name') or '', live.get('bio') or '', live.get('photo_url') or '', str(live.get('photo_uid') or '')
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
@@ -471,21 +476,36 @@ def add_to_moderation(kind_q: str, q, known) -> None:
         if tg_id:
             conds.append(f"tg_id={tg_id}")
         if username:
-            conds.append(f"lower(username)=lower('{username.replace(chr(39), '')}')")
-        if phone:
+            conds.append(f"lower(username)=lower('{e(username)}')")
+        if kind_q == 'phone':
             conds.append(f"right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}'")
         if not conds:
             return
-        cur.execute(f"SELECT 1 FROM {SCHEMA}.check_lists WHERE {' OR '.join(conds)} LIMIT 1")
-        if cur.fetchone():
-            return
-        cur.execute(
-            f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id, source) "
-            f"VALUES ('', 'pending', '', '{username.replace(chr(39), '')}', '{phone}', '', "
-            f"{tg_id if tg_id else 'NULL'}, 'запрос в боте') ON CONFLICT DO NOTHING")
+        cur.execute(f"SELECT id FROM {SCHEMA}.check_lists WHERE {' OR '.join(conds)} ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        scan = "last_scan_at=now(), scan_status='ok'" if live else ''
+        if row:
+            if not live:
+                return
+            sets = [f"tg_id=COALESCE(tg_id, {tg_id})" if tg_id else '',
+                    f"username=CASE WHEN username='' THEN '{e(username)}' ELSE username END" if username else '',
+                    f"name=CASE WHEN name='' THEN '{e(name)}' ELSE name END" if name else '',
+                    f"phone=CASE WHEN phone='' THEN '{e(phone)}' ELSE phone END" if phone else '',
+                    f"bio=CASE WHEN coalesce(bio,'')='' THEN '{e(bio)}' ELSE bio END" if bio else '',
+                    f"photo_url=CASE WHEN coalesce(photo_url,'')='' THEN '{e(photo)}' ELSE photo_url END" if photo else '',
+                    f"photo_file_uid=CASE WHEN coalesce(photo_file_uid,'')='' THEN '{e(photo_uid)}' ELSE photo_file_uid END" if photo_uid else '',
+                    scan, "updated_at=now()"]
+            cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(x for x in sets if x)} WHERE id={int(row[0])}")
+        else:
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id, source, bio, "
+                f"photo_url, photo_file_uid, last_scan_at, scan_status) "
+                f"VALUES ('', 'pending', '{e(name)}', '{e(username)}', '{e(phone)}', '', "
+                f"{tg_id if tg_id else 'NULL'}, 'запрос в боте', '{e(bio)}', '{e(photo)}', '{e(photo_uid)}', "
+                f"{'now()' if live else 'NULL'}, '{'ok' if live else ''}') ON CONFLICT DO NOTHING")
         conn.commit()
-    except Exception as e:
-        print(f'[KB-BOT] add to moderation failed: {type(e).__name__}')
+    except Exception as ex:
+        print(f'[KB-BOT] add to moderation failed: {type(ex).__name__}: {str(ex)[:150]}')
     finally:
         cur.close()
         conn.close()
