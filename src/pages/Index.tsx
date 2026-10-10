@@ -10,6 +10,7 @@ export default function Index() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [open, setOpen] = useState(false);
 
   const stars = useMemo(
     () => Array.from({ length: 70 }, () => ({
@@ -57,40 +58,59 @@ export default function Index() {
             animation: `twinkle ${s.dur}s ease-in-out ${s.delay}s infinite` }} />
       ))}
 
-      <div className="relative w-full max-w-sm">
-        <div className="pointer-events-none absolute left-1/2 top-1/2 w-[440px] h-[440px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/5"
+      <div className={`relative w-full transition-all duration-500 ${open ? "max-w-xs" : "max-w-[220px]"}`}>
+        <div className="pointer-events-none absolute left-1/2 top-1/2 w-[340px] h-[340px] -ml-[170px] -mt-[170px] rounded-full border border-white/5"
           style={{ animation: "orbit 30s linear infinite" }}>
           <span className="absolute -top-1 left-1/2 w-2 h-2 rounded-full bg-fuchsia-400 shadow-[0_0_12px_4px_rgba(232,121,249,0.6)]" />
         </div>
 
         <form onSubmit={submit}
-          className="relative rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-7 shadow-[0_0_60px_-10px_rgba(168,85,247,0.45)]">
-          <div className="flex justify-center -mt-2 mb-4">
-            <img src="/kb-logo.png" alt="База знаний" className="w-40 h-auto drop-shadow-[0_0_25px_rgba(217,70,239,0.45)]" />
+          className={`relative rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-[0_0_50px_-12px_rgba(168,85,247,0.45)] transition-all duration-500 ${open ? "p-5" : "p-4"}`}>
+          <div className="flex justify-center">
+            <img src="/kb-logo.png" alt="База знаний"
+              className={`h-auto drop-shadow-[0_0_25px_rgba(217,70,239,0.45)] transition-all duration-500 ${open ? "w-24" : "w-32"}`} />
           </div>
 
-          <div className="space-y-3">
-            <div className="relative">
-              <Icon name="User" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-              <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="Логин" autoComplete="username"
-                className="w-full rounded-xl bg-black/40 border border-white/10 pl-10 pr-3 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-fuchsia-400/60 transition-colors" />
-            </div>
-            <div className="relative">
-              <Icon name="Lock" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль"
-                type={show ? "text" : "password"} autoComplete="current-password"
-                className="w-full rounded-xl bg-black/40 border border-white/10 pl-10 pr-10 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-fuchsia-400/60 transition-colors" />
-              <button type="button" onClick={() => setShow((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white">
-                <Icon name={show ? "EyeOff" : "Eye"} size={16} />
-              </button>
-            </div>
-            {error && <div className="text-xs text-rose-300 text-center">{error}</div>}
-            <button type="submit" disabled={loading || !login || !password}
-              className="w-full grad-btn text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
-              {loading ? <Icon name="Loader2" size={16} className="animate-spin" /> : <Icon name="LogIn" size={16} />}
-              Войти
+          {!open && (
+            <button type="button" onClick={() => setOpen(true)}
+              className="mt-3 w-full grad-btn text-white rounded-xl py-2 text-sm font-semibold flex items-center justify-center gap-2">
+              <Icon name="LogIn" size={15} />Войти
             </button>
+          )}
+
+          <div className={`grid transition-all duration-500 ease-out ${open ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0"}`}>
+            <div className="overflow-hidden">
+              <div className="space-y-2.5 p-0.5">
+                <div className="relative">
+                  <Icon name="User" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="Логин" autoComplete="username"
+                    tabIndex={open ? 0 : -1} autoFocus={open} key={open ? "o" : "c"}
+                    className="space-input w-full rounded-xl bg-black/40 border border-white/10 pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-fuchsia-400/60 transition-colors" />
+                </div>
+                <div className="relative">
+                  <Icon name="Lock" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль"
+                    type={show ? "text" : "password"} autoComplete="current-password" tabIndex={open ? 0 : -1}
+                    className="space-input w-full rounded-xl bg-black/40 border border-white/10 pl-9 pr-9 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-fuchsia-400/60 transition-colors" />
+                  <button type="button" onClick={() => setShow((v) => !v)} tabIndex={open ? 0 : -1}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white">
+                    <Icon name={show ? "EyeOff" : "Eye"} size={15} />
+                  </button>
+                </div>
+                {error && <div className="text-xs text-rose-300 text-center">{error}</div>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { setOpen(false); setError(""); }} tabIndex={open ? 0 : -1}
+                    className="px-3 rounded-xl border border-white/10 text-white/50 hover:text-white hover:bg-white/5">
+                    <Icon name="X" size={15} />
+                  </button>
+                  <button type="submit" disabled={loading || !login || !password} tabIndex={open ? 0 : -1}
+                    className="flex-1 grad-btn text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
+                    {loading ? <Icon name="Loader2" size={15} className="animate-spin" /> : <Icon name="LogIn" size={15} />}
+                    Войти
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
       </div>

@@ -424,3 +424,12 @@ html {
   background: rgba(245, 158, 11, 0.18) !important;
   color: #fbbf24 !important;
 }
+/* Автозаполнение браузера — оставляем тёмные поля */
+.space-input:-webkit-autofill,
+.space-input:-webkit-autofill:hover,
+.space-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #fff;
+  -webkit-box-shadow: 0 0 0 1000px rgba(12, 10, 24, 1) inset;
+  caret-color: #fff;
+  transition: background-color 9999s ease-in-out 0s;
+}
