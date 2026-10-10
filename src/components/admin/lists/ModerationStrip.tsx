@@ -163,6 +163,12 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
         found += d.found;
         setScan({ running: true, done, found, left: d.left });
         if (!d.left) break;
+        if (!d.done && d.hour_limit) {
+          setScan({ running: false, done, found, left: d.left });
+          toast("Часовой лимит аккаунтов исчерпан — бережём их от блокировки. Сканер продолжит сам в фоне");
+          onChanged();
+          return;
+        }
         if (!d.done && d.all_paused) {
           const m = Math.ceil((d.resume_in || 0) / 60);
           const when = m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`;

@@ -655,6 +655,10 @@ def run_check(chat_id, kind: str, query: str) -> None:
             cur.execute(f"SELECT tg_id, username FROM {SCHEMA}.tg_users WHERE lower(username)='{qe}' "
                         f"ORDER BY updated_at DESC LIMIT 1")
             known = cur.fetchone()
+        elif kind_q == 'phone':
+            cur.execute(f"SELECT tg_id, username FROM {SCHEMA}.tg_users WHERE coalesce(phone, '') <> '' "
+                        f"AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}' ORDER BY updated_at DESC LIMIT 1")
+            known = cur.fetchone()
 
         conds = []
         if kind_q == 'id':
@@ -663,6 +667,8 @@ def run_check(chat_id, kind: str, query: str) -> None:
                 conds.append(f"lower(username) = lower('{known[1].replace(chr(39), chr(39) * 2)}')")
         elif kind_q == 'phone':
             conds.append(f"(phone <> '' AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = '{q}')")
+            if known:
+                conds.append(f"tg_id = {int(known[0])}")
         else:
             qe = q.replace("'", "''")
             conds.append(f"lower(username) = '{qe}'")

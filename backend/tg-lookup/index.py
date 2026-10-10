@@ -8,6 +8,7 @@ import uuid
 import asyncio
 import time
 import hashlib
+import random
 import psycopg2
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -263,6 +264,56 @@ def sess_key(session: str) -> str:
     return hashlib.sha256(session.encode()).hexdigest()[:24]
 
 
+SCAN_PER_HOUR = 20
+BOT_PER_HOUR = 40
+SCAN_PAUSE = (2.5, 4.5)
+
+
+def usage_map(cur) -> dict:
+    """Сколько запросов в Telegram сделал каждый аккаунт за последний час."""
+    cur.execute(f"SELECT session_hash, sum(cnt) FROM {SCHEMA}.tg_session_usage "
+                f"WHERE hour_at > now() - interval '1 hour' GROUP BY 1")
+    return {r[0]: int(r[1]) for r in cur.fetchall()}
+
+
+def usage_add(cur, conn, key: str, n: int) -> None:
+    if n <= 0:
+        return
+    cur.execute(f"INSERT INTO {SCHEMA}.tg_session_usage (session_hash, hour_at, cnt) "
+                f"VALUES ('{key}', date_trunc('minute', now()), {int(n)}) "
+                f"ON CONFLICT (session_hash, hour_at) DO UPDATE SET cnt = {SCHEMA}.tg_session_usage.cnt + {int(n)}")
+    cur.execute(f"DELETE FROM {SCHEMA}.tg_session_usage WHERE hour_at < now() - interval '1 day'")
+    conn.commit()
+
+
+def fill_from_cache(cur, conn, rows: list) -> list:
+    """Тех, кого бот уже знает (ID и имя), заполняем из своей базы — без запроса в Telegram."""
+    names = [str(u).lower().replace("'", "''") for _, u in rows if u]
+    if not names:
+        return rows
+    cur.execute(f"SELECT lower(username), tg_id, trim(coalesce(first_name,'') || ' ' || coalesce(last_name,'')), coalesce(phone,'') "
+                f"FROM {SCHEMA}.tg_users WHERE coalesce(username,'') <> '' AND lower(username) IN ({','.join(chr(39) + n + chr(39) for n in names)}) "
+                f"AND updated_at > now() - interval '30 days'")
+    known = {r[0]: r for r in cur.fetchall()}
+    left = []
+    for row_id, uname in rows:
+        k = known.get(str(uname).lower())
+        if not k:
+            left.append((row_id, uname))
+            continue
+        q = lambda v: str(v or '').replace("'", "''")
+        try:
+            cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), scan_status='ok', tg_id=COALESCE(tg_id, {int(k[1])}), "
+                        f"name=CASE WHEN name='' THEN '{q(k[2])}' ELSE name END, "
+                        f"phone=CASE WHEN phone='' THEN '{q(k[3])}' ELSE phone END WHERE id={int(row_id)}")
+            conn.commit()
+        except psycopg2.errors.UniqueViolation:
+            conn.rollback()
+            cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={int(row_id)} AND list_type='pending'")
+            conn.commit()
+    return left
+
+
 async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats: dict) -> dict:
     """Пачкой сканирует карточки модерации одним подключением, пока есть время."""
     from telethon.errors import FloodWaitError
@@ -339,6 +390,8 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
                 conn.commit()
                 stats['dupes'] = stats.get('dupes', 0) + 1
             stats['done'] += 1
+            if deadline - time.time() > 10:
+                await asyncio.sleep(random.uniform(*SCAN_PAUSE))
     finally:
         await client.disconnect()
     return stats
@@ -367,17 +420,30 @@ def handle_batch(context, scope: str = 'all') -> dict:
             reserved = True
             print('[TG-LOOKUP] batch: last free account reserved for bot')
         print(f'[TG-LOOKUP] batch sessions {len(sessions)}, blocked {len(blocked)}')
-        workers = sessions[:4]
+        used = usage_map(cur)
+        quota = {sess_key(x): SCAN_PER_HOUR - used.get(sess_key(x), 0) for x in sessions}
+        workers = [x for x in sessions if quota[sess_key(x)] > 0][:4]
+        if sessions and not workers:
+            print('[TG-LOOKUP] batch: hourly limit reached on all accounts')
         where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
         cur.execute(f"SELECT id, username FROM {SCHEMA}.check_lists WHERE {where} "
-                    f"ORDER BY (list_type='pending') DESC, id DESC LIMIT {12 * max(1, len(workers))}")
-        rows = cur.fetchall()
+                    f"ORDER BY (list_type='pending') DESC, id DESC LIMIT 200")
+        fetched = cur.fetchall()
+        rows = fill_from_cache(cur, conn, fetched)
+        from_cache = len(fetched) - len(rows)
+        rows = rows[:sum(min(6, quota[sess_key(w)]) for w in workers)]
+        parts = []
+        pos = 0
+        for w in workers:
+            n = min(6, quota[sess_key(w)])
+            parts.append(rows[pos:pos + n])
+            pos += n
         stats = [{'done': 0, 'found': 0, 'missing': 0, 'flood': 0} for _ in workers]
 
         async def run_all():
             async def one(i, sess):
                 try:
-                    await asyncio.wait_for(batch_scan(sess, rows[i::len(workers)], deadline, cur, conn, stats[i]),
+                    await asyncio.wait_for(batch_scan(sess, parts[i], deadline, cur, conn, stats[i]),
                                            timeout=max(2, deadline - time.time()))
                 except asyncio.TimeoutError:
                     stats[i]['cut'] = True
@@ -391,6 +457,7 @@ def handle_batch(context, scope: str = 'all') -> dict:
             asyncio.run(run_all())
         for sess, st in zip(workers, stats):
             print(f'[TG-LOOKUP] batch result {st}')
+            usage_add(cur, conn, sess_key(sess), st.get('done', 0))
             for k in total:
                 total[k] += st.get(k, 0)
             if st.get('flood') and not st.get('cut'):
@@ -404,7 +471,10 @@ def handle_batch(context, scope: str = 'all') -> dict:
                     f"FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
         paused, resume_in = cur.fetchone()
         accounts = len(load_sessions(cur))
-        return resp(200, {'ok': True, **total, 'left': left, 'accounts': accounts, 'paused': paused,
+        total['done'] += from_cache
+        total['found'] += from_cache
+        hour_limit = bool(sessions) and not workers
+        return resp(200, {'ok': True, **total, 'from_cache': from_cache, 'hour_limit': hour_limit, 'left': left, 'accounts': accounts, 'paused': paused,
                           'all_paused': (accounts > 0 and paused >= accounts) or (reserved and not workers),
                           'reserved': reserved and not workers, 'resume_in': resume_in})
     finally:
@@ -1038,12 +1108,16 @@ def handler(event: dict, context) -> dict:
         bot_keys = bot_session_keys(cur)
         sessions.sort(key=lambda x: (1 if sess_key(x) in blocked else 0, 0 if sess_key(x) in bot_keys else 1,
                                      0 if StringSession(x).dc_id == 2 else 1))
+        used = usage_map(cur)
         tried = 0
         for s in sessions:
             left = budget - (time.time() - started)
             if left < 2.5 or tried >= 5:
                 break
+            if used.get(sess_key(s), 0) >= BOT_PER_HOUR:
+                continue
             tried += 1
+            usage_add(cur, conn, sess_key(s), 1)
             try:
                 result = asyncio.run(asyncio.wait_for(lookup(s, '' if phone else username, phone), timeout=min(left, 14)))
             except (asyncio.TimeoutError, OSError, ConnectionError) as e:
