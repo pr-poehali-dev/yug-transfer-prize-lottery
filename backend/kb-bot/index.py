@@ -818,6 +818,22 @@ def handle_scan(event: dict) -> dict:
     return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'results': results})}
 
 
+def send_reminders() -> int:
+    """За 3 дня до конца подписки — одно напоминание с кнопкой продления."""
+    sent = 0
+    for uid, until, is_trial in payments.due_reminders():
+        kind = 'Тестовый период' if is_trial else 'Подписка'
+        res = tg_api('sendMessage', {'chat_id': uid, 'parse_mode': 'HTML', 'reply_markup': payments.PLANS_MARKUP,
+                                     'text': f"⏳ <b>{kind} скоро закончится</b>\n\n"
+                                             f"📅 Действует до: <b>{until.strftime('%d.%m.%Y %H:%M')}</b>\n\n"
+                                             'Продлите заранее, чтобы не потерять доступ к списку групп и поиску. '
+                                             'Новый срок добавится к оставшимся дням.'}, timeout=3)
+        if res.get('ok') or 'blocked' in str(res.get('description', '')) or 'not found' in str(res.get('description', '')):
+            payments.mark_reminded(uid)
+            sent += 1 if res.get('ok') else 0
+    return sent
+
+
 def handle_daily_scan(event: dict, context) -> dict:
     """Ежедневный обход всех карточек: сначала давно не сканированные, пока хватает времени."""
     headers = event.get('headers') or {}
@@ -827,8 +843,10 @@ def handle_daily_scan(event: dict, context) -> dict:
     if not secret or given != secret:
         return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
     started = time.time()
+    reminded = send_reminders()
+    print(f'[KB-BOT] reminders sent: {reminded}')
     try:
-        budget = context.get_remaining_time_in_millis() / 1000 - 3
+        budget = context.get_remaining_time_in_millis() / 1000 - 3 - (time.time() - started)
     except Exception:
         budget = 2.5
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
@@ -854,7 +872,7 @@ def handle_daily_scan(event: dict, context) -> dict:
     left = len(ids) - done
     print(f'[KB-BOT] daily scan: done={done} changes={changed} errors={errors} left={left}')
     return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(
-        {'ok': True, 'scanned': done, 'changes': changed, 'errors': errors, 'left': left})}
+        {'ok': True, 'scanned': done, 'changes': changed, 'errors': errors, 'left': left, 'reminded': reminded})}
 
 
 def private_only_commands() -> dict:

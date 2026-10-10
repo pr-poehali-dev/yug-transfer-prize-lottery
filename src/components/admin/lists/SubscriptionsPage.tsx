@@ -12,6 +12,8 @@ interface Payment {
   note: string;
   created_at: string;
   active_until: string | null;
+  paid_until?: string | null;
+  payment_id?: string;
 }
 
 interface Subscriber {
@@ -74,9 +76,16 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
   const [search, setSearch] = useState("");
   const [roleF, setRoleF] = useState<"all" | "driver" | "dispatcher" | "none">("all");
 
+  const [payQ, setPayQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setPayQ(tab === "payments" ? search.trim() : ""), 400);
+    return () => clearTimeout(t);
+  }, [search, tab]);
+
   useEffect(() => {
     setLoading(true);
-    fetch(`${KNOWLEDGE_BASE_URL}?entity=subs${month ? `&month=${month}` : ""}`, { headers: { "X-Admin-Token": token } })
+    const qp = payQ ? `&q=${encodeURIComponent(payQ)}` : "";
+    fetch(`${KNOWLEDGE_BASE_URL}?entity=subs${month ? `&month=${month}` : ""}${qp}`, { headers: { "X-Admin-Token": token } })
       .then((r) => r.json())
       .then((d) => {
         if (d.ok) {
@@ -86,7 +95,7 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [month, token]);
+  }, [month, token, payQ]);
 
   const maxSum = Math.max(1, ...(data?.by_month || []).map((m) => m.sum));
   const now = Date.now();
@@ -100,12 +109,7 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
   }, [data, search, roleF]);
   const roleCount = (r: string) => (data?.subscribers || []).filter((s) => (r === "none" ? !s.role : s.role === r)).length;
 
-  const pays = useMemo(() => {
-    const q = search.trim().toLowerCase().replace(/^@/, "");
-    const list = data?.payments || [];
-    if (!q) return list;
-    return list.filter((p) => [p.name, p.username, String(p.tg_id ?? "")].some((v) => v.toLowerCase().includes(q)));
-  }, [data, search]);
+  const pays = data?.payments || [];
 
   return (
     <div className="space-y-4">
@@ -188,7 +192,7 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
             )}
             <div className="relative flex-1">
               <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск: имя, @username, ID"
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tab === "payments" ? "Поиск оплат за всё время: имя, @username, ID" : "Поиск: имя, @username, ID"}
                 className={`${inputCls} pl-9`} />
             </div>
           </div>
@@ -196,7 +200,7 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
           <div className="rounded-2xl border border-white/10 overflow-hidden">
             {tab === "payments" ? (
               pays.length === 0 ? (
-                <div className="text-sm text-white/40 py-8 text-center">В этом месяце оплат нет</div>
+                <div className="text-sm text-white/40 py-8 text-center">{payQ ? "Оплат по запросу не найдено" : "В этом месяце оплат нет"}</div>
               ) : (
                 <div className="divide-y divide-white/5">
                   {pays.map((p) => (
@@ -209,10 +213,20 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
                           {p.name || "Без имени"} {p.username && <span className="text-sky-300">@{p.username}</span>}
                         </div>
                         <div className="text-[11px] text-white/40">
-                          {fmtDate(p.created_at, true)}{p.tg_id ? ` · ID ${p.tg_id}` : ""}{p.note ? ` · ${p.note}` : ""}
+                          Оплатил {fmtDate(p.created_at, true)}{p.tg_id ? ` · ID ${p.tg_id}` : ""}{p.note ? ` · ${p.note}` : ""}
                         </div>
+                        {p.paid_until && (
+                          <div className="text-[11px] text-white/50">Оплачено до {fmtDate(p.paid_until)}</div>
+                        )}
                       </div>
-                      <div className="text-sm font-medium text-emerald-300 shrink-0">{rub(p.amount)}</div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-medium text-emerald-300">{rub(p.amount)}</div>
+                        {p.active_until && (
+                          new Date(p.active_until).getTime() > now
+                            ? <div className="text-[11px] text-emerald-400/80">активна до {fmtDate(p.active_until)}</div>
+                            : <div className="text-[11px] text-rose-400/80">истекла {fmtDate(p.active_until)}</div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -160,14 +160,22 @@ def handle_subs_stats(cur, qs: dict) -> dict:
                 f"AND created_at >= date_trunc('month', now()) - interval '11 months' GROUP BY 1 ORDER BY 1")
     by_month = [{'month': r[0], 'count': r[1], 'sum': float(r[2])} for r in cur.fetchall()]
 
+    q = str(qs.get('q') or '').strip().lstrip('@').replace("'", "''")[:64]
+    if q:
+        num = f" OR p.tg_user_id::text = '{q}'" if q.isdigit() else ''
+        pay_filter = (f"(p.username ILIKE '%{q}%' OR p.first_name ILIKE '%{q}%' OR s.username ILIKE '%{q}%' "
+                      f"OR s.first_name ILIKE '%{q}%' OR p.payment_id = '{q}'{num})")
+    else:
+        pay_filter = f"p.created_at >= {m_start} AND p.created_at < {m_end}"
     cur.execute(f"SELECT p.id, p.tg_user_id, coalesce(nullif(p.username, ''), s.username, '') , "
                 f"coalesce(nullif(p.first_name, ''), s.first_name, ''), p.amount_rub, p.note, p.payment_id, "
-                f"p.created_at, s.active_until "
+                f"p.created_at, s.active_until, p.paid_until, p.days "
                 f"FROM {SCHEMA}.kb_payments p LEFT JOIN {SCHEMA}.kb_subscriptions s ON s.tg_user_id = p.tg_user_id "
-                f"WHERE p.status='succeeded' AND p.created_at >= {m_start} AND p.created_at < {m_end} "
+                f"WHERE p.status='succeeded' AND {pay_filter} "
                 f"ORDER BY p.created_at DESC LIMIT 500")
     payments = [{'id': r[0], 'tg_id': r[1], 'username': r[2], 'name': r[3], 'amount': float(r[4] or 0),
-                 'note': r[5] or '', 'payment_id': r[6] or '', 'created_at': r[7], 'active_until': r[8]}
+                 'note': r[5] or '', 'payment_id': r[6] or '', 'created_at': r[7], 'active_until': r[8],
+                 'paid_until': r[9], 'days': r[10] or 0}
                 for r in cur.fetchall()]
 
     cur.execute(f"SELECT tg_user_id, username, first_name, active_until, is_trial, created_at, role FROM {SCHEMA}.kb_subscriptions "

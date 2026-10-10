@@ -57,8 +57,12 @@ def create(uid: int, chat_id: int, plan_key: str, return_url: str) -> tuple:
         return '', ''
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
-    cur.execute(f"INSERT INTO {SCHEMA}.kb_payments (id, tg_user_id, chat_id, plan, amount) "
-                f"VALUES ('{pid.replace(chr(39), '')}', {int(uid)}, {int(chat_id)}, '{plan_key}', {plan['price']})")
+    cur.execute(f"SELECT username, first_name FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
+    u = cur.fetchone() or ('', '')
+    e = lambda v: str(v or '').replace("'", "''")
+    cur.execute(f"INSERT INTO {SCHEMA}.kb_payments (tg_user_id, chat_id, username, first_name, amount_rub, days, "
+                f"payment_id, status, plan, note) VALUES ({int(uid)}, {int(chat_id)}, '{e(u[0])}', '{e(u[1])}', "
+                f"{plan['price']}, {plan['days']}, '{e(pid)}', 'pending', '{plan_key}', '{e(plan['title'])}')")
     conn.commit()
     cur.close()
     conn.close()
@@ -74,30 +78,55 @@ def confirm(payment_id: str) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT tg_user_id, chat_id, plan, status FROM {SCHEMA}.kb_payments WHERE id='{pid}'")
+        cur.execute(f"SELECT tg_user_id, chat_id, plan, status, days FROM {SCHEMA}.kb_payments WHERE payment_id='{pid}'")
         row = cur.fetchone()
         if not row:
             return {'status': status or 'unknown'}
-        uid, chat_id, plan_key, old = row
-        res = {'status': status, 'chat_id': chat_id, 'plan': plan_key, 'new': False}
+        uid, chat_id, plan_key, old, days = row
+        res = {'status': status, 'chat_id': chat_id or uid, 'plan': plan_key, 'new': False}
         if status == 'succeeded' and p.get('paid'):
-            cur.execute(f"UPDATE {SCHEMA}.kb_payments SET status='succeeded', paid_at=now() "
-                        f"WHERE id='{pid}' AND status<>'succeeded' RETURNING id")
+            cur.execute(f"UPDATE {SCHEMA}.kb_payments SET status='succeeded', paid_at=now(), created_at=now() "
+                        f"WHERE payment_id='{pid}' AND status<>'succeeded' RETURNING id")
             if cur.fetchone():
-                days = PLANS[plan_key]['days']
+                days = int(days or PLANS.get(plan_key, {}).get('days', 30))
                 cur.execute(
                     f"INSERT INTO {SCHEMA}.kb_subscriptions (tg_user_id, active_until, is_trial) "
                     f"VALUES ({int(uid)}, now() + interval '{days} days', false) "
-                    f"ON CONFLICT (tg_user_id) DO UPDATE SET is_trial=false, updated_at=now(), "
+                    f"ON CONFLICT (tg_user_id) DO UPDATE SET is_trial=false, updated_at=now(), reminded_until=NULL, "
                     f"active_until=GREATEST(COALESCE({SCHEMA}.kb_subscriptions.active_until, now()), now()) + interval '{days} days'")
+                cur.execute(f"UPDATE {SCHEMA}.kb_payments SET paid_until=(SELECT active_until FROM {SCHEMA}.kb_subscriptions "
+                            f"WHERE tg_user_id={int(uid)}) WHERE payment_id='{pid}'")
                 res['new'] = True
             cur.execute(f"SELECT active_until FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
             u = cur.fetchone()
             res['until'] = u[0].strftime('%d.%m.%Y') if u and u[0] else ''
         elif status == 'canceled' and old != 'canceled':
-            cur.execute(f"UPDATE {SCHEMA}.kb_payments SET status='canceled' WHERE id='{pid}'")
+            cur.execute(f"UPDATE {SCHEMA}.kb_payments SET status='canceled' WHERE payment_id='{pid}'")
         conn.commit()
         return res
     finally:
         cur.close()
         conn.close()
+
+
+def due_reminders() -> list:
+    """Подписки, которые кончаются в ближайшие 3 дня и о которых ещё не напоминали (на этот срок)."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT tg_user_id, active_until, is_trial FROM {SCHEMA}.kb_subscriptions "
+                    f"WHERE active_until > now() AND active_until < now() + interval '3 days' "
+                    f"AND (reminded_until IS NULL OR reminded_until <> active_until) LIMIT 200")
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def mark_reminded(uid: int) -> None:
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET reminded_until=active_until WHERE tg_user_id={int(uid)}")
+    conn.commit()
+    cur.close()
+    conn.close()
