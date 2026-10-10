@@ -390,14 +390,24 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
           return (
             <div key={i.id} className="relative rounded-xl border border-white/10 space-card p-2.5">
               <div className="flex gap-2.5">
-                <button onClick={() => onOpen(i)} className="w-14 h-14 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
+                <button onClick={() => (i.photo_url ? onOpen(i) : scanCard(i))} disabled={scanIds.includes(i.id)}
+                  title={i.photo_url ? "Открыть карточку" : "Нажмите — подтянуть данные из Telegram"}
+                  className="group/av relative w-14 h-14 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {i.photo_url ? (
                     <img src={i.photo_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-sm font-semibold text-white/30">{initials}</span>
+                    <span className="text-sm font-semibold text-white/30 group-hover/av:opacity-0">{initials}</span>
+                  )}
+                  {!i.photo_url && (
+                    <span className={`absolute inset-0 flex items-center justify-center bg-sky-500/20 text-sky-200 transition-opacity ${
+                      scanIds.includes(i.id) ? "opacity-100" : "opacity-0 group-hover/av:opacity-100"}`}>
+                      <Icon name={scanIds.includes(i.id) ? "Loader2" : "ScanSearch"} fallback="RefreshCw" size={18}
+                        className={scanIds.includes(i.id) ? "animate-spin" : ""} />
+                    </span>
                   )}
                 </button>
-                <div className="flex-1 min-w-0 text-[11px] space-y-0.5">
+                <div className="flex-1 min-w-0 text-[11px] space-y-0.5 cursor-pointer" onClick={() => !scanIds.includes(i.id) && scanCard(i)}
+                  title="Нажмите — подтянуть данные из Telegram">
                   <div className="text-xs font-semibold text-white truncate">{i.name || "Без имени"}</div>
                   <div className="text-white/50 font-mono truncate">{i.tg_id ? `ID ${i.tg_id}` : "ID —"}</div>
                   <div className="text-white/50 truncate">{i.phone || "—"}</div>
