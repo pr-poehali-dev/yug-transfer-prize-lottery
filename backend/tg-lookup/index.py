@@ -375,9 +375,12 @@ def handle_batch(context) -> dict:
                 conn.commit()
         cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists WHERE list_type='pending' AND username <> '' AND last_scan_at IS NULL")
         left = cur.fetchone()[0]
-        cur.execute(f"SELECT count(*) FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
-        paused = cur.fetchone()[0]
-        return resp(200, {'ok': True, **total, 'left': left, 'accounts': len(load_sessions(cur)), 'paused': paused})
+        cur.execute(f"SELECT count(*), coalesce(extract(epoch from min(until_at) - now()), 0)::int "
+                    f"FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
+        paused, resume_in = cur.fetchone()
+        accounts = len(load_sessions(cur))
+        return resp(200, {'ok': True, **total, 'left': left, 'accounts': accounts, 'paused': paused,
+                          'all_paused': accounts > 0 and paused >= accounts, 'resume_in': resume_in})
     finally:
         cur.close()
         conn.close()

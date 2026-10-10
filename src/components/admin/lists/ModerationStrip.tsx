@@ -50,7 +50,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   const [groupChat, setGroupChat] = useState("");
   const [group, setGroup] = useState<{ running: boolean; title: string; added: number; skipped: number; total: number; progress: number; mode?: string } | null>(null);
   const groupStop = useRef(false);
-  const [scan, setScan] = useState<{ running: boolean; done: number; found: number; left: number } | null>(null);
+  const [scan, setScan] = useState<{ running: boolean; done: number; found: number; left: number; pausedFor?: string } | null>(null);
   const stopRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const reqRef = useRef(0);
@@ -163,6 +163,14 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
         found += d.found;
         setScan({ running: true, done, found, left: d.left });
         if (!d.left) break;
+        if (!d.done && d.all_paused) {
+          const m = Math.ceil((d.resume_in || 0) / 60);
+          const when = m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`;
+          setScan({ running: false, done, found, left: d.left, pausedFor: when });
+          toast.error(`Telegram ограничил поиск на всех аккаунтах. Первый освободится через ${when}`);
+          onChanged();
+          return;
+        }
         if (!d.done) {
           idle += 1;
           if (idle >= 3) {
@@ -308,7 +316,14 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
             <div className="h-full bg-sky-400 transition-all"
               style={{ width: `${Math.min(100, (scan.done / Math.max(1, scan.done + scan.left)) * 100)}%` }} />
           </div>
-          <div className="text-[11px] text-white/40">Не закрывайте страницу. Можно остановить и продолжить позже — проверенные не повторяются.</div>
+          {scan.pausedFor ? (
+            <div className="text-[11px] text-amber-300/90">
+              Telegram временно ограничил поиск по @username на всех аккаунтах. Первый освободится через {scan.pausedFor} —
+              тогда нажмите «Сканировать все» снова. Фото участников группы можно грузить и сейчас — кнопкой «Фото».
+            </div>
+          ) : (
+            <div className="text-[11px] text-white/40">Не закрывайте страницу. Можно остановить и продолжить позже — проверенные не повторяются.</div>
+          )}
         </div>
       )}
 
