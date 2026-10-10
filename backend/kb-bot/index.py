@@ -22,7 +22,6 @@ BUTTON_CHECK = '🔎 Проверить по базе'
 BUTTON_COMPLAIN = '⚠️ Отправить жалобу'
 BUTTON_ORDERS = '🚖 Поиск заказов'
 ORDERS_URL = 'https://t.me/OneTMM_Bot?start=ref_6072837543'
-ORDERS_WEBAPP = 'https://baza-info.online/tg-search'
 COMPLAIN_PROMPT = 'На кого жалоба?'
 CHECKS_ANY = {'prompt': 'Проверка по базе водителей и диспетчеров', 'who': 'Аккаунт', 'role': ''}
 CHECKS = {
@@ -37,7 +36,7 @@ CORS = {
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_ORDERS, 'web_app': {'url': ORDERS_WEBAPP}}], [{'text': BUTTON_COMPLAIN}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_ORDERS}], [{'text': BUTTON_COMPLAIN}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
