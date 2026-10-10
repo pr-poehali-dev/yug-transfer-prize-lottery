@@ -735,19 +735,61 @@ def esc_html(s: str) -> str:
     return (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
-def send_groups(chat_id) -> None:
+GROUPS_PER_PAGE = 10
+
+
+def groups_page(page: int) -> tuple:
     rows = load_groups()
     if not rows:
-        tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Список групп пока пуст.',
-                               'reply_markup': MAIN_KEYBOARD})
+        return 'Список групп пока пуст.', None
+    pages = (len(rows) + GROUPS_PER_PAGE - 1) // GROUPS_PER_PAGE
+    page = max(0, min(page, pages - 1))
+    start = page * GROUPS_PER_PAGE
+    lines = [f"📋 <b>Список групп</b>\nСтраница {page + 1} из {pages}"]
+    for i, (title, content) in enumerate(rows[start:start + GROUPS_PER_PAGE], start=start + 1):
+        parts = [x for x in str(content or '').split('\n') if x.strip()]
+        link = parts[0].strip() if parts and parts[0].startswith('http') else ''
+        name = esc_html(title)
+        head = f'{i}. <a href="{esc_html(link)}">{name}</a>' if link else f'{i}. <b>{name}</b>'
+        extra = [esc_html(x) for x in (parts[1:] if link else parts)]
+        lines.append('\n'.join([head] + extra))
+    nav = []
+    if page > 0:
+        nav.append({'text': '◀️ Назад', 'callback_data': f'grp:{page - 1}'})
+    nav.append({'text': f'{page + 1}/{pages}', 'callback_data': f'grp:{page}'})
+    if page < pages - 1:
+        nav.append({'text': 'Вперёд ▶️', 'callback_data': f'grp:{page + 1}'})
+    jump = []
+    if pages > 5:
+        jump = [{'text': '⏮ В начало', 'callback_data': 'grp:0'},
+                {'text': '+5 ⏩', 'callback_data': f'grp:{min(page + 5, pages - 1)}'},
+                {'text': 'В конец ⏭', 'callback_data': f'grp:{pages - 1}'}]
+    kb = {'inline_keyboard': [nav] + ([jump] if jump else [])}
+    return '\n\n'.join(lines), kb
+
+
+def send_groups(chat_id) -> None:
+    text, kb = groups_page(0)
+    payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'disable_web_page_preview': True}
+    payload['reply_markup'] = kb or MAIN_KEYBOARD
+    tg_api('sendMessage', payload)
+
+
+def handle_groups_page(callback: dict) -> None:
+    msg = callback.get('message') or {}
+    chat_id = (msg.get('chat') or {}).get('id')
+    uid = (callback.get('from') or {}).get('id')
+    tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id')}, timeout=2.2)
+    if not sub_active(uid):
+        send_paywall(chat_id, 'Список групп')
         return
-    parts = []
-    for title, content in rows:
-        parts.append(f"<b>{esc_html(title)}</b>\n{esc_html(content)}".strip())
-    text = '\n\n'.join(parts)
-    for i in range(0, len(text), 4000):
-        tg_api('sendMessage', {'chat_id': chat_id, 'text': text[i:i + 4000], 'parse_mode': 'HTML',
-                               'disable_web_page_preview': True, 'reply_markup': MAIN_KEYBOARD})
+    try:
+        page = int(str(callback.get('data', '')).split(':')[1])
+    except ValueError:
+        page = 0
+    text, kb = groups_page(page)
+    tg_api('editMessageText', {'chat_id': chat_id, 'message_id': msg.get('message_id'), 'text': text,
+                               'parse_mode': 'HTML', 'disable_web_page_preview': True, 'reply_markup': kb})
 
 
 def verify_admin(token: str) -> bool:
@@ -1058,6 +1100,9 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if str(callback.get('data') or '').startswith('myrole:'):
         handle_my_role(callback)
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
+    if str(callback.get('data') or '').startswith('grp:'):
+        handle_groups_page(callback)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if str(callback.get('data') or '').startswith('buy:'):
         handle_buy(callback)
