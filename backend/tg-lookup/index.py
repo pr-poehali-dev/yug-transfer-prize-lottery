@@ -19,7 +19,7 @@ from telethon.tl.types import User
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 CORS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
 }
 
@@ -150,6 +150,8 @@ def proxy_kwargs() -> dict:
 
 def make_client(session: str):
     sess = StringSession(session)
+    if not sess.dc_id:
+        sess.set_dc(2, DC_IPS[2][0], 443)
     extra = proxy_kwargs()
     if extra and isinstance(extra.get('proxy'), dict):
         # Прокси не пускает на «голые» IP Telegram — подключаемся через доменное имя того же адреса.
@@ -870,6 +872,40 @@ def handler(event: dict, context) -> dict:
         return handle_group(qs, context)
     if is_cron:
         return resp(400, {'error': 'only batch'})
+
+    if qs.get('action') == 'accounts':
+        import accounts
+        body = json.loads(event.get('body') or '{}') if event.get('httpMethod') == 'POST' else {}
+        op = body.get('op') or 'list'
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        try:
+            if op == 'list':
+                return resp(200, accounts.list_accounts(cur))
+            if op == 'delete':
+                return resp(200, accounts.delete_account(cur, conn, int(body.get('id') or 0)))
+            try:
+                if op == 'send_code':
+                    out = asyncio.run(asyncio.wait_for(accounts.send_code(make_client, cur, conn, body.get('phone', '')), timeout=20))
+                elif op == 'sign_in':
+                    out = asyncio.run(asyncio.wait_for(accounts.sign_in(make_client, cur, conn, body.get('phone', ''),
+                                                                        body.get('code', ''), body.get('password', ''),
+                                                                        body.get('label', '')), timeout=20))
+                else:
+                    out = {'ok': False, 'error': 'unknown op'}
+            except asyncio.TimeoutError:
+                out = {'ok': False, 'error': 'Telegram не ответил вовремя, попробуйте ещё раз'}
+            except Exception as e:
+                n = type(e).__name__
+                print(f'[TG-LOOKUP] accounts {op}: {n}: {str(e)[:200]}')
+                msg = {'PhoneNumberInvalidError': 'Неверный номер телефона',
+                       'PhoneNumberBannedError': 'Этот номер заблокирован в Telegram',
+                       'FloodWaitError': 'Telegram просит подождать перед новой попыткой'}.get(n, f'Ошибка Telegram: {n}')
+                out = {'ok': False, 'error': msg}
+            return resp(200, out)
+        finally:
+            cur.close()
+            conn.close()
 
     if qs.get('action') == 'proxy_test':
         import socks

@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { TG_LOOKUP_API } from "./listTypes";
+import { ScanAccounts } from "./ScanAccounts";
 
 interface Props {
   token: string;
@@ -82,6 +83,9 @@ export function GlobalScanBar({ token, onChanged }: Props) {
           <div className="h-full bg-cyan-400 transition-all" style={{ width: `${pct}%` }} />
         </div>
       )}
+      <div className="border-t border-white/10 pt-2">
+        <ScanAccounts token={token} />
+      </div>
     </div>
   );
 }
