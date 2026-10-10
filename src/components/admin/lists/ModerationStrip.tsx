@@ -214,6 +214,36 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
     setBusyId(null);
   };
 
+  const [scanIds, setScanIds] = useState<number[]>([]);
+  const scanCard = async (item: ListItem) => {
+    if (!item.tg_id && !item.username && item.phone.replace(/\D/g, "").length < 10) {
+      toast.error("Нет ни ID, ни @username, ни телефона — искать не по чему");
+      return;
+    }
+    setScanIds((x) => [...x, item.id]);
+    try {
+      const d = await fetch(`${TG_LOOKUP_API}?rescan=${item.id}`, { headers: { "X-Admin-Token": token } })
+        .then((r) => r.json()).catch(() => ({}));
+      if (d.ok) {
+        setItems((prev) => prev.map((p) => (p.id === item.id ? {
+          ...p,
+          name: d.name || p.name,
+          username: d.username || p.username,
+          phone: p.phone || d.phone || "",
+          tg_id: p.tg_id || d.tg_id,
+          photo_url: d.photo_url || p.photo_url,
+          bio: d.bio ?? p.bio,
+        } : p)));
+        toast.success(d.photo_url ? "Данные и фото подтянуты" : "Данные подтянуты (фото в Telegram нет или скрыто)");
+      } else {
+        toast.error(d.error || "Не удалось получить данные из Telegram");
+      }
+    } catch {
+      toast.error("Не удалось связаться с Telegram");
+    }
+    setScanIds((x) => x.filter((v) => v !== item.id));
+  };
+
   const remove = (item: ListItem) => {
     toast("Удалить карточку с модерации?", {
       action: {
@@ -373,9 +403,16 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
                   <div className="text-white/50 truncate">{i.phone || "—"}</div>
                   <div className="text-sky-300 truncate">{i.username ? `@${i.username}` : "—"}</div>
                 </div>
-                <button onClick={() => remove(i)} className="self-start p-1 rounded text-white/30 hover:text-red-400">
-                  <Icon name="X" size={13} />
-                </button>
+                <div className="self-start flex flex-col gap-1">
+                  <button onClick={() => remove(i)} title="Удалить" className="p-1 rounded text-white/30 hover:text-red-400">
+                    <Icon name="X" size={13} />
+                  </button>
+                  <button onClick={() => scanCard(i)} disabled={scanIds.includes(i.id)} title="Подтянуть данные из Telegram"
+                    className="p-1 rounded text-sky-300/70 hover:text-sky-200 hover:bg-sky-500/10 disabled:opacity-70">
+                    <Icon name={scanIds.includes(i.id) ? "Loader2" : "ScanSearch"} fallback="RefreshCw" size={14}
+                      className={scanIds.includes(i.id) ? "animate-spin" : ""} />
+                  </button>
+                </div>
               </div>
 
               <button

@@ -174,7 +174,7 @@ def make_client(session: str):
     return client
 
 
-async def lookup(session: str, username: str, phone: str = '') -> dict:
+async def lookup(session: str, username: str, phone: str = '', finder=None) -> dict:
     t0 = time.time()
     client = make_client(session)
     await client.connect()
@@ -182,7 +182,11 @@ async def lookup(session: str, username: str, phone: str = '') -> dict:
     try:
         if not await client.is_user_authorized():
             return {'retry': True, 'error': 'session not authorized'}
-        if phone:
+        if finder is not None:
+            entity = await finder(client)
+            if entity is None:
+                return {'error': 'Не удалось найти человека через группу'}
+        elif phone:
             entity = await resolve_phone(client, phone)
             if entity is None:
                 return {'error': 'По этому номеру аккаунт не найден или скрыт настройками приватности'}
@@ -667,6 +671,69 @@ async def find_admin_session(sessions: list, chat_ref: str) -> str:
     return next((r for r in res if isinstance(r, str) and r), '')
 
 
+def rescan_direct(cur, conn, item_id: int, row, context):
+    """Обновляет карточку без поиска по @username: по сохранённому ключу доступа или через аккаунт-админа группы."""
+    from telethon.tl.types import InputPeerUser
+    _, _, tg_id, access_hash, access_sess, name = row
+    sessions = load_sessions(cur)
+    by_key = {sess_key(x): x for x in sessions}
+    attempts = []
+    if access_hash and access_sess in by_key:
+        peer = InputPeerUser(int(tg_id), int(access_hash))
+
+        async def by_hash(client):
+            return await client.get_entity(peer)
+        attempts.append((by_key[access_sess], by_hash))
+    cur.execute(f"SELECT chat, session_hash FROM {SCHEMA}.group_scan_jobs WHERE session_hash <> '' "
+                f"AND mode IN ('members', 'photos') ORDER BY id DESC LIMIT 1")
+    job = cur.fetchone()
+    if job and job[1] in by_key and (name or '').strip():
+        chat_ref, admin_key = job
+
+        async def by_group(client):
+            from telethon.tl.functions.channels import GetParticipantsRequest
+            from telethon.tl.types import ChannelParticipantsSearch
+            chat = await resolve_chat(client, chat_ref)
+            if chat is None:
+                return None
+            for qtext in dict.fromkeys([name.strip(), name.strip().split()[0]]):
+                res = await client(GetParticipantsRequest(chat, ChannelParticipantsSearch(qtext[:60]), 0, 200, hash=0))
+                hit = next((u for u in res.users if u.id == int(tg_id)), None)
+                if hit:
+                    cur.execute(f"UPDATE {SCHEMA}.check_lists SET tg_access_hash={int(hit.access_hash or 0)}, "
+                                f"access_session='{admin_key}' WHERE id={int(item_id)}")
+                    conn.commit()
+                    return hit
+            return None
+        attempts.append((by_key[admin_key], by_group))
+    if not attempts:
+        return None
+    started = time.time()
+    try:
+        budget = context.get_remaining_time_in_millis() / 1000 - 1
+    except Exception:
+        budget = 4
+    result = None
+    for sess, finder in attempts:
+        left = budget - (time.time() - started)
+        if left < 3:
+            break
+        try:
+            result = asyncio.run(asyncio.wait_for(lookup(sess, '', '', finder=finder), timeout=min(left, 20)))
+        except Exception as e:
+            print(f'[TG-LOOKUP] direct rescan failed: {type(e).__name__}')
+            result = None
+        if result and result.get('tg_id'):
+            break
+    if not result or not result.get('tg_id'):
+        return None
+    save_cache(cur, result)
+    result['scan'] = apply_rescan(cur, item_id, result)
+    cur.execute(f"UPDATE {SCHEMA}.check_lists SET scan_status='ok' WHERE id={int(item_id)}")
+    conn.commit()
+    return resp(200, {'ok': True, **result})
+
+
 def handle_group(qs: dict, context) -> dict:
     raw_chat = str(qs.get('chat') or '').strip().lower()
     for pref in ('https://t.me/', 'http://t.me/', 't.me/', 'tg://chat?id=', '@'):
@@ -871,11 +938,16 @@ def handler(event: dict, context) -> dict:
     if rescan_id:
         c0 = psycopg2.connect(os.environ['DATABASE_URL'])
         k0 = c0.cursor()
-        k0.execute(f"SELECT username, phone FROM {SCHEMA}.check_lists WHERE id={rescan_id}")
+        k0.execute(f"SELECT username, phone, tg_id, tg_access_hash, access_session, name FROM {SCHEMA}.check_lists WHERE id={rescan_id}")
         r0 = k0.fetchone()
+        direct = None
+        if r0 and r0[2]:
+            direct = rescan_direct(k0, c0, rescan_id, r0, context)
         c0.close()
         if not r0:
             return resp(404, {'ok': False, 'error': 'Карточка не найдена'})
+        if direct is not None:
+            return direct
         qs = {'username': r0[0] or '', 'phone': '' if r0[0] else (r0[1] or '')}
     username = clean_username(qs.get('username', ''))
     phone = ''.join(ch for ch in str(qs.get('phone') or '') if ch.isdigit())
