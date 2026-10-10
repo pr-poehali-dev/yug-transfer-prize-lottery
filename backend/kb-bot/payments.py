@@ -83,7 +83,7 @@ def confirm(payment_id: str) -> dict:
         if not row:
             return {'status': status or 'unknown'}
         uid, chat_id, plan_key, old, days = row
-        res = {'status': status, 'chat_id': chat_id or uid, 'plan': plan_key, 'new': False}
+        res = {'status': status, 'chat_id': chat_id or uid, 'plan': plan_key, 'new': False, 'pid': pid}
         if status == 'succeeded' and p.get('paid'):
             cur.execute(f"UPDATE {SCHEMA}.kb_payments SET status='succeeded', paid_at=now(), created_at=now() "
                         f"WHERE payment_id='{pid}' AND status<>'succeeded' RETURNING id")
@@ -127,6 +127,33 @@ def mark_reminded(uid: int) -> None:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     cur.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET reminded_until=active_until WHERE tg_user_id={int(uid)}")
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def unnotified(uid: int = 0) -> list:
+    """Оплаченные платежи, о которых человеку ещё не удалось сообщить."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        who = f"AND p.tg_user_id={int(uid)} " if uid else ''
+        cur.execute(f"SELECT p.payment_id, COALESCE(p.chat_id, p.tg_user_id), p.plan, s.active_until "
+                    f"FROM {SCHEMA}.kb_payments p LEFT JOIN {SCHEMA}.kb_subscriptions s ON s.tg_user_id=p.tg_user_id "
+                    f"WHERE p.status='succeeded' AND NOT p.notified {who}"
+                    f"AND p.paid_at > now() - interval '3 days' ORDER BY p.id LIMIT 30")
+        return [{'pid': r[0], 'chat_id': r[1], 'plan': r[2], 'new': True,
+                 'until': r[3].strftime('%d.%m.%Y') if r[3] else ''} for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def mark_notified(pid: str) -> None:
+    pid = ''.join(c for c in str(pid) if c.isalnum() or c == '-')
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    cur.execute(f"UPDATE {SCHEMA}.kb_payments SET notified=TRUE WHERE payment_id='{pid}'")
     conn.commit()
     cur.close()
     conn.close()

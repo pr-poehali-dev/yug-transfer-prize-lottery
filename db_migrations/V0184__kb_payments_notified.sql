@@ -1,0 +1,1 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.kb_payments ADD COLUMN IF NOT EXISTS notified BOOLEAN NOT NULL DEFAULT FALSE;

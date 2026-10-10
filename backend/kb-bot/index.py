@@ -424,12 +424,14 @@ def notify_paid(res: dict) -> None:
     if res.get('new') and res.get('chat_id'):
         plan = payments.PLANS.get(res.get('plan'), {})
         rec, SCREEN['rec'] = SCREEN['rec'], None
-        tg_api('sendMessage', {'chat_id': res['chat_id'], 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD,
+        sent = tg_api('sendMessage', {'chat_id': res['chat_id'], 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD,
                                'text': f"✅ <b>Ваш платёж зачислен!</b>\n\n"
                                        f"Подписка на <b>{plan.get('title', '')}</b> активна.\n"
                                        f"📅 Действует до: <b>{res.get('until', '')}</b>\n\n"
-                                       '🚖 Хороших дорог и щедрых пассажиров!'})
+                                       '🚖 Хороших дорог и щедрых пассажиров!'}, timeout=4)
         SCREEN['rec'] = rec
+        if sent.get('ok') and res.get('pid'):
+            payments.mark_notified(res['pid'])
 
 
 def check_pending(uid: int = 0) -> int:
@@ -448,8 +450,9 @@ def check_pending(uid: int = 0) -> int:
     for pid in pids:
         res = payments.confirm(pid)
         if res.get('new'):
-            notify_paid(res)
             done += 1
+    for res in payments.unnotified(uid):
+        notify_paid(res)
     return done
 
 
