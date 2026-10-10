@@ -207,7 +207,7 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
           )}
 
           {showForm && (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+            <div className="rounded-xl border border-white/10 space-card p-4 space-y-3">
               <div className="text-sm font-medium text-white">
                 {editingId ? "Редактирование записи" : "Новая запись"}
               </div>
@@ -258,7 +258,7 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
           ) : (
             <div className="space-y-2">
               {filtered.map((item) => (
-                <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03]">
+                <div key={item.id} className="rounded-xl border border-white/10 space-card">
                   <div className="flex items-center gap-2 px-3 py-2.5">
                     <button
                       onClick={() => setOpenId(openId === item.id ? null : item.id)}

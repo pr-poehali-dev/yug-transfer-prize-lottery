@@ -127,7 +127,7 @@ export function NewPersonCardForm({ token, onSaved, onCancel, prefill }: Props) 
   const initials = (form.name || uname || "").slice(0, 2).toUpperCase();
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-4">
+    <div className="rounded-2xl border border-white/10 space-card p-4 space-y-4">
       <div className="flex items-center justify-between">
         <div className="text-sm font-medium text-white">Новая запись</div>
         <button onClick={onCancel} className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/5">
@@ -171,7 +171,7 @@ export function NewPersonCardForm({ token, onSaved, onCancel, prefill }: Props) 
               pending ? "border-amber-500/25 bg-amber-500/[0.06]" : black ? "border-red-500/25 bg-red-500/[0.06]" : "border-emerald-500/25 bg-emerald-500/[0.06]"
             }`}
           />
-          <div className={`relative rounded-2xl border bg-[#14141c] overflow-hidden ${pending ? "border-amber-500/30" : black ? "border-red-500/30" : "border-emerald-500/30"}`}>
+          <div className={`relative rounded-2xl border space-card overflow-hidden ${pending ? "border-amber-500/30" : black ? "border-red-500/30" : "border-emerald-500/30"}`}>
             <div className="relative aspect-square bg-white/5">
               {form.photo_url ? (
                 <img src={form.photo_url} alt="" className="w-full h-full object-cover" />

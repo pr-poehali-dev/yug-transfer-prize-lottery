@@ -141,7 +141,7 @@ export function ComplaintEditDialog({ token, complaint, onClose, onSaved }: Prop
 
   return (
     <Dialog open={!!complaint} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="bg-[#14141c] border-white/10 text-white max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="space-dialog border-white/10 text-white max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="Pencil" size={16} className="text-red-300" />Жалоба #{complaint?.id}

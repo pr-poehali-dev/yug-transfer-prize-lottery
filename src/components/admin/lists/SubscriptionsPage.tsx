@@ -51,7 +51,7 @@ const shiftMonth = (m: string, delta: number) => {
 
 function Stat({ icon, label, value, hint, color }: { icon: string; label: string; value: string; hint?: string; color: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="rounded-2xl border border-white/10 space-card p-4">
       <div className="flex items-center gap-2 text-xs text-white/50">
         <Icon name={icon} size={14} className={color} />{label}
       </div>
@@ -136,7 +136,7 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
               hint={`${data.stats.all_count} оплат`} />
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="rounded-2xl border border-white/10 space-card p-4">
             <div className="text-xs text-white/50 mb-3">Доход по месяцам</div>
             {data.by_month.length === 0 ? (
               <div className="text-sm text-white/40 py-4 text-center">Оплат за последний год нет</div>

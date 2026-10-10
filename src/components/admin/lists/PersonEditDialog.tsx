@@ -181,7 +181,7 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-[#14141c] border-white/10 text-white">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto space-dialog border-white/10 text-white">
         <DialogHeader>
           <DialogTitle>{item ? "Редактировать карточку" : "Новая карточка"}</DialogTitle>
           <DialogDescription className="text-white/50">{def.title}</DialogDescription>

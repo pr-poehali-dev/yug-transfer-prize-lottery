@@ -146,11 +146,11 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
       {loading ? (
         <div className="py-10 text-center text-white/40"><Icon name="Loader2" size={20} className="animate-spin inline" /></div>
       ) : !items.length ? (
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] py-10 text-center text-sm text-white/40">Жалоб нет</div>
+        <div className="rounded-xl border border-white/10 space-card py-10 text-center text-sm text-white/40">Жалоб нет</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {items.map((c) => (
-            <div key={c.id} className="rounded-xl border border-white/10 bg-[#14141c] p-3 space-y-3">
+            <div key={c.id} className="rounded-xl border border-white/10 space-card p-3 space-y-3">
               <div className="flex items-start gap-3 cursor-pointer" onClick={() => setEditing(c)} title="Открыть карточку">
                 <div className="w-12 h-12 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {c.target.photo_url

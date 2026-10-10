@@ -106,7 +106,7 @@ export function GroupsPage({ token, onBack }: { token: string; onBack: () => voi
       <div className="text-xs text-white/40">Этот список бот показывает по кнопке «📋 Список групп».</div>
 
       {showForm && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
+        <div className="rounded-xl border border-white/10 space-card p-4 space-y-2">
           <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
             placeholder="Название группы" className={inputCls} />
           <textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} rows={3}

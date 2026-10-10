@@ -349,7 +349,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
 
       <div className="text-xs text-white/40">Присвойте статус — карточка уйдёт в нужный список.</div>
       {!items.length && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] py-10 text-center text-sm text-white/40">
+        <div className="rounded-xl border border-white/10 space-card py-10 text-center text-sm text-white/40">
           {loading ? <Icon name="Loader2" size={18} className="animate-spin inline" /> : counts.all ? "Ничего не найдено" : "Новых карточек нет"}
         </div>
       )}
@@ -358,7 +358,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
           const initials = (i.name || i.username || "?").slice(0, 2).toUpperCase();
           const busy = busyId === i.id;
           return (
-            <div key={i.id} className="relative rounded-xl border border-white/10 bg-[#14141c] p-2.5">
+            <div key={i.id} className="relative rounded-xl border border-white/10 space-card p-2.5">
               <div className="flex gap-2.5">
                 <button onClick={() => onOpen(i)} className="w-14 h-14 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {i.photo_url ? (

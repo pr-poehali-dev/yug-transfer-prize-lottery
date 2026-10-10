@@ -41,7 +41,7 @@ export function LayersDialog({ token, item, open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto bg-[#14141c] border-white/10 text-white">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto space-dialog border-white/10 text-white">
         <DialogHeader>
           <DialogTitle>Все изменения аккаунта</DialogTitle>
           <DialogDescription className="text-white/50">

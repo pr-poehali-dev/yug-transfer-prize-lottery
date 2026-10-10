@@ -37,7 +37,7 @@ export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) 
         );
       })}
       <div
-        className={`relative rounded-2xl border bg-[#14141c] overflow-hidden flex flex-col h-full ${
+        className={`relative rounded-2xl border space-card overflow-hidden flex flex-col h-full ${
           black ? "border-red-500/30" : "border-emerald-500/30"
         }`}
       >
