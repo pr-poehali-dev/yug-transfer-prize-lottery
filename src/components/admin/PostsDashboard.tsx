@@ -68,7 +68,7 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
           )}
         </div>
       ) : (
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-10 md:py-16">
+        <div className="max-w-5xl mx-auto px-4 md:px-6 py-10 min-h-[calc(100vh-4rem)] flex flex-col justify-center">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {tiles.map((t) => {
               const c = toneCls[t.tone];
