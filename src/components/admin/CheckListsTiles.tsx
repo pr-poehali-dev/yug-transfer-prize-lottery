@@ -9,7 +9,7 @@ import { ModerationPage } from "./lists/ModerationStrip";
 import { SubscriptionsPage } from "./lists/SubscriptionsPage";
 import { GroupsPage } from "./lists/GroupsPage";
 import { ComplaintsPage } from "./lists/ComplaintsPage";
-import { GlobalScanBar } from "./lists/GlobalScanBar";
+import { GlobalScanPage, useScanState } from "./lists/GlobalScanBar";
 
 interface ListPageProps {
   token: string;
@@ -272,6 +272,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   const [modItem, setModItem] = useState<ListItem | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [listCounts, setListCounts] = useState<Record<string, number>>({});
+  const scanState = useScanState();
   const [complaintsNew, setComplaintsNew] = useState(0);
 
   const load = async () => {
@@ -316,6 +317,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   }
   if (open === "complaints") return <ComplaintsPage token={token} onBack={() => { setOpen(null); load(); }} />;
   if (open === "groups") return <GroupsPage token={token} onBack={() => setOpen(null)} />;
+  if (open === "scan") return <GlobalScanPage token={token} onChanged={load} onBack={() => setOpen(null)} />;
   if (open === "subs") return <SubscriptionsPage token={token} onBack={() => setOpen(null)} />;
 
   if (current) {
@@ -333,6 +335,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     amber: { box: "border-amber-400/30 hover:border-amber-400/60 hover:shadow-[0_0_40px_-10px_rgba(251,191,36,0.6)]", icon: "bg-amber-500/20", text: "text-amber-300" },
     red: { box: "border-red-400/30 hover:border-red-400/60 hover:shadow-[0_0_40px_-10px_rgba(248,113,113,0.6)]", icon: "bg-red-500/20", text: "text-red-300" },
     emerald: { box: "border-emerald-400/30 hover:border-emerald-400/60 hover:shadow-[0_0_40px_-10px_rgba(52,211,153,0.6)]", icon: "bg-emerald-500/20", text: "text-emerald-300" },
+    cyan: { box: "border-cyan-400/30 hover:border-cyan-400/60 hover:shadow-[0_0_40px_-10px_rgba(34,211,238,0.6)]", icon: "bg-cyan-500/20", text: "text-cyan-300" },
     sky: { box: "border-sky-400/30 hover:border-sky-400/60 hover:shadow-[0_0_40px_-10px_rgba(56,189,248,0.6)]", icon: "bg-sky-500/20", text: "text-sky-300" },
     violet: { box: "border-violet-400/30 hover:border-violet-400/60 hover:shadow-[0_0_40px_-10px_rgba(167,139,250,0.6)]", icon: "bg-violet-500/20", text: "text-violet-300" },
   };
@@ -348,11 +351,13 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     })),
     { key: "groups", title: "Список групп", sub: "Группы для бота", icon: "MessagesSquare", tone: "sky" },
     { key: "subs", title: "Моя подписка", sub: "Оплаты, доход, статистика", icon: "CreditCard", tone: "violet" },
+    {
+      key: "scan", title: "Глобальное сканирование", icon: "Radar", tone: "cyan",
+      sub: scanState?.running ? `Идёт · осталось ${scanState.left}` : "Обновление базы и аккаунты сканера",
+    },
   ];
 
   return (
-    <div className="space-y-3">
-    <GlobalScanBar token={token} onChanged={load} />
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {tiles.map((t) => {
         const c = toneMap[t.tone];
@@ -379,7 +384,6 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
           </button>
         );
       })}
-    </div>
     </div>
   );
 }
