@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.kb_subscriptions SET active_until='2099-12-31 23:59:59', is_trial=false, updated_at=now() WHERE tg_user_id=8048647111;

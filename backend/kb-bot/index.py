@@ -472,6 +472,8 @@ def send_subscription(chat_id, user_id) -> None:
 
     if not row or not row[0]:
         text = '💳 <b>Моя подписка</b>\n\nУ вас пока нет подписки.'
+    elif row[1] and row[0].year >= 2090:
+        text = '💳 <b>Моя подписка</b>\n\n✅ Активна\n♾ <b>Бессрочная</b>'
     elif row[1]:
         until = row[0].strftime('%d.%m.%Y %H:%M')
         kind = 'Тестовый период' if row[2] else 'Активна'
