@@ -14,7 +14,7 @@ interface AdminBotTabProps {
   onToggle?: () => void;
 }
 
-export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: AdminBotTabProps) {
+export function AdminBotTab({ token, expanded: controlledExpanded }: AdminBotTabProps) {
   const [posts, setPosts] = useState<BotPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -23,9 +23,8 @@ export function AdminBotTab({ token, expanded: controlledExpanded, onToggle }: A
   const [sending, setSending] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [localExpanded, setLocalExpanded] = useState(false);
+  const [localExpanded] = useState(false);
   const expanded = controlledExpanded ?? localExpanded;
-  const toggleExpanded = onToggle ?? (() => setLocalExpanded(v => !v));
 
   const fetchPosts = async () => {
     try {

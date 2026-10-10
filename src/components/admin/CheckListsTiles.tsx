@@ -5,7 +5,7 @@ import { LISTS, LISTS_API, COMPLAINTS_API, SCAN_API, TG_LOOKUP_API, LOOKUP_API, 
 import { PersonCard } from "./lists/PersonCard";
 import { PersonEditDialog } from "./lists/PersonEditDialog";
 import { LayersDialog } from "./lists/LayersDialog";
-import { ModerationRow, ModerationPage } from "./lists/ModerationStrip";
+import { ModerationPage } from "./lists/ModerationStrip";
 import { SubscriptionsPage } from "./lists/SubscriptionsPage";
 import { GroupsPage } from "./lists/GroupsPage";
 import { ComplaintsPage } from "./lists/ComplaintsPage";
@@ -289,73 +289,54 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     );
   }
 
+  const toneMap: Record<string, { box: string; icon: string; text: string }> = {
+    amber: { box: "border-amber-400/30 hover:border-amber-400/60 hover:shadow-[0_0_40px_-10px_rgba(251,191,36,0.6)]", icon: "bg-amber-500/20", text: "text-amber-300" },
+    red: { box: "border-red-400/30 hover:border-red-400/60 hover:shadow-[0_0_40px_-10px_rgba(248,113,113,0.6)]", icon: "bg-red-500/20", text: "text-red-300" },
+    emerald: { box: "border-emerald-400/30 hover:border-emerald-400/60 hover:shadow-[0_0_40px_-10px_rgba(52,211,153,0.6)]", icon: "bg-emerald-500/20", text: "text-emerald-300" },
+    sky: { box: "border-sky-400/30 hover:border-sky-400/60 hover:shadow-[0_0_40px_-10px_rgba(56,189,248,0.6)]", icon: "bg-sky-500/20", text: "text-sky-300" },
+    violet: { box: "border-violet-400/30 hover:border-violet-400/60 hover:shadow-[0_0_40px_-10px_rgba(167,139,250,0.6)]", icon: "bg-violet-500/20", text: "text-violet-300" },
+  };
+  const tiles: { key: string; title: string; sub: string; icon: string; tone: string; badge?: number }[] = [
+    { key: "moderation", title: "На модерации", sub: `${pendingCount} карточек`, icon: "Clock", tone: "amber" },
+    { key: "complaints", title: "Жалобы", sub: complaintsNew ? `${complaintsNew} новых` : "Новых нет", icon: "ShieldAlert", tone: "red", badge: complaintsNew },
+    ...LISTS.map((def) => ({
+      key: `${def.role}-${def.list_type}`,
+      title: def.title,
+      sub: `${items.filter((i) => i.role === def.role && i.list_type === def.list_type).length} чел.`,
+      icon: def.role === "driver" ? "Car" : "Headset",
+      tone: def.list_type === "black" ? "red" : "emerald",
+    })),
+    { key: "groups", title: "Список групп", sub: "Группы для бота", icon: "MessagesSquare", tone: "sky" },
+    { key: "subs", title: "Моя подписка", sub: "Оплаты, доход, статистика", icon: "CreditCard", tone: "violet" },
+  ];
+
   return (
-    <div className="space-y-3">
-    <ModerationRow count={pendingCount} onOpen={() => setOpen("moderation")} />
-    <button
-      onClick={() => setOpen("complaints")}
-      className="group w-full rounded-xl border border-red-500/25 bg-red-500/[0.05] hover:bg-red-500/[0.1] px-4 py-2.5 flex items-center gap-2 text-left transition-colors"
-    >
-      <Icon name="ShieldAlert" size={15} className="text-red-400" />
-      <span className="text-sm font-medium text-white">Жалобы</span>
-      <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${complaintsNew ? "bg-red-500 text-white" : "bg-white/10 text-white/50"}`}>{complaintsNew}</span>
-      <span className="text-[11px] text-white/40 ml-1 hidden sm:inline truncate">Претензии от водителей и диспетчеров из бота</span>
-      <Icon name="ChevronRight" size={16} className="ml-auto shrink-0 text-white/30 group-hover:text-white/70 transition-colors" />
-    </button>
-    <div className="grid grid-cols-2 gap-3">
-      {LISTS.map((def) => {
-        const key = `${def.role}-${def.list_type}`;
-        const count = items.filter((i) => i.role === def.role && i.list_type === def.list_type).length;
-        const black = def.list_type === "black";
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {tiles.map((t) => {
+        const c = toneMap[t.tone];
         return (
           <button
-            key={key}
-            onClick={() => setOpen(key)}
-            className={`group text-left rounded-2xl border p-4 md:p-5 min-h-[120px] flex flex-col justify-between transition-all hover:-translate-y-0.5 ${
-              black
-                ? "border-red-500/25 bg-red-500/[0.06] hover:bg-red-500/[0.12]"
-                : "border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12]"
-            }`}
+            key={t.key}
+            onClick={() => setOpen(t.key)}
+            className={`group relative text-left rounded-2xl border bg-white/[0.04] backdrop-blur-xl p-4 min-h-[112px] lg:min-h-[130px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/[0.07] ${c.box}`}
           >
             <div className="flex items-center justify-between">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${black ? "bg-red-500/15" : "bg-emerald-500/15"}`}>
-                <Icon name={def.role === "driver" ? "Car" : "Headset"} fallback="Users" size={20} className={def.color} />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${c.icon}`}>
+                <Icon name={t.icon} fallback="Users" size={19} className={c.text} />
               </div>
-              <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-white/70 transition-colors" />
+              {t.badge ? (
+                <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-red-500 text-white">{t.badge}</span>
+              ) : (
+                <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-white/70 transition-colors" />
+              )}
             </div>
             <div className="mt-3">
-              <div className="text-sm md:text-base font-medium text-white leading-snug">{def.title}</div>
-              <div className="text-xs text-white/50 mt-0.5">{count} чел.</div>
+              <div className="text-sm md:text-base font-medium text-white leading-snug">{t.title}</div>
+              <div className="text-xs text-white/50 mt-0.5">{t.sub}</div>
             </div>
           </button>
         );
       })}
-      {([
-        { key: "groups", title: "Список групп", sub: "Группы для бота", icon: "MessagesSquare", tone: "sky" },
-        { key: "subs", title: "Моя подписка", sub: "Оплаты, доход, статистика", icon: "CreditCard", tone: "violet" },
-      ] as const).map((t) => (
-        <button
-          key={t.key}
-          onClick={() => setOpen(t.key)}
-          className={`group text-left rounded-2xl border p-4 md:p-5 min-h-[120px] flex flex-col justify-between transition-all hover:-translate-y-0.5 ${
-            t.tone === "sky"
-              ? "border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.12]"
-              : "border-violet-500/25 bg-violet-500/[0.06] hover:bg-violet-500/[0.12]"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${t.tone === "sky" ? "bg-sky-500/15" : "bg-violet-500/15"}`}>
-              <Icon name={t.icon} size={20} className={t.tone === "sky" ? "text-sky-400" : "text-violet-400"} />
-            </div>
-            <Icon name="ChevronRight" size={18} className="text-white/30 group-hover:text-white/70 transition-colors" />
-          </div>
-          <div className="mt-3">
-            <div className="text-sm md:text-base font-medium text-white leading-snug">{t.title}</div>
-            <div className="text-xs text-white/50 mt-0.5">{t.sub}</div>
-          </div>
-        </button>
-      ))}
-    </div>
     </div>
   );
 }

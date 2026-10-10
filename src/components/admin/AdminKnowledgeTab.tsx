@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
-import { KNOWLEDGE_BASE_URL, KB_BOT_URL } from "./adminTypes";
+import { KNOWLEDGE_BASE_URL } from "./adminTypes";
 import { CheckListsTiles } from "./CheckListsTiles";
 import { NewPersonCardForm } from "./lists/NewPersonCardForm";
 import { detectQuery } from "./lists/listTypes";
@@ -44,15 +44,6 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
     setSearch("");
   };
   const [tilesKey, setTilesKey] = useState(0);
-  const [bot, setBot] = useState<{ username: string; webhook: string } | null>(null);
-  const fetchBot = async () => {
-    try {
-      const res = await fetch(`${KB_BOT_URL}?action=bot_info`);
-      const data = await res.json();
-      setBot({ username: data.username || "", webhook: data.webhook || "" });
-    } catch { /* */ }
-  };
-
   const fetchItems = async () => {
     try {
       const res = await fetch(KNOWLEDGE_BASE_URL, { headers: { "X-Admin-Token": token } });
@@ -66,7 +57,6 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
 
   useEffect(() => {
     fetchItems();
-    fetchBot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -139,23 +129,6 @@ export function AdminKnowledgeTab({ token, expanded }: Props) {
     <div>
       {expanded && (
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center">
-              <Icon name="BookOpen" size={20} className="text-emerald-400" />
-            </div>
-            <h1 className="text-xl md:text-2xl font-semibold text-white">База знаний</h1>
-          {bot?.username && (
-            <a
-              href={`https://t.me/${bot.username}`}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-auto inline-flex items-center gap-2 text-sm text-white/70 hover:text-white rounded-xl border border-white/10 px-3 py-1.5"
-            >
-              <Icon name="Bot" size={15} className="text-sky-400" />
-              @{bot.username}
-            </a>
-          )}
-          </div>
           <CheckListsTiles key={tilesKey} token={token} onOpenChange={setListOpen} />
           {!listOpen && (<>
           <div className="flex flex-col sm:flex-row gap-2">

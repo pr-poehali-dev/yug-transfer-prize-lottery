@@ -29,7 +29,7 @@ const EMPTY: PostFormData = {
   status: "draft", scheduled_at: null, chats: ALL_CHAT_KEYS,
 };
 
-export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpanded, onToggle }: AdminPostsTabProps) {
+export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpanded }: AdminPostsTabProps) {
   // ── форма ──
   const [form, setForm] = useState<PostFormData>({ ...EMPTY });
   const [savedForm, setSavedForm] = useState<PostFormData>({ ...EMPTY });
@@ -52,9 +52,8 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
   const [sendingMissingId, setSendingMissingId] = useState<number | null>(null);
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [editingInTgId, setEditingInTgId] = useState<number | null>(null);
-  const [localExpanded, setLocalExpanded] = useState(false);
+  const [localExpanded] = useState(false);
   const formExpanded = controlledExpanded ?? localExpanded;
-  const toggleExpanded = onToggle ?? (() => setLocalExpanded(v => !v));
 
   const fetchPosts = async (sf = statusFilter) => {
     setLoading(true);
