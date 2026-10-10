@@ -75,6 +75,13 @@ def tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False) 
 def _tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False) -> dict:
     """Запрос к Telegram сразу по всем адресам параллельно — берём первый ответ."""
     data = json.dumps(payload).encode()
+    if DEADLINE['t'] and not _bg:
+        left = DEADLINE['t'] - time.time() - 1.2
+        if left < 0.5:
+            if method in ('sendMessage', 'sendPhoto'):
+                FALLBACK.append((method, payload))
+            return {}
+        timeout = min(timeout, left)
     hosts = [LAST_OK['host']] if LAST_OK['host'] else TG_HOSTS
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(TG_HOSTS))
     futures = {pool.submit(_call, h, method, data, timeout): h for h in hosts}
@@ -95,6 +102,8 @@ def _tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False)
         if _bg:
             return result
         return _tg_api(method, payload, timeout, _bg)
+    if not result and not _bg and method in ('sendMessage', 'sendPhoto'):
+        FALLBACK.append((method, payload))
     if method in ('sendMessage', 'sendPhoto', 'sendMediaGroup') and result.get('ok'):
         markup = payload.get('reply_markup')
         if isinstance(markup, str):
@@ -1377,10 +1386,21 @@ def private_only_commands() -> dict:
     return res
 
 
+FALLBACK = []
+
+
 def handler(event: dict, context) -> dict:
     BG.clear()
+    FALLBACK.clear()
     try:
-        return _handler(event, context)
+        resp = _handler(event, context)
+        if FALLBACK and isinstance(resp, dict) and resp.get('body') == 'ok':
+            # Telegram не ответил на отправку — отдаём сообщение прямо в ответе на вебхук, чтобы человек его получил.
+            m, p = FALLBACK[-1]
+            print(f'[KB-BOT] delivering {m} via webhook reply')
+            return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps({'method': m, **p}, ensure_ascii=False)}
+        return resp
     finally:
         for t in list(BG):
             left = (DEADLINE['t'] - time.time() - 0.3) if DEADLINE['t'] else 2.5
@@ -1411,6 +1431,8 @@ def _handler(event: dict, context) -> dict:
             wh = tg_api('getWebhookInfo', {}, timeout=2.2).get('result', {}) if me else {}
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({
                 'ok': bool(me), 'username': me.get('username', ''), 'webhook': wh.get('url', ''),
+                'pending': wh.get('pending_update_count'), 'last_error': wh.get('last_error_message', ''),
+                'last_error_date': wh.get('last_error_date'),
                 'error': me_res.get('description', '') if not me else ''})}
         if action == 'complaint_to_group':
             tg_api('getMe', {}, timeout=2.5)
@@ -1441,6 +1463,18 @@ def _handler(event: dict, context) -> dict:
                 complaints.mark_group_message(tg_api, cid, '✅ Принята — из админки')
             complaints.notify_reporter(tg_api, cid)
             return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True})}
+        if action == 'test_complaint':
+            c3 = psycopg2.connect(os.environ['DATABASE_URL'])
+            k3 = c3.cursor()
+            k3.execute(f"INSERT INTO {SCHEMA}.kb_complaints (item_id, reporter_tg_id, reporter_username, reporter_name, step, status, text, incident_date) "
+                       f"VALUES (109602, 6072837543, 'ug_transfer_online', 'Тест', 'done', 'new', "
+                       f"'🧪 ТЕСТОВАЯ ЖАЛОБА — проверка работы. В группу ЧС не отправлять, нажмите «Не обоснована».', CURRENT_DATE) RETURNING id")
+            new_id = k3.fetchone()[0]
+            c3.commit()
+            k3.close()
+            c3.close()
+            complaints.notify_admin(tg_api, new_id)
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'id': new_id})}
         if action == 'repost_complaints':
             c3 = psycopg2.connect(os.environ['DATABASE_URL'])
             k3 = c3.cursor()
