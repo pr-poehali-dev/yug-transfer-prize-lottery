@@ -2,6 +2,7 @@
 import os
 import json
 import time
+import datetime
 import ssl
 import http.client
 import concurrent.futures
@@ -86,12 +87,61 @@ def load_groups() -> list:
         conn.close()
 
 
+TRIAL_DAYS = 3
+
+
+def start_trial(user: dict) -> tuple:
+    """Выдаёт пробный период один раз. Возвращает (дата окончания, выдан_сейчас)."""
+    uid = int(user.get('id') or 0)
+    if not uid:
+        return None, False
+    q = lambda v: str(v or '').replace("'", "''")
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"INSERT INTO {SCHEMA}.kb_subscriptions (tg_user_id, username, first_name, active_until, is_trial) "
+                    f"VALUES ({uid}, '{q(user.get('username'))}', '{q(user.get('first_name'))}', "
+                    f"NOW() + interval '{TRIAL_DAYS} days', TRUE) ON CONFLICT (tg_user_id) DO NOTHING RETURNING active_until")
+        row = cur.fetchone()
+        if row:
+            conn.commit()
+            return row[0], True
+        cur.execute(f"SELECT active_until FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={uid}")
+        r = cur.fetchone()
+        return (r[0] if r else None), False
+    finally:
+        cur.close()
+        conn.close()
+
+
+def send_welcome(chat_id, user: dict) -> None:
+    until, fresh = start_trial(user)
+    name = esc_html(user.get('first_name') or '')
+    hello = f'👋 Здравствуйте{", " + name if name else ""}!'
+    if fresh and until:
+        text = (f'{hello}\n\n'
+                '🔎 Система поиска и проверки водителей и диспетчеров работает <b>по подписке</b>.\n\n'
+                f'🎁 У вас есть <b>{TRIAL_DAYS} дня бесплатно</b>, чтобы протестировать наш сервис.\n'
+                f'📅 Тестовый период действует до: <b>{until.strftime("%d.%m.%Y %H:%M")}</b>\n\n'
+                'Отправьте @username, номер телефона или ID — и бот покажет, что о человеке известно.')
+    elif until and until > datetime.datetime.now():
+        text = (f'{hello}\n\n✅ Ваша подписка активна до <b>{until.strftime("%d.%m.%Y %H:%M")}</b>.\n\n'
+                'Отправьте @username, номер телефона или ID для проверки.')
+    else:
+        text = (f'{hello}\n\n🔎 Система поиска работает <b>по подписке</b>.\n'
+                '⏳ Ваш тестовый период уже закончился — продлите подписку, чтобы продолжить пользоваться поиском.')
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': RENEW_MARKUP})
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Меню 👇', 'reply_markup': MAIN_KEYBOARD})
+        return
+    tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD})
+
+
 def send_subscription(chat_id, user_id) -> None:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
         cur.execute(
-            f"SELECT active_until, active_until > NOW() FROM {SCHEMA}.kb_subscriptions "
+            f"SELECT active_until, active_until > NOW(), is_trial FROM {SCHEMA}.kb_subscriptions "
             f"WHERE tg_user_id = {int(user_id)}")
         row = cur.fetchone()
     finally:
@@ -102,7 +152,8 @@ def send_subscription(chat_id, user_id) -> None:
         text = '💳 <b>Моя подписка</b>\n\nУ вас пока нет подписки.'
     elif row[1]:
         until = row[0].strftime('%d.%m.%Y %H:%M')
-        text = f'💳 <b>Моя подписка</b>\n\n✅ Активна\n📅 Действует до: <b>{until}</b>'
+        kind = 'Тестовый период' if row[2] else 'Активна'
+        text = f'💳 <b>Моя подписка</b>\n\n✅ {kind}\n📅 Действует до: <b>{until}</b>'
     else:
         until = row[0].strftime('%d.%m.%Y')
         text = f'💳 <b>Моя подписка</b>\n\n❌ Закончилась {until}'
@@ -748,6 +799,8 @@ def handler(event: dict, context) -> dict:
         run_check(chat_id, reply_kind, text)
     elif text == BUTTON_SUB or text.lower() in ('моя подписка', '/sub'):
         send_subscription(chat_id, (message.get('from') or {}).get('id') or chat_id)
+    elif text.split(' ')[0].split('@')[0] == '/start':
+        send_welcome(chat_id, message.get('from') or {})
     elif text.startswith('/'):
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Выберите пункт меню 👇',
                                'reply_markup': MAIN_KEYBOARD})
