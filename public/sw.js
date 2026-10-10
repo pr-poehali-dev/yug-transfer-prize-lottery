@@ -4,8 +4,8 @@ self.addEventListener('push', function(event) {
   const title = data.title || 'Уведомление';
   const options = {
     body: data.body || '',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/favicon-kb.png',
+    badge: '/favicon-kb.png',
     tag: data.tag || 'yug-transfer',
     renotify: true,
     data: { url: data.url || '/' },
