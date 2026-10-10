@@ -15,6 +15,21 @@ interface Account {
 
 const API = `${TG_LOOKUP_API}?action=accounts`;
 
+const VIA_TEXT: Record<string, string> = {
+  app: "Код отправлен в приложение Telegram",
+  sms: "Код отправлен по СМС",
+  call: "Telegram позвонит — код будет в номере или продиктуют голосом",
+  fragment: "Код отправлен через Fragment",
+  email: "Код отправлен на почту, привязанную к аккаунту",
+};
+
+const NEXT_TEXT: Record<string, string> = {
+  sms: "прислать по СМС",
+  call: "получить звонком",
+  fragment: "прислать через Fragment",
+  email: "прислать на почту",
+};
+
 function pauseText(until?: string | null) {
   if (!until) return "";
   const m = Math.max(1, Math.ceil((new Date(until).getTime() - Date.now()) / 60000));
@@ -31,6 +46,8 @@ export function ScanAccounts({ token }: { token: string }) {
   const [password, setPassword] = useState("");
   const [purpose, setPurpose] = useState<"bot" | "scan">("scan");
   const [busy, setBusy] = useState(false);
+  const [via, setVia] = useState("");
+  const [nextVia, setNextVia] = useState("");
 
   const call = async (body?: object) => {
     const r = await fetch(API, {
@@ -61,6 +78,8 @@ export function ScanAccounts({ token }: { token: string }) {
     setCode("");
     setPassword("");
     setPurpose("scan");
+    setVia("");
+    setNextVia("");
   };
 
   const sendCode = async () => {
@@ -69,10 +88,27 @@ export function ScanAccounts({ token }: { token: string }) {
       const d = await call({ op: "send_code", phone });
       if (d.ok) {
         setStep("code");
-        toast.success("Код отправлен в Telegram на этот номер");
+        setVia(d.via || "");
+        setNextVia(d.next || "");
+        toast.success(VIA_TEXT[d.via as string] || "Код отправлен");
       } else toast.error(d.error || "Не удалось отправить код");
     } catch {
       toast.error("Не удалось отправить код");
+    }
+    setBusy(false);
+  };
+
+  const resendCode = async () => {
+    setBusy(true);
+    try {
+      const d = await call({ op: "resend_code", phone });
+      if (d.ok) {
+        setVia(d.via || "");
+        setNextVia(d.next || "");
+        toast.success(VIA_TEXT[d.via as string] || "Код отправлен повторно");
+      } else toast.error(d.error || "Не удалось отправить код повторно");
+    } catch {
+      toast.error("Не удалось отправить код повторно");
     }
     setBusy(false);
   };
@@ -140,7 +176,12 @@ export function ScanAccounts({ token }: { token: string }) {
         <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
           <div className="text-xs text-white/60">
             {step === "phone" && "Введите номер Telegram-аккаунта — на него придёт код в приложении Telegram. Аккаунт «Только для бота» не участвует в сканировании и бережёт лимиты для поиска по запросам пользователей."}
-            {step === "code" && `Введите код, который пришёл в Telegram на ${phone}.`}
+            {step === "code" && (
+              <>
+                {VIA_TEXT[via] || "Код отправлен"} ({phone}).
+                {via === "app" && " Откройте Telegram на телефоне или компьютере, где уже выполнен вход в этот аккаунт, — код придёт в чат «Telegram» с синей галочкой. СМС в этом случае не приходит."}
+              </>
+            )}
             {step === "password" && "На аккаунте включён облачный пароль (двухэтапная проверка) — введите его."}
           </div>
           {step === "phone" && (
@@ -161,6 +202,12 @@ export function ScanAccounts({ token }: { token: string }) {
           )}
           {step === "code" && (
             <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Код из Telegram" inputMode="numeric" className={inputCls} autoFocus />
+          )}
+          {step === "code" && (
+            <button onClick={resendCode} disabled={busy || !nextVia}
+              className="text-xs text-cyan-300 hover:text-cyan-200 disabled:text-white/30 disabled:cursor-not-allowed underline underline-offset-2">
+              {nextVia ? `Код не пришёл — ${NEXT_TEXT[nextVia] || "отправить другим способом"}` : "Другого способа отправки Telegram не предлагает"}
+            </button>
           )}
           {step === "password" && (
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Облачный пароль" className={inputCls} autoFocus />

@@ -58,7 +58,45 @@ async def send_code(make_client, cur, conn, phone_raw: str) -> dict:
                 f"ON CONFLICT (phone) DO UPDATE SET session_string=EXCLUDED.session_string, "
                 f"phone_code_hash=EXCLUDED.phone_code_hash, created_at=now()")
     conn.commit()
-    return {'ok': True, 'phone': phone}
+    return {'ok': True, 'phone': phone, 'via': _via(sent), 'next': _via_next(sent)}
+
+
+VIA = {'SentCodeTypeApp': 'app', 'SentCodeTypeSms': 'sms', 'SentCodeTypeCall': 'call',
+       'SentCodeTypeFlashCall': 'call', 'SentCodeTypeMissedCall': 'call', 'SentCodeTypeFragmentSms': 'fragment',
+       'SentCodeTypeEmailCode': 'email', 'SentCodeTypeSetUpEmailRequired': 'email',
+       'SentCodeTypeFirebaseSms': 'sms', 'SentCodeTypeSmsWord': 'sms', 'SentCodeTypeSmsPhrase': 'sms',
+       'CodeTypeSms': 'sms', 'CodeTypeCall': 'call', 'CodeTypeFlashCall': 'call', 'CodeTypeMissedCall': 'call',
+       'CodeTypeFragmentSms': 'fragment'}
+
+
+def _via(sent) -> str:
+    return VIA.get(type(getattr(sent, 'type', None)).__name__, 'other')
+
+
+def _via_next(sent) -> str:
+    nt = getattr(sent, 'next_type', None)
+    return VIA.get(type(nt).__name__, '') if nt else ''
+
+
+async def resend_code(make_client, cur, conn, phone_raw: str) -> dict:
+    """Повторная отправка кода другим способом (обычно СМС или звонок)."""
+    from telethon.tl.functions.auth import ResendCodeRequest
+    phone = _phone(phone_raw)
+    cur.execute(f"SELECT session_string, phone_code_hash FROM {SCHEMA}.tg_login_pending WHERE phone='{_q(phone)}'")
+    row = cur.fetchone()
+    if not row:
+        return {'ok': False, 'error': 'Сначала запросите код'}
+    client = make_client(row[0])
+    await client.connect()
+    try:
+        sent = await client(ResendCodeRequest(phone_number=phone, phone_code_hash=row[1]))
+        sess = client.session.save()
+    finally:
+        await client.disconnect()
+    cur.execute(f"UPDATE {SCHEMA}.tg_login_pending SET session_string='{_q(sess)}', "
+                f"phone_code_hash='{_q(sent.phone_code_hash)}', created_at=now() WHERE phone='{_q(phone)}'")
+    conn.commit()
+    return {'ok': True, 'phone': phone, 'via': _via(sent), 'next': _via_next(sent)}
 
 
 async def sign_in(make_client, cur, conn, phone_raw: str, code: str, password: str, label: str, purpose: str = 'scan') -> dict:

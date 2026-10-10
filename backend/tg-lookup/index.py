@@ -979,6 +979,8 @@ def handler(event: dict, context) -> dict:
                                                                                bool(body.get('main'))), timeout=20))
                 elif op == 'send_code':
                     out = asyncio.run(asyncio.wait_for(accounts.send_code(make_client, cur, conn, body.get('phone', '')), timeout=20))
+                elif op == 'resend_code':
+                    out = asyncio.run(asyncio.wait_for(accounts.resend_code(make_client, cur, conn, body.get('phone', '')), timeout=20))
                 elif op == 'sign_in':
                     out = asyncio.run(asyncio.wait_for(accounts.sign_in(make_client, cur, conn, body.get('phone', ''),
                                                                         body.get('code', ''), body.get('password', ''),
@@ -992,7 +994,11 @@ def handler(event: dict, context) -> dict:
                 print(f'[TG-LOOKUP] accounts {op}: {n}: {str(e)[:200]}')
                 msg = {'PhoneNumberInvalidError': 'Неверный номер телефона',
                        'PhoneNumberBannedError': 'Этот номер заблокирован в Telegram',
-                       'FloodWaitError': 'Telegram просит подождать перед новой попыткой'}.get(n, f'Ошибка Telegram: {n}')
+                       'FloodWaitError': f"Telegram просит подождать {max(1, int(getattr(e, 'seconds', 60) or 60) // 60)} мин перед новой попыткой",
+                       'SendCodeUnavailableError': 'Telegram исчерпал способы отправки кода. Подождите несколько часов и запросите заново',
+                       'PhoneCodeExpiredError': 'Код устарел — запросите новый',
+                       'PhonePasswordFloodError': 'Слишком много попыток входа — подождите несколько часов',
+                       'PhoneNumberFloodError': 'Слишком много запросов кода на этот номер — подождите несколько часов'}.get(n, f'Ошибка Telegram: {n}')
                 out = {'ok': False, 'error': msg}
             return resp(200, out)
         finally:
