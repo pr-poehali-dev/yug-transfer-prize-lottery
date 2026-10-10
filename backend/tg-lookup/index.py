@@ -758,6 +758,30 @@ def handle_group(qs: dict, context) -> dict:
         conn.close()
 
 
+def handle_auto(context) -> dict:
+    """Фоновый запуск по расписанию: сначала догружает фото участников группы, потом сканирует карточки."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT id FROM {SCHEMA}.group_scan_jobs WHERE status='running' AND mode='photos' "
+                    f"AND updated_at < now() - interval '50 seconds' ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
+        paused = cur.fetchone()[0]
+        accounts = len(load_sessions(cur))
+    finally:
+        cur.close()
+        conn.close()
+    if row:
+        print(f'[TG-LOOKUP] auto: photos job {row[0]}')
+        return handle_group({'job': str(row[0])}, context)
+    if accounts and paused >= accounts:
+        print('[TG-LOOKUP] auto: all accounts paused')
+        return resp(200, {'ok': True, 'skipped': 'all paused'})
+    print('[TG-LOOKUP] auto: batch')
+    return handle_batch(context)
+
+
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'body': ''}
@@ -768,6 +792,8 @@ def handler(event: dict, context) -> dict:
     is_cron = bool(cron) and (headers.get('X-Cron-Secret') or headers.get('x-cron-secret') or qs.get('secret')) == cron
     if not is_cron and not verify_token(headers.get('X-Admin-Token') or headers.get('x-admin-token') or ''):
         return resp(401, {'error': 'Unauthorized'})
+    if qs.get('action') == 'auto':
+        return handle_auto(context)
     if qs.get('action') == 'batch':
         return handle_batch(context)
     if qs.get('action') == 'group':
