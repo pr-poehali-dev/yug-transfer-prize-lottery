@@ -181,7 +181,9 @@ def handle_my_role(callback: dict) -> None:
     till = f'\n🎁 Доступ до: <b>{until.strftime("%d.%m.%Y %H:%M")}</b>' if until else ''
     send_single(chat_id, user['id'], {
         'reply_markup': MAIN_KEYBOARD,
-        'text': f'✅ Ваша роль: <b>{ROLE_NAMES[role]}</b>{till}\n\n'
+        'text': f'✅ Ваша роль: <b>{ROLE_NAMES[role]}</b>{till}\n'
+                + ('🎧 Для диспетчеров поиск и проверка — <b>бесплатно</b> всегда. Список групп — по подписке.\n' if role == 'dispatcher' else '')
+                + '\n'
                 '🔎 Отправьте @username, номер телефона или ID — бот покажет, что о человеке известно.',
     })
 
@@ -199,12 +201,18 @@ def send_welcome(chat_id, user: dict, start_msg_id=None) -> None:
     hello = f'👋 Здравствуйте{", " + name if name else ""}!'
     role = get_role(uid)
     active = bool(until and until > datetime.datetime.now())
-    if not active and not fresh:
+    if not active and not fresh and role != 'dispatcher':
         send_single(chat_id, uid, {'reply_markup': RENEW_MARKUP,
                                    'text': f'{hello}\n\n🔎 Поиск работает <b>по подписке</b>.\n'
                                            '⏳ Тестовый период закончился — продлите подписку, чтобы продолжить.'})
         return
     till = until.strftime("%d.%m.%Y %H:%M") if until else ''
+    if role == 'dispatcher' and not active:
+        send_single(chat_id, uid, {'reply_markup': MAIN_KEYBOARD, 'text': (
+            f'{hello} Ваша роль: <b>🎧 Диспетчер</b>\n\n'
+            '🔎 Поиск и проверка для диспетчеров — <b>бесплатно</b>: отправьте @username, телефон или ID.\n'
+            '🔒 Список групп — по подписке.')})
+        return
     if not role:
         send_single(chat_id, uid, {'reply_markup': ROLE_MARKUP, 'text': (
             f'{hello}\n\n'
@@ -214,6 +222,7 @@ def send_welcome(chat_id, user: dict, start_msg_id=None) -> None:
         return
     send_single(chat_id, uid, {'reply_markup': MAIN_KEYBOARD, 'text': (
         f'{hello} Ваша роль: <b>{ROLE_NAMES.get(role, role)}</b>\n'
+        + ('🎧 Для диспетчеров поиск и проверка — <b>бесплатно</b>. Список групп — по подписке.\n' if role == 'dispatcher' else '') +
         f'✅ Доступ до: <b>{till}</b>\n\n'
         '🔎 Отправьте @username, номер телефона или ID для проверки.')})
 
@@ -241,6 +250,29 @@ def send_subscription(chat_id, user_id) -> None:
         text = f'💳 <b>Моя подписка</b>\n\n❌ Закончилась {until}'
     tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML',
                            'reply_markup': RENEW_MARKUP})
+
+
+def sub_active(uid: int) -> bool:
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT active_until > NOW() FROM {SCHEMA}.kb_subscriptions WHERE tg_user_id={int(uid)}")
+        r = cur.fetchone()
+        return bool(r and r[0])
+    finally:
+        cur.close()
+        conn.close()
+
+
+def can_check(uid: int) -> bool:
+    """Проверка людей: диспетчерам бесплатно, остальным — по подписке."""
+    return get_role(uid) == 'dispatcher' or sub_active(uid)
+
+
+def send_paywall(chat_id, what: str) -> None:
+    tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': RENEW_MARKUP,
+                           'text': f'🔒 <b>{what}</b> доступен только по подписке.\n\n'
+                                   'Оформите подписку, чтобы открыть доступ.'})
 
 
 def create_payment_url(user_id) -> str:
@@ -872,8 +904,15 @@ def handler(event: dict, context) -> dict:
     reply_text = ((message.get('reply_to_message') or {}).get('text') or '')
     reply_kind = 'any' if CHECKS_ANY['prompt'] in reply_text else next((k for k, c in CHECKS.items() if c['prompt'] in reply_text), '')
 
+    uid = (message.get('from') or {}).get('id') or chat_id
+    is_check_btn = text in (BUTTON_CHECK, BUTTON_CHECK_DRIVER, BUTTON_CHECK_DISP) or text.lower() in ('проверить', '/check')
     if text == BUTTON_GROUPS or text.lower() in ('список групп', '/groups'):
-        send_groups(chat_id)
+        if sub_active(uid):
+            send_groups(chat_id)
+        else:
+            send_paywall(chat_id, 'Список групп')
+    elif (is_check_btn or reply_kind) and not can_check(uid):
+        send_paywall(chat_id, 'Поиск и проверка')
     elif text == BUTTON_CHECK or text.lower() in ('проверить', '/check'):
         ask_check(chat_id, 'any')
     elif text == BUTTON_CHECK_DRIVER:
@@ -892,6 +931,8 @@ def handler(event: dict, context) -> dict:
     elif text.startswith('/'):
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Выберите пункт меню 👇',
                                'reply_markup': MAIN_KEYBOARD})
+    elif looks_like_person(text) and not can_check(uid):
+        send_paywall(chat_id, 'Поиск и проверка')
     else:
         run_search(chat_id, text)
 
