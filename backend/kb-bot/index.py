@@ -20,6 +20,8 @@ BUTTON_CHECK_DRIVER = '🚗 Проверить водителя'
 BUTTON_CHECK_DISP = '🎧 Проверить диспетчера'
 BUTTON_CHECK = '🔎 Проверить по базе'
 BUTTON_COMPLAIN = '⚠️ Отправить жалобу'
+BUTTON_ORDERS = '🚖 Поиск заказов'
+ORDERS_URL = 'https://t.me/OneTMM_Bot?start=ref_6072837543'
 COMPLAIN_PROMPT = 'На кого жалоба?'
 CHECKS_ANY = {'prompt': 'Проверка по базе водителей и диспетчеров', 'who': 'Аккаунт', 'role': ''}
 CHECKS = {
@@ -34,7 +36,7 @@ CORS = {
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_COMPLAIN}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_COMPLAIN}, {'text': BUTTON_ORDERS}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
@@ -943,7 +945,7 @@ def private_only_commands() -> dict:
     res = {}
     for scope in ('default', 'all_group_chats', 'all_chat_administrators'):
         res[scope] = tg_api('deleteMyCommands', {'scope': {'type': scope}}, timeout=2.2).get('ok')
-    res['private'] = tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}, {'command': 'complain', 'description': 'Отправить жалобу'}, {'command': 'role', 'description': 'Сменить роль'}], 'scope': {'type': 'all_private_chats'}}, timeout=2.2).get('ok')
+    res['private'] = tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}, {'command': 'complain', 'description': 'Отправить жалобу'}, {'command': 'orders', 'description': 'Поиск заказов'}, {'command': 'role', 'description': 'Сменить роль'}], 'scope': {'type': 'all_private_chats'}}, timeout=2.2).get('ok')
     return res
 
 
@@ -1096,6 +1098,13 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
     reply_text = ((message.get('reply_to_message') or {}).get('text') or '')
+    if text == BUTTON_ORDERS or text.lower() in ('/orders', 'поиск заказов', 'заказы'):
+        tg_api('sendMessage', {
+            'chat_id': chat_id, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
+            'text': '🚖 <b>Поиск заказов</b>\n\nСвежие заказы на трансферы для водителей и диспетчеров — '
+                    'в нашем боте-партнёре. Нажмите кнопку ниже, чтобы перейти.',
+            'reply_markup': {'inline_keyboard': [[{'text': '🚖 Перейти к заказам', 'url': ORDERS_URL}]]}})
+        return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if text == BUTTON_COMPLAIN or text.lower() in ('/complain', 'жалоба', 'пожаловаться'):
         ask_complaint_target(chat_id)
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
