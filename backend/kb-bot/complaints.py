@@ -384,15 +384,15 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
 def decision_markup(cid: int, list_type: str = '') -> dict:
     """Кнопки в группе ЧС: только решение."""
     first = '⛔️ Подтвердить (уже в ЧС)' if list_type == 'black' else '⛔️ Заносим в ЧС'
-    return {'inline_keyboard': [[{'text': first, 'callback_data': f'cblack:{int(cid)}'},
-                                 {'text': '✖️ Жалоба не обоснована', 'callback_data': f'creject:{int(cid)}'}]]}
+    return {'inline_keyboard': [[{'text': first, 'callback_data': f'cblack:{int(cid)}'}],
+                                [{'text': '✖️ Жалоба не обоснована', 'callback_data': f'creject:{int(cid)}'}]]}
 
 
 def admin_markup(cid: int, list_type: str = '', role: str = '') -> dict:
     """Кнопки решения по жалобе: отправить в группу ЧС или отклонить."""
     rows = []
-    rows.append([{'text': '📤 Отправить в группу ЧС', 'callback_data': f'csend:{int(cid)}'},
-                 {'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
+    rows.append([{'text': '📤 Отправить в группу ЧС', 'callback_data': f'csend:{int(cid)}'}])
+    rows.append([{'text': '✖️ Не обоснована', 'callback_data': f'creject:{int(cid)}'}])
     return {'inline_keyboard': rows}
 
 
