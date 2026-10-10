@@ -193,7 +193,7 @@ export function PersonEditDialog({ token, def, item, open, onClose, onSaved }: P
               {form.photo_url ? (
                 <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
-                <Icon name="User" size={28} className="text-white/30" />
+                <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
               )}
             </div>
             <div className="flex flex-col gap-1.5">

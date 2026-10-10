@@ -385,7 +385,6 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {items.map((i) => {
-          const initials = (i.name || i.username || "?").slice(0, 2).toUpperCase();
           const busy = busyId === i.id;
           return (
             <div key={i.id} className="relative rounded-xl border border-white/10 space-card p-2.5">
@@ -396,7 +395,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
                   {i.photo_url ? (
                     <img src={i.photo_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-sm font-semibold text-white/30 group-hover/av:opacity-0">{initials}</span>
+                    <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
                   )}
                   {!i.photo_url && (
                     <span className={`absolute inset-0 flex items-center justify-center bg-sky-500/20 text-sky-200 transition-opacity ${

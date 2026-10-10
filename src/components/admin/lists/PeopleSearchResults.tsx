@@ -61,7 +61,7 @@ export function PeopleSearchResults({ token, query, onChanged }: { token: string
                 <div className="w-11 h-11 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {i.photo_url
                     ? <img src={i.photo_url} alt="" className="w-full h-full object-cover" />
-                    : <span className="text-xs text-white/40">{(i.name || i.username || "?").slice(0, 2).toUpperCase()}</span>}
+                    : <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm text-white truncate">{i.name || "Без имени"}</div>

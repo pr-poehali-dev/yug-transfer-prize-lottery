@@ -124,7 +124,6 @@ export function NewPersonCardForm({ token, onSaved, onCancel, prefill }: Props) 
     setSaving(false);
   };
 
-  const initials = (form.name || uname || "").slice(0, 2).toUpperCase();
 
   return (
     <div className="rounded-2xl border border-white/10 space-card p-4 space-y-4">
@@ -176,13 +175,7 @@ export function NewPersonCardForm({ token, onSaved, onCancel, prefill }: Props) 
               {form.photo_url ? (
                 <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  {initials ? (
-                    <span className="text-3xl font-semibold text-white/30">{initials}</span>
-                  ) : (
-                    <Icon name="User" size={40} className="text-white/20" />
-                  )}
-                </div>
+<img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
               )}
               {scanning && (
                 <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2 text-xs text-sky-200">

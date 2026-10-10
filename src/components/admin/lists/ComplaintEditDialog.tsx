@@ -159,7 +159,7 @@ export function ComplaintEditDialog({ token, complaint, onClose, onSaved }: Prop
                   className="relative w-20 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10 shrink-0 group">
                   {tgt.photo_url
                     ? <img src={tgt.photo_url} alt="" className="w-full h-full object-cover" />
-                    : <Icon name="User" size={22} className="text-white/30 mx-auto" />}
+                    : <img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />}
                   <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white">
                     Сменить
                   </span>

@@ -11,7 +11,6 @@ interface Props {
 
 export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) {
   const black = item.list_type === "black";
-  const initials = (item.name || item.username || "?").replace("@", "").slice(0, 2).toUpperCase();
   const layers = Math.max(1, item.layers || 1);
   const behind = Math.min(layers - 1, 4);
   const offset = 6;
@@ -45,9 +44,7 @@ export function PersonCard({ item, scanning, onEdit, onScan, onLayers }: Props) 
           {item.photo_url ? (
             <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-3xl font-semibold text-white/30">
-              {initials}
-            </div>
+<img src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
           )}
           {item.changes > 0 && (
             <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-black font-medium flex items-center gap-1">
