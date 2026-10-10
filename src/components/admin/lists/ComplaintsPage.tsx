@@ -111,6 +111,22 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
     setBusy(null);
   };
 
+  const remove = async (c: Complaint) => {
+    if (!confirm(`Удалить жалобу #${c.id}? Она пропадёт из списка.`)) return;
+    setBusy(c.id);
+    try {
+      const res = await fetch(`${COMPLAINTS_API}&id=${c.id}`, { method: "DELETE", headers: { "X-Admin-Token": token } });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success("Жалоба удалена");
+        setItems((prev) => prev.filter((x) => x.id !== c.id));
+      } else toast.error("Не удалось удалить");
+    } catch {
+      toast.error("Не удалось удалить");
+    }
+    setBusy(null);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -267,6 +283,14 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                     Не обоснована
                   </button>
                 </div>
+              )}
+
+              {c.status !== "new" && (
+                <button disabled={busy === c.id} onClick={() => remove(c)}
+                  className="w-full rounded-lg border border-red-500/30 hover:bg-red-500/10 text-red-300 text-xs py-2 flex items-center justify-center gap-1.5 disabled:opacity-60">
+                  <Icon name={busy === c.id ? "Loader2" : "Trash2"} size={13} className={busy === c.id ? "animate-spin" : ""} />
+                  Удалить жалобу
+                </button>
               )}
             </div>
           ))}

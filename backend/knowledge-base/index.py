@@ -353,6 +353,13 @@ def handle_complaints(cur, conn, method: str, qs: dict, body: dict) -> dict:
             except Exception as e:
                 print(f'[KB] notify reporter failed: {type(e).__name__}')
         return resp(200, {'ok': True})
+    if method == 'DELETE':
+        cid = int(qs.get('id') or 0)
+        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET status='deleted', updated_at=now() "
+                    f"WHERE id={cid} AND status IN ('accepted','rejected') RETURNING id")
+        ok = cur.fetchone()
+        conn.commit()
+        return resp(200 if ok else 404, {'ok': bool(ok)})
     return resp(405, {'error': 'method'})
 
 
@@ -663,4 +670,3 @@ def handler(event: dict, context) -> dict:
     finally:
         cur.close()
         conn.close()
-
