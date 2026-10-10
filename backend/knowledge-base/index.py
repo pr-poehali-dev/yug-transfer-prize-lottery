@@ -448,6 +448,29 @@ def handle_people_search(cur, qs: dict) -> dict:
     return resp(200, {'ok': True, 'items': [row_to_item(r) for r in cur.fetchall()]})
 
 
+JUNK_WHERE = ("c.username = '' AND c.photo_url = '' AND c.bio = '' AND c.reason = '' AND c.note = '' "
+              "AND (trim(c.name) = '' OR trim(c.name) ~ '^[0-9 +()\\-]+$') "
+              f"AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.kb_complaints k WHERE k.item_id = c.id)")
+
+
+def handle_junk(cur, conn, method: str) -> dict:
+    """Пустые карточки: только ID, без имени (или имя из цифр), без username, фото и описания."""
+    if method == 'GET':
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists c WHERE {JUNK_WHERE}")
+        return resp(200, {'ok': True, 'count': cur.fetchone()[0]})
+    if method == 'POST':
+        cur.execute(f"SELECT c.id FROM {SCHEMA}.check_lists c WHERE {JUNK_WHERE}")
+        ids = [str(r[0]) for r in cur.fetchall()]
+        if ids:
+            lst = ','.join(ids)
+            cur.execute(f"DELETE FROM {SCHEMA}.check_list_history WHERE item_id IN ({lst})")
+            cur.execute(f"DELETE FROM {SCHEMA}.check_list_snapshots WHERE item_id IN ({lst})")
+            cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id IN ({lst})")
+            conn.commit()
+        return resp(200, {'ok': True, 'deleted': len(ids)})
+    return resp(405, {'error': 'Method not allowed'})
+
+
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
     if method == 'GET' and qs.get('search'):
         return handle_people_search(cur, qs)
@@ -598,6 +621,8 @@ def handler(event: dict, context) -> dict:
             return handle_history(cur, qs)
         if qs.get('entity') == 'lookup':
             return handle_lookup(cur, qs)
+        if qs.get('entity') == 'junk':
+            return handle_junk(cur, conn, method)
         if qs.get('entity') == 'lists':
             return handle_lists(cur, conn, method, qs, body)
 

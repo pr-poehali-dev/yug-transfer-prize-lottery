@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { TG_LOOKUP_API } from "./listTypes";
 import { ScanAccounts } from "./ScanAccounts";
+import { JunkCleanup } from "./JunkCleanup";
 
 interface Props {
   token: string;
@@ -130,6 +131,7 @@ export function GlobalScanPage({ token, onChanged, onBack }: Props & { onBack: (
         <span className="text-base font-medium text-white">Глобальное сканирование</span>
       </div>
       <GlobalScanBar token={token} onChanged={onChanged} />
+      <JunkCleanup token={token} onChanged={onChanged} />
     </div>
   );
 }
