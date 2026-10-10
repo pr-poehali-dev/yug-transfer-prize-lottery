@@ -23,9 +23,7 @@ BUTTON_CHECK_DISP = '🎧 Проверить диспетчера'
 BUTTON_CHECK = '🔎 Проверить по базе'
 BUTTON_COMPLAIN = '⚠️ Отправить жалобу в ЧС'
 BUTTON_COMPLAIN_OLD = '⚠️ Отправить жалобу'
-BUTTON_ORDERS = '🚖 Поиск заказов'
 BUTTON_ROLE = '👤 Сменить роль'
-ORDERS_URL = 'https://t.me/OneTMM_Bot?start=ref_6072837543'
 COMPLAIN_PROMPT = 'На кого жалоба?'
 CHECKS_ANY = {'prompt': 'Проверка по базе водителей и диспетчеров', 'who': 'Аккаунт', 'role': ''}
 CHECKS = {
@@ -40,8 +38,8 @@ CORS = {
 }
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
-MENU_BUTTONS = {BUTTON_CHECK, BUTTON_GROUPS, BUTTON_ORDERS, BUTTON_COMPLAIN, BUTTON_COMPLAIN_OLD, BUTTON_SUB}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_ORDERS}], [{'text': BUTTON_COMPLAIN}, {'text': BUTTON_SUB}], [{'text': BUTTON_ROLE}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
+MENU_BUTTONS = {BUTTON_CHECK, BUTTON_GROUPS, BUTTON_COMPLAIN, BUTTON_COMPLAIN_OLD, BUTTON_SUB}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}], [{'text': BUTTON_COMPLAIN}, {'text': BUTTON_SUB}], [{'text': BUTTON_ROLE}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
@@ -1572,11 +1570,8 @@ def _handler(event: dict, context) -> dict:
 
 def handle_private(message: dict, chat_id, text: str) -> dict:
     reply_text = ((message.get('reply_to_message') or {}).get('text') or '')
-    if text == BUTTON_ORDERS or text.lower() in ('/orders', 'поиск заказов', 'заказы'):
-        tg_api('sendMessage', {
-            'chat_id': chat_id, 'parse_mode': 'HTML', 'disable_web_page_preview': True,
-            'text': '🚖 <b>Поиск заказов</b>',
-            'reply_markup': {'inline_keyboard': [[{'text': 'Включить мониторинг', 'url': ORDERS_URL}]]}})
+    if text == '🚖 Поиск заказов':
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': '📋 Меню обновлено 👇', 'reply_markup': MAIN_KEYBOARD})
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
     if text in (BUTTON_COMPLAIN, BUTTON_COMPLAIN_OLD) or text.lower() in ('/complain', 'жалоба', 'пожаловаться'):
         ask_complaint_target(chat_id)
