@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.kb_complaints SET topic_msg_id = group_msg_id WHERE group_chat = '-1002146850254' AND group_msg_id IS NOT NULL AND topic_msg_id IS NULL;

@@ -404,8 +404,9 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         c2 = db()
         k2 = c2.cursor()
         ids = ','.join(str(i) for i in sent_ids.get(str(target_chat), []) if i)
+        topic = f", topic_msg_id={int(msg_id)}" if str(target_chat) == COPY_CHAT else ''
         k2.execute(f"UPDATE {SCHEMA}.kb_complaints SET group_chat='{q(target_chat)}', group_msg_id={int(msg_id)}, "
-                   f"group_msgs='{q(target_chat)}|{ids}' WHERE id={int(cid)}")
+                   f"group_msgs='{q(target_chat)}|{ids}'{topic} WHERE id={int(cid)}")
         c2.commit()
         k2.close()
         c2.close()
@@ -543,6 +544,7 @@ def handle_black_button(tg_api, callback: dict) -> None:
     if 'не найден' in result:
         return
     publish_verdict(tg_api, cid, by)
+    finish_topic(tg_api, cid, True)
     notify_reporter(tg_api, cid)
 
 
@@ -592,6 +594,31 @@ def mark_group_message(tg_api, cid: int, label: str) -> None:
         'reply_markup': {'inline_keyboard': [[{'text': label, 'callback_data': 'noop'}]]}}, timeout=3)
 
 
+def finish_topic(tg_api, cid: int, accepted: bool) -> None:
+    """После решения по жалобе обновляет исходное сообщение в теме «Жалобы»:
+    в ЧС — убирает кнопки, не обоснована — удаляет сообщение."""
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(f"SELECT topic_msg_id FROM {SCHEMA}.kb_complaints WHERE id={int(cid)}")
+    r = cur.fetchone()
+    if not r or not r[0]:
+        cur.close()
+        conn.close()
+        return
+    mid = int(r[0])
+    if accepted:
+        res = tg_api('editMessageReplyMarkup', {'chat_id': COPY_CHAT, 'message_id': mid,
+                                                'reply_markup': {'inline_keyboard': []}}, timeout=3)
+    else:
+        res = tg_api('deleteMessage', {'chat_id': COPY_CHAT, 'message_id': mid}, timeout=3)
+    if not res.get('ok') and 'not modified' not in str(res.get('description', '')):
+        print(f"[KB-BOT] topic finish #{cid} failed: {str(res.get('description', ''))[:120]}")
+    cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET topic_msg_id=NULL WHERE id={int(cid)}")
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def reject(cid: int, by: str) -> str:
     conn = db()
     cur = conn.cursor()
@@ -620,6 +647,7 @@ def handle_reject_button(tg_api, callback: dict) -> None:
     tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'text': result}, timeout=2.2)
     if result.startswith('✖️'):
         delete_group_messages(tg_api, cid)
+        finish_topic(tg_api, cid, False)
         notify_reporter(tg_api, cid)
 
 

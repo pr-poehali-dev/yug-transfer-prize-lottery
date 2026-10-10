@@ -1477,8 +1477,10 @@ def _handler(event: dict, context) -> dict:
             st = qs.get('status', '')
             if st == 'accepted' and qs.get('black') == '1':
                 complaints.publish_verdict(tg_api, cid, 'администратор (админка)')
+                complaints.finish_topic(tg_api, cid, True)
             elif st == 'rejected':
                 complaints.delete_group_messages(tg_api, cid)
+                complaints.finish_topic(tg_api, cid, False)
             else:
                 complaints.mark_group_message(tg_api, cid, '✅ Принята — из админки')
             complaints.notify_reporter(tg_api, cid)
