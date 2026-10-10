@@ -1,0 +1,1 @@
+UPDATE t_p67171637_yug_transfer_prize_l.kb_complaints SET need_repost = true WHERE id = 9 AND status = 'new';

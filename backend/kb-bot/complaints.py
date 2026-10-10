@@ -228,7 +228,17 @@ def handle_message(tg_api, tg_download, store_photo, message: dict, main_kb: dic
                                    'text': f'📎 Фото добавлено ({len(plist)}/{MAX_PHOTOS}). Можно ещё или нажмите «✅ Отправить жалобу».'})
             return True
         if msg in ('✅ Отправить жалобу', '⏭ Без фото'):
-            upd("status='new', step='done'")
+            # Отправляем только один раз: повторное нажатие или повтор от Telegram ничего не дублирует.
+            c0 = db()
+            k0 = c0.cursor()
+            k0.execute(f"UPDATE {SCHEMA}.kb_complaints SET status='new', step='done', updated_at=now() "
+                       f"WHERE id={int(cid)} AND status='draft' RETURNING id")
+            first = k0.fetchone()
+            c0.commit()
+            k0.close()
+            c0.close()
+            if not first:
+                return True
             info = ''
             conn = db()
             cur = conn.cursor()
@@ -297,9 +307,11 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         f"🙋 <b>Пожаловался:</b> {reporter} (ID <code>{rep_id}</code>)",
     ]
     # В группу ЧС доказательства не отправляем — только аватарка; скриншоты остаются в теме «жалобы» и в админке.
-    plist = [] if to_decision else [p for p in (photos or '').split('\n') if p]
-    if plist:
-        lines.append(f"📎 Скриншоты к жалобе: {len(plist)} (ниже)")
+    # Скриншоты-доказательства никуда не отправляем — они только в админке.
+    attached = len([p for p in (photos or '').split('\n') if p])
+    plist = []
+    if attached and not to_decision:
+        lines.append(f"📎 Скриншоты: {attached} — смотрите в админке")
     msg = '\n'.join(lines)
     markup = decision_markup(cid, lt) if to_decision else admin_markup(cid, lt, role or '')
     if to_decision:
@@ -326,15 +338,15 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
             return tg_api(method, p)
 
         res = call(thread)
-        if not res.get('ok') and thread:
-            # Только в тему «жалобы»: при сбое повторяем туда же, в General не отправляем.
-            time.sleep(0.5)
-            res = call(thread)
+        if not res:
+            # Telegram не ответил вовремя — сообщение, скорее всего, уже дошло. Повтор дал бы дубль.
+            print(f"[KB-BOT] complaint to {chat}: no answer from Telegram, no retry")
+            return None
         if not res.get('ok') and first_photo and first_photo != NO_AVATAR:
             print(f"[KB-BOT] complaint avatar failed: {res.get('description', '')[:120]}")
             first_photo = NO_AVATAR
             res = call(thread)
-        if not res.get('ok') and first_photo:
+        if res and not res.get('ok') and first_photo:
             print(f"[KB-BOT] complaint photo failed: {res.get('description', '')[:120]}")
             first_photo = None
             res = call(thread)

@@ -78,7 +78,7 @@ def _tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False)
     if DEADLINE['t'] and not _bg:
         left = DEADLINE['t'] - time.time() - 1.2
         if left < 0.5:
-            if method in ('sendMessage', 'sendPhoto'):
+            if method in ('sendMessage', 'sendPhoto') and is_private_chat(payload.get('chat_id')):
                 FALLBACK.append((method, payload))
             return {}
         timeout = min(timeout, left)
@@ -102,7 +102,7 @@ def _tg_api(method: str, payload: dict, timeout: float = 3.5, _bg: bool = False)
         if _bg:
             return result
         return _tg_api(method, payload, timeout, _bg)
-    if not result and not _bg and method in ('sendMessage', 'sendPhoto'):
+    if not result and not _bg and method in ('sendMessage', 'sendPhoto') and is_private_chat(payload.get('chat_id')):
         FALLBACK.append((method, payload))
     if method in ('sendMessage', 'sendPhoto', 'sendMediaGroup') and result.get('ok'):
         markup = payload.get('reply_markup')
@@ -1387,6 +1387,14 @@ def private_only_commands() -> dict:
 
 
 FALLBACK = []
+
+
+def is_private_chat(chat_id) -> bool:
+    """Запасная доставка — только в личку человеку, в группы никогда (иначе дубли)."""
+    try:
+        return int(chat_id) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def handler(event: dict, context) -> dict:
