@@ -22,6 +22,7 @@ BUTTON_CHECK = '🔎 Проверить по базе'
 BUTTON_COMPLAIN = '⚠️ Отправить жалобу в ЧС'
 BUTTON_COMPLAIN_OLD = '⚠️ Отправить жалобу'
 BUTTON_ORDERS = '🚖 Поиск заказов'
+BUTTON_ROLE = '👤 Сменить роль'
 ORDERS_URL = 'https://t.me/OneTMM_Bot?start=ref_6072837543'
 COMPLAIN_PROMPT = 'На кого жалоба?'
 CHECKS_ANY = {'prompt': 'Проверка по базе водителей и диспетчеров', 'who': 'Аккаунт', 'role': ''}
@@ -38,7 +39,7 @@ CORS = {
 LAST_OK = {'host': ''}
 RENEW_MARKUP = {'inline_keyboard': [[{'text': '🔄 Продлить подписку', 'callback_data': 'renew_sub'}]]}
 MENU_BUTTONS = {BUTTON_CHECK, BUTTON_GROUPS, BUTTON_ORDERS, BUTTON_COMPLAIN, BUTTON_COMPLAIN_OLD, BUTTON_SUB}
-MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_ORDERS}], [{'text': BUTTON_COMPLAIN}, {'text': BUTTON_SUB}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
+MAIN_KEYBOARD = {'keyboard': [[{'text': BUTTON_CHECK}], [{'text': BUTTON_GROUPS}, {'text': BUTTON_ORDERS}], [{'text': BUTTON_COMPLAIN}, {'text': BUTTON_SUB}], [{'text': BUTTON_ROLE}]], 'resize_keyboard': True, 'is_persistent': True, 'input_field_placeholder': 'Поиск'}
 
 
 def _call(host: str, method: str, data: bytes, timeout: float) -> dict:
@@ -1413,7 +1414,7 @@ def handle_private(message: dict, chat_id, text: str) -> dict:
         run_check(chat_id, reply_kind, text)
     elif text == BUTTON_SUB or text.lower() in ('моя подписка', '/sub'):
         send_subscription(chat_id, (message.get('from') or {}).get('id') or chat_id)
-    elif text.split('@')[0] == '/role':
+    elif text == BUTTON_ROLE or text.split('@')[0] == '/role' or text.lower() == 'сменить роль':
         tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': message.get('message_id')}, timeout=2.2)
         ask_role(chat_id, (message.get('from') or {}).get('id') or chat_id)
     elif text.split(' ')[0].split('@')[0] == '/start':
