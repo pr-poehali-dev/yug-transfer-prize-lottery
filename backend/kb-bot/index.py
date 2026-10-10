@@ -119,6 +119,35 @@ def start_trial(user: dict) -> tuple:
         conn.close()
 
 
+def register_account(user: dict) -> None:
+    """Аккаунт, запустивший бота, сразу попадает в базу (на модерацию), если его там ещё нет."""
+    uid = int(user.get('id') or 0)
+    if not uid or user.get('is_bot'):
+        return
+    e = lambda v: str(v or '').replace("'", "''")
+    name = ' '.join(x for x in [user.get('first_name', ''), user.get('last_name', '')] if x).strip()
+    un = str(user.get('username') or '')
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cond = f"tg_id={uid}" + (f" OR lower(username)=lower('{e(un)}')" if un else '')
+        cur.execute(f"SELECT id FROM {SCHEMA}.check_lists WHERE {cond} LIMIT 1")
+        row = cur.fetchone()
+        if row:
+            cur.execute(f"UPDATE {SCHEMA}.check_lists SET tg_id=COALESCE(tg_id, {uid}), "
+                        f"name=CASE WHEN name='' THEN '{e(name)}' ELSE name END, "
+                        f"username=CASE WHEN username='' THEN '{e(un)}' ELSE username END WHERE id={int(row[0])}")
+        else:
+            cur.execute(f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id, source) "
+                        f"VALUES ('', 'pending', '{e(name)}', '{e(un)}', '', '', {uid}, 'запустил бота') ON CONFLICT DO NOTHING")
+        conn.commit()
+    except Exception as ex:
+        print(f'[KB-BOT] register account failed: {type(ex).__name__}: {str(ex)[:150]}')
+    finally:
+        cur.close()
+        conn.close()
+
+
 ROLE_MARKUP = {'inline_keyboard': [[{'text': '🚗 Я водитель', 'callback_data': 'myrole:driver'},
                                      {'text': '🎧 Я диспетчер', 'callback_data': 'myrole:dispatcher'}]]}
 ROLE_NAMES = {'driver': '🚗 Водитель', 'dispatcher': '🎧 Диспетчер'}
@@ -202,14 +231,16 @@ def send_welcome(chat_id, user: dict, start_msg_id=None) -> None:
     if start_msg_id:
         tg_api('deleteMessage', {'chat_id': chat_id, 'message_id': start_msg_id}, timeout=2.2)
     until, fresh = start_trial(user)
+    register_account(user)
     name = esc_html(user.get('first_name') or '')
     hello = f'👋 Здравствуйте{", " + name if name else ""}!'
     role = get_role(uid)
     active = bool(until and until > datetime.datetime.now())
     if not active and not fresh and role != 'dispatcher':
-        send_single(chat_id, uid, {'reply_markup': RENEW_MARKUP,
-                                   'text': f'{hello}\n\n🔎 Поиск работает <b>по подписке</b>.\n'
-                                           '⏳ Тестовый период закончился — продлите подписку, чтобы продолжить.'})
+        send_single(chat_id, uid, {'reply_markup': payments.PLANS_MARKUP,
+                                   'text': f'{hello}\n\n⏳ Бесплатные {TRIAL_DAYS} дня закончились.\n'
+                                           f'Дальше бот работает по тарифам:\n{plans_text()}\n\n'
+                                           'Выберите тариф ниже 👇'})
         return
     till = until.strftime("%d.%m.%Y %H:%M") if until else ''
     if role == 'dispatcher' and not active:
@@ -274,10 +305,15 @@ def can_check(uid: int) -> bool:
     return get_role(uid) == 'dispatcher' or sub_active(uid)
 
 
+def plans_text() -> str:
+    return '\n'.join(f"• {p['title']} — <b>{p['price']} ₽</b>" for p in payments.PLANS.values())
+
+
 def send_paywall(chat_id, what: str) -> None:
-    tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': RENEW_MARKUP,
-                           'text': f'🔒 <b>{what}</b> доступен только по подписке.\n\n'
-                                   'Оформите подписку, чтобы открыть доступ.'})
+    tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML', 'reply_markup': payments.PLANS_MARKUP,
+                           'text': f'🔒 <b>{what}</b> — по подписке.\n\n'
+                                   f'Бесплатный тестовый период закончился. Тарифы:\n{plans_text()}\n\n'
+                                   'Выберите тариф ниже 👇'})
 
 
 BOT_LINK = {'url': ''}
@@ -941,6 +977,37 @@ def send_reminders() -> int:
     return sent
 
 
+def send_expired_notices() -> int:
+    """Один раз сообщаем, что тест/подписка закончились, и сразу показываем тарифы."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT tg_user_id, is_trial FROM {SCHEMA}.kb_subscriptions "
+                    f"WHERE active_until < now() AND active_until > now() - interval '7 days' "
+                    f"AND (expired_notified_until IS NULL OR expired_notified_until <> active_until) "
+                    f"AND coalesce(role,'') <> 'dispatcher' LIMIT 100")
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+    sent = 0
+    for uid, is_trial in rows:
+        head = f'⏳ <b>Бесплатные {TRIAL_DAYS} дня закончились</b>' if is_trial else '⏳ <b>Подписка закончилась</b>'
+        res = tg_api('sendMessage', {'chat_id': uid, 'parse_mode': 'HTML', 'reply_markup': payments.PLANS_MARKUP,
+                                     'text': f'{head}\n\nЧтобы и дальше проверять водителей и диспетчеров и видеть список групп, '
+                                             f'выберите тариф:\n{plans_text()}'}, timeout=3)
+        desc = str(res.get('description', ''))
+        if res.get('ok') or 'blocked' in desc or 'not found' in desc or 'deactivated' in desc:
+            c2 = psycopg2.connect(os.environ['DATABASE_URL'])
+            k2 = c2.cursor()
+            k2.execute(f"UPDATE {SCHEMA}.kb_subscriptions SET expired_notified_until=active_until WHERE tg_user_id={int(uid)}")
+            c2.commit()
+            k2.close()
+            c2.close()
+            sent += 1 if res.get('ok') else 0
+    return sent
+
+
 def handle_daily_scan(event: dict, context) -> dict:
     """Ежедневный обход всех карточек: сначала давно не сканированные, пока хватает времени."""
     headers = event.get('headers') or {}
@@ -952,6 +1019,8 @@ def handle_daily_scan(event: dict, context) -> dict:
     started = time.time()
     reminded = send_reminders()
     print(f'[KB-BOT] reminders sent: {reminded}')
+    expired = send_expired_notices()
+    print(f'[KB-BOT] expired notices sent: {expired}')
     try:
         budget = context.get_remaining_time_in_millis() / 1000 - 3 - (time.time() - started)
     except Exception:
@@ -1138,6 +1207,8 @@ def handler(event: dict, context) -> dict:
     if not chat_id or chat.get('type') != 'private':
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
 
+    if not text.startswith('/start'):
+        start_trial(message.get('from') or {})
     if complaints.handle_message(tg_api, tg_download, store_photo, message, MAIN_KEYBOARD,
                                  lambda cid: complaints.notify_admin(tg_api, cid)):
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
