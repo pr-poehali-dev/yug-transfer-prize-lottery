@@ -414,18 +414,43 @@ def handle_buy(callback: dict) -> None:
     plan = payments.PLANS[plan_key]
     tg_api('sendMessage', {'chat_id': chat_id, 'parse_mode': 'HTML',
                            'text': f"💳 Подписка на <b>{plan['title']}</b> — <b>{plan['price']} ₽</b>\n\n"
-                                   'Нажмите «Оплатить». После оплаты подписка включится автоматически.',
+                                   'Нажмите «Оплатить». Как только платёж пройдёт, бот сам пришлёт подтверждение '
+                                   'и включит подписку — ничего нажимать не нужно.',
                            'reply_markup': {'inline_keyboard': [
-                               [{'text': f"Оплатить {plan['price']} ₽", 'url': url}],
-                               [{'text': '✅ Я оплатил', 'callback_data': f'paid:{pid}'}]]}})
+                               [{'text': f"Оплатить {plan['price']} ₽", 'url': url}]]}})
 
 
 def notify_paid(res: dict) -> None:
     if res.get('new') and res.get('chat_id'):
         plan = payments.PLANS.get(res.get('plan'), {})
+        rec, SCREEN['rec'] = SCREEN['rec'], None
         tg_api('sendMessage', {'chat_id': res['chat_id'], 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD,
-                               'text': f"✅ Оплата получена — подписка на <b>{plan.get('title', '')}</b> активна.\n"
-                                       f"📅 Действует до: <b>{res.get('until', '')}</b>"})
+                               'text': f"✅ <b>Ваш платёж зачислен!</b>\n\n"
+                                       f"Подписка на <b>{plan.get('title', '')}</b> активна.\n"
+                                       f"📅 Действует до: <b>{res.get('until', '')}</b>\n\n"
+                                       '🚖 Хороших дорог и щедрых пассажиров!'})
+        SCREEN['rec'] = rec
+
+
+def check_pending(uid: int = 0) -> int:
+    """Подстраховка к уведомлениям ЮKassa: сверяем неоплаченные платежи за последние сутки."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        who = f"AND tg_user_id={int(uid)} " if uid else ''
+        cur.execute(f"SELECT payment_id FROM {SCHEMA}.kb_payments WHERE status='pending' {who}"
+                    f"AND created_at > now() - interval '1 day' ORDER BY id DESC LIMIT {2 if uid else 30}")
+        pids = [r[0] for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+    done = 0
+    for pid in pids:
+        res = payments.confirm(pid)
+        if res.get('new'):
+            notify_paid(res)
+            done += 1
+    return done
 
 
 def handle_paid(callback: dict) -> None:
@@ -1081,6 +1106,7 @@ def handle_daily_scan(event: dict, context) -> dict:
     started = time.time()
     reminded = send_reminders()
     print(f'[KB-BOT] reminders sent: {reminded}')
+    print(f'[KB-BOT] pending payments confirmed: {check_pending()}')
     expired = send_expired_notices()
     print(f'[KB-BOT] expired notices sent: {expired}')
     try:
@@ -1271,6 +1297,7 @@ def handler(event: dict, context) -> dict:
 
     if not text.startswith('/start'):
         start_trial(message.get('from') or {})
+    check_pending(int((message.get('from') or {}).get('id') or 0))
     if complaints.handle_message(tg_api, tg_download, store_photo, message, MAIN_KEYBOARD,
                                  lambda cid: complaints.notify_admin(tg_api, cid)):
         return {'statusCode': 200, 'headers': CORS, 'body': 'ok'}
