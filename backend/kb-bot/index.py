@@ -1212,7 +1212,7 @@ def private_only_commands() -> dict:
     res = {}
     for scope in ('default', 'all_group_chats', 'all_chat_administrators'):
         res[scope] = tg_api('deleteMyCommands', {'scope': {'type': scope}}, timeout=2.2).get('ok')
-    res['private'] = tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Главное меню'}, {'command': 'complain', 'description': 'Отправить жалобу'}, {'command': 'orders', 'description': 'Поиск заказов'}, {'command': 'role', 'description': 'Сменить роль'}], 'scope': {'type': 'all_private_chats'}}, timeout=2.2).get('ok')
+    res['private'] = tg_api('setMyCommands', {'commands': [{'command': 'start', 'description': 'Если пропали кнопки — нажмите'}], 'scope': {'type': 'all_private_chats'}}, timeout=2.2).get('ok')
     return res
 
 
