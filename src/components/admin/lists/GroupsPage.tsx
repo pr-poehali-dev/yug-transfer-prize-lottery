@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { KNOWLEDGE_BASE_URL } from "../adminTypes";
+import { loadGroupJobs, useGroupJobs } from "./groupScanStore";
+import { GroupScanButton, GroupScanStatus } from "./GroupScanControls";
 
 interface Group {
   id: number;
@@ -44,6 +46,7 @@ export function GroupsPage({ token, onBack }: { token: string; onBack: () => voi
   const [quick, setQuick] = useState("");
   const [busy, setBusy] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const jobOf = useGroupJobs();
 
   const load = async () => {
     try {
@@ -62,6 +65,7 @@ export function GroupsPage({ token, onBack }: { token: string; onBack: () => voi
 
   useEffect(() => {
     load();
+    loadGroupJobs(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -276,7 +280,9 @@ export function GroupsPage({ token, onBack }: { token: string; onBack: () => voi
                       {link ? link.replace("https://", "") : "нет ссылки"}
                       {note && <span className="text-amber-300/70"> · {note.replace(/\n/g, " ")}</span>}
                     </div>
+                    {link && <GroupScanStatus job={jobOf(link)} />}
                   </div>
+                  {link && <GroupScanButton token={token} chat={link} title={g.title} job={jobOf(link)} />}
                   {link && (
                     <a href={link} target="_blank" rel="noreferrer" title="Открыть"
                       className="p-1.5 rounded-md text-sky-300/70 hover:text-sky-300 hover:bg-white/5">
