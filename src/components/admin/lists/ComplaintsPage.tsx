@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { ComplaintEditDialog } from "./ComplaintEditDialog";
-import { COMPLAINTS_API, COMPLAINT_TO_GROUP_API, fmtDate } from "./listTypes";
+import { COMPLAINTS_API, COMPLAINT_TO_GROUP_API, TG_LOOKUP_API, fmtDate } from "./listTypes";
 
 interface Complaint {
   id: number;
@@ -71,6 +71,27 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
       toast.error("Не удалось отправить");
     }
     setSending(null);
+  };
+
+  const [scanning, setScanning] = useState<number | null>(null);
+  const scanTarget = async (c: Complaint) => {
+    if (!c.item_id) { toast.error("Жалоба не привязана к карточке"); return; }
+    if (!c.target.tg_id && !c.target.username && (c.target.phone || "").replace(/\D/g, "").length < 10) {
+      toast.error("Нет ни ID, ни @username, ни телефона — искать не по чему");
+      return;
+    }
+    setScanning(c.id);
+    try {
+      const d = await fetch(`${TG_LOOKUP_API}?rescan=${c.item_id}`, { headers: { "X-Admin-Token": token } })
+        .then((r) => r.json()).catch(() => ({}));
+      if (d.ok) {
+        toast.success(d.scan?.changes ? `Данные обновлены, изменений: ${d.scan.changes}` : d.photo_url ? "Данные и фото подтянуты из Telegram" : "Данные подтянуты (фото скрыто или нет)");
+        load();
+      } else toast.error(d.error || "Не удалось получить данные из Telegram");
+    } catch {
+      toast.error("Не удалось связаться с Telegram");
+    }
+    setScanning(null);
   };
 
   const setRole = async (c: Complaint, role: "driver" | "dispatcher") => {
@@ -198,6 +219,13 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS[c.status].cls}`}>
                     {STATUS[c.status].label}
                   </span>
+                  {c.item_id && (
+                    <button disabled={scanning === c.id} onClick={(e) => { e.stopPropagation(); scanTarget(c); }} title="Подтянуть имя, фото, ID и описание из Telegram"
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] border border-cyan-400/40 text-cyan-200 hover:bg-cyan-500/10 disabled:opacity-60">
+                      <Icon name={scanning === c.id ? "Loader2" : "Radar"} fallback="ScanSearch" size={11} className={scanning === c.id ? "animate-spin" : ""} />
+                      {scanning === c.id ? "Сканирую…" : "Сканер"}
+                    </button>
+                  )}
                   <button onClick={(e) => { e.stopPropagation(); setEditing(c); }} title="Редактировать"
                     className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] border border-white/10 text-white/70 hover:text-white hover:bg-white/5">
                     <Icon name="Pencil" size={11} />Изменить
