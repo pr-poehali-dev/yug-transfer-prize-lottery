@@ -1,0 +1,2 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.check_lists ADD COLUMN IF NOT EXISTS photo_checked_at TIMESTAMPTZ;
+UPDATE t_p67171637_yug_transfer_prize_l.check_lists SET photo_checked_at = last_scan_at WHERE coalesce(photo_url,'') <> '';

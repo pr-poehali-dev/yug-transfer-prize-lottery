@@ -326,7 +326,7 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
             try:
                 entity = await asyncio.wait_for(client.get_entity(uname), timeout=6)
                 if not isinstance(entity, User):
-                    sets.append("scan_status='не личный аккаунт'")
+                    sets += ["scan_status='не личный аккаунт'", "photo_checked_at=now()"]
                     stats['missing'] += 1
                 else:
                     bio = ''
@@ -336,11 +336,15 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
                     except Exception:
                         pass
                     photo_url, photo_uid = '', ''
-                    if entity.photo and getattr(entity.photo, 'photo_id', None) and deadline - time.time() > 4:
+                    has_photo = bool(entity.photo and getattr(entity.photo, 'photo_id', None))
+                    if not has_photo:
+                        sets.append("photo_checked_at=now()")
+                    elif deadline - time.time() > 4:
                         try:
                             raw = await asyncio.wait_for(client.download_profile_photo(entity, file=bytes, download_big=False), timeout=4)
                             if raw:
                                 photo_url, photo_uid = store_photo(raw), str(entity.photo.photo_id)
+                                sets.append("photo_checked_at=now()")
                         except Exception:
                             pass
                     name = ' '.join(x for x in [entity.first_name or '', entity.last_name or ''] if x).strip()
@@ -362,12 +366,12 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
                 if isinstance(e, asyncio.TimeoutError):
                     print(f'[TG-LOOKUP] batch timeout on {uname}')
                     break
-                sets.append("scan_status='не найден'")
+                sets += ["scan_status='не найден'", "photo_checked_at=now()"]
                 stats['missing'] += 1
             except Exception as e:
                 n = type(e).__name__
                 if 'Username' in n:
-                    sets.append("scan_status='не найден'")
+                    sets += ["scan_status='не найден'", "photo_checked_at=now()"]
                     stats['missing'] += 1
                 else:
                     print(f'[TG-LOOKUP] batch {uname}: {n}')
@@ -419,11 +423,14 @@ def handle_batch(context, scope: str = 'all') -> dict:
         workers = [x for x in sessions if quota[sess_key(x)] > 0][:4]
         if sessions and not workers:
             print('[TG-LOOKUP] batch: hourly limit reached on all accounts')
-        where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
+        if scope == 'full':
+            where = "username <> '' AND photo_checked_at IS NULL AND coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт', 'дубль другой карточки')"
+        else:
+            where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
         cur.execute(f"SELECT id, username FROM {SCHEMA}.check_lists WHERE {where} "
-                    f"ORDER BY (list_type='pending') DESC, id DESC LIMIT 1000")
+                    f"ORDER BY (list_type='pending') DESC, (list_type='black') DESC, id DESC LIMIT 1000")
         fetched = cur.fetchall()
-        rows = fill_from_cache(cur, conn, fetched)
+        rows = fetched if scope == 'full' else fill_from_cache(cur, conn, fetched)
         from_cache = len(fetched) - len(rows)
         rows = rows[:sum(min(6, quota[sess_key(w)]) for w in workers)]
         parts = []
@@ -510,7 +517,7 @@ def apply_rescan(cur, item_id: int, d: dict) -> dict:
         cur.execute(f"INSERT INTO {SCHEMA}.check_list_history (item_id, field, old_value, new_value, source) "
                     f"VALUES ({int(item_id)}, '{field}', '{q(old)}', '{q(new)}', 'scan')")
     status = f"изменений: {len(changes)}" if changes else 'без изменений'
-    sets += ['last_scan_at=now()', f"scan_status='{status}'", 'updated_at=now()']
+    sets += ['last_scan_at=now()', 'photo_checked_at=now()', f"scan_status='{status}'", 'updated_at=now()']
     cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
     if changes:
         fields = ','.join(dict.fromkeys(f for f, _, _ in changes))
@@ -647,7 +654,7 @@ async def photos_pull(client, chat, job: dict, deadline: float, cur, conn, skey:
             with_photo = [u for u in need if getattr(u, 'photo', None) and getattr(u.photo, 'photo_id', None)]
             without = [u for u in need if u not in with_photo]
             if without:
-                cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), scan_status='нет фото', "
+                cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), photo_checked_at=now(), scan_status='нет фото', "
                             f"tg_access_hash=CASE tg_id {' '.join(f'WHEN {u.id} THEN {int(u.access_hash or 0)}' for u in without)} END, "
                             f"access_session='{skey}' WHERE tg_id IN ({','.join(str(u.id) for u in without)}) AND list_type='pending'")
                 job['skipped'] += cur.rowcount
@@ -663,7 +670,7 @@ async def photos_pull(client, chat, job: dict, deadline: float, cur, conn, skey:
                     url = await asyncio.get_running_loop().run_in_executor(None, store_photo, raw)
                     cur.execute(f"UPDATE {SCHEMA}.check_lists SET photo_url='{url}', photo_file_uid='{u.photo.photo_id}', "
                                 f"tg_access_hash={int(u.access_hash or 0)}, access_session='{skey}', "
-                                f"last_scan_at=coalesce(last_scan_at, now()), "
+                                f"last_scan_at=coalesce(last_scan_at, now()), photo_checked_at=now(), "
                                 f"scan_status=CASE WHEN scan_status IN ('', 'из группы', 'нет фото') THEN 'ok' ELSE scan_status END "
                                 f"WHERE tg_id={int(u.id)}")
                     job['added'] += 1

@@ -10,7 +10,7 @@ interface Props {
   onChanged: () => void;
 }
 
-type ScanState = { running: boolean; done: number; found: number; left: number; note?: string } | null;
+type ScanState = { running: boolean; done: number; found: number; left: number; note?: string; scope?: string } | null;
 
 let scanState: ScanState = null;
 let stopFlag = false;
@@ -29,15 +29,15 @@ export function useScanState() {
   return s;
 }
 
-async function runScan(token: string, onChanged: () => void) {
+async function runScan(token: string, onChanged: () => void, scope: "all" | "full" = "all") {
   if (scanState?.running) return;
   stopFlag = false;
   let done = 0, found = 0, idle = 0, left = -1, err = "", lastRefresh = Date.now();
-  const setScan = setScanGlobal;
+  const setScan = (v: ScanState) => setScanGlobal(v ? { ...v, scope } : v);
   setScan({ running: true, done, found, left: 0 });
   while (!stopFlag) {
     try {
-      const d = await fetch(`${TG_LOOKUP_API}?action=batch&scope=all`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
+      const d = await fetch(`${TG_LOOKUP_API}?action=batch&scope=${scope}`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
       if (!d.ok) { err = d.error || "сервер не ответил"; break; }
       done += d.done || 0;
       found += d.found || 0;
@@ -83,7 +83,8 @@ async function runScan(token: string, onChanged: () => void) {
 
 export function GlobalScanBar({ token, onChanged }: Props) {
   const scan = useScanState();
-  const start = () => runScan(token, onChanged);
+  const start = () => runScan(token, onChanged, scan?.scope === "full" ? "full" : "all");
+  const startFull = () => runScan(token, onChanged, "full");
 
   const pct = scan ? Math.min(100, (scan.done / Math.max(1, scan.done + scan.left)) * 100) : 0;
 
@@ -94,7 +95,9 @@ export function GlobalScanBar({ token, onChanged }: Props) {
           <Icon name="Radar" fallback="ScanSearch" size={19} className="text-cyan-300" />
         </div>
         <div className="flex-1 min-w-[180px]">
-          <div className="text-sm font-medium text-white">Глобальное сканирование базы</div>
+          <div className="text-sm font-medium text-white">
+            {scan?.scope === "full" ? "Полное сканирование: фото и все данные" : "Глобальное сканирование базы"}
+          </div>
           <div className="text-xs text-white/50">
             {scan
               ? `проверено ${scan.done} · найдено ${scan.found} · осталось ${scan.left}${scan.note ? ` · ${scan.note}` : ""}`
@@ -107,10 +110,16 @@ export function GlobalScanBar({ token, onChanged }: Props) {
             <Icon name="Square" size={14} />Стоп
           </button>
         ) : (
-          <button onClick={start}
-            className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2">
-            <Icon name="Play" size={14} />{scan ? "Продолжить" : "Запустить"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={startFull} title="Пройдёт по всем карточкам без фото и подтянет фото, имя, описание и ID"
+              className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2">
+              <Icon name="ImageDown" fallback="Image" size={14} />{scan?.scope === "full" ? "Продолжить полный скан" : "Скачать фото и все данные"}
+            </button>
+            <button onClick={start}
+              className="rounded-xl px-4 py-2 text-sm border border-white/15 text-white/80 hover:bg-white/5 flex items-center gap-2">
+              <Icon name="Play" size={14} />{scan && scan.scope !== "full" ? "Продолжить" : "Только новые"}
+            </button>
+          </div>
         )}
       </div>
       {scan && (
