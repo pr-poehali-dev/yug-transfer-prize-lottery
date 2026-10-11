@@ -495,6 +495,46 @@ JUNK_WHERE = ("c.username = '' AND c.photo_url = '' AND c.bio = '' AND c.reason 
               f"AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.kb_complaints k WHERE k.item_id = c.id)")
 
 
+BOT_WHERE = ("c.list_type = 'pending' AND c.username = '' AND coalesce(c.photo_url, '') = '' AND c.phone = '' "
+             "AND coalesce(c.bio, '') = '' AND c.tg_id IS NOT NULL "
+             "AND NOT EXISTS (SELECT 1 FROM {S}.kb_complaints k WHERE k.item_id = c.id)")
+
+
+def handle_bots(cur, conn, method: str, qs: dict) -> dict:
+    """Подозрительные аккаунты (накрутка): без @username, фото, телефона и описания. Удаляем навсегда — в бан-лист по ID."""
+    where = BOT_WHERE.format(S=SCHEMA)
+    grp = str(qs.get('group') or '')
+    if grp:
+        where += f" AND '{esc(grp)}' = ANY(c.groups)"
+    if method == 'GET':
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_lists c WHERE {where}")
+        total = cur.fetchone()[0]
+        cur.execute(f"SELECT g, count(*) FROM {SCHEMA}.check_lists c, unnest(c.groups) g "
+                    f"WHERE {BOT_WHERE.format(S=SCHEMA)} GROUP BY g ORDER BY 2 DESC")
+        groups = [{'title': r[0], 'count': r[1]} for r in cur.fetchall()]
+        cur.execute(f"SELECT c.id, c.name, c.tg_id, c.groups FROM {SCHEMA}.check_lists c WHERE {where} ORDER BY c.tg_id DESC LIMIT 60")
+        sample = [{'id': r[0], 'name': r[1], 'tg_id': r[2], 'groups': r[3]} for r in cur.fetchall()]
+        cur.execute(f"SELECT count(*) FROM {SCHEMA}.check_bans")
+        banned = cur.fetchone()[0]
+        return resp(200, {'ok': True, 'count': total, 'groups': groups, 'sample': sample, 'banned': banned})
+    if method == 'POST':
+        ids_in = [int(x) for x in (qs.get('ids') or '').split(',') if x.strip().isdigit()]
+        cond = f"c.id IN ({','.join(str(i) for i in ids_in)})" if ids_in else where
+        cur.execute(f"SELECT c.id, c.tg_id, c.name FROM {SCHEMA}.check_lists c WHERE {cond} AND c.list_type='pending'")
+        rows = cur.fetchall()
+        if rows:
+            vals = ','.join(f"({int(r[1])}, '{esc(r[2])[:120]}', 'бот')" for r in rows if r[1])
+            if vals:
+                cur.execute(f"INSERT INTO {SCHEMA}.check_bans (tg_id, name, reason) VALUES {vals} ON CONFLICT (tg_id) DO NOTHING")
+            lst = ','.join(str(r[0]) for r in rows)
+            cur.execute(f"DELETE FROM {SCHEMA}.check_list_history WHERE item_id IN ({lst})")
+            cur.execute(f"DELETE FROM {SCHEMA}.check_list_snapshots WHERE item_id IN ({lst})")
+            cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id IN ({lst})")
+            conn.commit()
+        return resp(200, {'ok': True, 'deleted': len(rows)})
+    return resp(405, {'error': 'Method not allowed'})
+
+
 def handle_junk(cur, conn, method: str) -> dict:
     """Пустые карточки: только ID, без имени (или имя из цифр), без username, фото и описания."""
     if method == 'GET':
@@ -699,6 +739,8 @@ def handler(event: dict, context) -> dict:
             return handle_history(cur, qs)
         if qs.get('entity') == 'lookup':
             return handle_lookup(cur, qs)
+        if qs.get('entity') == 'bots':
+            return handle_bots(cur, conn, method, qs)
         if qs.get('entity') == 'junk':
             return handle_junk(cur, conn, method)
         if qs.get('entity') == 'lists':

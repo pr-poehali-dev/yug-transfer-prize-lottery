@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { GroupsBadge } from "./GroupsBadge";
+import { BotCleanup } from "./BotCleanup";
 import { toast } from "sonner";
 import { LISTS, LISTS_API, TG_LOOKUP_API, BULK_IMPORT_API, ListItem, inputCls } from "./listTypes";
 
@@ -385,6 +386,8 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
           )}
         </div>
       )}
+
+      <BotCleanup token={token} onChanged={onChanged} />
 
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">

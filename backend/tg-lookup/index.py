@@ -600,6 +600,10 @@ def mark_group(cur, ids, title: str) -> None:
 def insert_users(cur, users: list, title: str) -> int:
     q = lambda v: str(v or '').replace("'", "''")
     vals = []
+    if users:
+        cur.execute(f"SELECT tg_id FROM {SCHEMA}.check_bans WHERE tg_id IN ({','.join(str(int(u.id)) for u in users)})")
+        banned = {r[0] for r in cur.fetchall()}
+        users = [u for u in users if u.id not in banned]
     for u in users:
         name = ' '.join(x for x in [u.first_name or '', u.last_name or ''] if x).strip()
         un = u.username or ''
