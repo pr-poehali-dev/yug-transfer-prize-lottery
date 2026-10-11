@@ -160,8 +160,9 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
     let left = info?.left ?? counts.new;
     setScan({ running: true, done, found, left, phase: groups.length ? "Фото через группы" : "Данные по @username" });
 
+    let groupsPaused = false;
     for (const g of groups) {
-      if (stopRef.current) break;
+      if (stopRef.current || groupsPaused) break;
       let jobId = 0, fails = 0, gotHere = 0;
       while (!stopRef.current) {
         try {
@@ -175,6 +176,11 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
           gotHere = j.added || 0;
           found += inc; done += inc; left = Math.max(0, left - inc);
           setScan({ running: true, done, found, left, phase: `Фото из группы «${g.title}»` });
+          if (j.status === "paused") {
+            groupsPaused = true;
+            toast(`Telegram попросил паузу для групп — пока добираю фото по @никам`);
+            break;
+          }
           if (j.status !== "running") break;
         } catch {
           fails += 1;

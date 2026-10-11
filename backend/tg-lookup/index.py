@@ -520,7 +520,14 @@ def apply_rescan(cur, item_id: int, d: dict) -> dict:
                     f"VALUES ({int(item_id)}, '{field}', '{q(old)}', '{q(new)}', 'scan')")
     status = f"изменений: {len(changes)}" if changes else 'без изменений'
     sets += ['last_scan_at=now()', 'photo_checked_at=now()', f"scan_status='{status}'", 'updated_at=now()']
-    cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
+    try:
+        cur.execute("SAVEPOINT rs")
+        cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
+    except psycopg2.Error:
+        # Этот человек уже есть в базе другой карточкой — обновляем без ID/username, чтобы не было дубля.
+        cur.execute("ROLLBACK TO SAVEPOINT rs")
+        sets = [x for x in sets if not x.startswith(('tg_id=', 'username='))]
+        cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
     if changes:
         fields = ','.join(dict.fromkeys(f for f, _, _ in changes))
         cur.execute(f"INSERT INTO {SCHEMA}.check_list_snapshots "
@@ -534,7 +541,7 @@ GROUP_QUERIES = [''] + list('абвгдеёжзийклмнопрстуфхцч�
 EXCLUDED_CHATS = {'-1002146850254', '2146850254', '-2146850254', '-1003740884399', '3740884399', 'chernyi_spisok_transfer'}
 
 
-async def resolve_chat(client, chat: str, join: bool = True):
+async def resolve_chat(client, chat: str, join: bool = True, title: str = ''):
     """Находит группу по ссылке, @username, приглашению t.me/+… или числовому ID. join=True — вступает, если ещё не в группе."""
     c = chat.strip()
     for pref in ('https://t.me/', 'http://t.me/', 't.me/', 'tg://chat?id='):
@@ -548,6 +555,12 @@ async def resolve_chat(client, chat: str, join: bool = True):
             if d.id == want or getattr(d.entity, 'id', None) in (short, abs(want)):
                 return d.entity
         return None
+    if (c.startswith('+') or c.startswith('joinchat/')) and title:
+        # Уже вступили — ищем группу в своих диалогах: так Telegram не ограничивает частые проверки приглашений.
+        t = title.strip().lower()
+        async for d in client.iter_dialogs(limit=400):
+            if (getattr(d.entity, 'title', '') or '').strip().lower() == t:
+                return d.entity
     if c.startswith('+') or c.startswith('joinchat/'):
         from telethon.tl.functions.messages import CheckChatInviteRequest, ImportChatInviteRequest
         from telethon.tl.types import ChatInviteAlready, ChatInvitePeek
@@ -557,6 +570,8 @@ async def resolve_chat(client, chat: str, join: bool = True):
             inv = await client(CheckChatInviteRequest(h))
         except Exception as e:
             print(f'[TG-LOOKUP] invite check failed: {type(e).__name__}')
+            if 'FloodWait' in type(e).__name__:
+                raise
             return None
         if isinstance(inv, (ChatInviteAlready, ChatInvitePeek)):
             return inv.chat
@@ -750,7 +765,10 @@ async def group_pull(session: str, job: dict, deadline: float, cur, conn) -> dic
     try:
         if not await client.is_user_authorized():
             return {'error': 'session'}
-        chat = await resolve_chat(client, job['chat'])
+        try:
+            chat = await resolve_chat(client, job['chat'], title=job.get('title') or '')
+        except FloodWaitError as e:
+            return {'flood': e.seconds}
         if chat is None:
             return {'error': 'no_access'}
         is_admin = bool(getattr(chat, 'admin_rights', None) or getattr(chat, 'creator', False))
@@ -802,13 +820,13 @@ async def group_pull(session: str, job: dict, deadline: float, cur, conn) -> dic
         await client.disconnect()
 
 
-async def find_admin_session(sessions: list, chat_ref: str) -> str:
+async def find_admin_session(sessions: list, chat_ref: str, title: str = '') -> str:
     """Параллельно проверяет аккаунты и возвращает тот, что админ группы (видит всех участников)."""
     async def check(sess):
         client = make_client(sess)
         try:
             await asyncio.wait_for(client.connect(), timeout=8)
-            chat = await asyncio.wait_for(resolve_chat(client, chat_ref, join=False), timeout=10)
+            chat = await asyncio.wait_for(resolve_chat(client, chat_ref, join=False, title=title), timeout=10)
             if chat is not None and (getattr(chat, 'admin_rights', None) or getattr(chat, 'creator', False)):
                 return sess_key(sess)
         except Exception:
@@ -914,7 +932,12 @@ def handle_group(qs: dict, context) -> dict:
         row = cur.fetchone()
         if not row:
             new_mode = 'photos' if want_photos else 'members'
-            cur.execute(f"INSERT INTO {SCHEMA}.group_scan_jobs (chat, mode) VALUES ('{chat.replace(chr(39), '')}', '{new_mode}') RETURNING {cols}")
+            cc = chat.replace(chr(39), '')
+            cur.execute(f"SELECT title, session_hash FROM {SCHEMA}.group_scan_jobs WHERE lower(chat)=lower('{cc}') "
+                        f"AND coalesce(title,'')<>'' ORDER BY (session_hash<>'') DESC, id DESC LIMIT 1")
+            known = cur.fetchone() or ('', '')
+            cur.execute(f"INSERT INTO {SCHEMA}.group_scan_jobs (chat, mode, title, session_hash) VALUES "
+                        f"('{cc}', '{new_mode}', '{(known[0] or '').replace(chr(39), chr(39) * 2)}', '{known[1] or ''}') RETURNING {cols}")
             row = cur.fetchone()
             conn.commit()
         job = dict(zip(cols.split(', '), row))
@@ -925,7 +948,7 @@ def handle_group(qs: dict, context) -> dict:
 
         sessions = load_sessions(cur)
         if not job['session_hash'] and job.get('mode') != 'history':
-            admin_hash = asyncio.run(find_admin_session(sessions, job['chat']))
+            admin_hash = asyncio.run(find_admin_session(sessions, job['chat'], job.get('title') or ''))
             if admin_hash:
                 job['session_hash'] = admin_hash
         sessions.sort(key=lambda x: (0 if sess_key(x) == job['session_hash'] else 1, 0 if StringSession(x).dc_id == 2 else 1))
@@ -957,7 +980,7 @@ def handle_group(qs: dict, context) -> dict:
             status, err = 'error', 'В группе скрыт список участников — фото можно подтянуть только сканером карточек.'
         elif result.get('error') == 'join_request':
             status, err = 'error', 'Группа закрытая — отправлена заявка на вступление. Когда админ примет, нажмите «Сканировать» ещё раз.'
-        elif result.get('flood') and not job['session_hash']:
+        elif result.get('flood'):
             m = int(result['flood']) // 60 + 1
             status, err = 'paused', f'Telegram просит паузу {m} мин — нажмите «Сканировать» позже'
         elif result.get('error') in ('no_access', 'not_admin') and not job['session_hash']:
