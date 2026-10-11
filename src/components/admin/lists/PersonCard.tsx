@@ -1,4 +1,5 @@
 import Icon from "@/components/ui/icon";
+import { GroupsBadge } from "./GroupsBadge";
 import { ListItem, FIELD_LABELS, fmtDate } from "./listTypes";
 
 interface Props {
@@ -84,6 +85,7 @@ export function PersonCard({ item, scanning, onEdit, onScan, onLayers, onDelete 
               <Icon name="AtSign" size={12} className="text-white/40 shrink-0" />
               {item.username ? item.username : <span className="text-white/30">—</span>}
             </div>
+            <GroupsBadge groups={item.groups} className="text-[11px]" />
           </div>
           {black && (item.reason || item.removed_at) && (
             <div className="mt-1 rounded-lg bg-red-500/10 px-2 py-1.5 text-[11px] text-red-200 space-y-0.5">

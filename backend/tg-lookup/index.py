@@ -560,6 +560,16 @@ async def resolve_chat(client, chat: str):
     return ent
 
 
+def mark_group(cur, ids, title: str) -> None:
+    """Запоминает, в какой группе состоит человек (у одного человека может быть несколько групп)."""
+    ids = [int(i) for i in ids]
+    t = str(title or '').replace("'", "''")[:120]
+    if not ids or not t:
+        return
+    cur.execute(f"UPDATE {SCHEMA}.check_lists SET groups = array_append(groups, '{t}') "
+                f"WHERE tg_id IN ({','.join(str(i) for i in ids)}) AND NOT ('{t}' = ANY(groups))")
+
+
 def insert_users(cur, users: list, title: str) -> int:
     q = lambda v: str(v or '').replace("'", "''")
     vals = []
@@ -582,7 +592,9 @@ def insert_users(cur, users: list, title: str) -> int:
                     f"first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, updated_at=now()")
     cur.execute(f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id, "
                 f"source, last_scan_at, scan_status) VALUES {', '.join(vals)} ON CONFLICT DO NOTHING RETURNING id")
-    return len(cur.fetchall())
+    added = len(cur.fetchall())
+    mark_group(cur, [u.id for u in users], title)
+    return added
 
 
 def save_job(cur, conn, job: dict) -> None:
@@ -648,6 +660,7 @@ async def photos_pull(client, chat, job: dict, deadline: float, cur, conn, skey:
         users = {u.id: u for u in res.users if not u.bot and not u.deleted}
         page_done = True
         if users:
+            mark_group(cur, list(users), job.get('title') or '')
             cur.execute(f"SELECT tg_id FROM {SCHEMA}.check_lists WHERE tg_id IN ({','.join(str(i) for i in users)}) "
                         f"AND coalesce(photo_url, '') = ''")
             need = [users[r[0]] for r in cur.fetchall() if r[0] in users]

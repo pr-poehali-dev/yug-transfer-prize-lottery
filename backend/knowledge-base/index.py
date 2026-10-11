@@ -73,7 +73,7 @@ def handle_lookup(cur, qs: dict) -> dict:
     return resp(200, {'ok': True, 'found': True, 'tg_id': row[0], 'username': row[1], 'name': row[2]})
 
 
-LIST_FIELDS = "id, role, list_type, name, username, phone, note, created_at, tg_id, photo_url, bio, reason, removed_at, last_scan_at, scan_status, updated_at"
+LIST_FIELDS = "id, role, list_type, name, username, phone, note, created_at, tg_id, photo_url, bio, reason, removed_at, last_scan_at, scan_status, updated_at, groups"
 FIELD_LABELS = {'name': 'Имя', 'username': 'Username', 'phone': 'Телефон', 'tg_id': 'Telegram ID',
                 'note': 'Комментарий', 'reason': 'Причина', 'removed_at': 'Дата удаления',
                 'photo_url': 'Фото', 'list_type': 'Список', 'role': 'Роль', 'bio': 'Описание'}
@@ -446,7 +446,7 @@ def handle_pending(cur, qs: dict) -> dict:
     if text:
         t = esc(text.lower())
         digits = ''.join(ch for ch in text if ch.isdigit())
-        parts = [f"lower(name) LIKE '%{t}%'", f"lower(username) LIKE '%{t}%'", f"lower(bio) LIKE '%{t}%'"]
+        parts = [f"lower(name) LIKE '%{t}%'", f"lower(username) LIKE '%{t}%'", f"lower(bio) LIKE '%{t}%'", f"lower(array_to_string(groups, ' ')) LIKE '%{t}%'"]
         if digits and len(digits) >= 5:
             parts += [f"tg_id::text LIKE '%{digits}%'", f"regexp_replace(phone, '[^0-9]', '', 'g') LIKE '%{digits}%'"]
         conds.append(f"({' OR '.join(parts)})")

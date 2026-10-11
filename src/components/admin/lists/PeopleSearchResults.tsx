@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
+import { GroupsBadge } from "./GroupsBadge";
 import { LISTS, LISTS_API, type ListDef, type ListItem } from "./listTypes";
 import { PersonEditDialog } from "./PersonEditDialog";
 
@@ -69,6 +70,7 @@ export function PeopleSearchResults({ token, query, onChanged }: { token: string
                     {i.username ? `@${i.username}` : ""}{i.username && i.tg_id ? " · " : ""}{i.tg_id ? `ID ${i.tg_id}` : ""}
                     {!i.username && !i.tg_id && i.phone ? i.phone : ""}
                   </div>
+                  <GroupsBadge groups={i.groups} className="mt-0.5" />
                   <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full ${b.cls}`}>{b.text}</span>
                 </div>
               </button>

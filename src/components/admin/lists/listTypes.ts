@@ -19,6 +19,7 @@ export interface ListItem {
   last_scan_at: string | null;
   scan_status: string;
   updated_at: string | null;
+  groups?: string[];
   changes: number;
   layers: number;
   last_change: { fields: string[]; at: string; source: string } | null;

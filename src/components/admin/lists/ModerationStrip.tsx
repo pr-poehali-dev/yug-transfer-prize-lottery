@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
+import { GroupsBadge } from "./GroupsBadge";
 import { toast } from "sonner";
 import { LISTS, LISTS_API, TG_LOOKUP_API, BULK_IMPORT_API, ListItem, inputCls } from "./listTypes";
 
@@ -417,6 +418,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
                   <div className="text-white/50 font-mono truncate">{i.tg_id ? `ID ${i.tg_id}` : "ID —"}</div>
                   <div className="text-white/50 truncate">{i.phone || "—"}</div>
                   <div className="text-sky-300 truncate">{i.username ? `@${i.username}` : "—"}</div>
+                  <GroupsBadge groups={i.groups} />
                 </div>
                 <div className="self-start flex flex-col gap-1">
                   <button onClick={() => remove(i)} title="Удалить" className="p-1 rounded text-white/30 hover:text-red-400">
