@@ -287,31 +287,25 @@ def usage_add(cur, conn, key: str, n: int) -> None:
 
 
 def fill_from_cache(cur, conn, rows: list) -> list:
-    """Тех, кого бот уже знает (ID и имя), заполняем из своей базы — без запроса в Telegram."""
-    names = [str(u).lower().replace("'", "''") for _, u in rows if u]
-    if not names:
+    """Тех, кого бот уже знает (ID и имя), заполняем из своей базы одним запросом — без обращения в Telegram."""
+    ids = [int(r) for r, u in rows if u]
+    if not ids:
         return rows
-    cur.execute(f"SELECT lower(username), tg_id, trim(coalesce(first_name,'') || ' ' || coalesce(last_name,'')), coalesce(phone,'') "
-                f"FROM {SCHEMA}.tg_users WHERE coalesce(username,'') <> '' AND lower(username) IN ({','.join(chr(39) + n + chr(39) for n in names)}) "
-                f"AND updated_at > now() - interval '30 days'")
-    known = {r[0]: r for r in cur.fetchall()}
-    left = []
-    for row_id, uname in rows:
-        k = known.get(str(uname).lower())
-        if not k:
-            left.append((row_id, uname))
-            continue
-        q = lambda v: str(v or '').replace("'", "''")
-        try:
-            cur.execute("SAVEPOINT fc")
-            cur.execute(f"UPDATE {SCHEMA}.check_lists SET last_scan_at=now(), scan_status='ok', tg_id=COALESCE(tg_id, {int(k[1])}), "
-                        f"name=CASE WHEN name='' THEN '{q(k[2])}' ELSE name END, "
-                        f"phone=CASE WHEN phone='' THEN '{q(k[3])}' ELSE phone END WHERE id={int(row_id)}")
-        except psycopg2.errors.UniqueViolation:
-            cur.execute("ROLLBACK TO SAVEPOINT fc")
-            cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={int(row_id)} AND list_type='pending'")
+    id_list = ','.join(str(i) for i in ids)
+    cur.execute(
+        f"WITH k AS (SELECT DISTINCT ON (lower(username)) lower(username) un, tg_id, "
+        f"trim(coalesce(first_name,'') || ' ' || coalesce(last_name,'')) nm, coalesce(phone,'') ph "
+        f"FROM {SCHEMA}.tg_users WHERE coalesce(username,'') <> '' AND updated_at > now() - interval '30 days' "
+        f"ORDER BY lower(username), updated_at DESC) "
+        f"UPDATE {SCHEMA}.check_lists c SET last_scan_at=now(), scan_status='ok', "
+        f"tg_id = CASE WHEN c.tg_id IS NULL AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.check_lists d "
+        f"WHERE d.tg_id = k.tg_id AND d.id <> c.id) THEN k.tg_id ELSE c.tg_id END, "
+        f"name = CASE WHEN c.name = '' THEN k.nm ELSE c.name END, "
+        f"phone = CASE WHEN c.phone = '' THEN k.ph ELSE c.phone END "
+        f"FROM k WHERE c.id IN ({id_list}) AND lower(c.username) = k.un RETURNING c.id")
+    done = {r[0] for r in cur.fetchall()}
     conn.commit()
-    return left
+    return [(r, u) for r, u in rows if r not in done]
 
 
 async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats: dict) -> dict:
@@ -427,7 +421,7 @@ def handle_batch(context, scope: str = 'all') -> dict:
             print('[TG-LOOKUP] batch: hourly limit reached on all accounts')
         where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
         cur.execute(f"SELECT id, username FROM {SCHEMA}.check_lists WHERE {where} "
-                    f"ORDER BY (list_type='pending') DESC, id DESC LIMIT 200")
+                    f"ORDER BY (list_type='pending') DESC, id DESC LIMIT 1000")
         fetched = cur.fetchall()
         rows = fill_from_cache(cur, conn, fetched)
         from_cache = len(fetched) - len(rows)
