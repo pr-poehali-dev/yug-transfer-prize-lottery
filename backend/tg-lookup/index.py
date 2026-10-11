@@ -1059,9 +1059,28 @@ def handle_auto(context) -> dict:
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT id FROM {SCHEMA}.group_scan_jobs WHERE status='running' AND mode='photos' "
-                    f"AND updated_at < now() - interval '50 seconds' ORDER BY id LIMIT 1")
+        cur.execute(f"SELECT id FROM {SCHEMA}.group_scan_jobs WHERE mode='photos' AND ("
+                    f"(status='running' AND updated_at < now() - interval '50 seconds') OR "
+                    f"(status='paused' AND updated_at < now() - interval '15 minutes')) ORDER BY id DESC LIMIT 1")
         row = cur.fetchone()
+        if not row:
+            # Нет активной задачи — берём следующую группу, где больше всего карточек без фото.
+            cur.execute(f"WITH need AS (SELECT g, count(*) n FROM {SCHEMA}.check_lists, unnest(groups) g "
+                        f"WHERE coalesce(photo_url,'')='' AND photo_checked_at IS NULL GROUP BY g HAVING count(*) >= 3), "
+                        f"src AS (SELECT DISTINCT ON (title) title, chat, session_hash FROM {SCHEMA}.group_scan_jobs "
+                        f"WHERE coalesce(title,'')<>'' AND mode <> 'photos' ORDER BY title, (session_hash<>'') DESC, id DESC), "
+                        f"tried AS (SELECT DISTINCT title FROM {SCHEMA}.group_scan_jobs WHERE mode='photos' "
+                        f"AND (status='error' OR updated_at > now() - interval '12 hours')) "
+                        f"SELECT src.chat, src.title, src.session_hash FROM need JOIN src ON src.title=need.g "
+                        f"WHERE need.g NOT IN (SELECT title FROM tried) ORDER BY need.n DESC LIMIT 1")
+            nxt = cur.fetchone()
+            if nxt:
+                q = lambda v: str(v or '').replace("'", "''")
+                cur.execute(f"INSERT INTO {SCHEMA}.group_scan_jobs (chat, mode, title, session_hash) VALUES "
+                            f"('{q(nxt[0])}', 'photos', '{q(nxt[1])}', '{q(nxt[2])}') RETURNING id")
+                row = cur.fetchone()
+                conn.commit()
+                print(f'[TG-LOOKUP] auto: new photos job for {nxt[1]}')
         cur.execute(f"SELECT count(*) FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
         paused = cur.fetchone()[0]
         accounts = len(load_sessions(cur))
