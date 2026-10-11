@@ -293,8 +293,12 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
 
   const load = async () => {
     try {
-      const res = await fetch(LISTS_API, { headers: { "X-Admin-Token": token } });
-      const data = await res.json();
+      let data: { ok?: boolean; items?: ListItem[]; pending_count?: number; list_counts?: Record<string, number> } | null = null;
+      for (let attempt = 0; attempt < 3 && !data?.ok; attempt++) {
+        if (attempt) await new Promise((r) => setTimeout(r, 2000 * attempt));
+        data = await fetch(LISTS_API, { headers: { "X-Admin-Token": token } }).then((r) => r.json()).catch(() => null);
+      }
+      if (!data) throw new Error("no data");
       if (data.ok) {
         setItems(data.items || []);
         setPendingCount(data.pending_count || 0);

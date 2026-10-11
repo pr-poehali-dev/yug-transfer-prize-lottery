@@ -32,7 +32,7 @@ export function useScanState() {
 async function runScan(token: string, onChanged: () => void) {
   if (scanState?.running) return;
   stopFlag = false;
-  let done = 0, found = 0, idle = 0, left = -1, err = "";
+  let done = 0, found = 0, idle = 0, left = -1, err = "", lastRefresh = Date.now();
   const setScan = setScanGlobal;
   setScan({ running: true, done, found, left: 0 });
   while (!stopFlag) {
@@ -66,7 +66,7 @@ async function runScan(token: string, onChanged: () => void) {
         if (idle >= 3) { err = "аккаунты не смогли проверить ни одной карточки"; break; }
         await new Promise((r) => setTimeout(r, 20000));
       } else idle = 0;
-      if (done % 200 < (d.done || 0)) onChanged();
+      if (Date.now() - lastRefresh > 60000) { lastRefresh = Date.now(); onChanged(); }
     } catch {
       idle += 1;
       if (idle >= 3) { err = "сервер не отвечает"; break; }
