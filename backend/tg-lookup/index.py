@@ -423,14 +423,16 @@ def handle_batch(context, scope: str = 'all') -> dict:
         workers = [x for x in sessions if quota[sess_key(x)] > 0][:4]
         if sessions and not workers:
             print('[TG-LOOKUP] batch: hourly limit reached on all accounts')
-        if scope == 'full':
+        if scope == 'pending_full':
+            where = "list_type='pending' AND username <> '' AND photo_checked_at IS NULL AND coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт', 'дубль другой карточки')"
+        elif scope == 'full':
             where = "username <> '' AND photo_checked_at IS NULL AND coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт', 'дубль другой карточки')"
         else:
             where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
         cur.execute(f"SELECT id, username FROM {SCHEMA}.check_lists WHERE {where} "
                     f"ORDER BY (list_type='pending') DESC, (list_type='black') DESC, id DESC LIMIT 1000")
         fetched = cur.fetchall()
-        rows = fetched if scope == 'full' else fill_from_cache(cur, conn, fetched)
+        rows = fetched if scope in ('full', 'pending_full') else fill_from_cache(cur, conn, fetched)
         from_cache = len(fetched) - len(rows)
         rows = rows[:sum(min(6, quota[sess_key(w)]) for w in workers)]
         parts = []
@@ -682,6 +684,10 @@ async def photos_pull(client, chat, job: dict, deadline: float, cur, conn, skey:
                 chat, ChannelParticipantsSearch(GROUP_QUERIES[job['q_index']]), job['q_offset'], 200, hash=0)), timeout=8)
         except FloodWaitError as e:
             return {'flood': e.seconds}
+        except Exception as e:
+            if 'AdminRequired' in type(e).__name__ or 'Forbidden' in type(e).__name__:
+                return {'error': 'hidden'}
+            raise
         users = {u.id: u for u in res.users if not u.bot and not u.deleted}
         page_done = True
         if users:
@@ -744,8 +750,6 @@ async def group_pull(session: str, job: dict, deadline: float, cur, conn) -> dic
         if chat is None:
             return {'error': 'no_access'}
         is_admin = bool(getattr(chat, 'admin_rights', None) or getattr(chat, 'creator', False))
-        if job.get('mode') == 'photos' and not is_admin:
-            return {'error': 'not_admin'}
         if not job.get('title'):
             job['title'] = getattr(chat, 'title', '') or job['chat']
         try:
@@ -920,10 +924,6 @@ def handle_group(qs: dict, context) -> dict:
             admin_hash = asyncio.run(find_admin_session(sessions, job['chat']))
             if admin_hash:
                 job['session_hash'] = admin_hash
-            elif job.get('mode') == 'photos':
-                cur.execute(f"UPDATE {SCHEMA}.group_scan_jobs SET status='error', error='Нужен аккаунт-админ этой группы' WHERE id={job['id']}")
-                conn.commit()
-                return resp(200, {'ok': False, 'error': 'Фото можно подтянуть, только если один из ваших аккаунтов — админ этой группы.'})
         sessions.sort(key=lambda x: (0 if sess_key(x) == job['session_hash'] else 1, 0 if StringSession(x).dc_id == 2 else 1))
         result = {'error': 'no_access'}
         for sess in sessions:
@@ -949,7 +949,9 @@ def handle_group(qs: dict, context) -> dict:
             break
         status = 'done' if job['q_index'] >= len(GROUP_QUERIES) else 'running'
         err = ''
-        if result.get('error') == 'join_request':
+        if result.get('error') == 'hidden':
+            status, err = 'error', 'В группе скрыт список участников — фото можно подтянуть только сканером карточек.'
+        elif result.get('error') == 'join_request':
             status, err = 'error', 'Группа закрытая — отправлена заявка на вступление. Когда админ примет, нажмите «Сканировать» ещё раз.'
         elif result.get('flood') and not job['session_hash']:
             m = int(result['flood']) // 60 + 1
@@ -984,6 +986,29 @@ def handle_group_jobs() -> dict:
         for it in items:
             it['in_base'] = members.get(it['title'] or '', 0)
         return resp(200, {'ok': True, 'items': items})
+    finally:
+        cur.close()
+        conn.close()
+
+
+def handle_photo_groups() -> dict:
+    """Группы, участники которых на модерации ещё без фото — их фото быстрее всего забрать через саму группу."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"WITH need AS (SELECT g, count(*) n FROM {SCHEMA}.check_lists, unnest(groups) g "
+                    f"WHERE list_type='pending' AND coalesce(photo_url,'')='' AND photo_checked_at IS NULL GROUP BY g), "
+                    f"src AS (SELECT DISTINCT ON (title) title, chat FROM {SCHEMA}.group_scan_jobs "
+                    f"WHERE coalesce(title,'')<>'' ORDER BY title, id DESC), "
+                    f"tried AS (SELECT DISTINCT title FROM {SCHEMA}.group_scan_jobs WHERE mode='photos' AND status IN ('done','error')) "
+                    f"SELECT src.chat, need.g, need.n FROM need JOIN src ON src.title=need.g "
+                    f"WHERE need.g NOT IN (SELECT title FROM tried) ORDER BY need.n DESC")
+        items = [{'chat': r[0], 'title': r[1], 'need': r[2]} for r in cur.fetchall()]
+        cur.execute(f"SELECT count(*) FILTER (WHERE coalesce(photo_url,'')='' AND photo_checked_at IS NULL), "
+                    f"count(*) FILTER (WHERE coalesce(photo_url,'')='' AND photo_checked_at IS NULL AND username<>'') "
+                    f"FROM {SCHEMA}.check_lists WHERE list_type='pending'")
+        left, with_user = cur.fetchone()
+        return resp(200, {'ok': True, 'items': items, 'left': left, 'with_username': with_user})
     finally:
         cur.close()
         conn.close()
@@ -1042,6 +1067,8 @@ def handler(event: dict, context) -> dict:
         return handle_batch(context, qs.get('scope') or 'all')
     if qs.get('action') == 'group':
         return handle_group(qs, context)
+    if qs.get('action') == 'photo_groups':
+        return handle_photo_groups()
     if qs.get('action') == 'group_jobs':
         return handle_group_jobs()
     if qs.get('action') == 'group_stop':

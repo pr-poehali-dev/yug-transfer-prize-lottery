@@ -51,7 +51,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   const [groupChat, setGroupChat] = useState("");
   const [group, setGroup] = useState<{ running: boolean; title: string; added: number; skipped: number; total: number; progress: number; mode?: string } | null>(null);
   const groupStop = useRef(false);
-  const [scan, setScan] = useState<{ running: boolean; done: number; found: number; left: number; pausedFor?: string } | null>(null);
+  const [scan, setScan] = useState<{ running: boolean; done: number; found: number; left: number; pausedFor?: string; phase?: string } | null>(null);
   const stopRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const reqRef = useRef(0);
@@ -153,37 +153,58 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   const scanAll = async () => {
     stopRef.current = false;
     let done = 0, found = 0;
-    setScan({ running: true, done, found, left: counts.new });
+    const info = await fetch(`${TG_LOOKUP_API}?action=photo_groups`, { headers: { "X-Admin-Token": token } })
+      .then((r) => r.json()).catch(() => null);
+    const groups: { chat: string; title: string; need: number }[] = info?.items || [];
+    let left = info?.left ?? counts.new;
+    setScan({ running: true, done, found, left, phase: groups.length ? "Фото через группы" : "Данные по @username" });
+
+    for (const g of groups) {
+      if (stopRef.current) break;
+      let jobId = 0, fails = 0, gotHere = 0;
+      while (!stopRef.current) {
+        try {
+          const q = jobId ? `job=${jobId}` : `chat=${encodeURIComponent(g.chat)}&mode=photos`;
+          const d = await fetch(`${TG_LOOKUP_API}?action=group&${q}`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
+          const j = d.job;
+          if (!j) break;
+          jobId = j.id;
+          fails = 0;
+          const inc = (j.added || 0) - gotHere;
+          gotHere = j.added || 0;
+          found += inc; done += inc; left = Math.max(0, left - inc);
+          setScan({ running: true, done, found, left, phase: `Фото из группы «${g.title}»` });
+          if (j.status !== "running") break;
+        } catch {
+          fails += 1;
+          if (fails >= 3) break;
+          await new Promise((r) => setTimeout(r, 4000));
+        }
+      }
+      onChanged();
+    }
+
     let idle = 0;
     while (!stopRef.current) {
       try {
-        const res = await fetch(`${TG_LOOKUP_API}?action=batch&scope=pending`, { headers: { "X-Admin-Token": token } });
+        const res = await fetch(`${TG_LOOKUP_API}?action=batch&scope=pending_full`, { headers: { "X-Admin-Token": token } });
         const d = await res.json();
         if (!d.ok) break;
         done += d.done;
         found += d.found;
-        setScan({ running: true, done, found, left: d.left });
+        setScan({ running: true, done, found, left: d.left, phase: "Данные и фото по @username" });
         if (!d.left) break;
-        if (!d.done && d.hour_limit) {
-          setScan({ running: false, done, found, left: d.left });
-          toast("Часовой лимит аккаунтов исчерпан — бережём их от блокировки. Сканер продолжит сам в фоне");
-          onChanged();
-          return;
-        }
-        if (!d.done && d.all_paused) {
+        if (!d.done && (d.hour_limit || d.all_paused || d.reserved)) {
           const m = Math.ceil((d.resume_in || 0) / 60);
-          const when = m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`;
-          setScan({ running: false, done, found, left: d.left, pausedFor: when });
-          toast.error(`Telegram ограничил поиск на всех аккаунтах. Первый освободится через ${when}`);
+          const when = d.all_paused && m ? (m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`) : "";
+          setScan({ running: false, done, found, left: d.left, pausedFor: when || "ближайший час" });
+          toast("Лимит аккаунтов на поиск исчерпан — бережём их от блокировки. Остальное сканер дотянет сам в фоне");
           onChanged();
           return;
         }
         if (!d.done) {
           idle += 1;
-          if (idle >= 3) {
-            toast.error(d.paused ? "Telegram попросил паузу — продолжим позже автоматически" : "Сканирование остановилось");
-            break;
-          }
+          if (idle >= 3) { toast.error("Сканирование остановилось"); break; }
           await new Promise((r) => setTimeout(r, 20000));
         } else idle = 0;
         if (done % 150 < d.done) onChanged();
@@ -192,7 +213,8 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
         if (idle >= 3) break;
       }
     }
-    setScan((s) => (s ? { ...s, running: false } : s));
+    setScan((x) => (x ? { ...x, running: false } : x));
+    if (!stopRef.current) toast.success(`Готово: подтянуто ${found}`);
     onChanged();
   };
 
@@ -292,9 +314,9 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
               <Icon name="Square" size={13} />Остановить
             </button>
           ) : (
-            <button onClick={scanAll} disabled={!counts.new}
-              className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2 disabled:opacity-50">
-              <Icon name="ScanSearch" fallback="Search" size={15} />Сканировать все{counts.new ? ` (${counts.new})` : ""}
+            <button onClick={scanAll} title="Подтянуть фото, имя, описание и ID для всех карточек на модерации"
+              className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2">
+              <Icon name="ScanSearch" fallback="Search" size={15} />Подтянуть всё и фото
             </button>
           )}
         </div>
@@ -346,8 +368,8 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
         <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] px-4 py-3 space-y-2">
           <div className="flex items-center gap-2 text-sm text-white">
             {scan.running && <Icon name="Loader2" size={14} className="animate-spin text-sky-300" />}
-            {scan.running ? "Сканирую Telegram…" : "Сканирование остановлено"}
-            <span className="ml-auto text-xs text-white/60">проверено {scan.done} · найдено {scan.found} · осталось {scan.left}</span>
+            <span className="truncate">{scan.running ? (scan.phase || "Сканирую Telegram…") : "Сканирование остановлено"}</span>
+            <span className="ml-auto text-xs text-white/60 shrink-0">подтянуто {scan.found} · осталось без фото {scan.left}</span>
           </div>
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full bg-sky-400 transition-all"
@@ -355,8 +377,8 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
           </div>
           {scan.pausedFor ? (
             <div className="text-[11px] text-amber-300/90">
-              Telegram временно ограничил поиск по @username на всех аккаунтах. Первый освободится через {scan.pausedFor} —
-              тогда нажмите «Сканировать все» снова. Фото участников группы можно грузить и сейчас — кнопкой «Фото».
+              Лимит поиска по @username на аккаунтах исчерпан — освободится через {scan.pausedFor}.
+              Сканер продолжит сам в фоне, или нажмите «Подтянуть всё и фото» позже.
             </div>
           ) : (
             <div className="text-[11px] text-white/40">Не закрывайте страницу. Можно остановить и продолжить позже — проверенные не повторяются.</div>
