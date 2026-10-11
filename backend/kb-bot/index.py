@@ -14,6 +14,7 @@ import dbpool
 dbpool.install()
 import complaints
 import payments
+import broadcast
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 BUTTON_GROUPS = '📋 Список групп'
@@ -1466,6 +1467,12 @@ def _handler(event: dict, context) -> dict:
     except Exception:
         DEADLINE['t'] = time.time() + 4.5
 
+    if event.get('httpMethod') == 'GET' and (event.get('queryStringParameters') or {}).get('action') == 'broadcast':
+        h = event.get('headers') or {}
+        if not verify_admin(h.get('X-Admin-Token') or h.get('x-admin-token') or ''):
+            return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
+        return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps(broadcast.overview(), ensure_ascii=False, default=str)}
     if (event.get('queryStringParameters') or {}).get('action') == 'daily_scan':
         return handle_daily_scan(event, context)
 
@@ -1570,6 +1577,13 @@ def _handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'status': 'bot active'})}
 
     qs = event.get('queryStringParameters') or {}
+    if qs.get('action') == 'broadcast':
+        h = event.get('headers') or {}
+        if not verify_admin(h.get('X-Admin-Token') or h.get('x-admin-token') or ''):
+            return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
+        res = broadcast.handle(event, lambda m, p: tg_api(m, p, timeout=4), DEADLINE['t'] or time.time() + 4)
+        return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps(res, ensure_ascii=False, default=str)}
     if qs.get('action') == 'yookassa':
         return handle_yookassa(event)
     if qs.get('action') == 'scan':

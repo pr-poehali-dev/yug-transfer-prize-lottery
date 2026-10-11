@@ -11,6 +11,8 @@ import { GroupsPage } from "./lists/GroupsPage";
 import { ComplaintsPage } from "./lists/ComplaintsPage";
 import { GlobalScanPage, useScanState } from "./lists/GlobalScanBar";
 import { SearchStatsPage } from "./lists/SearchStatsPage";
+import { ScanSummaryPage } from "./lists/ScanSummaryPage";
+import { BroadcastPage } from "./lists/BroadcastPage";
 
 interface ListPageProps {
   token: string;
@@ -339,6 +341,8 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
   if (open === "groups") return <GroupsPage token={token} onBack={() => setOpen(null)} />;
   if (open === "scan") return <GlobalScanPage token={token} onChanged={load} onBack={() => setOpen(null)} />;
   if (open === "searches") return <SearchStatsPage token={token} onBack={() => setOpen(null)} />;
+  if (open === "summary") return <ScanSummaryPage token={token} onBack={() => setOpen(null)} />;
+  if (open === "broadcast") return <BroadcastPage token={token} onBack={() => setOpen(null)} />;
   if (open === "subs") return <SubscriptionsPage token={token} onBack={() => setOpen(null)} />;
 
   if (current) {
@@ -359,6 +363,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
     cyan: { box: "border-cyan-400/30 hover:border-cyan-400/60 hover:shadow-[0_0_40px_-10px_rgba(34,211,238,0.6)]", icon: "bg-cyan-500/20", text: "text-cyan-300" },
     sky: { box: "border-sky-400/30 hover:border-sky-400/60 hover:shadow-[0_0_40px_-10px_rgba(56,189,248,0.6)]", icon: "bg-sky-500/20", text: "text-sky-300" },
     orange: { box: "border-orange-400/30 hover:border-orange-400/60 hover:shadow-[0_0_40px_-10px_rgba(251,146,60,0.6)]", icon: "bg-orange-500/20", text: "text-orange-300" },
+    pink: { box: "border-pink-400/30 hover:border-pink-400/60 hover:shadow-[0_0_40px_-10px_rgba(244,114,182,0.6)]", icon: "bg-pink-500/20", text: "text-pink-300" },
     violet: { box: "border-violet-400/30 hover:border-violet-400/60 hover:shadow-[0_0_40px_-10px_rgba(167,139,250,0.6)]", icon: "bg-violet-500/20", text: "text-violet-300" },
   };
   const tiles: { key: string; title: string; sub: string; icon: string; tone: string; badge?: number }[] = [
@@ -377,6 +382,8 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
       key: "scan", title: "Глобальное сканирование", icon: "Radar", tone: "cyan",
       sub: scanState?.running ? `Идёт · осталось ${scanState.left}` : "Обновление базы и аккаунты сканера",
     },
+    { key: "summary", title: "Сводка", sub: "Кто сменил ник, фото, удалился", icon: "ClipboardList", tone: "cyan" },
+    { key: "broadcast", title: "Рассылка через бота", sub: "Предложения подписчикам бота", icon: "Megaphone", tone: "pink" },
     { key: "searches", title: "Статистика поиска", sub: "Кого и кто искал в боте", icon: "ChartColumn", tone: "orange" },
   ];
 

@@ -76,7 +76,7 @@ def handle_lookup(cur, qs: dict) -> dict:
 LIST_FIELDS = "id, role, list_type, name, username, phone, note, created_at, tg_id, photo_url, bio, reason, removed_at, last_scan_at, scan_status, updated_at"
 FIELD_LABELS = {'name': 'Имя', 'username': 'Username', 'phone': 'Телефон', 'tg_id': 'Telegram ID',
                 'note': 'Комментарий', 'reason': 'Причина', 'removed_at': 'Дата удаления',
-                'photo_url': 'Фото', 'list_type': 'Список', 'role': 'Роль'}
+                'photo_url': 'Фото', 'list_type': 'Список', 'role': 'Роль', 'bio': 'Описание'}
 
 
 def row_to_item(r) -> dict:
@@ -135,6 +135,38 @@ def handle_history(cur, qs: dict) -> dict:
     items = [{'field': r[0], 'label': FIELD_LABELS.get(r[0], r[0]), 'old': r[1], 'new': r[2],
               'source': r[3], 'changed_at': r[4]} for r in cur.fetchall()]
     return resp(200, {'ok': True, 'items': items})
+
+
+def handle_scan_summary(cur, qs: dict) -> dict:
+    days = max(1, min(90, int(qs.get('days') or 7)))
+    since = f"now() - interval '{days} days'"
+    cur.execute(f"SELECT count(*), count(*) FILTER (WHERE last_scan_at IS NOT NULL), "
+                f"count(*) FILTER (WHERE last_scan_at IS NULL AND username <> ''), "
+                f"count(*) FILTER (WHERE last_scan_at > {since}) "
+                f"FROM {SCHEMA}.check_lists WHERE list_type <> 'pending'")
+    total, scanned, left, recent = cur.fetchone()
+    cur.execute(f"SELECT field, count(*) FROM {SCHEMA}.check_list_history "
+                f"WHERE source='scan' AND changed_at > {since} GROUP BY field")
+    by_field = {r[0]: r[1] for r in cur.fetchall()}
+    cur.execute(f"SELECT scan_status, count(*) FROM {SCHEMA}.check_lists "
+                f"WHERE scan_status IN ('не найден', 'аккаунт недоступен боту', 'не личный аккаунт') GROUP BY 1")
+    gone = {r[0]: r[1] for r in cur.fetchall()}
+    flt = str(qs.get('field') or '')
+    cond = f"AND h.field='{esc(flt)}'" if flt in ('name', 'username', 'bio', 'photo_url', 'phone') else ''
+    cur.execute(f"SELECT h.item_id, h.field, h.old_value, h.new_value, h.changed_at, c.name, c.username, "
+                f"c.photo_url, c.role, c.list_type FROM {SCHEMA}.check_list_history h "
+                f"JOIN {SCHEMA}.check_lists c ON c.id = h.item_id "
+                f"WHERE h.source='scan' AND h.changed_at > {since} {cond} ORDER BY h.changed_at DESC, h.id DESC LIMIT 100")
+    changes = [{'item_id': r[0], 'field': r[1], 'label': FIELD_LABELS.get(r[1], r[1]), 'old': (r[2] or '')[:200],
+                'new': (r[3] or '')[:200], 'changed_at': r[4], 'name': r[5], 'username': r[6], 'photo_url': r[7],
+                'role': r[8], 'list_type': r[9]} for r in cur.fetchall()]
+    cur.execute(f"SELECT id, name, username, photo_url, role, list_type, scan_status, last_scan_at "
+                f"FROM {SCHEMA}.check_lists WHERE scan_status IN ('не найден', 'аккаунт недоступен боту') "
+                f"AND list_type <> 'pending' ORDER BY last_scan_at DESC NULLS LAST LIMIT 50")
+    missing = [{'id': r[0], 'name': r[1], 'username': r[2], 'photo_url': r[3], 'role': r[4], 'list_type': r[5],
+                'status': r[6], 'at': r[7]} for r in cur.fetchall()]
+    return resp(200, {'ok': True, 'days': days, 'total': total, 'scanned': scanned, 'left': left,
+                      'recent': recent, 'by_field': by_field, 'gone': gone, 'changes': changes, 'missing': missing})
 
 
 def handle_subs_stats(cur, qs: dict) -> dict:
@@ -661,6 +693,8 @@ def handler(event: dict, context) -> dict:
             return handle_subs_stats(cur, qs)
         if qs.get('entity') == 'snapshots':
             return handle_snapshots(cur, qs)
+        if qs.get('entity') == 'scan_summary':
+            return handle_scan_summary(cur, qs)
         if qs.get('entity') == 'history':
             return handle_history(cur, qs)
         if qs.get('entity') == 'lookup':
