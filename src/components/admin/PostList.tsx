@@ -71,11 +71,11 @@ export function PostList({
           <p className="text-sm">Постов пока нет</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
         {posts.map(post => {
           const st = STATUS_CFG[post.status] || STATUS_CFG.draft;
           const isActive = editId === post.id;
-          const btn = "flex-1 h-8 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40";
+          const btn = "flex-1 h-7 rounded-md flex items-center justify-center transition-colors disabled:opacity-40";
           const spin = (c: string) => <div className={`w-3 h-3 border rounded-full animate-spin ${c}`} />;
           return (
             <div
@@ -83,25 +83,25 @@ export function PostList({
               className={`rounded-2xl border overflow-hidden flex flex-col transition-all ${isActive ? "border-purple-500/50 ring-1 ring-purple-500/30" : "border-white/10 hover:border-white/20"}`}
               style={{ background: isActive ? "rgba(168,85,247,0.06)" : "rgba(255,255,255,0.03)" }}
             >
-              <div className="relative aspect-[16/9] bg-white/5">
+              <div className="relative h-24 sm:h-32 shrink-0 overflow-hidden bg-white/5">
                 {post.photo_url && !post.photo_url.startsWith("data:") ? (
                   <img loading="lazy" decoding="async" src={post.photo_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <Icon name="Image" size={28} className="text-white/15" />
+                    <Icon name="Image" size={22} className="text-white/15" />
                   </div>
                 )}
-                <span className={`absolute top-2 left-2 text-[11px] px-2 py-0.5 rounded-full border flex items-center gap-1 backdrop-blur-md bg-black/50 ${st.color} ${st.bg.split(" ").filter(c => c.startsWith("border")).join(" ")}`}>
+                <span className={`absolute top-1.5 left-1.5 text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 backdrop-blur-md bg-black/50 ${st.color} ${st.bg.split(" ").filter(c => c.startsWith("border")).join(" ")}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                   {st.label}
                 </span>
               </div>
 
-              <div className="p-3 flex-1 flex flex-col gap-1.5">
-                <p className="text-white text-sm font-semibold line-clamp-1">{post.title || "Без названия"}</p>
-                <p className="text-white/45 text-xs leading-snug line-clamp-3 flex-1">{strip(post.text)}</p>
-                <div className="flex items-center gap-x-2.5 gap-y-1 text-[11px] text-white/30 flex-wrap pt-1">
-                  <span>{new Date(post.created_at!).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+              <div className="p-2 sm:p-2.5 flex-1 flex flex-col gap-1">
+                <p className="text-white text-xs sm:text-sm font-semibold line-clamp-1">{post.title || "Без названия"}</p>
+                <p className="text-white/45 text-[11px] leading-snug line-clamp-2 flex-1">{strip(post.text)}</p>
+                <div className="flex items-center gap-x-2 gap-y-0.5 text-[10px] text-white/30 flex-wrap">
+                  <span className="hidden sm:inline">{new Date(post.created_at!).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                   {post.scheduled_at && (
                     <span className="text-purple-400/80 flex items-center gap-1">
                       <Icon name="Clock" size={10} />
@@ -121,7 +121,7 @@ export function PostList({
                     </span>
                   )}
                   {post.button_text && (
-                    <span className="text-blue-400/60 flex items-center gap-1 truncate max-w-full">
+                    <span className="hidden sm:flex text-blue-400/60 items-center gap-1 truncate max-w-full">
                       <Icon name="MousePointer" size={10} />
                       {post.button_text}
                     </span>
@@ -129,7 +129,7 @@ export function PostList({
                 </div>
               </div>
 
-              <div className="flex gap-1 p-2 border-t border-white/5">
+              <div className="flex gap-1 p-1.5 border-t border-white/5">
                 <button
                   onClick={() => onPublish(post)}
                   disabled={publishingId === post.id}
