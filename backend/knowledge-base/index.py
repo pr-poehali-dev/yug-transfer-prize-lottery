@@ -553,6 +553,70 @@ def handle_junk(cur, conn, method: str) -> dict:
     return resp(405, {'error': 'Method not allowed'})
 
 
+def notify_searchers(cur, conn, card: dict) -> int:
+    """После модерации пишет в бот всем, кто искал этого человека и получил «нет информации»."""
+    import urllib.request
+    import threading
+    token = os.environ.get('KB_BOT_TOKEN', '')
+    if not token:
+        return 0
+    cond = []
+    if card.get('tg_id'):
+        cond.append(f"found_tg_id={int(card['tg_id'])}")
+        cond.append(f"(kind='id' AND regexp_replace(query, '[^0-9]', '', 'g')='{int(card['tg_id'])}')")
+    un = str(card.get('username') or '').lower()
+    if un:
+        cond.append(f"lower(found_username)='{esc(un)}'")
+        cond.append(f"(kind='username' AND lower(query) LIKE '%{esc(un)}')")
+    digits = ''.join(ch for ch in str(card.get('phone') or '') if ch.isdigit())[-10:]
+    if len(digits) == 10:
+        cond.append(f"(kind='phone' AND right(regexp_replace(query, '[^0-9]', '', 'g'), 10)='{digits}')")
+    if not cond:
+        return 0
+    cur.execute(f"SELECT DISTINCT searcher_tg_id, max(query) FROM {SCHEMA}.kb_search_log "
+                f"WHERE result='unknown' AND notified_at IS NULL AND ({' OR '.join(cond)}) GROUP BY 1 LIMIT 50")
+    rows = cur.fetchall()
+    if not rows:
+        return 0
+    h = lambda v: str(v or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    who = {'driver': '🚗 водитель', 'dispatcher': '🎧 диспетчер'}.get(card.get('role'), 'участник')
+    lst = '⛔️ <b>ЧЁРНОМ СПИСКЕ</b>' if card['list_type'] == 'black' else '✅ <b>БЕЛОМ СПИСКЕ</b>'
+    advice = '❌ Работать НЕ рекомендуем!' if card['list_type'] == 'black' else '👍 Проверен — с ним можно работать.'
+    info = [f"👤 {h(card.get('name')) or 'Без имени'}"]
+    if un:
+        info.append(f"🔗 @{h(card['username'])}")
+    if card.get('tg_id'):
+        info.append(f"🆔 <code>{int(card['tg_id'])}</code>")
+    if card.get('phone'):
+        info.append(f"📞 {h(card['phone'])}")
+    if card['list_type'] == 'black' and card.get('reason'):
+        info.append(f"\n⛔️ <b>За что:</b> {h(card['reason'])[:600]}")
+    sent = []
+
+    def send(chat_id, query):
+        text = (f"🔔 <b>Проверка завершена</b>\n\nВы искали <b>{h(query)}</b>.\n"
+                f"Данный {who} находится в {lst}.\n\n" + "\n".join(info) + f"\n\n{advice}")
+        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
+                                     data=json.dumps({'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}).encode(),
+                                     headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(req, timeout=2.5) as r:
+                if json.loads(r.read().decode() or '{}').get('ok'):
+                    sent.append(chat_id)
+        except Exception as e:
+            print(f"[KB] notify {chat_id}: {type(e).__name__}")
+    threads = [threading.Thread(target=send, args=(r[0], r[1]), daemon=True) for r in rows]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(3)
+    ids = ','.join(str(int(r[0])) for r in rows)
+    cur.execute(f"UPDATE {SCHEMA}.kb_search_log SET notified_at=now() "
+                f"WHERE result='unknown' AND notified_at IS NULL AND searcher_tg_id IN ({ids}) AND ({' OR '.join(cond)})")
+    conn.commit()
+    return len(sent)
+
+
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
     if method == 'GET' and qs.get('search'):
         return handle_people_search(cur, qs)
@@ -659,7 +723,10 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
         if snap_changed:
             add_snapshot(cur, item_id, 'manual', snap_changed)
         conn.commit()
-        return resp(200, {'ok': True, 'tg_id': tg_id})
+        notified = 0
+        if old.get('list_type') == 'pending' and lt in ('black', 'white'):
+            notified = notify_searchers(cur, conn, new)
+        return resp(200, {'ok': True, 'tg_id': tg_id, 'notified': notified})
 
     if method == 'DELETE':
         item_id = int(qs.get('id') or 0)

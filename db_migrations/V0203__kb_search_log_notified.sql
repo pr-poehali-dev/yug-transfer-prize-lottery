@@ -1,0 +1,1 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.kb_search_log ADD COLUMN notified_at timestamp with time zone NULL;

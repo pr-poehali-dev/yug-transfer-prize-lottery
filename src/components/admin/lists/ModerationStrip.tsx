@@ -238,7 +238,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
       });
       const d = await res.json();
       if (d.ok) {
-        toast.success(`Перемещено: ${LISTS.find((l) => l.role === role && l.list_type === list_type)?.title}`);
+        toast.success(`Перемещено: ${LISTS.find((l) => l.role === role && l.list_type === list_type)?.title}${d.notified ? ` · ответ отправлен искавшим: ${d.notified}` : ""}`);
         onChanged();
       } else toast.error("Не удалось присвоить статус");
     } catch {

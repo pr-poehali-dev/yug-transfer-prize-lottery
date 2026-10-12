@@ -801,7 +801,7 @@ def run_check(chat_id, kind: str, query: str) -> None:
         log_search(chat_id, query, kind_q, 'unknown', None, live)
         head = (f"⚠️ <b>Будьте внимательны!</b>\n\n"
                 f"У нас ещё нет информации о данном участнике <b>{shown}</b>.\n"
-                f"Мы взяли его на проверку — данные появятся после модерации.")
+                f"Мы взяли его на проверку — как только проверим, пришлём ответ сюда.")
         if live:
             info = [f"👤 {esc_html(live.get('name') or '—')}"]
             if live.get('username'):
