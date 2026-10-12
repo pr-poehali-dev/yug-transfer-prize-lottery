@@ -32,6 +32,7 @@ const EMPTY: PostFormData = {
 export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpanded }: AdminPostsTabProps) {
   // ── форма ──
   const [form, setForm] = useState<PostFormData>({ ...EMPTY });
+  const [formOpen, setFormOpen] = useState(false);
   const [savedForm, setSavedForm] = useState<PostFormData>({ ...EMPTY });
   const [editId, setEditId] = useState<number | null>(null);
   const [scheduledAt, setScheduledAt] = useState("");
@@ -121,6 +122,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       setExpireHours(0);
     }
     setFormError(""); setFormSuccess("");
+    setFormOpen(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -391,6 +393,20 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
 
       {formExpanded && (
         <div className="space-y-4">
+          <div className="space-card rounded-2xl border border-white/10 overflow-hidden">
+            <button
+              onClick={() => setFormOpen(v => !v)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-white/[0.03] transition-colors"
+            >
+              <Icon name={editId ? "Pencil" : "Plus"} size={16} className="text-violet-400" />
+              <span className="text-sm font-medium text-white">{editId ? "Редактирование поста" : "Новый пост"}</span>
+              {!formOpen && (form.title || form.text) && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300">черновик</span>
+              )}
+              <Icon name="ChevronDown" size={18} className={`ml-auto text-white/50 transition-transform ${formOpen ? "rotate-180" : ""}`} />
+            </button>
+          </div>
+          {formOpen && (
           <PostForm
             form={form}
             editId={editId}
@@ -410,6 +426,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
             onPublishNow={handlePublishNow}
             onReset={() => confirmLeave(resetForm)}
           />
+          )}
 
           <PostList
             posts={posts}
