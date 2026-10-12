@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { GroupsBadge } from "./GroupsBadge";
 import { LISTS, ListItem } from "./listTypes";
@@ -18,11 +19,12 @@ interface Props {
   onToggleMenu: () => void;
   onOpen: (item: ListItem) => void;
   onScan: (item: ListItem) => void;
-  onRemove: (item: ListItem) => void;
+  onRemove: (item: ListItem, forever: boolean) => void;
   onAssign: (item: ListItem, role: string, list_type: string) => void;
 }
 
 export function ModerationCard({ item: i, busy, scanning, menuOpen, onToggleMenu, onOpen, onScan, onRemove, onAssign }: Props) {
+  const [confirmDel, setConfirmDel] = useState(false);
   return (
     <div className="relative rounded-xl border border-white/10 space-card p-2.5">
       <div className="flex gap-2.5">
@@ -51,7 +53,7 @@ export function ModerationCard({ item: i, busy, scanning, menuOpen, onToggleMenu
           <GroupsBadge groups={i.groups} />
         </div>
         <div className="self-start flex flex-col gap-1">
-          <button onClick={() => onRemove(i)} title="Удалить" className="p-1 rounded text-white/30 hover:text-red-400">
+          <button onClick={() => setConfirmDel((v) => !v)} title="Удалить" className="p-1 rounded text-white/30 hover:text-red-400">
             <Icon name="X" size={13} />
           </button>
           <button onClick={() => onScan(i)} disabled={scanning} title="Подтянуть данные из Telegram"
@@ -61,6 +63,25 @@ export function ModerationCard({ item: i, busy, scanning, menuOpen, onToggleMenu
           </button>
         </div>
       </div>
+
+      {confirmDel && (
+        <div className="mt-2 rounded-lg border border-red-500/25 bg-red-500/[0.06] p-2 space-y-1.5">
+          <div className="text-[11px] text-white/60">Удалить карточку?</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button onClick={() => { setConfirmDel(false); onRemove(i, false); }}
+              title="Убрать с модерации. При следующем сканировании группы может появиться снова"
+              className="rounded-md px-2 py-1.5 text-[11px] border border-white/15 text-white/80 hover:bg-white/5">
+              С модерации
+            </button>
+            <button onClick={() => { setConfirmDel(false); onRemove(i, true); }}
+              title="Удалить из базы и больше никогда не добавлять при сканировании"
+              className="rounded-md px-2 py-1.5 text-[11px] bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center gap-1">
+              <Icon name="Trash2" size={11} />Из базы навсегда
+            </button>
+          </div>
+          <button onClick={() => setConfirmDel(false)} className="w-full text-[11px] text-white/40 hover:text-white/70">Отмена</button>
+        </div>
+      )}
 
       <button
         onClick={onToggleMenu}

@@ -663,6 +663,10 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
 
     if method == 'DELETE':
         item_id = int(qs.get('id') or 0)
+        if qs.get('forever') == '1':
+            # Навсегда: запоминаем Telegram ID, чтобы сканер групп больше не добавлял этого человека.
+            cur.execute(f"INSERT INTO {SCHEMA}.check_bans (tg_id, name, reason) SELECT tg_id, name, 'удалён вручную' "
+                        f"FROM {SCHEMA}.check_lists WHERE id={item_id} AND tg_id IS NOT NULL ON CONFLICT (tg_id) DO NOTHING")
         cur.execute(f"DELETE FROM {SCHEMA}.check_list_history WHERE item_id={item_id}")
         cur.execute(f"DELETE FROM {SCHEMA}.check_list_snapshots WHERE item_id={item_id}")
         cur.execute(f"DELETE FROM {SCHEMA}.check_lists WHERE id={item_id}")

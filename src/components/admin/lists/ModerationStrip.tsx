@@ -277,17 +277,10 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
     setScanIds((x) => x.filter((v) => v !== item.id));
   };
 
-  const remove = (item: ListItem) => {
-    toast("Удалить карточку с модерации?", {
-      action: {
-        label: "Удалить",
-        onClick: async () => {
-          await fetch(`${LISTS_API}&id=${item.id}`, { method: "DELETE", headers: { "X-Admin-Token": token } });
-          onChanged();
-        },
-      },
-      cancel: { label: "Отмена", onClick: () => {} },
-    });
+  const remove = async (item: ListItem, forever: boolean) => {
+    await fetch(`${LISTS_API}&id=${item.id}${forever ? "&forever=1" : ""}`, { method: "DELETE", headers: { "X-Admin-Token": token } });
+    toast.success(forever ? "Удалено из базы навсегда — сканер больше не добавит" : "Убрано с модерации");
+    onChanged();
   };
 
   return (
