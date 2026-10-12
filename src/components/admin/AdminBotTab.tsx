@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import Icon from "@/components/ui/icon";
 import { ADMIN_BOT_POSTS_URL, SAIT_BOT_DAILY_URL } from "./adminTypes";
 import { BotPost } from "./bot/botTypes";
 import { BotsListBlock } from "./bot/BotsListBlock";
@@ -178,16 +177,8 @@ export function AdminBotTab({ token, expanded: controlledExpanded }: AdminBotTab
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-10 h-10 rounded-xl bg-orange-500/15 flex items-center justify-center">
-          <Icon name="Calendar" size={20} className="text-orange-400" />
-        </div>
-        <h1 className="text-xl md:text-2xl font-semibold text-white">Ежедневные посты</h1>
-        <span className="text-sm text-white/40">{posts.length}</span>
-      </div>
-
       {expanded && (
-        <div className=" space-y-6">
+        <div className="space-y-3">
           <BotsListBlock token={token} show={showBotsBlock} />
 
           <BotPostsList
