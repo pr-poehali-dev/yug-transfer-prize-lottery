@@ -13,6 +13,7 @@ import { GlobalScanPage, useScanState } from "./lists/GlobalScanBar";
 import { SearchStatsPage } from "./lists/SearchStatsPage";
 import { ScanSummaryPage } from "./lists/ScanSummaryPage";
 import { BroadcastPage } from "./lists/BroadcastPage";
+import Pager from "./lists/Pager";
 
 interface ListPageProps {
   token: string;
@@ -28,6 +29,8 @@ function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPagePr
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<ListItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const topRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const reqRef = useRef(0);
 
@@ -41,6 +44,7 @@ function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPagePr
       if (req !== reqRef.current) return;
       if (d.ok) {
         setItems((prev) => (append ? [...prev, ...d.items] : d.items));
+        setPage(Math.floor(offset / LIST_PAGE) + 1);
         setTotal(d.total || 0);
       }
     } catch {
@@ -59,8 +63,13 @@ function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPagePr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, def.role, def.list_type]);
 
+  const goPage = (p: number) => {
+    fetchPage((p - 1) * LIST_PAGE, false);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const onChanged = () => {
-    fetchPage(0, false);
+    fetchPage((page - 1) * LIST_PAGE, false);
     onParentChanged();
   };
   const [editing, setEditing] = useState<ListItem | null>(null);
@@ -205,7 +214,7 @@ function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPagePr
   };
 
   return (
-    <div className="space-y-4">
+    <div ref={topRef} className="space-y-4 scroll-mt-20">
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={onBack}
@@ -258,12 +267,7 @@ function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPagePr
         </div>
       )}
 
-      {items.length > 0 && items.length < total && (
-        <button onClick={() => fetchPage(items.length, true)} disabled={loading}
-          className="w-full rounded-xl border border-white/10 space-card py-3 text-sm text-white/70 hover:text-white disabled:opacity-60">
-          {loading ? "Загрузка…" : `Показать ещё (${total - items.length})`}
-        </button>
-      )}
+      <Pager page={page} total={total} perPage={LIST_PAGE} loading={loading} onChange={goPage} />
 
       <LayersDialog token={token} item={layersItem} open={!!layersItem} onClose={() => setLayersItem(null)} />
 

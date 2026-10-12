@@ -8,6 +8,7 @@ import { ModerationScanProgress, ScanState } from "./ModerationScanProgress";
 import { ModerationFilters, ModerationFilter } from "./ModerationFilters";
 import { ModerationCard } from "./ModerationCard";
 import { ModerationHeader } from "./ModerationHeader";
+import Pager from "./Pager";
 
 interface Props {
   token: string;
@@ -42,6 +43,8 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   const [filter, setFilter] = useState<ModerationFilter>("all");
   const [items, setItems] = useState<ListItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const topRef = useRef<HTMLDivElement>(null);
   const [counts, setCounts] = useState({ all: 0, new: 0, ok: 0, miss: 0 });
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -65,6 +68,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
       if (req !== reqRef.current) return;
       if (d.ok) {
         setItems((prev) => (append ? [...prev, ...d.items] : d.items));
+        setPage(Math.floor(offset / PAGE) + 1);
         setTotal(d.total);
         setCounts(d.counts);
       }
@@ -84,8 +88,13 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, query, token]);
 
+  const goPage = (p: number) => {
+    fetchPage((p - 1) * PAGE, false);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const onChanged = () => {
-    fetchPage(0, false);
+    fetchPage((page - 1) * PAGE, false);
     onParentChanged();
   };
 
@@ -284,7 +293,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   };
 
   return (
-    <div className="space-y-4">
+    <div ref={topRef} className="space-y-4 scroll-mt-20">
       <ModerationHeader
         count={counts.all}
         fileRef={fileRef}
@@ -335,13 +344,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
           />
         ))}
       </div>
-      {total > items.length && (
-        <button onClick={() => fetchPage(items.length, true)} disabled={loading}
-          className="w-full rounded-xl border border-white/10 py-2.5 text-sm text-white/70 hover:bg-white/5 disabled:opacity-60 flex items-center justify-center gap-2">
-          {loading && <Icon name="Loader2" size={14} className="animate-spin" />}
-          Показать ещё ({total - items.length})
-        </button>
-      )}
+      <Pager page={page} total={total} perPage={PAGE} loading={loading} onChange={goPage} />
     </div>
   );
 }
