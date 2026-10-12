@@ -17,11 +17,11 @@ export default function SpaceBackground({ dim = 0.6, count = 70, solid = 0 }: { 
         @keyframes drift { from { transform: scale(1.05) translate(0,0) } to { transform: scale(1.15) translate(-2%,-1%) } }
       `}</style>
       <img src={SPACE_BG} alt="" className="absolute inset-0 w-full h-full object-cover object-left opacity-95"
-        style={{ animation: "drift 40s ease-in-out infinite alternate" }} />
+        style={solid > 0 ? undefined : { animation: "drift 40s ease-in-out infinite alternate" }} />
       <div className="absolute inset-0"
         style={{ background: `radial-gradient(ellipse at center, rgba(5,6,13,0.1) 0%, rgba(5,6,13,${dim}) 80%)` }} />
       {solid > 0 && <div className="absolute inset-0" style={{ background: `rgba(5,6,13,${solid})` }} />}
-      {stars.map((s, i) => (
+      {!solid && stars.map((s, i) => (
         <span key={i} className="absolute rounded-full bg-white"
           style={{ top: `${s.top}%`, left: `${s.left}%`, width: s.size, height: s.size,
             animation: `twinkle ${s.dur}s ease-in-out ${s.delay}s infinite` }} />

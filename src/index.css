@@ -125,9 +125,7 @@
   }
 
   .space-card {
-    background: linear-gradient(160deg, rgba(30, 22, 54, 0.78), rgba(12, 14, 28, 0.82) 55%, rgba(10, 24, 36, 0.8));
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
+    background: linear-gradient(160deg, rgba(30, 22, 54, 0.92), rgba(12, 14, 28, 0.94) 55%, rgba(10, 24, 36, 0.92));
     box-shadow: 0 10px 40px -20px rgba(168, 85, 247, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 

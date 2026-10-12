@@ -399,7 +399,7 @@ export function CheckListsTiles({ token, onOpenChange }: { token: string; onOpen
           <button
             key={t.key}
             onClick={() => setOpen(t.key)}
-            className={`group relative text-left rounded-2xl border bg-white/[0.04] backdrop-blur-xl p-4 min-h-[112px] lg:min-h-[130px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/[0.07] ${c.box}`}
+            className={`group relative text-left rounded-2xl border bg-white/[0.06] p-4 min-h-[112px] lg:min-h-[130px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/[0.07] ${c.box}`}
           >
             <div className="flex items-center justify-between">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${c.icon}`}>

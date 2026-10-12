@@ -27,7 +27,7 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
   return (
     <div className="relative isolate min-h-screen">
       <SpaceBackground dim={0.6} solid={openSection ? 0.6 : 0} />
-      <header className="bg-[#05060d]/60 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
+      <header className="bg-[#05060d]/90 border-b border-white/10 sticky top-0 z-50">
         <div className={`${openSection ? "max-w-none" : "max-w-5xl"} mx-auto px-4 md:px-8 flex items-center justify-between h-16`}>
           <div className="flex items-center gap-2">
             {openSection && (
@@ -76,7 +76,7 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
                 <button
                   key={t.key}
                   onClick={() => setOpenSection(t.key)}
-                  className={`group text-left rounded-2xl border bg-white/[0.04] backdrop-blur-xl p-5 md:p-6 min-h-[160px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.07] ${c.box}`}
+                  className={`group text-left rounded-2xl border bg-white/[0.06] p-5 md:p-6 min-h-[160px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.07] ${c.box}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${c.icon}`}>
