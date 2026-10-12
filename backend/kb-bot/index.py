@@ -1017,10 +1017,10 @@ def run_complaint_target(chat_id, user: dict, query: str) -> None:
 def verdict(r) -> str:
     """Итог проверки: кто это (водитель/диспетчер) и можно ли с ним работать."""
     list_type, role = r[0], (r[10] if len(r) > 10 else '')
-    who = {'driver': '🚗 Это ВОДИТЕЛЬ', 'dispatcher': '🎧 Это ДИСПЕТЧЕР'}.get(role, '👤 Аккаунт')
+    who = {'driver': '🚗 Этот водитель', 'dispatcher': '🎧 Этот диспетчер'}.get(role, '👤 Этот аккаунт')
     if list_type == 'black':
-        return f"⛔️ <b>ЧЁРНЫЙ СПИСОК</b>\n{who}\n\n❌ Работать НЕ рекомендуем!"
-    return f"✅ <b>БЕЛЫЙ СПИСОК</b>\n{who}\n\n👍 Проверен — с ним можно работать."
+        return f"⛔️ <b>{who} в чёрном списке.</b>\n❌ Работать не рекомендуем!"
+    return f"✅ <b>{who} в белом списке.</b>\n👍 Проверен — с ним можно работать."
 
 
 def card_text(r, head: str) -> str:
@@ -1109,11 +1109,9 @@ def notify_moderated(item_id: int, preview_to: int = 0, preview_query: str = '')
     if not rows:
         return 0
     r = enrich_card(r)
-    who = {'driver': 'водитель', 'dispatcher': 'диспетчер'}.get(r[10], 'участник')
-    where_txt = 'ЧЁРНОМ СПИСКЕ' if r[0] == 'black' else 'БЕЛОМ СПИСКЕ'
     for chat_id, query in rows:
         head = (f"🔔 <b>Проверка завершена</b>\n"
-                f"Вы искали <b>{esc_html(query)}</b> — данный {who} находится в <b>{where_txt}</b>.\n\n" + verdict(r))
+                f"Вы искали <b>{esc_html(query)}</b>.\n\n" + verdict(r))
         if preview_to:
             head = "👁 <b>ПРИМЕР</b> — так увидит ответ искавший:\n\n" + head
         send_card(chat_id, r, head)
