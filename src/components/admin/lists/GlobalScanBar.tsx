@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { TG_LOOKUP_API } from "./listTypes";
@@ -13,7 +13,6 @@ interface Props {
 type ScanState = { running: boolean; done: number; found: number; left: number; note?: string; scope?: string } | null;
 
 let scanState: ScanState = null;
-let stopFlag = false;
 const listeners = new Set<(s: ScanState) => void>();
 const setScanGlobal = (v: ScanState) => {
   scanState = v;
@@ -29,62 +28,52 @@ export function useScanState() {
   return s;
 }
 
-async function runScan(token: string, onChanged: () => void, scope: "all" | "full" = "all") {
-  if (scanState?.running) return;
-  stopFlag = false;
-  let done = 0, found = 0, idle = 0, left = -1, err = "", lastRefresh = Date.now();
-  const setScan = (v: ScanState) => setScanGlobal(v ? { ...v, scope } : v);
-  setScan({ running: true, done, found, left: 0 });
-  while (!stopFlag) {
-    try {
-      const d = await fetch(`${TG_LOOKUP_API}?action=batch&scope=${scope}`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
-      if (!d.ok) { err = d.error || "сервер не ответил"; break; }
-      done += d.done || 0;
-      found += d.found || 0;
-      left = d.left || 0;
-      setScan({ running: true, done, found, left });
-      if (!left) break;
-      if (!d.done && d.reserved) {
-        setScan({ running: false, done, found, left, note: "Свободен только 1 аккаунт — он оставлен для поиска в боте" });
-        onChanged();
-        return;
-      }
-      if (!d.done && d.hour_limit) {
-        setScan({ running: false, done, found, left, note: "Часовой лимит аккаунтов исчерпан — сканер продолжит сам в фоне" });
-        onChanged();
-        return;
-      }
-      if (!d.done && d.all_paused) {
-        const m = Math.ceil((d.resume_in || 0) / 60);
-        const when = m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`;
-        setScan({ running: false, done, found, left, note: `Telegram попросил паузу — можно продолжить через ${when}` });
-        onChanged();
-        return;
-      }
-      if (!d.done) {
-        idle += 1;
-        if (idle >= 3) { err = "аккаунты не смогли проверить ни одной карточки"; break; }
-        await new Promise((r) => setTimeout(r, 20000));
-      } else idle = 0;
-      if (Date.now() - lastRefresh > 60000) { lastRefresh = Date.now(); onChanged(); }
-    } catch {
-      idle += 1;
-      if (idle >= 3) { err = "сервер не отвечает"; break; }
-      await new Promise((r) => setTimeout(r, 5000));
-    }
-  }
-  const finished = left === 0 && !err;
-  const note = finished ? "База обновлена" : stopFlag ? "Остановлено — можно продолжить" : `Прервано: ${err || "ошибка"} — можно продолжить`;
-  setScan({ running: false, done, found, left: Math.max(0, left), note });
-  if (finished) toast.success("Глобальное сканирование завершено");
-  else if (!stopFlag) toast.error(`Сканирование прервано: ${err || "ошибка"}`);
-  onChanged();
+async function callBg(token: string, op: "start" | "stop" | "status", scope = "all") {
+  const d = await fetch(`${TG_LOOKUP_API}?action=bg_${op}&scope=${scope}`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
+  if (!d.ok) throw new Error(d.error || "сервер не ответил");
+  setScanGlobal(d.has ? { running: d.running, done: d.done, found: d.found, left: d.left, note: d.note, scope: d.scope } : null);
+  return d;
+}
+
+function useBgPolling(token: string, onChanged: () => void) {
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    let last = Date.now();
+    const tick = async () => {
+      try {
+        const d = await callBg(token, "status");
+        if (!alive) return;
+        if (wasRunning.current && !d.running) {
+          if (d.finished) toast.success("Глобальное сканирование завершено");
+          onChanged();
+        } else if (d.running && Date.now() - last > 60000) {
+          last = Date.now();
+          onChanged();
+        }
+        wasRunning.current = d.running;
+      } catch { /* */ }
+    };
+    tick();
+    const t = setInterval(tick, 5000);
+    return () => { alive = false; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 }
 
 export function GlobalScanBar({ token, onChanged }: Props) {
   const scan = useScanState();
-  const start = () => runScan(token, onChanged, scan?.scope === "full" ? "full" : "all");
-  const startFull = () => runScan(token, onChanged, "full");
+  useBgPolling(token, onChanged);
+  const run = async (op: "start" | "stop", scope = "all") => {
+    try {
+      await callBg(token, op, scope);
+      if (op === "start") toast.success("Сканирование запущено на сервере", { description: "Можно закрыть сайт — оно дойдёт до конца само" });
+    } catch (e) {
+      toast.error(`Не удалось: ${(e as Error).message}`);
+    }
+  };
+  const start = () => run("start", "all");
+  const startFull = () => run("start", "full");
 
   const pct = scan ? Math.min(100, (scan.done / Math.max(1, scan.done + scan.left)) * 100) : 0;
 
@@ -102,10 +91,11 @@ export function GlobalScanBar({ token, onChanged }: Props) {
             {scan
               ? `проверено ${scan.done} · найдено ${scan.found} · осталось ${scan.left}${scan.note ? ` · ${scan.note}` : ""}`
               : "Обновит имена, фото, описание и ID по всем непроверенным карточкам"}
+            {scan?.running && <div className="text-[11px] text-cyan-300/80 mt-0.5">Работает на сервере — можно закрыть сайт, скан дойдёт до конца сам</div>}
           </div>
         </div>
         {scan?.running ? (
-          <button onClick={() => { stopFlag = true; }}
+          <button onClick={() => run("stop")}
             className="rounded-xl px-4 py-2 text-sm border border-white/15 text-white/80 hover:bg-white/5 flex items-center gap-2">
             <Icon name="Square" size={14} />Стоп
           </button>
@@ -113,11 +103,11 @@ export function GlobalScanBar({ token, onChanged }: Props) {
           <div className="flex flex-wrap gap-2">
             <button onClick={startFull} title="Пройдёт по всем карточкам без фото и подтянет фото, имя, описание и ID"
               className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2">
-              <Icon name="ImageDown" fallback="Image" size={14} />{scan?.scope === "full" ? "Продолжить полный скан" : "Скачать фото и все данные"}
+              <Icon name="ImageDown" fallback="Image" size={14} />{scan?.scope === "full" && scan.left ? "Продолжить полный скан" : "Скачать фото и все данные"}
             </button>
             <button onClick={start}
               className="rounded-xl px-4 py-2 text-sm border border-white/15 text-white/80 hover:bg-white/5 flex items-center gap-2">
-              <Icon name="Play" size={14} />{scan && scan.scope !== "full" ? "Продолжить" : "Только новые"}
+              <Icon name="Play" size={14} />{scan && scan.scope !== "full" && scan.left ? "Продолжить" : "Только новые"}
             </button>
           </div>
         )}

@@ -395,10 +395,10 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
     return stats
 
 
-def handle_batch(context, scope: str = 'all') -> dict:
+def handle_batch(context, scope: str = 'all', reserve: float = 2) -> dict:
     started = time.time()
     try:
-        budget = context.get_remaining_time_in_millis() / 1000 - 2
+        budget = context.get_remaining_time_in_millis() / 1000 - reserve
     except Exception:
         budget = 3
     deadline = started + budget
@@ -1054,6 +1054,146 @@ def handle_group_stop(qs: dict) -> dict:
         conn.close()
 
 
+SELF_URL = 'https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a'
+
+
+def bg_load(cur) -> tuple:
+    cur.execute(f"SELECT value, extract(epoch from now() - updated_at)::int FROM {SCHEMA}.app_settings WHERE key='global_scan'")
+    row = cur.fetchone()
+    if not row:
+        return {}, 0
+    try:
+        return json.loads(row[0] or '{}'), row[1]
+    except Exception:
+        return {}, row[1]
+
+
+def bg_save(cur, conn, st: dict) -> None:
+    v = json.dumps(st, ensure_ascii=False).replace("'", "''")
+    cur.execute(f"INSERT INTO {SCHEMA}.app_settings (key, value, updated_at) VALUES ('global_scan', '{v}', now()) "
+                f"ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()")
+    conn.commit()
+
+
+def bg_fire(chain: str) -> None:
+    """Запускает следующий шаг фонового скана, не дожидаясь его окончания."""
+    import urllib.request
+    req = urllib.request.Request(f"{SELF_URL}?action=bg_tick&chain={chain}",
+                                 headers={'X-Cron-Secret': os.environ.get('CRON_SECRET', '')})
+    try:
+        urllib.request.urlopen(req, timeout=1.5).read()
+    except Exception:
+        pass
+
+
+def bg_control(op: str, scope: str = 'all') -> dict:
+    """Старт/стоп/статус фонового глобального скана. Скан идёт на сервере и не зависит от открытого сайта."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    fire = ''
+    try:
+        st, age = bg_load(cur)
+        if op == 'start':
+            same = st.get('scope') == scope and not st.get('finished')
+            st = {'on': True, 'scope': scope, 'chain': uuid.uuid4().hex,
+                  'done': st.get('done', 0) if same else 0, 'found': st.get('found', 0) if same else 0,
+                  'left': st.get('left', 0), 'note': 'Запущено на сервере', 'started_at': int(time.time())}
+            bg_save(cur, conn, st)
+            fire = st['chain']
+        elif op == 'stop':
+            st['on'] = False
+            st['note'] = 'Остановлено — можно продолжить'
+            bg_save(cur, conn, st)
+        elif st.get('on') and age > 120:
+            # Цепочка оборвалась (сбой сети/платформы) — перезапускаем сами.
+            st['chain'] = uuid.uuid4().hex
+            st['note'] = 'Перезапущено после обрыва'
+            bg_save(cur, conn, st)
+            fire = st['chain']
+            age = 0
+    finally:
+        cur.close()
+        conn.close()
+    if fire:
+        bg_fire(fire)
+    return resp(200, {'ok': True, 'running': bool(st.get('on')), 'scope': st.get('scope') or 'all',
+                      'done': st.get('done', 0), 'found': st.get('found', 0), 'left': st.get('left', 0),
+                      'note': st.get('note', ''), 'finished': bool(st.get('finished')), 'age': age, 'has': bool(st)})
+
+
+def bg_tick(chain: str, context) -> dict:
+    """Один шаг фонового скана: пачка карточек, затем сам запускает следующий шаг, пока база не закончится."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        st, _ = bg_load(cur)
+        if not st.get('on') or st.get('chain') != chain:
+            return resp(200, {'ok': True, 'skipped': True})
+        st['note'] = 'Сканирую…'
+        bg_save(cur, conn, st)
+    finally:
+        cur.close()
+        conn.close()
+    started = time.time()
+    try:
+        d = json.loads(handle_batch(context, st.get('scope') or 'all', reserve=6)['body'])
+    except Exception as e:
+        print(f'[TG-LOOKUP] bg tick failed: {type(e).__name__}: {str(e)[:150]}')
+        d = {'ok': False}
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur_st, _ = bg_load(cur)
+        if not cur_st.get('on') or cur_st.get('chain') != chain:
+            return resp(200, {'ok': True, 'stopped': True})
+        st = cur_st
+        wait = 0
+        if d.get('ok'):
+            st['done'] = st.get('done', 0) + (d.get('done') or 0)
+            st['found'] = st.get('found', 0) + (d.get('found') or 0)
+            st['left'] = d.get('left') or 0
+            if not st['left']:
+                st.update({'on': False, 'finished': True, 'note': 'База обновлена'})
+            elif d.get('done'):
+                st['note'] = 'Сканирую в фоне'
+            else:
+                if d.get('all_paused') and d.get('resume_in'):
+                    m = max(1, int(d['resume_in']) // 60)
+                    st['note'] = f'Telegram попросил паузу (~{m} мин) — продолжу сам'
+                elif d.get('hour_limit'):
+                    st['note'] = 'Часовой лимит аккаунтов — жду и продолжу сам'
+                elif d.get('reserved'):
+                    st['note'] = 'Свободен 1 аккаунт (оставлен боту) — жду и продолжу сам'
+                else:
+                    st['note'] = 'Аккаунты не ответили — повторю'
+                wait = 1
+        else:
+            st['note'] = 'Ошибка шага — повторю'
+            wait = 1
+        bg_save(cur, conn, st)
+    finally:
+        cur.close()
+        conn.close()
+    if not st.get('on'):
+        return resp(200, {'ok': True, 'finished': True})
+    if wait:
+        try:
+            rest = context.get_remaining_time_in_millis() / 1000 - 4
+        except Exception:
+            rest = 0
+        time.sleep(max(0, min(20, rest)))
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        try:
+            bg_save(cur, conn, st)
+        finally:
+            cur.close()
+            conn.close()
+    print(f"[TG-LOOKUP] bg tick {time.time() - started:.1f}s done={st.get('done')} left={st.get('left')}")
+    bg_fire(chain)
+    return resp(200, {'ok': True, 'next': True})
+
+
 def handle_auto(context) -> dict:
     """Фоновый запуск по расписанию: сначала догружает фото участников группы, потом сканирует карточки."""
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
@@ -1107,7 +1247,15 @@ def handler(event: dict, context) -> dict:
     is_cron = bool(cron) and (headers.get('X-Cron-Secret') or headers.get('x-cron-secret') or qs.get('secret')) == cron
     if not is_cron and not verify_token(headers.get('X-Admin-Token') or headers.get('x-admin-token') or ''):
         return resp(401, {'error': 'Unauthorized'})
+    if qs.get('action') == 'bg_tick':
+        return bg_tick(qs.get('chain') or '', context)
+    if qs.get('action') in ('bg_start', 'bg_stop', 'bg_status'):
+        return bg_control(qs['action'][3:], qs.get('scope') or 'all')
     if qs.get('action') == 'auto':
+        try:
+            bg_control('status')
+        except Exception:
+            pass
         return handle_auto(context)
     if qs.get('action') == 'batch':
         return handle_batch(context, qs.get('scope') or 'all')
