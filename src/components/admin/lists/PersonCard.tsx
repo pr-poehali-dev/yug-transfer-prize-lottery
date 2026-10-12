@@ -1,6 +1,7 @@
 import Icon from "@/components/ui/icon";
 import { GroupsBadge } from "./GroupsBadge";
 import { ListItem, FIELD_LABELS, fmtDate } from "./listTypes";
+import { TgLink } from "./TgLink";
 
 interface Props {
   item: ListItem;
@@ -83,7 +84,7 @@ export function PersonCard({ item, scanning, onEdit, onScan, onLayers, onDelete 
             </div>
             <div className="flex items-center gap-1.5 text-sky-300 truncate">
               <Icon name="AtSign" size={12} className="text-white/40 shrink-0" />
-              {item.username ? item.username : <span className="text-white/30">—</span>}
+              {item.username ? <TgLink username={item.username} prefix="" className="text-sky-300 truncate" /> : <span className="text-white/30">—</span>}
             </div>
             <GroupsBadge groups={item.groups} className="text-[11px]" />
           </div>

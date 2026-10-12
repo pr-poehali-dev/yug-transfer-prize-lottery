@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { KNOWLEDGE_BASE_URL } from "../adminTypes";
 import { fmtDate, inputCls } from "./listTypes";
+import { TgLink } from "./TgLink";
 
 interface Payment {
   id: number;
@@ -210,7 +211,7 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-white truncate">
-                          {p.name || "Без имени"} {p.username && <span className="text-sky-300">@{p.username}</span>}
+                          {p.name || "Без имени"} {p.username && <TgLink username={p.username} />}
                         </div>
                         <div className="text-[11px] text-white/40">
                           Оплатил {fmtDate(p.created_at, true)}{p.tg_id ? ` · ID ${p.tg_id}` : ""}{p.note ? ` · ${p.note}` : ""}
@@ -241,7 +242,7 @@ export function SubscriptionsPage({ token, onBack }: { token: string; onBack: ()
                     <div key={s.tg_id} className="flex items-center gap-3 px-4 py-3">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-white truncate">
-                          {s.name || "Без имени"} {s.username && <span className="text-sky-300">@{s.username}</span>}
+                          {s.name || "Без имени"} {s.username && <TgLink username={s.username} />}
                         </div>
                         <div className="text-[11px] text-white/40">
                           ID {s.tg_id}{s.created_at ? ` · запустил бота ${fmtDate(s.created_at)}` : ""}

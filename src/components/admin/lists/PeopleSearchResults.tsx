@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { GroupsBadge } from "./GroupsBadge";
 import { LISTS, LISTS_API, type ListDef, type ListItem } from "./listTypes";
 import { PersonEditDialog } from "./PersonEditDialog";
+import { TgLink } from "./TgLink";
 
 const PENDING_DEF: ListDef = { role: "", list_type: "pending", title: "На модерации", icon: "Clock", color: "text-amber-400" };
 
@@ -57,8 +58,9 @@ export function PeopleSearchResults({ token, query, onChanged }: { token: string
           {items.map((i) => {
             const b = badge(i);
             return (
-              <button key={i.id} onClick={() => setOpenItem(i)}
-                className="rounded-xl border border-white/10 space-card p-2.5 flex items-center gap-3 text-left hover:border-white/25 transition-colors">
+              <div key={i.id} role="button" tabIndex={0} onClick={() => setOpenItem(i)}
+                onKeyDown={(e) => e.key === "Enter" && setOpenItem(i)}
+                className="cursor-pointer rounded-xl border border-white/10 space-card p-2.5 flex items-center gap-3 text-left hover:border-white/25 transition-colors">
                 <div className="w-11 h-11 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
                   {i.photo_url
                     ? <img loading="lazy" decoding="async" src={i.photo_url} alt="" className="w-full h-full object-cover" />
@@ -67,13 +69,13 @@ export function PeopleSearchResults({ token, query, onChanged }: { token: string
                 <div className="min-w-0 flex-1">
                   <div className="text-sm text-white truncate">{i.name || "Без имени"}</div>
                   <div className="text-[11px] text-white/50 truncate">
-                    {i.username ? `@${i.username}` : ""}{i.username && i.tg_id ? " · " : ""}{i.tg_id ? `ID ${i.tg_id}` : ""}
+                    {i.username ? <TgLink username={i.username} /> : ""}{i.username && i.tg_id ? " · " : ""}{i.tg_id ? `ID ${i.tg_id}` : ""}
                     {!i.username && !i.tg_id && i.phone ? i.phone : ""}
                   </div>
                   <GroupsBadge groups={i.groups} className="mt-0.5" />
                   <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full ${b.cls}`}>{b.text}</span>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>

@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { fmtDate } from "./listTypes";
 import { KNOWLEDGE_BASE_URL } from "../adminTypes";
+import { TgLink } from "./TgLink";
 
 interface Totals { total: number; searchers: number; black: number; white: number; unknown: number; today: number }
 interface Top { key: string; name: string; username: string; tg_id: number | null; count: number; searchers: number; last_at: string; result: string }
@@ -33,7 +34,7 @@ function who(name: string, username: string, id?: number | null) {
     <div className="min-w-0">
       <div className="text-sm text-white truncate">{name || (username ? `@${username}` : id || "—")}</div>
       <div className="text-[11px] text-white/45 truncate">
-        {username && <span className="text-sky-300">@{username}</span>}
+        {username && <TgLink username={username} />}
         {username && id ? " · " : ""}
         {id ? <span className="font-mono">{id}</span> : null}
       </div>

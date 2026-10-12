@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { COMPLAINTS_API, UPLOAD_API, inputCls } from "./listTypes";
+import { TgLink } from "./TgLink";
 
 export interface EditableComplaint {
   id: number;
@@ -228,7 +229,7 @@ export function ComplaintEditDialog({ token, complaint, onClose, onSaved }: Prop
             <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/50 space-y-0.5">
               <div>
                 Пожаловался: <span className="text-sky-300">{complaint.reporter_name || "—"}
-                  {complaint.reporter_username ? ` @${complaint.reporter_username}` : ""}</span>
+                  {complaint.reporter_username ? <> <TgLink username={complaint.reporter_username} /></> : ""}</span>
                 {complaint.reporter_tg_id ? <span className="font-mono"> · ID {complaint.reporter_tg_id}</span> : null}
               </div>
               {complaint.created_at && <div>Подана: {new Date(complaint.created_at).toLocaleString("ru-RU")}</div>}

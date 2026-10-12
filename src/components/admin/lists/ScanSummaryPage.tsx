@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { fmtDate } from "./listTypes";
 import { KNOWLEDGE_BASE_URL } from "../adminTypes";
+import { TgLink } from "./TgLink";
 
 interface Change {
   item_id: number; field: string; label: string; old: string; new: string; changed_at: string;
@@ -133,7 +134,7 @@ export function ScanSummaryPage({ token, onBack }: { token: string; onBack: () =
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm text-white truncate">{c.name || "Без имени"}</span>
-                        {c.username && <span className="text-xs text-white/50">@{c.username}</span>}
+                        {c.username && <TgLink username={c.username} className="text-xs text-sky-300" />}
                         {listTag(c.role, c.list_type)}
                       </div>
                       <div className="text-xs text-white/70 flex flex-wrap items-center gap-1.5">

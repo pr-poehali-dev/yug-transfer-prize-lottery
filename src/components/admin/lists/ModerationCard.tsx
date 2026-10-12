@@ -1,6 +1,7 @@
 import Icon from "@/components/ui/icon";
 import { GroupsBadge } from "./GroupsBadge";
 import { LISTS, ListItem } from "./listTypes";
+import { TgLink } from "./TgLink";
 
 const SHORT: Record<string, string> = {
   "dispatcher-white": "Белый · диспетчер",
@@ -46,7 +47,7 @@ export function ModerationCard({ item: i, busy, scanning, menuOpen, onToggleMenu
           <div className="text-xs font-semibold text-white truncate">{i.name || "Без имени"}</div>
           <div className="text-white/50 font-mono truncate">{i.tg_id ? `ID ${i.tg_id}` : "ID —"}</div>
           <div className="text-white/50 truncate">{i.phone || "—"}</div>
-          <div className="text-sky-300 truncate">{i.username ? `@${i.username}` : "—"}</div>
+          <div className="text-sky-300 truncate">{i.username ? <TgLink username={i.username} /> : "—"}</div>
           <GroupsBadge groups={i.groups} />
         </div>
         <div className="self-start flex flex-col gap-1">

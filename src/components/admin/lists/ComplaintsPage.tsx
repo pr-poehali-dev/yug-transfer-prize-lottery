@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { ComplaintEditDialog } from "./ComplaintEditDialog";
 import { COMPLAINTS_API, COMPLAINT_TO_GROUP_API, TG_LOOKUP_API, fmtDate } from "./listTypes";
+import { TgLink } from "./TgLink";
 
 interface Complaint {
   id: number;
@@ -197,7 +198,7 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
                 <div className="flex-1 min-w-0 text-xs space-y-0.5">
                   <div className="text-sm font-semibold text-white truncate">На: {c.target.name || "Без имени"}</div>
                   <div className="text-white/50 truncate">
-                    {c.target.username ? `@${c.target.username} · ` : ""}{c.target.tg_id ? `ID ${c.target.tg_id}` : ""}
+                    {c.target.username ? <><TgLink username={c.target.username} />{" · "}</> : ""}{c.target.tg_id ? `ID ${c.target.tg_id}` : ""}
                   </div>
                   <div className={c.target.list_type === "black" ? "text-red-300" : "text-white/40"}>
                     {ROLE[c.target.role] || "Роль не указана"} · {LIST[c.target.list_type] || "—"}
