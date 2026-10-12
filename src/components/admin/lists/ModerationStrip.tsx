@@ -7,6 +7,7 @@ import { ModerationGroupPanel, GroupState } from "./ModerationGroupPanel";
 import { ModerationScanProgress, ScanState } from "./ModerationScanProgress";
 import { ModerationFilters, ModerationFilter } from "./ModerationFilters";
 import { ModerationCard } from "./ModerationCard";
+import { ModerationHeader } from "./ModerationHeader";
 
 interface Props {
   token: string;
@@ -291,39 +292,17 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <button onClick={onBack}
-          className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm border border-white/10 text-white/70 hover:text-white hover:bg-white/5">
-          <Icon name="ArrowLeft" size={14} />Назад
-        </button>
-        <Icon name="Clock" size={18} className="text-amber-400" />
-        <span className="text-base font-medium text-white">На модерации</span>
-        <span className="text-xs text-white/40">· {counts.all}</span>
-        <div className="ml-auto flex flex-wrap gap-2">
-          <input ref={fileRef} type="file" accept=".txt,.csv" className="hidden"
-            onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])} />
-          <button onClick={() => setGroupOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm border border-sky-500/40 text-sky-200 hover:bg-sky-500/10">
-            <Icon name="Users" size={14} />Сканировать группу
-          </button>
-          <button onClick={() => fileRef.current?.click()} disabled={importing}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm border border-white/10 text-white/80 hover:bg-white/5 disabled:opacity-60">
-            <Icon name={importing ? "Loader2" : "Upload"} size={14} className={importing ? "animate-spin" : ""} />
-            Загрузить список
-          </button>
-          {scan?.running ? (
-            <button onClick={() => { stopRef.current = true; }}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm bg-red-500/80 hover:bg-red-500 text-white">
-              <Icon name="Square" size={13} />Остановить
-            </button>
-          ) : (
-            <button onClick={scanAll} title="Подтянуть фото, имя, описание и ID для всех карточек на модерации"
-              className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2">
-              <Icon name="ScanSearch" fallback="Search" size={15} />Подтянуть всё и фото
-            </button>
-          )}
-        </div>
-      </div>
+      <ModerationHeader
+        count={counts.all}
+        fileRef={fileRef}
+        importing={importing}
+        scanRunning={!!scan?.running}
+        onBack={onBack}
+        onImportFile={importFile}
+        onToggleGroup={() => setGroupOpen((v) => !v)}
+        onStopScan={() => { stopRef.current = true; }}
+        onScanAll={scanAll}
+      />
 
       {groupOpen && (
         <ModerationGroupPanel
