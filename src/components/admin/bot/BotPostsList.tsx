@@ -43,25 +43,25 @@ export function BotPostsList({
 }: BotPostsListProps) {
   return (
     <div className="rounded-2xl border border-white/8 p-3 sm:p-4" style={{ background: "rgba(255,255,255,0.02)" }}>
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-3">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0 w-full">
           <div className="w-7 h-7 rounded-md bg-orange-500/10 flex items-center justify-center flex-shrink-0">
             <Icon name="Calendar" size={16} className="text-orange-400" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h3 className="text-white font-medium text-base leading-tight">Ежедневные посты</h3>
-            <p className="text-white/40 text-[11px] truncate">
+            <p className="text-white/40 text-[11px] leading-snug">
               <Icon name="RefreshCw" size={11} className="inline mr-1" />
               Зацикленная очередь · {posts.length} {posts.length === 1 ? "пост" : posts.length < 5 ? "поста" : "постов"} · @ug_transfer_pro
               {unusedCount > 0 && unusedCount < posts.length && ` · ещё ${unusedCount} новых в первой очереди`}
             </p>
           </div>
         </div>
-        <div className="flex gap-2 flex-shrink-0">
-          <button onClick={onSendNow} disabled={sending} className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium hover:opacity-80 transition-colors disabled:opacity-50">
+        <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto flex-shrink-0">
+          <button onClick={onSendNow} disabled={sending} className="px-3 py-2 sm:py-1.5 rounded-lg whitespace-nowrap bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium hover:opacity-80 transition-colors disabled:opacity-50">
             {sending ? "Отправка..." : "Отправить сейчас"}
           </button>
-          <button onClick={onAddNew} className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 text-sm font-medium hover:opacity-80 transition-colors">
+          <button onClick={onAddNew} className="px-3 py-2 sm:py-1.5 rounded-lg whitespace-nowrap bg-purple-500/10 border border-purple-500/20 text-purple-400 text-sm font-medium hover:opacity-80 transition-colors">
             <Icon name="Plus" size={14} className="inline mr-1" />Добавить
           </button>
         </div>
@@ -76,7 +76,7 @@ export function BotPostsList({
       ) : posts.length === 0 ? (
         <p className="text-white/30 text-center py-8">Нет постов</p>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-2 max-h-[calc(100vh-230px)] min-h-[300px] overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-2 sm:max-h-[calc(100vh-230px)] sm:min-h-[300px] sm:overflow-y-auto sm:pr-1">
           {queueOrder.map(pid => posts.find(p => p.id === pid)!).filter(Boolean).map(post => {
             const sched = scheduleMap[post.id];
             const isNext = sched?.index === 0;
@@ -85,8 +85,8 @@ export function BotPostsList({
               <img loading="lazy" decoding="async" src={post.photo_url} alt="" className="w-14 h-14 object-cover rounded-lg border border-white/10 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{post.greeting}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white text-sm font-medium line-clamp-2 sm:truncate">{post.greeting}</p>
                     <p className="text-white/50 text-[11px] leading-snug mt-0.5 line-clamp-2">{post.description}</p>
                   </div>
                   <div className="flex gap-0.5 flex-shrink-0">
