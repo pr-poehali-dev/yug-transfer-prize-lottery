@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/icon";
-import { GroupsBadge } from "./GroupsBadge";
 import { BotCleanup } from "./BotCleanup";
 import { toast } from "sonner";
-import { LISTS, LISTS_API, TG_LOOKUP_API, BULK_IMPORT_API, ListItem, inputCls } from "./listTypes";
+import { LISTS, LISTS_API, TG_LOOKUP_API, BULK_IMPORT_API, ListItem } from "./listTypes";
+import { ModerationGroupPanel, GroupState } from "./ModerationGroupPanel";
+import { ModerationScanProgress, ScanState } from "./ModerationScanProgress";
+import { ModerationFilters, ModerationFilter } from "./ModerationFilters";
+import { ModerationCard } from "./ModerationCard";
 
 interface Props {
   token: string;
@@ -11,13 +14,6 @@ interface Props {
   onOpen: (item: ListItem) => void;
   onBack: () => void;
 }
-
-const SHORT: Record<string, string> = {
-  "dispatcher-white": "Белый · диспетчер",
-  "dispatcher-black": "Чёрный · диспетчер",
-  "driver-white": "Белый · водитель",
-  "driver-black": "Чёрный · водитель",
-};
 
 export function ModerationRow({ count, onOpen }: { count: number; onOpen: () => void }) {
   return (
@@ -42,7 +38,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   const [busyId, setBusyId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "new" | "ok" | "miss">("all");
+  const [filter, setFilter] = useState<ModerationFilter>("all");
   const [items, setItems] = useState<ListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState({ all: 0, new: 0, ok: 0, miss: 0 });
@@ -50,9 +46,9 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
   const [importing, setImporting] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupChat, setGroupChat] = useState("");
-  const [group, setGroup] = useState<{ running: boolean; title: string; added: number; skipped: number; total: number; progress: number; mode?: string } | null>(null);
+  const [group, setGroup] = useState<GroupState | null>(null);
   const groupStop = useRef(false);
-  const [scan, setScan] = useState<{ running: boolean; done: number; found: number; left: number; pausedFor?: string; phase?: string } | null>(null);
+  const [scan, setScan] = useState<ScanState | null>(null);
   const stopRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const reqRef = useRef(0);
@@ -330,90 +326,20 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
       </div>
 
       {groupOpen && (
-        <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.05] p-3 space-y-2">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input value={groupChat} onChange={(e) => setGroupChat(e.target.value)} disabled={group?.running}
-              placeholder="Ссылка t.me/…, @группа или ID группы (-100…)" className={inputCls} />
-            {group?.running ? (
-              <button onClick={() => { groupStop.current = true; }}
-                className="shrink-0 rounded-xl px-4 py-2 text-sm bg-red-500/80 hover:bg-red-500 text-white">Остановить</button>
-            ) : (
-              <>
-                <button onClick={() => scanGroup("members")} disabled={!groupChat.trim()}
-                  className="shrink-0 grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50">Участники</button>
-                <button onClick={() => scanGroup("photos")} disabled={!groupChat.trim()}
-                  className="shrink-0 rounded-xl px-4 py-2 text-sm font-medium border border-sky-400/50 text-sky-200 hover:bg-sky-500/10 disabled:opacity-50 flex items-center gap-1.5">
-                  <Icon name="Image" size={14} />Фото
-                </button>
-              </>
-            )}
-          </div>
-          <div className="text-[11px] text-white/40">
-            Участники попадут в «На модерации». Кто уже есть в базе (по Telegram ID или @username) — пропускается, дублей не будет.
-            Полный список доступен, если один из ваших аккаунтов — админ группы; иначе соберём тех, кто писал сообщения.
-            «Фото» — подтянет аватарки уже загруженных участников этой группы (нужен аккаунт-админ, лимиты поиска не тратятся).
-          </div>
-          {group && (
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center gap-2 text-sm text-white">
-                {group.running && <Icon name="Loader2" size={14} className="animate-spin text-sky-300" />}
-                <span className="truncate">{group.title}</span>
-                <span className="ml-auto text-xs text-white/60 shrink-0">
-                  {group.mode === "photos" ? `фото ${group.added} · без фото ${group.skipped}` : `новых ${group.added} · уже в базе ${group.skipped}`}
-                  {group.total ? ` · в группе ${group.total}` : ""}
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <div className="h-full bg-sky-400 transition-all" style={{ width: `${Math.min(100, group.progress)}%` }} />
-              </div>
-            </div>
-          )}
-        </div>
+        <ModerationGroupPanel
+          groupChat={groupChat}
+          setGroupChat={setGroupChat}
+          group={group}
+          onStop={() => { groupStop.current = true; }}
+          onScan={scanGroup}
+        />
       )}
 
-      {scan && (
-        <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] px-4 py-3 space-y-2">
-          <div className="flex items-center gap-2 text-sm text-white">
-            {scan.running && <Icon name="Loader2" size={14} className="animate-spin text-sky-300" />}
-            <span className="truncate">{scan.running ? (scan.phase || "Сканирую Telegram…") : "Сканирование остановлено"}</span>
-            <span className="ml-auto text-xs text-white/60 shrink-0">подтянуто {scan.found} · осталось без фото {scan.left}</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full bg-sky-400 transition-all"
-              style={{ width: `${Math.min(100, (scan.done / Math.max(1, scan.done + scan.left)) * 100)}%` }} />
-          </div>
-          {scan.pausedFor ? (
-            <div className="text-[11px] text-amber-300/90">
-              Лимит поиска по @username на аккаунтах исчерпан — освободится через {scan.pausedFor}.
-              Сканер продолжит сам в фоне, или нажмите «Подтянуть всё и фото» позже.
-            </div>
-          ) : (
-            <div className="text-[11px] text-white/40">Не закрывайте страницу. Можно остановить и продолжить позже — проверенные не повторяются.</div>
-          )}
-        </div>
-      )}
+      {scan && <ModerationScanProgress scan={scan} />}
 
       <BotCleanup token={token} onChanged={onChanged} />
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по имени, @username, ID, описанию" className={`${inputCls} pl-9`} />
-        </div>
-        <div className="flex gap-1 overflow-x-auto">
-          {([
-            ["all", `Все ${counts.all}`], ["new", `Не проверены ${counts.new}`],
-            ["ok", `Найдены ${counts.ok}`], ["miss", `Не найдены ${counts.miss}`],
-          ] as const).map(([k, label]) => (
-            <button key={k} onClick={() => setFilter(k)}
-              className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs border ${filter === k
-                ? "border-amber-400/60 bg-amber-500/15 text-amber-200" : "border-white/10 text-white/60 hover:bg-white/5"}`}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <ModerationFilters search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} counts={counts} />
 
       <div className="text-xs text-white/40">Присвойте статус — карточка уйдёт в нужный список.</div>
       {!items.length && (
@@ -422,80 +348,20 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {items.map((i) => {
-          const busy = busyId === i.id;
-          return (
-            <div key={i.id} className="relative rounded-xl border border-white/10 space-card p-2.5">
-              <div className="flex gap-2.5">
-                <button onClick={() => (i.photo_url ? onOpen(i) : scanCard(i))} disabled={scanIds.includes(i.id)}
-                  title={i.photo_url ? "Открыть карточку" : "Нажмите — подтянуть данные из Telegram"}
-                  className="group/av relative w-14 h-14 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center">
-                  {i.photo_url ? (
-                    <img loading="lazy" decoding="async" src={i.photo_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <img loading="lazy" decoding="async" src="/avatar-placeholder.jpg" alt="" className="w-full h-full object-cover" />
-                  )}
-                  {!i.photo_url && (
-                    <span className={`absolute inset-0 flex items-center justify-center bg-sky-500/20 text-sky-200 transition-opacity ${
-                      scanIds.includes(i.id) ? "opacity-100" : "opacity-0 group-hover/av:opacity-100"}`}>
-                      <Icon name={scanIds.includes(i.id) ? "Loader2" : "ScanSearch"} fallback="RefreshCw" size={18}
-                        className={scanIds.includes(i.id) ? "animate-spin" : ""} />
-                    </span>
-                  )}
-                </button>
-                <div className="flex-1 min-w-0 text-[11px] space-y-0.5 cursor-pointer" onClick={() => !scanIds.includes(i.id) && scanCard(i)}
-                  title="Нажмите — подтянуть данные из Telegram">
-                  <div className="text-xs font-semibold text-white truncate">{i.name || "Без имени"}</div>
-                  <div className="text-white/50 font-mono truncate">{i.tg_id ? `ID ${i.tg_id}` : "ID —"}</div>
-                  <div className="text-white/50 truncate">{i.phone || "—"}</div>
-                  <div className="text-sky-300 truncate">{i.username ? `@${i.username}` : "—"}</div>
-                  <GroupsBadge groups={i.groups} />
-                </div>
-                <div className="self-start flex flex-col gap-1">
-                  <button onClick={() => remove(i)} title="Удалить" className="p-1 rounded text-white/30 hover:text-red-400">
-                    <Icon name="X" size={13} />
-                  </button>
-                  <button onClick={() => scanCard(i)} disabled={scanIds.includes(i.id)} title="Подтянуть данные из Telegram"
-                    className="p-1 rounded text-sky-300/70 hover:text-sky-200 hover:bg-sky-500/10 disabled:opacity-70">
-                    <Icon name={scanIds.includes(i.id) ? "Loader2" : "ScanSearch"} fallback="RefreshCw" size={14}
-                      className={scanIds.includes(i.id) ? "animate-spin" : ""} />
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setMenuId(menuId === i.id ? null : i.id)}
-                disabled={busy}
-                className="mt-2 w-full rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs py-1.5 flex items-center justify-center gap-1.5 disabled:opacity-60"
-              >
-                <Icon name={busy ? "Loader2" : "Tag"} size={12} className={busy ? "animate-spin" : ""} />
-                Присвоить статус
-                <Icon name="ChevronDown" size={12} className={`transition-transform ${menuId === i.id ? "rotate-180" : ""}`} />
-              </button>
-
-              {menuId === i.id && (
-                <div className="mt-1.5 grid grid-cols-2 gap-1">
-                  {LISTS.map((l) => {
-                    const black = l.list_type === "black";
-                    return (
-                      <button
-                        key={`${l.role}-${l.list_type}`}
-                        onClick={() => assign(i, l.role, l.list_type)}
-                        className={`rounded-md px-1.5 py-1.5 text-[10px] leading-tight border ${
-                          black
-                            ? "border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20"
-                            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
-                        }`}
-                      >
-                        {SHORT[`${l.role}-${l.list_type}`]}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {items.map((i) => (
+          <ModerationCard
+            key={i.id}
+            item={i}
+            busy={busyId === i.id}
+            scanning={scanIds.includes(i.id)}
+            menuOpen={menuId === i.id}
+            onToggleMenu={() => setMenuId(menuId === i.id ? null : i.id)}
+            onOpen={onOpen}
+            onScan={scanCard}
+            onRemove={remove}
+            onAssign={assign}
+          />
+        ))}
       </div>
       {total > items.length && (
         <button onClick={() => fetchPage(items.length, true)} disabled={loading}
