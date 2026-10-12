@@ -90,7 +90,6 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
 
   const goPage = (p: number) => {
     fetchPage((p - 1) * PAGE, false);
-    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const onChanged = () => {

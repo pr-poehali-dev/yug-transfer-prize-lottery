@@ -25,6 +25,8 @@ export default function Pager({ page, total, perPage, loading, onChange }: Props
   const go = (p: number) => {
     if (p < 1 || p > last || p === page || loading) return;
     onChange(p);
+    window.scrollTo({ top: 0, behavior: "auto" });
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
   };
   const base = "h-9 min-w-9 px-2 rounded-lg text-sm flex items-center justify-center transition-colors disabled:opacity-30";
   return (

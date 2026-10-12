@@ -65,7 +65,6 @@ function ListPage({ token, def, onBack, onChanged: onParentChanged }: ListPagePr
 
   const goPage = (p: number) => {
     fetchPage((p - 1) * LIST_PAGE, false);
-    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const onChanged = () => {
