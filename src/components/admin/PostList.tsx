@@ -71,140 +71,133 @@ export function PostList({
           <p className="text-sm">Постов пока нет</p>
         </div>
       ) : (
-        posts.map(post => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+        {posts.map(post => {
           const st = STATUS_CFG[post.status] || STATUS_CFG.draft;
           const isActive = editId === post.id;
+          const btn = "flex-1 h-8 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40";
+          const spin = (c: string) => <div className={`w-3 h-3 border rounded-full animate-spin ${c}`} />;
           return (
             <div
               key={post.id}
-              className={`rounded-2xl border transition-all ${isActive ? "border-purple-500/40 bg-purple-500/5" : "border-white/8 bg-white/3 hover:bg-white/5"}`}
-              style={{ background: isActive ? undefined : "rgba(255,255,255,0.02)" }}
+              className={`rounded-2xl border overflow-hidden flex flex-col transition-all ${isActive ? "border-purple-500/50 ring-1 ring-purple-500/30" : "border-white/10 hover:border-white/20"}`}
+              style={{ background: isActive ? "rgba(168,85,247,0.06)" : "rgba(255,255,255,0.03)" }}
             >
-              <div className="p-4 flex gap-3">
-                {/* Фото */}
-                <div className="shrink-0">
-                  {post.photo_url && !post.photo_url.startsWith("data:") ? (
-                    <div className="w-14 h-14 rounded-xl overflow-hidden border border-white/10">
-                      <img loading="lazy" decoding="async" src={post.photo_url} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                      <Icon name="Image" size={18} className="text-white/15" />
-                    </div>
-                  )}
-                </div>
+              <div className="relative aspect-[16/9] bg-white/5">
+                {post.photo_url && !post.photo_url.startsWith("data:") ? (
+                  <img loading="lazy" decoding="async" src={post.photo_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Icon name="Image" size={28} className="text-white/15" />
+                  </div>
+                )}
+                <span className={`absolute top-2 left-2 text-[11px] px-2 py-0.5 rounded-full border flex items-center gap-1 backdrop-blur-md bg-black/50 ${st.color} ${st.bg.split(" ").filter(c => c.startsWith("border")).join(" ")}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                  {st.label}
+                </span>
+              </div>
 
-                {/* Контент */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    {post.title && <p className="text-white text-sm font-medium truncate">{post.title}</p>}
-                    <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${st.bg} ${st.color}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                      {st.label}
+              <div className="p-3 flex-1 flex flex-col gap-1.5">
+                <p className="text-white text-sm font-semibold line-clamp-1">{post.title || "Без названия"}</p>
+                <p className="text-white/45 text-xs leading-snug line-clamp-3 flex-1">{strip(post.text)}</p>
+                <div className="flex items-center gap-x-2.5 gap-y-1 text-[11px] text-white/30 flex-wrap pt-1">
+                  <span>{new Date(post.created_at!).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                  {post.scheduled_at && (
+                    <span className="text-purple-400/80 flex items-center gap-1">
+                      <Icon name="Clock" size={10} />
+                      {new Date(post.scheduled_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </span>
-                  </div>
-                  <p className="text-white/40 text-xs leading-relaxed line-clamp-2 mb-2">
-                    {strip(post.text).slice(0, 100)}{strip(post.text).length > 100 ? "…" : ""}
-                  </p>
-                  <div className="flex items-center gap-3 text-xs text-white/25 flex-wrap">
-                    <span>{new Date(post.created_at!).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
-                    {post.scheduled_at && (
-                      <span className="text-purple-400/80 flex items-center gap-1">
-                        <Icon name="Clock" size={10} />
-                        {new Date(post.scheduled_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    )}
-                    {post.published_at && (
-                      <span className="text-emerald-400/70 flex items-center gap-1">
-                        <Icon name="CheckCircle2" size={10} />
-                        {new Date(post.published_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    )}
-                    {post.auto_expire_at && post.status !== "expired" && (
-                      <span className="text-orange-400/70 flex items-center gap-1" title="Автоудаление">
-                        <Icon name="Timer" size={10} />
-                        удалится {new Date(post.auto_expire_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    )}
-                    {post.button_text && (
-                      <span className="text-blue-400/60 flex items-center gap-1">
-                        <Icon name="MousePointer" size={10} />
-                        {post.button_text}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Действия */}
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <button
-                    onClick={() => onPublish(post)}
-                    disabled={publishingId === post.id}
-                    title={post.status === "published" ? "Отправить повторно" : "Опубликовать сейчас"}
-                    className="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center justify-center text-emerald-400 transition-colors disabled:opacity-40"
-                  >
-                    {publishingId === post.id
-                      ? <div className="w-3 h-3 border border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-                      : <Icon name={post.status === "published" ? "SendHorizontal" : "Send"} size={13} />}
-                  </button>
-                  <button
-                    onClick={() => isActive ? onResetEdit() : onEdit(post)}
-                    title={isActive ? "Закрыть" : "Редактировать"}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isActive ? "bg-purple-500/20 text-purple-300" : "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"}`}
-                  >
-                    <Icon name={isActive ? "X" : "Pencil"} size={13} />
-                  </button>
-                  {post.status === "published" && post.telegram_message_id && isActive && (
-                    <button
-                      onClick={() => onEditInTg(post)}
-                      disabled={editingInTgId === post.id}
-                      title="Обновить в Telegram"
-                      className="w-8 h-8 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 flex items-center justify-center text-sky-400 transition-colors disabled:opacity-40"
-                    >
-                      {editingInTgId === post.id
-                        ? <div className="w-3 h-3 border border-sky-400/30 border-t-sky-400 rounded-full animate-spin" />
-                        : <Icon name="RefreshCw" size={13} />}
-                    </button>
                   )}
-                  {post.status === "published" && (
-                    <button
-                      onClick={() => onSendMissing(post)}
-                      disabled={sendingMissingId === post.id}
-                      title="Дослать в группы, где поста нет"
-                      className="w-8 h-8 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center justify-center text-amber-400 transition-colors disabled:opacity-40"
-                    >
-                      {sendingMissingId === post.id
-                        ? <div className="w-3 h-3 border border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-                        : <Icon name="SendToBack" size={13} />}
-                    </button>
+                  {post.published_at && (
+                    <span className="text-emerald-400/70 flex items-center gap-1">
+                      <Icon name="CheckCircle2" size={10} />
+                      {new Date(post.published_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </span>
                   )}
-                  <button
-                    onClick={() => onDelete(post)}
-                    disabled={deleting === post.id}
-                    title="Удалить"
-                    className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-colors disabled:opacity-40"
-                  >
-                    {deleting === post.id
-                      ? <div className="w-3 h-3 border border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                      : <Icon name="Trash2" size={13} />}
-                  </button>
-                  {post.status === "published" && (
-                    <button
-                      onClick={() => onDeleteFromChats(post)}
-                      disabled={deletingChats === post.id}
-                      title="Удалить из групп"
-                      className="w-8 h-8 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 flex items-center justify-center text-orange-400 transition-colors disabled:opacity-40"
-                    >
-                      {deletingChats === post.id
-                        ? <div className="w-3 h-3 border border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
-                        : <Icon name="MessageSquareX" size={13} />}
-                    </button>
+                  {post.auto_expire_at && post.status !== "expired" && (
+                    <span className="text-orange-400/70 flex items-center gap-1" title="Автоудаление">
+                      <Icon name="Timer" size={10} />
+                      удалится {new Date(post.auto_expire_at).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                  {post.button_text && (
+                    <span className="text-blue-400/60 flex items-center gap-1 truncate max-w-full">
+                      <Icon name="MousePointer" size={10} />
+                      {post.button_text}
+                    </span>
                   )}
                 </div>
               </div>
+
+              <div className="flex gap-1 p-2 border-t border-white/5">
+                <button
+                  onClick={() => onPublish(post)}
+                  disabled={publishingId === post.id}
+                  title={post.status === "published" ? "Отправить повторно" : "Опубликовать сейчас"}
+                  className={`${btn} bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400`}
+                >
+                  {publishingId === post.id
+                    ? spin("border-emerald-400/30 border-t-emerald-400")
+                    : <Icon name={post.status === "published" ? "SendHorizontal" : "Send"} size={13} />}
+                </button>
+                <button
+                  onClick={() => isActive ? onResetEdit() : onEdit(post)}
+                  title={isActive ? "Закрыть" : "Редактировать"}
+                  className={`${btn} ${isActive ? "bg-purple-500/20 text-purple-300" : "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"}`}
+                >
+                  <Icon name={isActive ? "X" : "Pencil"} size={13} />
+                </button>
+                {post.status === "published" && post.telegram_message_id && isActive && (
+                  <button
+                    onClick={() => onEditInTg(post)}
+                    disabled={editingInTgId === post.id}
+                    title="Обновить в Telegram"
+                    className={`${btn} bg-sky-500/10 hover:bg-sky-500/20 text-sky-400`}
+                  >
+                    {editingInTgId === post.id
+                      ? spin("border-sky-400/30 border-t-sky-400")
+                      : <Icon name="RefreshCw" size={13} />}
+                  </button>
+                )}
+                {post.status === "published" && (
+                  <button
+                    onClick={() => onSendMissing(post)}
+                    disabled={sendingMissingId === post.id}
+                    title="Дослать в группы, где поста нет"
+                    className={`${btn} bg-amber-500/10 hover:bg-amber-500/20 text-amber-400`}
+                  >
+                    {sendingMissingId === post.id
+                      ? spin("border-amber-400/30 border-t-amber-400")
+                      : <Icon name="SendToBack" size={13} />}
+                  </button>
+                )}
+                {post.status === "published" && (
+                  <button
+                    onClick={() => onDeleteFromChats(post)}
+                    disabled={deletingChats === post.id}
+                    title="Удалить из групп"
+                    className={`${btn} bg-orange-500/10 hover:bg-orange-500/20 text-orange-400`}
+                  >
+                    {deletingChats === post.id
+                      ? spin("border-orange-400/30 border-t-orange-400")
+                      : <Icon name="MessageSquareX" size={13} />}
+                  </button>
+                )}
+                <button
+                  onClick={() => onDelete(post)}
+                  disabled={deleting === post.id}
+                  title="Удалить"
+                  className={`${btn} bg-red-500/10 hover:bg-red-500/20 text-red-400`}
+                >
+                  {deleting === post.id
+                    ? spin("border-red-400/30 border-t-red-400")
+                    : <Icon name="Trash2" size={13} />}
+                </button>
+              </div>
             </div>
           );
-        })
+        })}
+        </div>
       )}
     </div>
   );
