@@ -553,9 +553,37 @@ def handle_junk(cur, conn, method: str) -> dict:
     return resp(405, {'error': 'Method not allowed'})
 
 
-def notify_searchers(cur, conn, card: dict) -> int:
+TG_HOSTS = ['149.154.167.220', '149.154.167.41', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
+
+
+def tg_send(token: str, payload: dict) -> bool:
+    """Отправка в Telegram: пробуем прямые адреса по очереди (api.telegram.org из облака бывает недоступен)."""
+    import http.client
+    import ssl
+    data = json.dumps(payload).encode()
+    for host in TG_HOSTS:
+        ctx = ssl.create_default_context()
+        if host != 'api.telegram.org':
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        c = http.client.HTTPSConnection(host, 443, timeout=2, context=ctx)
+        try:
+            c.request('POST', f'/bot{token}/sendMessage', body=data,
+                      headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
+            r = json.loads(c.getresponse().read() or b'{}')
+            if r.get('ok'):
+                return True
+            print(f"[KB] tg {host}: {str(r.get('description'))[:100]}")
+            return False
+        except Exception as e:
+            print(f"[KB] tg {host}: {type(e).__name__}")
+        finally:
+            c.close()
+    return False
+
+
+def notify_searchers(cur, conn, card: dict, preview_to: int = 0, preview_query: str = '') -> int:
     """После модерации пишет в бот всем, кто искал этого человека и получил «нет информации»."""
-    import urllib.request
     import threading
     token = os.environ.get('KB_BOT_TOKEN', '')
     if not token:
@@ -571,11 +599,16 @@ def notify_searchers(cur, conn, card: dict) -> int:
     digits = ''.join(ch for ch in str(card.get('phone') or '') if ch.isdigit())[-10:]
     if len(digits) == 10:
         cond.append(f"(kind='phone' AND right(regexp_replace(query, '[^0-9]', '', 'g'), 10)='{digits}')")
+    if preview_to:
+        cond = cond or ['true']
     if not cond:
         return 0
-    cur.execute(f"SELECT DISTINCT searcher_tg_id, max(query) FROM {SCHEMA}.kb_search_log "
+    if preview_to:
+        rows = [(preview_to, preview_query)]
+    else:
+        cur.execute(f"SELECT DISTINCT searcher_tg_id, max(query) FROM {SCHEMA}.kb_search_log "
                 f"WHERE result='unknown' AND notified_at IS NULL AND ({' OR '.join(cond)}) GROUP BY 1 LIMIT 50")
-    rows = cur.fetchall()
+        rows = cur.fetchall()
     if not rows:
         return 0
     h = lambda v: str(v or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -596,20 +629,19 @@ def notify_searchers(cur, conn, card: dict) -> int:
     def send(chat_id, query):
         text = (f"🔔 <b>Проверка завершена</b>\n\nВы искали <b>{h(query)}</b>.\n"
                 f"Данный {who} находится в {lst}.\n\n" + "\n".join(info) + f"\n\n{advice}")
-        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
-                                     data=json.dumps({'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}).encode(),
-                                     headers={'Content-Type': 'application/json'})
-        try:
-            with urllib.request.urlopen(req, timeout=2.5) as r:
-                if json.loads(r.read().decode() or '{}').get('ok'):
-                    sent.append(chat_id)
-        except Exception as e:
-            print(f"[KB] notify {chat_id}: {type(e).__name__}")
+        if preview_to:
+            text = "👁 <b>ПРИМЕР</b> — так увидит ответ искавший после модерации:\n\n" + text
+        if tg_send(token, {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}):
+            sent.append(chat_id)
+        else:
+            print(f"[KB] notify {chat_id}: failed")
     threads = [threading.Thread(target=send, args=(r[0], r[1]), daemon=True) for r in rows]
     for t in threads:
         t.start()
     for t in threads:
-        t.join(3)
+        t.join(4)
+    if preview_to:
+        return len(sent)
     ids = ','.join(str(int(r[0])) for r in rows)
     cur.execute(f"UPDATE {SCHEMA}.kb_search_log SET notified_at=now() "
                 f"WHERE result='unknown' AND notified_at IS NULL AND searcher_tg_id IN ({ids}) AND ({' OR '.join(cond)})")
