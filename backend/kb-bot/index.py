@@ -1073,6 +1073,53 @@ def load_history(item_id) -> list:
 NO_PHOTO_URL = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/cc06515e-5e65-4cde-b02f-d24b1889abb4.jpg'
 
 
+def notify_moderated(item_id: int, preview_to: int = 0, preview_query: str = '') -> int:
+    """После модерации отправляет полную карточку (с фото) всем, кто искал этого человека и получил «нет информации»."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT {CARD_COLS} FROM {SCHEMA}.check_lists WHERE id={int(item_id)}")
+        r = cur.fetchone()
+        if not r or r[0] not in ('black', 'white'):
+            return 0
+        if preview_to:
+            rows = [(preview_to, preview_query or (f"@{r[2]}" if r[2] else r[1]))]
+        else:
+            e = lambda v: str(v or '').replace("'", "''")
+            cond = []
+            if r[5]:
+                cond += [f"found_tg_id={int(r[5])}", f"(kind='id' AND regexp_replace(query, '[^0-9]', '', 'g')='{int(r[5])}')"]
+            if r[2]:
+                un = e(r[2].lower())
+                cond += [f"lower(found_username)='{un}'", f"(kind='username' AND lower(query) LIKE '%{un}')"]
+            digits = ''.join(ch for ch in str(r[3] or '') if ch.isdigit())[-10:]
+            if len(digits) == 10:
+                cond.append(f"(kind='phone' AND right(regexp_replace(query, '[^0-9]', '', 'g'), 10)='{digits}')")
+            if not cond:
+                return 0
+            where = f"result='unknown' AND notified_at IS NULL AND ({' OR '.join(cond)})"
+            cur.execute(f"SELECT searcher_tg_id, max(query) FROM {SCHEMA}.kb_search_log WHERE {where} GROUP BY 1 LIMIT 20")
+            rows = cur.fetchall()
+            if rows:
+                cur.execute(f"UPDATE {SCHEMA}.kb_search_log SET notified_at=now() WHERE {where}")
+                conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+    if not rows:
+        return 0
+    r = enrich_card(r)
+    who = {'driver': 'водитель', 'dispatcher': 'диспетчер'}.get(r[10], 'участник')
+    where_txt = 'ЧЁРНОМ СПИСКЕ' if r[0] == 'black' else 'БЕЛОМ СПИСКЕ'
+    for chat_id, query in rows:
+        head = (f"🔔 <b>Проверка завершена</b>\n"
+                f"Вы искали <b>{esc_html(query)}</b> — данный {who} находится в <b>{where_txt}</b>.\n\n" + verdict(r))
+        if preview_to:
+            head = "👁 <b>ПРИМЕР</b> — так увидит ответ искавший:\n\n" + head
+        send_card(chat_id, r, head)
+    return len(rows)
+
+
 def send_card(chat_id, r, head: str) -> None:
     """Карточка всегда уходит одним сообщением с фото: своё фото аккаунта или заглушка."""
     text = card_text(r, head)
@@ -1488,6 +1535,12 @@ def _handler(event: dict, context) -> dict:
                 'pending': wh.get('pending_update_count'), 'last_error': wh.get('last_error_message', ''),
                 'last_error_date': wh.get('last_error_date'),
                 'error': me_res.get('description', '') if not me else ''})}
+        if action == 'notify_moderated':
+            preview = int(qs.get('preview_to') or 0)
+            if (event.get('headers') or {}).get('X-Cron-Secret', (event.get('headers') or {}).get('x-cron-secret')) != os.environ.get('CRON_SECRET'):
+                return {'statusCode': 401, 'headers': CORS, 'body': json.dumps({'error': 'Unauthorized'})}
+            n = notify_moderated(int(qs.get('id') or 0), preview, qs.get('query') or '')
+            return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'notified': n})}
         if action == 'complaint_to_group':
             tg_api('getMe', {}, timeout=2.5)
             res = complaints.send_to_decision(tg_api, int(qs.get('id') or 0))

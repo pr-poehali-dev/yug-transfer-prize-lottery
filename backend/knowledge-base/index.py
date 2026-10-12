@@ -553,100 +553,20 @@ def handle_junk(cur, conn, method: str) -> dict:
     return resp(405, {'error': 'Method not allowed'})
 
 
-TG_HOSTS = ['149.154.167.220', '149.154.167.41', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
-
-
-def tg_send(token: str, payload: dict) -> bool:
-    """Отправка в Telegram: пробуем прямые адреса по очереди (api.telegram.org из облака бывает недоступен)."""
-    import http.client
-    import ssl
-    data = json.dumps(payload).encode()
-    for host in TG_HOSTS:
-        ctx = ssl.create_default_context()
-        if host != 'api.telegram.org':
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-        c = http.client.HTTPSConnection(host, 443, timeout=2, context=ctx)
-        try:
-            c.request('POST', f'/bot{token}/sendMessage', body=data,
-                      headers={'Content-Type': 'application/json', 'Host': 'api.telegram.org'})
-            r = json.loads(c.getresponse().read() or b'{}')
-            if r.get('ok'):
-                return True
-            print(f"[KB] tg {host}: {str(r.get('description'))[:100]}")
-            return False
-        except Exception as e:
-            print(f"[KB] tg {host}: {type(e).__name__}")
-        finally:
-            c.close()
-    return False
-
-
-def notify_searchers(cur, conn, card: dict, preview_to: int = 0, preview_query: str = '') -> int:
-    """После модерации пишет в бот всем, кто искал этого человека и получил «нет информации»."""
-    import threading
-    token = os.environ.get('KB_BOT_TOKEN', '')
-    if not token:
+def notify_searchers(item_id: int) -> int:
+    """После модерации просим бота отправить полную карточку всем, кто искал этого человека."""
+    import urllib.request
+    req = urllib.request.Request(f"{KB_BOT_URL}?action=notify_moderated&id={int(item_id)}",
+                                 headers={'X-Cron-Secret': os.environ.get('CRON_SECRET', '')})
+    try:
+        with urllib.request.urlopen(req, timeout=4) as r:
+            return int(json.loads(r.read().decode() or '{}').get('notified') or 0)
+    except Exception as e:
+        print(f"[KB] notify: {type(e).__name__}")
         return 0
-    cond = []
-    if card.get('tg_id'):
-        cond.append(f"found_tg_id={int(card['tg_id'])}")
-        cond.append(f"(kind='id' AND regexp_replace(query, '[^0-9]', '', 'g')='{int(card['tg_id'])}')")
-    un = str(card.get('username') or '').lower()
-    if un:
-        cond.append(f"lower(found_username)='{esc(un)}'")
-        cond.append(f"(kind='username' AND lower(query) LIKE '%{esc(un)}')")
-    digits = ''.join(ch for ch in str(card.get('phone') or '') if ch.isdigit())[-10:]
-    if len(digits) == 10:
-        cond.append(f"(kind='phone' AND right(regexp_replace(query, '[^0-9]', '', 'g'), 10)='{digits}')")
-    if preview_to:
-        cond = cond or ['true']
-    if not cond:
-        return 0
-    if preview_to:
-        rows = [(preview_to, preview_query)]
-    else:
-        cur.execute(f"SELECT DISTINCT searcher_tg_id, max(query) FROM {SCHEMA}.kb_search_log "
-                f"WHERE result='unknown' AND notified_at IS NULL AND ({' OR '.join(cond)}) GROUP BY 1 LIMIT 50")
-        rows = cur.fetchall()
-    if not rows:
-        return 0
-    h = lambda v: str(v or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-    who = {'driver': '🚗 водитель', 'dispatcher': '🎧 диспетчер'}.get(card.get('role'), 'участник')
-    lst = '⛔️ <b>ЧЁРНОМ СПИСКЕ</b>' if card['list_type'] == 'black' else '✅ <b>БЕЛОМ СПИСКЕ</b>'
-    advice = '❌ Работать НЕ рекомендуем!' if card['list_type'] == 'black' else '👍 Проверен — с ним можно работать.'
-    info = [f"👤 {h(card.get('name')) or 'Без имени'}"]
-    if un:
-        info.append(f"🔗 @{h(card['username'])}")
-    if card.get('tg_id'):
-        info.append(f"🆔 <code>{int(card['tg_id'])}</code>")
-    if card.get('phone'):
-        info.append(f"📞 {h(card['phone'])}")
-    if card['list_type'] == 'black' and card.get('reason'):
-        info.append(f"\n⛔️ <b>За что:</b> {h(card['reason'])[:600]}")
-    sent = []
 
-    def send(chat_id, query):
-        text = (f"🔔 <b>Проверка завершена</b>\n\nВы искали <b>{h(query)}</b>.\n"
-                f"Данный {who} находится в {lst}.\n\n" + "\n".join(info) + f"\n\n{advice}")
-        if preview_to:
-            text = "👁 <b>ПРИМЕР</b> — так увидит ответ искавший после модерации:\n\n" + text
-        if tg_send(token, {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}):
-            sent.append(chat_id)
-        else:
-            print(f"[KB] notify {chat_id}: failed")
-    threads = [threading.Thread(target=send, args=(r[0], r[1]), daemon=True) for r in rows]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(4)
-    if preview_to:
-        return len(sent)
-    ids = ','.join(str(int(r[0])) for r in rows)
-    cur.execute(f"UPDATE {SCHEMA}.kb_search_log SET notified_at=now() "
-                f"WHERE result='unknown' AND notified_at IS NULL AND searcher_tg_id IN ({ids}) AND ({' OR '.join(cond)})")
-    conn.commit()
-    return len(sent)
+
+KB_BOT_URL = 'https://functions.poehali.dev/ed74936b-d187-466b-bd49-74818d8cceab'
 
 
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
@@ -757,7 +677,7 @@ def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:
         conn.commit()
         notified = 0
         if old.get('list_type') == 'pending' and lt in ('black', 'white'):
-            notified = notify_searchers(cur, conn, new)
+            notified = notify_searchers(item_id)
         return resp(200, {'ok': True, 'tg_id': tg_id, 'notified': notified})
 
     if method == 'DELETE':
