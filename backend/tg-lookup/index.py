@@ -185,6 +185,55 @@ def make_client(session: str):
                             **extra)
     return client
 
+def proxy_check() -> dict:
+    """Проверка прокси: 3 попытки подключиться к Telegram, время каждой."""
+    from urllib.parse import urlparse
+    raw = (os.environ.get('TG_PROXY_NEW') or os.environ.get('TG_PROXY') or '').strip()
+    which = 'TG_PROXY_NEW' if os.environ.get('TG_PROXY_NEW') else ('TG_PROXY' if raw else '')
+    info = {'secret': which, 'type': '', 'host': ''}
+    if raw:
+        u = urlparse(raw if '://' in raw else 'socks5://' + raw)
+        info['type'] = (u.scheme or '').upper()
+        info['host'] = f"{u.hostname}:{u.port}" if u.hostname else ''
+
+    async def one():
+        c = make_client('')
+        t0 = time.time()
+        try:
+            await asyncio.wait_for(c.connect(), timeout=8)
+            return {'ok': True, 'sec': round(time.time() - t0, 2)}
+        except Exception as e:
+            n = type(e).__name__
+            m = str(e)
+            if 'authentication' in m.lower():
+                err = 'Прокси не принял логин или пароль'
+            elif isinstance(e, asyncio.TimeoutError) or 'timed out' in m.lower():
+                err = 'Нет ответа (истекло время ожидания)'
+            elif 'refused' in m.lower():
+                err = 'Прокси отклонил подключение'
+            else:
+                err = f'{n}: {m[:80]}'
+            return {'ok': False, 'sec': round(time.time() - t0, 2), 'error': err}
+        finally:
+            try:
+                await c.disconnect()
+            except Exception:
+                pass
+
+    tries = []
+    for _ in range(3):
+        tries.append(asyncio.run(one()))
+    ok = [t['sec'] for t in tries if t['ok']]
+    avg = round(sum(ok) / len(ok), 2) if ok else None
+    if not ok:
+        status = 'down'
+    elif len(ok) == 3 and avg <= 4:
+        status = 'good'
+    else:
+        status = 'slow'
+    return {'ok': True, **info, 'tries': tries, 'success': len(ok), 'avg': avg, 'status': status}
+
+
 
 async def lookup(session: str, username: str, phone: str = '', finder=None) -> dict:
     t0 = time.time()
@@ -1314,6 +1363,9 @@ def handler(event: dict, context) -> dict:
         finally:
             cur.close()
             conn.close()
+
+    if qs.get('action') == 'proxy_check':
+        return resp(200, proxy_check())
 
     if qs.get('action') == 'proxy_test':
         import socks

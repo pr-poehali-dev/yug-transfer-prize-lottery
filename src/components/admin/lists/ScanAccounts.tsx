@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { toast } from "sonner";
 import { TG_LOOKUP_API, inputCls } from "./listTypes";
+import { ProxyCheck } from "./ProxyCheck";
 
 interface Account {
   id: number;
@@ -159,6 +160,7 @@ export function ScanAccounts({ token }: { token: string }) {
 
   return (
     <div className="space-y-2 pt-1">
+      <ProxyCheck token={token} />
       <div className="flex items-center gap-2">
         <Icon name="Users" size={14} className="text-cyan-300" />
         <span className="text-xs text-white/70">
