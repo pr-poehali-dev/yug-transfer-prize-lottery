@@ -135,7 +135,7 @@ def pick_ip(dc: int, default_ip: str) -> str:
 def proxy_kwargs() -> dict:
     """TG_PROXY: socks5://user:pass@host:port | http://host:port | mtproxy://SECRET@host:port"""
     from urllib.parse import urlparse, unquote
-    raw = (os.environ.get('TG_PROXY') or '').strip()
+    raw = (os.environ.get('TG_PROXY_NEW') or os.environ.get('TG_PROXY') or '').strip()
     if not raw:
         return {}
     if '://' not in raw:
@@ -1453,7 +1453,7 @@ def handler(event: dict, context) -> dict:
             err = result.get('error', 'Не найдено')
             if err == 'timeout':
                 err = ('Сервер не может подключиться к Telegram. Нужен прокси: добавьте секрет TG_PROXY'
-                       if not os.environ.get('TG_PROXY') else 'Прокси TG_PROXY не отвечает — проверьте его данные')
+                       if not (os.environ.get('TG_PROXY_NEW') or os.environ.get('TG_PROXY')) else 'Прокси TG_PROXY не отвечает — проверьте его данные')
             return resp(200, {'ok': False, 'error': err, 'budget': round(budget, 1)})
         save_cache(cur, result)
         if rescan_id:
