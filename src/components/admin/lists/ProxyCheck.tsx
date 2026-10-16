@@ -82,7 +82,7 @@ export function ProxyCheck({ token }: { token: string }) {
           </div>
           {res.status !== "good" && res.secret && (
             <div className="text-[11px] text-white/55">
-              Для стабильной работы нужен индивидуальный IPv4-прокси SOCKS5 — обновите секрет TG_PROXY_NEW.
+              Для стабильной работы нужен индивидуальный IPv4-прокси SOCKS5 — обновите секрет TG_PROXY_3.
             </div>
           )}
         </div>
