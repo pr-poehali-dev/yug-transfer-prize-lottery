@@ -1,0 +1,1 @@
+ALTER TABLE t_p67171637_yug_transfer_prize_l.kb_complaints ADD COLUMN IF NOT EXISTS decision_pending boolean NOT NULL DEFAULT false;

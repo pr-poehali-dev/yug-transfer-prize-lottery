@@ -284,6 +284,9 @@ COMPLAINTS_THREAD_ID = 10266
 CHAT_CANDIDATES = [DECISION_CHAT, COPY_CHAT]
 
 
+LAST_SEND = {'err': ''}
+
+
 def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
     """Новая жалоба уходит в служебную группу администраторов: текст, дата, фото и кнопка в админку."""
     conn = db()
@@ -348,7 +351,7 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
                 method = 'sendMessage'
             if th:
                 p['message_thread_id'] = th
-            return tg_api(method, p)
+            return tg_api(method, p, timeout=7)
 
         c0 = db()
         k0 = c0.cursor()
@@ -360,6 +363,7 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         if not res:
             # Telegram не ответил — жалобу дошлём позже автоматически (если она так и не появилась в группе).
             print(f"[KB-BOT] complaint #{cid} to {chat}: no answer from Telegram, will retry later")
+            LAST_SEND['err'] = 'timeout'
             return None
         if not res.get('ok') and first_photo and first_photo != NO_AVATAR:
             print(f"[KB-BOT] complaint avatar failed: {res.get('description', '')[:120]}")
@@ -369,8 +373,12 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
             print(f"[KB-BOT] complaint photo failed: {res.get('description', '')[:120]}")
             first_photo = None
             res = call(thread)
+        if not res:
+            LAST_SEND['err'] = 'timeout'
+            return None
         if not res.get('ok'):
             print(f"[KB-BOT] complaint to {chat} failed: {res.get('description', '')[:120]}")
+            LAST_SEND['err'] = res.get('description', '') or 'error'
             return None
         msg_id = (res.get('result') or {}).get('message_id')
         sent_ids.setdefault(str(chat), []).append(msg_id)
@@ -394,6 +402,7 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
 
     # Новая жалоба — только в тему «жалобы» (уведомление с кнопками).
     # В группу ЧС попадает лишь итоговая карточка — после решения администратора.
+    LAST_SEND['err'] = ''
     if to_decision:
         target_chat = os.environ.get('KB_COMPLAINTS_CHAT_ID', '').strip() or DECISION_CHAT
         msg_id = send_to(target_chat, None, True)
@@ -406,7 +415,8 @@ def notify_admin(tg_api, cid: int, to_decision: bool = False) -> None:
         ids = ','.join(str(i) for i in sent_ids.get(str(target_chat), []) if i)
         topic = f", topic_msg_id={int(msg_id)}" if str(target_chat) == COPY_CHAT else ''
         k2.execute(f"UPDATE {SCHEMA}.kb_complaints SET group_chat='{q(target_chat)}', group_msg_id={int(msg_id)}, "
-                   f"group_msgs='{q(target_chat)}|{ids}'{topic} WHERE id={int(cid)}")
+                   f"group_msgs='{q(target_chat)}|{ids}'{topic}"
+                   f"{', decision_pending=false' if to_decision else ''} WHERE id={int(cid)}")
         c2.commit()
         k2.close()
         c2.close()
@@ -417,12 +427,21 @@ def retry_unsent(tg_api) -> int:
     """Дошлёт в тему «Жалобы» жалобы, которые не ушли из-за сбоя связи с Telegram (до 3 попыток)."""
     conn = db()
     cur = conn.cursor()
-    cur.execute(f"SELECT id FROM {SCHEMA}.kb_complaints WHERE status='new' AND group_msg_id IS NULL "
+    cur.execute(f"SELECT id FROM {SCHEMA}.kb_complaints WHERE status='new' AND group_msg_id IS NULL AND NOT decision_pending "
                 f"AND coalesce(group_msgs,'')='' AND send_attempts < 3 AND updated_at < now() - interval '40 seconds' "
                 f"ORDER BY id LIMIT 1")
     r = cur.fetchone()
+    pend = None
+    if not r:
+        cur.execute(f"SELECT id FROM {SCHEMA}.kb_complaints WHERE decision_pending AND status='new' "
+                    f"AND send_attempts < 6 ORDER BY id LIMIT 1")
+        pend = cur.fetchone()
     cur.close()
     conn.close()
+    if pend:
+        notify_admin(tg_api, int(pend[0]), to_decision=True)
+        print(f"[KB-BOT] complaint #{pend[0]} decision retry: {'ok' if not LAST_SEND['err'] else LAST_SEND['err']}")
+        return int(pend[0])
     if not r:
         return 0
     notify_admin(tg_api, int(r[0]))
@@ -761,8 +780,22 @@ def send_to_decision(tg_api, cid: int) -> dict:
     cur.close()
     conn.close()
     ok = bool(r[1]) and r[0] != COPY_CHAT
-    return {'ok': ok, 'where': 'группу «ЧС Авто трансфера РФ»' if ok else '',
-            'error': '' if ok else 'Бот не смог отправить — добавьте его админом в группу ЧС'}
+    if ok:
+        return {'ok': True, 'where': 'группу «ЧС Авто трансфера РФ»', 'error': ''}
+    err = LAST_SEND['err']
+    if err == 'timeout' or not err:
+        conn = db()
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.kb_complaints SET decision_pending=true, send_attempts=0 WHERE id={int(cid)}")
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {'ok': True, 'queued': True, 'where': '',
+                'error': '⏳ Telegram сейчас не отвечает — бот отправит жалобу в группу ЧС автоматически в ближайшие минуты'}
+    low = err.lower()
+    if 'not enough rights' in low or 'forbidden' in low or 'chat not found' in low or 'kicked' in low:
+        return {'ok': False, 'error': 'Бот не смог отправить — добавьте его админом в группу ЧС'}
+    return {'ok': False, 'error': f'Telegram отклонил отправку: {err[:120]}'}
 
 
 def handle_send_button(tg_api, callback: dict) -> None:
@@ -775,5 +808,5 @@ def handle_send_button(tg_api, callback: dict) -> None:
         return
     res = send_to_decision(tg_api, cid)
     tg_api('answerCallbackQuery', {'callback_query_id': callback.get('id'), 'show_alert': not res['ok'],
-                                   'text': ('📤 Отправлено в группу ЧС на решение' if res['ok'] else res['error'])[:190]},
+                                   'text': (res['error'] if res.get('queued') or not res['ok'] else '📤 Отправлено в группу ЧС на решение')[:190]},
            timeout=2.2)

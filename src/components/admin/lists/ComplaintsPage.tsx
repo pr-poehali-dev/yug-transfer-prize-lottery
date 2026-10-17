@@ -65,7 +65,8 @@ export function ComplaintsPage({ token, onBack }: { token: string; onBack: () =>
     try {
       const res = await fetch(`${COMPLAINT_TO_GROUP_API}&id=${c.id}`);
       const d = await res.json();
-      if (d.ok) toast.success(`Жалоба отправлена в ${d.where}`, { description: "Решение примут администраторы группы" });
+      if (d.queued) toast.info("Telegram сейчас не отвечает", { description: "Бот отправит жалобу в группу ЧС автоматически в ближайшие минуты" });
+      else if (d.ok) toast.success(`Жалоба отправлена в ${d.where}`, { description: "Решение примут администраторы группы" });
       else toast.error(d.error || "Не удалось отправить");
       load();
     } catch {
