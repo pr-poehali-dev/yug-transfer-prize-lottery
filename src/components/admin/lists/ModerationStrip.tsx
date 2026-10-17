@@ -217,7 +217,7 @@ export function ModerationPage({ token, onChanged: onParentChanged, onOpen, onBa
         if (!d.done) {
           idle += 1;
           if (idle >= 3) { toast.error("Сканирование остановилось"); break; }
-          await new Promise((r) => setTimeout(r, 20000));
+          await new Promise((r) => setTimeout(r, 6000));
         } else idle = 0;
         if (done % 150 < d.done) onChanged();
       } catch {

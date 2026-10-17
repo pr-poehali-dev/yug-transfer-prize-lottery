@@ -373,7 +373,12 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
                 break
             sets = ["last_scan_at=now()"]
             try:
-                entity = await asyncio.wait_for(client.get_entity(uname), timeout=6)
+                if uname.startswith('phone:'):
+                    entity = await asyncio.wait_for(resolve_phone(client, uname[6:]), timeout=8)
+                    if entity is None:
+                        raise ValueError('no user by phone')
+                else:
+                    entity = await asyncio.wait_for(client.get_entity(uname), timeout=6)
                 if not isinstance(entity, User):
                     sets += ["scan_status='не личный аккаунт'", "photo_checked_at=now()"]
                     stats['missing'] += 1
@@ -390,12 +395,14 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
                         sets.append("photo_checked_at=now()")
                     elif deadline - time.time() > 4:
                         try:
-                            raw = await asyncio.wait_for(client.download_profile_photo(entity, file=bytes, download_big=False), timeout=4)
+                            raw = await asyncio.wait_for(client.download_profile_photo(entity, file=bytes, download_big=False),
+                                                         timeout=min(7, deadline - time.time() - 2))
                             if raw:
                                 photo_url, photo_uid = store_photo(raw), str(entity.photo.photo_id)
-                                sets.append("photo_checked_at=now()")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f'[TG-LOOKUP] photo download failed {uname}: {type(e).__name__}')
+                        # Отмечаем попытку в любом случае — иначе сканер крутится на одной карточке бесконечно.
+                        sets.append("photo_checked_at=now()")
                     name = ' '.join(x for x in [entity.first_name or '', entity.last_name or ''] if x).strip()
                     phone = f"+{entity.phone}" if entity.phone else ''
                     q = lambda v: str(v or '').replace("'", "''")
@@ -405,7 +412,9 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
                         sets += [f"photo_url='{q(photo_url)}'", f"photo_file_uid='{q(photo_uid)}'"]
                     if phone:
                         sets.append(f"phone=CASE WHEN phone='' THEN '{q(phone)}' ELSE phone END")
-                    save_cache(cur, {'tg_id': entity.id, 'username': entity.username or uname, 'name': name, 'phone': phone})
+                    if entity.username and uname.startswith('phone:'):
+                        sets.append(f"username=CASE WHEN username='' THEN '{q(entity.username)}' ELSE username END")
+                    save_cache(cur, {'tg_id': entity.id, 'username': entity.username or '', 'name': name, 'phone': phone})
                     stats['found'] += 1
             except FloodWaitError as e:
                 stats['flood'] = int(e.seconds)
@@ -439,6 +448,7 @@ async def batch_scan(session: str, rows: list, deadline: float, cur, conn, stats
             stats['done'] += 1
             if deadline - time.time() > 10:
                 await asyncio.sleep(random.uniform(*SCAN_PAUSE))
+        await asyncio.sleep(0)
     finally:
         await client.disconnect()
     return stats
@@ -469,21 +479,22 @@ def handle_batch(context, scope: str = 'all', reserve: float = 2) -> dict:
         print(f'[TG-LOOKUP] batch sessions {len(sessions)}, blocked {len(blocked)}')
         used = usage_map(cur)
         quota = {sess_key(x): SCAN_PER_HOUR - used.get(sess_key(x), 0) for x in sessions}
-        workers = [x for x in sessions if quota[sess_key(x)] > 0][:4]
+        workers = [x for x in sessions if quota[sess_key(x)] > 0][:8]
         if sessions and not workers:
             print('[TG-LOOKUP] batch: hourly limit reached on all accounts')
         if scope == 'pending_full':
-            where = "list_type='pending' AND username <> '' AND photo_checked_at IS NULL AND coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт', 'дубль другой карточки')"
+            where = "list_type='pending' AND (username <> '' OR (phone <> '' AND tg_id IS NULL)) AND photo_checked_at IS NULL AND coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт', 'дубль другой карточки')"
         elif scope == 'full':
             where = "username <> '' AND photo_checked_at IS NULL AND coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт', 'дубль другой карточки')"
         else:
             where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
-        cur.execute(f"SELECT id, username FROM {SCHEMA}.check_lists WHERE {where} "
-                    f"ORDER BY (list_type='pending') DESC, (list_type='black') DESC, id DESC LIMIT 1000")
+        cur.execute(f"SELECT id, CASE WHEN username <> '' THEN username ELSE 'phone:' || phone END FROM {SCHEMA}.check_lists WHERE {where} "
+                    f"ORDER BY (username <> '') DESC, (list_type='pending') DESC, (list_type='black') DESC, id DESC LIMIT 1000")
         fetched = cur.fetchall()
         rows = fetched if scope in ('full', 'pending_full') else fill_from_cache(cur, conn, fetched)
         from_cache = len(fetched) - len(rows)
         rows = rows[:sum(min(6, quota[sess_key(w)]) for w in workers)]
+        workers = workers[:max(1, -(-len(rows) // 3))] if rows else workers
         parts = []
         pos = 0
         for w in workers:
@@ -569,14 +580,18 @@ def apply_rescan(cur, item_id: int, d: dict) -> dict:
                     f"VALUES ({int(item_id)}, '{field}', '{q(old)}', '{q(new)}', 'scan')")
     status = f"изменений: {len(changes)}" if changes else 'без изменений'
     sets += ['last_scan_at=now()', 'photo_checked_at=now()', f"scan_status='{status}'", 'updated_at=now()']
-    try:
-        cur.execute("SAVEPOINT rs")
-        cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
-    except psycopg2.Error:
-        # Этот человек уже есть в базе другой карточкой — обновляем без ID/username, чтобы не было дубля.
-        cur.execute("ROLLBACK TO SAVEPOINT rs")
-        sets = [x for x in sets if not x.startswith(('tg_id=', 'username='))]
-        cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
+    # Этот человек уже есть в базе другой карточкой — обновляем без ID/username, чтобы не было дубля.
+    clash = []
+    if d.get('tg_id'):
+        clash.append(f"tg_id={int(d['tg_id'])}")
+    if d.get('username'):
+        clash.append(f"lower(username)=lower('{q(d['username'])}')")
+    if clash:
+        cur.execute(f"SELECT 1 FROM {SCHEMA}.check_lists WHERE id<>{int(item_id)} AND ({' OR '.join(clash)}) LIMIT 1")
+        if cur.fetchone():
+            sets = [x for x in sets if not x.startswith(('tg_id=', 'username='))]
+            changes = [c for c in changes if c[0] != 'username']
+    cur.execute(f"UPDATE {SCHEMA}.check_lists SET {', '.join(sets)} WHERE id={int(item_id)}")
     if changes:
         fields = ','.join(dict.fromkeys(f for f, _, _ in changes))
         cur.execute(f"INSERT INTO {SCHEMA}.check_list_snapshots "
