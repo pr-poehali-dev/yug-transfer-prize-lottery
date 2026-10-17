@@ -1364,6 +1364,27 @@ def handler(event: dict, context) -> dict:
             cur.close()
             conn.close()
 
+    if qs.get('action') == 'proxy_check_all':
+        out = []
+        saved = {k: os.environ.get(k) for k in ('TG_PROXY_3', 'TG_PROXY_NEW', 'TG_PROXY')}
+        try:
+            for name in ('TG_PROXY_3', 'TG_PROXY_NEW', 'TG_PROXY'):
+                if not saved[name]:
+                    out.append({'secret': name, 'empty': True})
+                    continue
+                for k in saved:
+                    os.environ.pop(k, None)
+                os.environ['TG_PROXY_3'] = saved[name]
+                r = proxy_check()
+                r['secret'] = name
+                out.append(r)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        return resp(200, {'ok': True, 'items': out})
     if qs.get('action') == 'proxy_check':
         return resp(200, proxy_check())
 
