@@ -749,6 +749,10 @@ def run_check(chat_id, kind: str, query: str) -> None:
         tg_api('sendMessage', {'chat_id': chat_id, 'text': 'Слишком короткий запрос. Попробуйте ещё раз.',
                                'reply_markup': MAIN_KEYBOARD})
         return
+    if is_admin_account(kind_q, q):
+        log_search(chat_id, query, kind_q, 'white', None)
+        send_admin_card(chat_id)
+        return
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
     try:
@@ -820,6 +824,45 @@ def run_check(chat_id, kind: str, query: str) -> None:
     found = [enrich_card(r) for r in found[:3]]
     for r in found:
         send_card(chat_id, r, verdict(r))
+
+
+ADMIN_ACCOUNTS = {'mew_zbot': 8269484315}
+
+
+def is_admin_account(kind_q: str, q) -> bool:
+    if kind_q == 'username':
+        return str(q).lstrip('@').lower() in ADMIN_ACCOUNTS
+    if kind_q == 'id':
+        return int(q) in ADMIN_ACCOUNTS.values()
+    return False
+
+
+def send_admin_card(chat_id) -> None:
+    """Особая карточка для служебного аккаунта администрации."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT name, photo_url FROM {SCHEMA}.check_lists WHERE lower(username)='mew_zbot' LIMIT 1")
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+    name = (row[0] if row and row[0] else 'База Знаний')
+    photo = (row[1] if row and row[1] else '') or NO_PHOTO_URL
+    text = ("👑 <b>ОФИЦИАЛЬНЫЙ АККАУНТ АДМИНИСТРАЦИИ</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            f"🛡 <b>{esc_html(name)}</b>\n"
+            "🔗 @mew_zbot\n"
+            f"🆔 ID: <code>{ADMIN_ACCOUNTS['mew_zbot']}</code>\n\n"
+            "⭐️ <b>Статус:</b> Администратор\n"
+            "✅ Подтверждённый официальный аккаунт\n"
+            "💎 Максимальный уровень доверия\n\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "📌 Пишет только с этого аккаунта. Остерегайтесь подделок с похожими именами!")
+    res = tg_api('sendPhoto', {'chat_id': chat_id, 'photo': photo, 'caption': text, 'parse_mode': 'HTML',
+                               'reply_markup': MAIN_KEYBOARD}, timeout=7)
+    if not res.get('ok') and res:
+        tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD})
 
 
 LOOKUP_URL = 'https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a'
