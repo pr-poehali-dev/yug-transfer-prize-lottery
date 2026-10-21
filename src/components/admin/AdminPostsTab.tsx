@@ -194,7 +194,8 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
 
   // ── публикация с автоповтором: облако иногда обрывает запрос по таймауту,
   // при этом пост мог уже уйти — поэтому перед повтором проверяем статус поста.
-  const publishWithRetry = async (postId: number, extra: Record<string, unknown> = {}, chats: string = ALL_CHAT_KEYS) => {
+  const publishWithRetry = async (postId: number, extra: Record<string, unknown> = {}, chats: string = ALL_CHAT_KEYS,
+    onProgress?: (msg: string) => void) => {
     const isPublished = async () => {
       try {
         const r = await fetch(`${ADMIN_POSTS_URL}?page=1&limit=50`, {
@@ -209,6 +210,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
 
     const runId = `${postId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     let lastError = "Ошибка публикации";
+    const label = (k: string) => CHAT_OPTIONS.find(c => c.key === k)?.label || k;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const res = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
@@ -216,8 +218,23 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
           headers: { "Content-Type": "application/json", "X-Admin-Token": token },
           body: JSON.stringify({ post_id: postId, chats, run_id: runId, ...extra }),
         });
-        const data = await res.json().catch(() => ({}));
-        if (data.ok) return data;
+        let data = await res.json().catch(() => ({}));
+        if (data.ok) {
+          // Часть групп не ответила вовремя — дотягиваем тем же запуском, без дублей.
+          for (let more = 0; more < 3 && (data.pending || []).length; more++) {
+            onProgress?.(`Отправлено в ${(data.sent || []).length} групп, досылаю: ${data.pending.map(label).join(", ")}…`);
+            const r2 = await fetch(`${ADMIN_POSTS_URL}?action=publish`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+              body: JSON.stringify({ post_id: postId, chats, run_id: runId, ...extra }),
+            }).catch(() => null);
+            const d2 = r2 ? await r2.json().catch(() => ({})) : {};
+            if (!d2.ok) break;
+            data = { ...d2, message_id: data.message_id, sent: Array.from(new Set([...(data.sent || []), ...(d2.sent || [])])),
+              blocked: [...(data.blocked || []), ...(d2.blocked || [])] };
+          }
+          return data;
+        }
         lastError = data.error || `Сервер вернул ${res.status}`;
       } catch (e) {
         lastError = e instanceof Error ? e.message : "Нет связи с сервером";
@@ -235,7 +252,7 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
     setPublishing(true); setFormError(""); setFormSuccess("");
     try {
       const savePayload: Record<string, unknown> = {
-        ...form, status: "draft", scheduled_at: null,
+        ...form, status: "draft", scheduled_at: null, skip_tg: true,
         ...(editId ? { id: editId } : {}),
       };
       const saveRes = await fetch(ADMIN_POSTS_URL, {
@@ -247,7 +264,8 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       if (!saveData.ok) throw new Error(saveData.error || "Ошибка сохранения");
       const postId = saveData.post.id;
 
-      const pubData = await publishWithRetry(postId, { expire_hours: expireHours || 0 }, form.chats);
+      setFormSuccess("Отправляю в группы…");
+      const pubData = await publishWithRetry(postId, { expire_hours: expireHours || 0 }, form.chats, setFormSuccess);
 
       const updatedPost = { ...saveData.post, status: "published" as const, published_at: new Date().toISOString(), telegram_message_id: pubData.message_id };
       setPosts(prev => {
@@ -256,7 +274,15 @@ export function AdminPostsTab({ token, onTotalChange, expanded: controlledExpand
       });
       if (!editId) setTotal(t => t + 1);
       resetForm();
-      setFormSuccess("✅ Пост опубликован!");
+      const lbl = (k: string) => CHAT_OPTIONS.find(c => c.key === k)?.label || k;
+      const left: string[] = pubData.pending || [];
+      const blocked: string[] = pubData.blocked || [];
+      setFormSuccess(`✅ Пост опубликован${pubData.sent?.length ? ` в ${pubData.sent.length} групп` : ""}!`);
+      const warn = [
+        blocked.length ? `Бот удалён или без прав в: ${blocked.map(lbl).join(", ")}` : "",
+        left.length ? `Не ответили, дошлите кнопкой «Дослать»: ${left.map(lbl).join(", ")}` : "",
+      ].filter(Boolean).join(". ");
+      if (warn) setFormError(warn);
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Ошибка публикации");
     } finally { setPublishing(false); }

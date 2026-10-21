@@ -52,6 +52,15 @@ def verify_token(token: str) -> bool:
 # Ходим по каждому адресу напрямую, подставляя правильный Host/SNI.
 TG_HOSTS = ['149.154.167.220', '149.154.167.99', '91.108.56.130', 'api.telegram.org']
 BEST_HOST = {'host': ''}
+# Адреса, которые в этом запуске уже не ответили — ставим их в конец, чтобы не ждать таймаут снова.
+SLOW_HOSTS = set()
+# Ошибки, которые повтором не исправить (бота выгнали, нет прав, чат не найден).
+FATAL_MARKS = ('kicked', 'not a member', 'chat not found', 'bot is not a member', 'have no rights', 'CHAT_WRITE_FORBIDDEN', 'need administrator rights')
+
+
+def is_fatal(err: str) -> bool:
+    e = str(err or '')
+    return any(m.lower() in e.lower() for m in FATAL_MARKS)
 # Общий дедлайн запуска: облако обрывает функцию по таймауту, поэтому
 # завершаемся сами чуть раньше — с сохранённым прогрессом и понятным ответом.
 DEADLINE = {'at': 0.0}
@@ -66,9 +75,8 @@ def time_left() -> float:
 def hosts_order() -> list:
     """Рабочий адрес из прошлого запроса — первым: не ждём таймаута на мёртвых IP."""
     best = BEST_HOST.get('host')
-    if best and best in TG_HOSTS:
-        return [best] + [h for h in TG_HOSTS if h != best]
-    return list(TG_HOSTS)
+    order = [best] + [h for h in TG_HOSTS if h != best] if best in TG_HOSTS else list(TG_HOSTS)
+    return [h for h in order if h not in SLOW_HOSTS] + [h for h in order if h in SLOW_HOSTS]
 
 
 def _tg_call(host: str, bot_token: str, method: str, data: bytes, wait: int) -> dict:
@@ -115,6 +123,8 @@ def tg_request(bot_token: str, method: str, payload: dict, attempts: int = 2, ti
         except Exception as e:
             last_err = f'{type(e).__name__}: {str(e)[:150]}'
             print(f'[POSTS] tg {method} via {host} failed: {last_err}')
+            if host != BEST_HOST.get('host'):
+                SLOW_HOSTS.add(host)
             continue
     return {'ok': False, 'description': last_err, 'network_error': True}
 
@@ -173,6 +183,8 @@ def tg_upload(bot_token: str, method: str, payload: dict, photo_bytes: bytes,
         except Exception as e:
             last_err = f'{type(e).__name__}: {str(e)[:150]}'
             print(f'[POSTS] tg {method}(file) via {host} failed: {last_err}')
+            if host != BEST_HOST.get('host'):
+                SLOW_HOSTS.add(host)
         finally:
             conn.close()
     return {'ok': False, 'description': last_err, 'network_error': True}
@@ -468,6 +480,8 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
             print(f"[POSTS] copy to {key} ({target}): {cp}")
             if cp['ok']:
                 return key, cp['message_ids'], None
+            if is_fatal('; '.join(cp['errors'])):
+                return key, [], 'FATAL ' + '; '.join(cp['errors'])
             if "can't be copied" in '; '.join(cp['errors']):
                 NO_COPY_CHATS.add(key)
         else:
@@ -483,6 +497,7 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
 
     queue = [k for k in chats if k != primary_key and not done.get(k)]
     stopped = False
+    blocked = []
     if queue:
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(queue))) as pool:
             futures = [pool.submit(send_one, k) for k in queue]
@@ -494,7 +509,9 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
                     if on_progress:
                         on_progress(per_chat)
                 else:
-                    errors.append(f'{key}: {err}')
+                    errors.append(f"{key}: {str(err).replace('FATAL ', '')}")
+                    if str(err).startswith('FATAL') or is_fatal(err):
+                        blocked.append(key)
                     if 'не успели' in str(err):
                         stopped = True
 
@@ -505,7 +522,8 @@ def publish_to_chats(bot_token: str, chats: list, channels: dict, post: dict,
         'per_chat': per_chat,
         'errors': errors,
         'stopped': stopped,
-        'pending': [k for k in chats if k not in per_chat],
+        'blocked': blocked,
+        'pending': [k for k in chats if k not in per_chat and k not in blocked],
     }
 
 
@@ -1012,7 +1030,8 @@ def handler(event: dict, context) -> dict:
             'ok': True, 'message_id': result.get('message_id'),
             'chats': chats, 'errors': result.get('errors') or [],
             'sent': list(merged_map.keys()),
-            'pending': [k for k in chats if k not in merged_map],
+            'blocked': result.get('blocked') or [],
+            'pending': [k for k in chats if k not in merged_map and k not in (result.get('blocked') or [])],
         })}
 
     # ── POST ?action=check_scheduled — авто-публикация запланированных ──────
@@ -1191,7 +1210,7 @@ def handler(event: dict, context) -> dict:
             status = 'published'
 
         # Любая правка живого поста сразу уходит во все группы — без галочек.
-        if already_live and bot_token and status != 'expired':
+        if already_live and bot_token and status != 'expired' and not body.get('skip_tg'):
             channels = {'main': channel_main, 'vip': channel_vip, 'horse': channel_horse,
                         'chat4': channel_chat4, 'chat5': channel_chat5, 'chat6': channel_chat6,
                         'chat7': channel_chat7, 'chat8': channel_chat8, 'chat9': channel_chat9,
