@@ -7,7 +7,7 @@ import SpaceBackground from "@/components/space/SpaceBackground";
 
 export function PostsDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [postsTotal, setPostsTotal] = useState<number | null>(null);
-  type Section = "posts" | "bot" | "kb" | "ai";
+  type Section = "posts" | "bot" | "kb";
   const [openSection, setOpenSection] = useState<Section | null>(null);
   const toggleSection = (s: Section) => setOpenSection((cur) => (cur === s ? null : s));
 
@@ -15,7 +15,6 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
     { key: "posts", title: "Посты в канал", sub: postsTotal != null ? `${postsTotal} постов` : "Публикация в группы", icon: "Send", tone: "violet" },
     { key: "bot", title: "Ежедневные посты", sub: "Автопостинг бота", icon: "Calendar", tone: "orange" },
     { key: "kb", title: "База знаний", sub: "Списки, группы, подписки", icon: "BookOpen", tone: "emerald" },
-    { key: "ai", title: "ИИ Агенты", sub: "Умные помощники", icon: "Sparkles", tone: "sky" },
   ];
   const toneCls: Record<string, { box: string; icon: string; text: string }> = {
     violet: { box: "border-violet-400/30 hover:border-violet-400/60 hover:shadow-[0_0_40px_-8px_rgba(167,139,250,0.6)]", icon: "bg-violet-500/20 shadow-[0_0_20px_rgba(167,139,250,0.35)]", text: "text-violet-300" },
@@ -54,22 +53,10 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
           )}
           {openSection === "bot" && <AdminBotTab token={token} expanded onToggle={() => toggleSection("bot")} />}
           {openSection === "kb" && <AdminKnowledgeTab token={token} expanded onToggle={() => toggleSection("kb")} />}
-          {openSection === "ai" && (
-            <div className="rounded-2xl border border-sky-400/25 bg-white/[0.04] backdrop-blur-xl p-8 md:p-12 flex flex-col items-center text-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-sky-500/15 flex items-center justify-center">
-                <Icon name="Sparkles" size={30} className="text-sky-400" />
-              </div>
-              <div className="text-xl font-semibold text-white">ИИ Агенты</div>
-              <div className="text-sm text-white/50 max-w-md">
-                Здесь появятся ИИ-помощники, которые будут работать за вас: отвечать в боте, писать посты, проверять людей.
-              </div>
-              <span className="text-xs px-3 py-1 rounded-full bg-sky-500/15 text-sky-300">Скоро</span>
-            </div>
-          )}
         </div>
       ) : (
         <div className="max-w-5xl mx-auto px-4 md:px-6 py-10 min-h-[calc(100vh-4rem)] flex flex-col justify-center">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {tiles.map((t) => {
               const c = toneCls[t.tone];
               return (
