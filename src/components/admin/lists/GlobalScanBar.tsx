@@ -11,7 +11,8 @@ interface Props {
 }
 
 type Capacity = { accounts: number; active: number; per_account: number; per_hour: number; used_hour: number };
-type ScanState = { running: boolean; done: number; found: number; left: number; note?: string; scope?: string; capacity?: Capacity } | null;
+type Base = { total: number; scanned: number; white_driver: number; black_driver: number; white_disp: number; black_disp: number; pending: number };
+type ScanState = { running: boolean; done: number; found: number; left: number; note?: string; scope?: string; capacity?: Capacity; base?: Base } | null;
 
 let scanState: ScanState = null;
 const listeners = new Set<(s: ScanState) => void>();
@@ -32,7 +33,7 @@ export function useScanState() {
 async function callBg(token: string, op: "start" | "stop" | "status", scope = "all") {
   const d = await fetch(`${TG_LOOKUP_API}?action=bg_${op}&scope=${scope}`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
   if (!d.ok) throw new Error(d.error || "сервер не ответил");
-  setScanGlobal(d.has ? { running: d.running, done: d.done, found: d.found, left: d.left, note: d.note, scope: d.scope, capacity: d.capacity } : null);
+  setScanGlobal(d.has ? { running: d.running, done: d.done, found: d.found, left: d.left, note: d.note, scope: d.scope, capacity: d.capacity, base: d.base } : null);
   return d;
 }
 
@@ -108,11 +109,39 @@ export function GlobalScanBar({ token, onChanged }: Props) {
           </div>
         </div>
 
+        {scan?.base?.total ? (
+          <div className="rounded-xl bg-black/25 border border-white/5 p-3 space-y-2.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[12px] text-white/55">Единая база</span>
+              <span className="text-lg font-semibold text-white tabular-nums">{fmt(scan.base.total)} чел.</span>
+            </div>
+            <div className="flex justify-between text-[11px] text-white/45">
+              <span>Уже просканированы</span>
+              <span className="tabular-nums text-emerald-300">{fmt(scan.base.scanned)} из {fmt(scan.base.total)}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+              {[
+                { l: "Водители · белый", v: scan.base.white_driver, c: "text-emerald-300" },
+                { l: "Водители · чёрный", v: scan.base.black_driver, c: "text-rose-300" },
+                { l: "Диспетчеры · белый", v: scan.base.white_disp, c: "text-emerald-300" },
+                { l: "Диспетчеры · чёрный", v: scan.base.black_disp, c: "text-rose-300" },
+              ].map((x) => (
+                <div key={x.l} className="flex justify-between rounded-lg bg-white/[0.04] px-2 py-1.5">
+                  <span className="text-white/50">{x.l}</span><span className={`tabular-nums ${x.c}`}>{fmt(x.v)}</span>
+                </div>
+              ))}
+            </div>
+            {scan.base.pending > 0 && (
+              <div className="text-[11px] text-amber-200/80">На модерации: {fmt(scan.base.pending)}</div>
+            )}
+          </div>
+        ) : null}
+
         {scan ? (
           <>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { l: "Проверено", v: scan.done, c: "text-white" },
+                { l: "Проверено за запуск", v: scan.done, c: "text-white" },
                 { l: "Найдено", v: scan.found, c: "text-emerald-300" },
                 { l: scan.scope === "refresh" ? "В очереди" : "Осталось", v: scan.left, c: "text-cyan-300" },
               ].map((x) => (

@@ -1198,6 +1198,15 @@ def bg_control(op: str, scope: str = 'all') -> dict:
             blk = {r[0] for r in cur.fetchall()}
             sess = load_sessions(cur)
             used = usage_map(cur)
+            cur.execute(f"SELECT count(*), count(*) FILTER (WHERE last_scan_at IS NOT NULL OR photo_checked_at IS NOT NULL), "
+                        f"count(*) FILTER (WHERE list_type='white' AND role='driver'), "
+                        f"count(*) FILTER (WHERE list_type='black' AND role='driver'), "
+                        f"count(*) FILTER (WHERE list_type='white' AND role='dispatcher'), "
+                        f"count(*) FILTER (WHERE list_type='black' AND role='dispatcher'), "
+                        f"count(*) FILTER (WHERE list_type='pending') FROM {SCHEMA}.check_lists")
+            r = cur.fetchone()
+            base = {'total': r[0], 'scanned': r[1], 'white_driver': r[2], 'black_driver': r[3],
+                    'white_disp': r[4], 'black_disp': r[5], 'pending': r[6]}
         finally:
             cur.close()
             conn.close()
@@ -1208,7 +1217,8 @@ def bg_control(op: str, scope: str = 'all') -> dict:
     except Exception as e:
         print(f'[TG-LOOKUP] capacity failed: {type(e).__name__}')
         cap = {}
-    return resp(200, {'ok': True, 'capacity': cap, 'running': bool(st.get('on')), 'scope': st.get('scope') or 'all',
+        base = {}
+    return resp(200, {'ok': True, 'capacity': cap, 'base': base, 'running': bool(st.get('on')), 'scope': st.get('scope') or 'all',
                       'done': st.get('done', 0), 'found': st.get('found', 0), 'left': st.get('left', 0),
                       'note': st.get('note', ''), 'finished': bool(st.get('finished')), 'age': age, 'has': bool(st)})
 
