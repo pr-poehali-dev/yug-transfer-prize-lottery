@@ -48,13 +48,18 @@ export function ProxyCheck({ token }: { token: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Icon name="Shield" size={14} className="text-cyan-300" />
-        <span className="text-xs text-white/70">Прокси для Telegram</span>
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 shrink-0 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+          <Icon name="Shield" size={16} className="text-cyan-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-white">Прокси для Telegram</div>
+          <div className="text-[11px] text-white/50">{busy ? "Проверяю… до 1 минуты" : "Связь сканера с Telegram"}</div>
+        </div>
         <button onClick={run} disabled={busy}
-          className="ml-auto rounded-lg px-3 py-1.5 text-xs border border-cyan-400/30 text-cyan-200 hover:bg-cyan-500/10 flex items-center gap-1.5 disabled:opacity-60">
-          <Icon name={busy ? "Loader2" : "Activity"} size={13} className={busy ? "animate-spin" : ""} />
-          {busy ? "Проверяю все прокси… до 1 мин" : "Проверить все прокси"}
+          className="shrink-0 rounded-xl px-3 py-2 text-xs font-medium border border-cyan-400/30 text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 flex items-center gap-1.5 whitespace-nowrap disabled:opacity-60">
+          <Icon name={busy ? "Loader2" : "Activity"} size={14} className={busy ? "animate-spin" : ""} />
+          {busy ? "Проверка" : "Проверить"}
         </button>
       </div>
 

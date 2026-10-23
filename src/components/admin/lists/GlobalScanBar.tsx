@@ -78,54 +78,120 @@ export function GlobalScanBar({ token, onChanged }: Props) {
 
   const pct = scan ? Math.min(100, (scan.done / Math.max(1, scan.done + scan.left)) * 100) : 0;
 
+  const title = scan?.scope === "refresh" ? "Круглосуточное обновление" : scan?.scope === "full" ? "Полный скан: фото и данные" : "Сканирование базы";
+  const waiting = !!scan?.note && /лимит|пауз|жду/i.test(scan.note);
+  const cap = scan?.capacity;
+  const loadPct = cap?.per_hour ? Math.min(100, (cap.used_hour / cap.per_hour) * 100) : 0;
+  const fmt = (n: number) => n.toLocaleString("ru-RU");
+
   return (
-    <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.05] p-4 space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-cyan-500/15">
-          <Icon name="Radar" fallback="ScanSearch" size={19} className="text-cyan-300" />
-        </div>
-        <div className="flex-1 min-w-[180px]">
-          <div className="text-sm font-medium text-white">
-            {scan?.scope === "refresh" ? "Круглосуточное обновление базы" : scan?.scope === "full" ? "Полное сканирование: фото и все данные" : "Глобальное сканирование базы"}
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-b from-cyan-500/[0.08] to-white/[0.02] p-4 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="relative w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center bg-cyan-500/15 ring-1 ring-cyan-400/20">
+            <Icon name="Radar" fallback="ScanSearch" size={20} className={`text-cyan-300 ${scan?.running && !waiting ? "animate-pulse" : ""}`} />
           </div>
-          <div className="text-xs text-white/50">
-            {scan
-              ? `проверено ${scan.done} · найдено ${scan.found} · ${scan.scope === "refresh" ? "в очереди на обновление" : "осталось"} ${scan.left}${scan.note ? ` · ${scan.note}` : ""}`
-              : "Обновит имена, фото, описание и ID по всем непроверенным карточкам"}
-            {scan?.running && <div className="text-[11px] text-cyan-300/80 mt-0.5">Работает на сервере 24/7 — после первичного скана сам обновляет карточки по кругу (каждые 3 дня)</div>}
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold text-white leading-tight">{title}</div>
+            <div className="mt-1.5">
+              {scan?.running ? (
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${waiting ? "bg-amber-400/15 text-amber-200" : "bg-emerald-400/15 text-emerald-200"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${waiting ? "bg-amber-300" : "bg-emerald-300 animate-pulse"}`} />
+                  {waiting ? "Пауза по лимиту" : "Идёт сканирование"}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium bg-white/10 text-white/60">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/40" />Остановлено
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        {scan?.running ? (
-          <button onClick={() => run("stop")}
-            className="rounded-xl px-4 py-2 text-sm border border-white/15 text-white/80 hover:bg-white/5 flex items-center gap-2">
-            <Icon name="Square" size={14} />Стоп
-          </button>
+
+        {scan ? (
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { l: "Проверено", v: scan.done, c: "text-white" },
+                { l: "Найдено", v: scan.found, c: "text-emerald-300" },
+                { l: scan.scope === "refresh" ? "В очереди" : "Осталось", v: scan.left, c: "text-cyan-300" },
+              ].map((x) => (
+                <div key={x.l} className="rounded-xl bg-black/25 border border-white/5 px-3 py-2.5">
+                  <div className={`text-lg font-semibold tabular-nums leading-none ${x.c}`}>{fmt(x.v)}</div>
+                  <div className="text-[11px] text-white/45 mt-1.5">{x.l}</div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="flex justify-between text-[11px] text-white/45 mb-1.5">
+                <span>Прогресс</span><span className="tabular-nums text-white/70">{pct.toFixed(1)}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-cyan-300 transition-all" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+            {scan.note && (
+              <div className="flex items-start gap-2 text-xs text-white/60">
+                <Icon name="Info" size={14} className="shrink-0 mt-px text-white/40" />{scan.note}
+              </div>
+            )}
+          </>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            <button onClick={startFull} title="Пройдёт по всем карточкам без фото и подтянет фото, имя, описание и ID"
-              className="grad-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2">
-              <Icon name="ImageDown" fallback="Image" size={14} />{scan?.scope === "full" && scan.left ? "Продолжить полный скан" : "Скачать фото и все данные"}
+          <div className="text-xs text-white/50">Обновит имена, фото, описание и ID по всем непроверенным карточкам.</div>
+        )}
+
+        {cap?.accounts ? (
+          <div className="rounded-xl bg-black/25 border border-white/5 p-3 space-y-2.5">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-sm font-semibold text-white tabular-nums">{cap.active}<span className="text-white/40 font-normal">/{cap.accounts}</span></div>
+                <div className="text-[10px] text-white/45 mt-0.5">аккаунтов</div>
+              </div>
+              <div className="border-x border-white/10">
+                <div className="text-sm font-semibold text-white tabular-nums">{cap.per_account}</div>
+                <div className="text-[10px] text-white/45 mt-0.5">в час на акк.</div>
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-cyan-300 tabular-nums">{cap.per_hour}</div>
+                <div className="text-[10px] text-white/45 mt-0.5">всего в час</div>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-[10px] text-white/45 mb-1">
+                <span>Лимит часа использован</span><span className="tabular-nums">{cap.used_hour} из {cap.per_hour}</span>
+              </div>
+              <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                <div className={`h-full rounded-full ${loadPct >= 100 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${loadPct}%` }} />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {scan?.running ? (
+          <div className="space-y-2">
+            <button onClick={() => run("stop")}
+              className="w-full rounded-xl py-2.5 text-sm font-medium border border-red-400/30 text-red-200 bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center gap-2 transition-colors">
+              <Icon name="Square" size={14} />Остановить
+            </button>
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-cyan-300/70">
+              <Icon name="Cloud" size={12} />Работает на сервере 24/7 — сайт можно закрыть
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button onClick={startFull} title="Пройдёт по всем карточкам и подтянет фото, имя, описание и ID"
+              className="grad-btn text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2">
+              <Icon name="ImageDown" fallback="Image" size={15} />{scan?.scope === "full" && scan.left ? "Продолжить полный скан" : "Фото и все данные"}
             </button>
             <button onClick={start}
-              className="rounded-xl px-4 py-2 text-sm border border-white/15 text-white/80 hover:bg-white/5 flex items-center gap-2">
-              <Icon name="Play" size={14} />{scan && scan.scope !== "full" && scan.left ? "Продолжить" : "Только новые"}
+              className="rounded-xl py-2.5 text-sm border border-white/15 text-white/80 hover:bg-white/5 flex items-center justify-center gap-2">
+              <Icon name="Play" size={15} />{scan && scan.scope !== "full" && scan.left ? "Продолжить" : "Только новые"}
             </button>
           </div>
         )}
       </div>
-      {scan?.capacity?.accounts ? (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-white/60">
-          <span>👥 Аккаунтов: <b className="text-white">{scan.capacity.active}</b>{scan.capacity.active < scan.capacity.accounts ? ` из ${scan.capacity.accounts} (остальные на паузе)` : ""}</span>
-          <span>⏱ По <b className="text-white">{scan.capacity.per_account}</b> проверок в час на каждый</span>
-          <span>⚡️ Всего: <b className="text-cyan-300">{scan.capacity.per_hour}</b> в час · использовано {scan.capacity.used_hour}</span>
-        </div>
-      ) : null}
-      {scan && (
-        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-          <div className="h-full bg-cyan-400 transition-all" style={{ width: `${pct}%` }} />
-        </div>
-      )}
-      <div className="border-t border-white/10 pt-2">
+
+      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
         <ScanAccounts token={token} />
       </div>
     </div>

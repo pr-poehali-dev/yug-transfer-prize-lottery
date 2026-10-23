@@ -159,17 +159,21 @@ export function ScanAccounts({ token }: { token: string }) {
   const free = items.filter((a) => !a.banned && !a.paused_until).length;
 
   return (
-    <div className="space-y-2 pt-1">
+    <div className="space-y-4">
       <ProxyCheck token={token} />
-      <div className="flex items-center gap-2">
-        <Icon name="Users" size={14} className="text-cyan-300" />
-        <span className="text-xs text-white/70">
-          Аккаунты сканера: {items.length} · свободно {free}
-        </span>
+      <div className="h-px bg-white/10" />
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 shrink-0 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+          <Icon name="Users" size={16} className="text-cyan-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-white">Аккаунты сканера</div>
+          <div className="text-[11px] text-white/50">всего {items.length} · <span className="text-emerald-300">свободно {free}</span></div>
+        </div>
         {!adding && (
           <button onClick={() => setAdding(true)}
-            className="ml-auto rounded-lg px-3 py-1.5 text-xs border border-cyan-400/30 text-cyan-200 hover:bg-cyan-500/10 flex items-center gap-1.5">
-            <Icon name="Plus" size={13} />Добавить аккаунт
+            className="shrink-0 rounded-xl px-3 py-2 text-xs font-medium border border-cyan-400/30 text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 flex items-center gap-1.5 whitespace-nowrap">
+            <Icon name="Plus" size={14} />Добавить
           </button>
         )}
       </div>
