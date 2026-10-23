@@ -313,7 +313,7 @@ def sess_key(session: str) -> str:
     return hashlib.sha256(session.encode()).hexdigest()[:24]
 
 
-SCAN_PER_HOUR = 20
+SCAN_PER_HOUR = 25
 BOT_PER_HOUR = 40
 SCAN_PAUSE = (2.5, 4.5)
 
