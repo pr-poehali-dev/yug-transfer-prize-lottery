@@ -685,6 +685,8 @@ def mark_group(cur, ids, title: str) -> None:
 
 
 def insert_users(cur, users: list, title: str) -> int:
+    """Новые участники групп сразу попадают в общую базу (белый список, водитель).
+    Кто уже есть в базе — не трогаем: его статус (белый/чёрный, водитель/диспетчер) сохраняется."""
     q = lambda v: str(v or '').replace("'", "''")
     vals = []
     if users:
@@ -696,7 +698,7 @@ def insert_users(cur, users: list, title: str) -> int:
         un = u.username or ''
         ph = f"+{u.phone}" if u.phone else ''
         scanned = "NULL, ''" if un else "now(), 'из группы'"
-        vals.append(f"('', 'pending', '{q(name)}', '{q(un)}', '{q(ph)}', '', {int(u.id)}, '{q(title)[:120]}', {scanned})")
+        vals.append(f"('driver', 'white', '{q(name)}', '{q(un)}', '{q(ph)}', '', {int(u.id)}, '{q(title)[:120]}', {scanned}, TRUE)")
     if not vals:
         return 0
     cache = {}
@@ -709,7 +711,7 @@ def insert_users(cur, users: list, title: str) -> int:
                     f"{', '.join(cache.values())} ON CONFLICT (tg_id) DO UPDATE SET username=EXCLUDED.username, "
                     f"first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, updated_at=now()")
     cur.execute(f"INSERT INTO {SCHEMA}.check_lists (role, list_type, name, username, phone, note, tg_id, "
-                f"source, last_scan_at, scan_status) VALUES {', '.join(vals)} ON CONFLICT DO NOTHING RETURNING id")
+                f"source, last_scan_at, scan_status, auto_white) VALUES {', '.join(vals)} ON CONFLICT DO NOTHING RETURNING id")
     added = len(cur.fetchall())
     mark_group(cur, [u.id for u in users], title)
     return added
