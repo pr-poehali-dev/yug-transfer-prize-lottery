@@ -484,14 +484,20 @@ def handle_batch(context, scope: str = 'all', reserve: float = 2) -> dict:
             print('[TG-LOOKUP] batch: hourly limit reached on all accounts')
         if scope == 'pending_full':
             where = "list_type='pending' AND (username <> '' OR (phone <> '' AND tg_id IS NULL)) AND photo_checked_at IS NULL AND coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт', 'дубль другой карточки')"
+        elif scope == 'refresh':
+            # Круглосуточное обновление: по кругу берём карточки, которые дольше всех не проверялись.
+            where = ("username <> '' AND coalesce(scan_status,'') <> 'дубль другой карточки' AND "
+                     "(last_scan_at IS NULL OR last_scan_at < now() - interval '3 days') AND "
+                     "(coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт') OR last_scan_at < now() - interval '14 days')")
         elif scope == 'full':
             where = "username <> '' AND photo_checked_at IS NULL AND coalesce(scan_status,'') NOT IN ('не найден', 'не личный аккаунт', 'дубль другой карточки')"
         else:
             where = ("list_type='pending' AND " if scope == 'pending' else '') + "username <> '' AND last_scan_at IS NULL"
         cur.execute(f"SELECT id, CASE WHEN username <> '' THEN username ELSE 'phone:' || phone END FROM {SCHEMA}.check_lists WHERE {where} "
-                    f"ORDER BY (username <> '') DESC, (list_type='pending') DESC, (list_type='black') DESC, id DESC LIMIT 1000")
+                    + ("ORDER BY last_scan_at NULLS FIRST, (list_type='black') DESC LIMIT 1000" if scope == 'refresh' else
+                       "ORDER BY (username <> '') DESC, (list_type='pending') DESC, (list_type='black') DESC, id DESC LIMIT 1000"))
         fetched = cur.fetchall()
-        rows = fetched if scope in ('full', 'pending_full') else fill_from_cache(cur, conn, fetched)
+        rows = fetched if scope in ('full', 'pending_full', 'refresh') else fill_from_cache(cur, conn, fetched)
         from_cache = len(fetched) - len(rows)
         rows = rows[:sum(min(6, quota[sess_key(w)]) for w in workers)]
         workers = workers[:max(1, -(-len(rows) // 3))] if rows else workers
@@ -1217,7 +1223,12 @@ def bg_tick(chain: str, context) -> dict:
             st['found'] = st.get('found', 0) + (d.get('found') or 0)
             st['left'] = d.get('left') or 0
             if not st['left']:
-                st.update({'on': False, 'finished': True, 'note': 'База обновлена'})
+                # Без остановки: первичный скан закончен — переходим на круговое обновление всей базы.
+                if (st.get('scope') or 'all') != 'refresh':
+                    st.update({'scope': 'refresh', 'note': 'Первичный скан завершён — обновляю карточки по кругу'})
+                else:
+                    st['note'] = 'Вся база свежая — жду, пока карточки устареют, и продолжу сам'
+                wait = 1
             elif d.get('done'):
                 st['note'] = 'Сканирую в фоне'
             else:

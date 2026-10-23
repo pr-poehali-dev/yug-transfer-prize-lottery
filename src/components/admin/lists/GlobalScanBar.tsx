@@ -85,13 +85,13 @@ export function GlobalScanBar({ token, onChanged }: Props) {
         </div>
         <div className="flex-1 min-w-[180px]">
           <div className="text-sm font-medium text-white">
-            {scan?.scope === "full" ? "Полное сканирование: фото и все данные" : "Глобальное сканирование базы"}
+            {scan?.scope === "refresh" ? "Круглосуточное обновление базы" : scan?.scope === "full" ? "Полное сканирование: фото и все данные" : "Глобальное сканирование базы"}
           </div>
           <div className="text-xs text-white/50">
             {scan
-              ? `проверено ${scan.done} · найдено ${scan.found} · осталось ${scan.left}${scan.note ? ` · ${scan.note}` : ""}`
+              ? `проверено ${scan.done} · найдено ${scan.found} · ${scan.scope === "refresh" ? "в очереди на обновление" : "осталось"} ${scan.left}${scan.note ? ` · ${scan.note}` : ""}`
               : "Обновит имена, фото, описание и ID по всем непроверенным карточкам"}
-            {scan?.running && <div className="text-[11px] text-cyan-300/80 mt-0.5">Работает на сервере — можно закрыть сайт, скан дойдёт до конца сам</div>}
+            {scan?.running && <div className="text-[11px] text-cyan-300/80 mt-0.5">Работает на сервере 24/7 — после первичного скана сам обновляет карточки по кругу (каждые 3 дня)</div>}
           </div>
         </div>
         {scan?.running ? (
