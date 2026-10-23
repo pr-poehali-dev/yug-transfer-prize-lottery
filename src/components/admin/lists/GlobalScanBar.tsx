@@ -10,7 +10,8 @@ interface Props {
   onChanged: () => void;
 }
 
-type ScanState = { running: boolean; done: number; found: number; left: number; note?: string; scope?: string } | null;
+type Capacity = { accounts: number; active: number; per_account: number; per_hour: number; used_hour: number };
+type ScanState = { running: boolean; done: number; found: number; left: number; note?: string; scope?: string; capacity?: Capacity } | null;
 
 let scanState: ScanState = null;
 const listeners = new Set<(s: ScanState) => void>();
@@ -31,7 +32,7 @@ export function useScanState() {
 async function callBg(token: string, op: "start" | "stop" | "status", scope = "all") {
   const d = await fetch(`${TG_LOOKUP_API}?action=bg_${op}&scope=${scope}`, { headers: { "X-Admin-Token": token } }).then((r) => r.json());
   if (!d.ok) throw new Error(d.error || "сервер не ответил");
-  setScanGlobal(d.has ? { running: d.running, done: d.done, found: d.found, left: d.left, note: d.note, scope: d.scope } : null);
+  setScanGlobal(d.has ? { running: d.running, done: d.done, found: d.found, left: d.left, note: d.note, scope: d.scope, capacity: d.capacity } : null);
   return d;
 }
 
@@ -112,6 +113,13 @@ export function GlobalScanBar({ token, onChanged }: Props) {
           </div>
         )}
       </div>
+      {scan?.capacity?.accounts ? (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-white/60">
+          <span>👥 Аккаунтов: <b className="text-white">{scan.capacity.active}</b>{scan.capacity.active < scan.capacity.accounts ? ` из ${scan.capacity.accounts} (остальные на паузе)` : ""}</span>
+          <span>⏱ По <b className="text-white">{scan.capacity.per_account}</b> проверок в час на каждый</span>
+          <span>⚡️ Всего: <b className="text-cyan-300">{scan.capacity.per_hour}</b> в час · использовано {scan.capacity.used_hour}</span>
+        </div>
+      ) : null}
       {scan && (
         <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
           <div className="h-full bg-cyan-400 transition-all" style={{ width: `${pct}%` }} />

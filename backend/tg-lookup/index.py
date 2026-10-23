@@ -313,7 +313,7 @@ def sess_key(session: str) -> str:
     return hashlib.sha256(session.encode()).hexdigest()[:24]
 
 
-SCAN_PER_HOUR = 25
+SCAN_PER_HOUR = 23
 BOT_PER_HOUR = 40
 SCAN_PAUSE = (2.5, 4.5)
 
@@ -479,7 +479,9 @@ def handle_batch(context, scope: str = 'all', reserve: float = 2) -> dict:
         print(f'[TG-LOOKUP] batch sessions {len(sessions)}, blocked {len(blocked)}')
         used = usage_map(cur)
         quota = {sess_key(x): SCAN_PER_HOUR - used.get(sess_key(x), 0) for x in sessions}
-        workers = [x for x in sessions if quota[sess_key(x)] > 0][:8]
+        # Равномерно: первыми берём аккаунты, у которых больше всего свободных проверок в этом часе.
+        # Новые аккаунты попадают сюда автоматически и сразу получают свои 23 проверки в час.
+        workers = sorted([x for x in sessions if quota[sess_key(x)] > 0], key=lambda x: -quota[sess_key(x)])[:8]
         if sessions and not workers:
             print('[TG-LOOKUP] batch: hourly limit reached on all accounts')
         if scope == 'pending_full':
@@ -1186,7 +1188,25 @@ def bg_control(op: str, scope: str = 'all') -> dict:
         conn.close()
     if fire:
         bg_fire(fire)
-    return resp(200, {'ok': True, 'running': bool(st.get('on')), 'scope': st.get('scope') or 'all',
+    try:
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        try:
+            cur.execute(f"SELECT session_hash FROM {SCHEMA}.tg_session_flood WHERE until_at > now()")
+            blk = {r[0] for r in cur.fetchall()}
+            sess = load_sessions(cur)
+            used = usage_map(cur)
+        finally:
+            cur.close()
+            conn.close()
+        active = [x for x in sess if sess_key(x) not in blk]
+        cap = {'accounts': len(sess), 'active': len(active), 'per_account': SCAN_PER_HOUR,
+               'per_hour': SCAN_PER_HOUR * len(active),
+               'used_hour': sum(min(SCAN_PER_HOUR, used.get(sess_key(x), 0)) for x in active)}
+    except Exception as e:
+        print(f'[TG-LOOKUP] capacity failed: {type(e).__name__}')
+        cap = {}
+    return resp(200, {'ok': True, 'capacity': cap, 'running': bool(st.get('on')), 'scope': st.get('scope') or 'all',
                       'done': st.get('done', 0), 'found': st.get('found', 0), 'left': st.get('left', 0),
                       'note': st.get('note', ''), 'finished': bool(st.get('finished')), 'age': age, 'has': bool(st)})
 
