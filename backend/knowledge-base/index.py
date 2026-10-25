@@ -18,7 +18,7 @@ CORS = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
 }
-KB_BOT_URL = 'https://functions.poehali.dev/ed74936b-d187-466b-bd49-74818d8cceab'
+KB_BOT_URL = os.environ.get('KB_BOT_URL', 'https://functions.poehali.dev/ed74936b-d187-466b-bd49-74818d8cceab')
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 
 
@@ -100,11 +100,11 @@ def upload_photo(body: dict) -> dict:
     ext = {'image/png': 'png', 'image/webp': 'webp'}.get(ctype, 'jpg')
     key = f"check-lists/{uuid.uuid4().hex}.{ext}"
     import boto3
-    s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
+    s3 = boto3.client('s3', endpoint_url=os.environ.get('S3_ENDPOINT', 'https://bucket.poehali.dev'),
                       aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
                       aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
-    s3.put_object(Bucket='files', Key=key, Body=raw, ContentType=ctype)
-    url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+    s3.put_object(Bucket=os.environ.get('S3_BUCKET', 'files'), Key=key, Body=raw, ContentType=ctype)
+    url = (os.environ.get('FILES_PUBLIC_URL') or f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket").rstrip('/') + f"/{key}"
     return resp(200, {'ok': True, 'url': url})
 
 
@@ -566,7 +566,7 @@ def notify_searchers(item_id: int) -> int:
         return 0
 
 
-KB_BOT_URL = 'https://functions.poehali.dev/ed74936b-d187-466b-bd49-74818d8cceab'
+KB_BOT_URL = os.environ.get('KB_BOT_URL', 'https://functions.poehali.dev/ed74936b-d187-466b-bd49-74818d8cceab')
 
 
 def handle_lists(cur, conn, method: str, qs: dict, body: dict) -> dict:

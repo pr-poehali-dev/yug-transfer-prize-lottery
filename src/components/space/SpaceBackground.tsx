@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-export const SPACE_BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/95ffefeb-bc16-4fb4-8928-92889e01b3ed.jpg";
+export const SPACE_BG = "/space-bg.jpg";
 
 export default function SpaceBackground({ dim = 0.6, count = 70, solid = 0 }: { dim?: number; count?: number; solid?: number }) {
   const stars = useMemo(

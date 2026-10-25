@@ -69,11 +69,11 @@ def bot_session_keys(cur) -> set:
 def store_photo(raw: bytes) -> str:
     import boto3
     key = f"check-lists/tg-{uuid.uuid4().hex}.jpg"
-    s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
+    s3 = boto3.client('s3', endpoint_url=os.environ.get('S3_ENDPOINT', 'https://bucket.poehali.dev'),
                       aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
                       aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
-    s3.put_object(Bucket='files', Key=key, Body=raw, ContentType='image/jpeg')
-    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+    s3.put_object(Bucket=os.environ.get('S3_BUCKET', 'files'), Key=key, Body=raw, ContentType='image/jpeg')
+    return (os.environ.get('FILES_PUBLIC_URL') or f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket").rstrip('/') + f"/{key}"
 
 
 async def resolve_phone(client, phone: str):
@@ -1128,7 +1128,7 @@ def handle_group_stop(qs: dict) -> dict:
         conn.close()
 
 
-SELF_URL = 'https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a'
+SELF_URL = os.environ.get('TG_LOOKUP_URL', 'https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a')
 
 
 def bg_load(cur) -> tuple:

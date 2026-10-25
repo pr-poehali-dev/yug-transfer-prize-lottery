@@ -7,7 +7,7 @@ import psycopg2
 
 SCHEMA = 't_p67171637_yug_transfer_prize_l'
 MAX_PHOTOS = 5
-NO_AVATAR = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ce9fc4b-5704-4dfd-8b7f-595e27e6da6f.jpg'
+NO_AVATAR = os.environ.get('NO_AVATAR_URL') or 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/0ce9fc4b-5704-4dfd-8b7f-595e27e6da6f.jpg'
 
 CANCEL_KB = {'keyboard': [[{'text': '❌ Отменить жалобу'}]], 'resize_keyboard': True}
 DATE_KB = {'keyboard': [[{'text': 'Сегодня'}, {'text': 'Вчера'}], [{'text': '❌ Отменить жалобу'}]], 'resize_keyboard': True}

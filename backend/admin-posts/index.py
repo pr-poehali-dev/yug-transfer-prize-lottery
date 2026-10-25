@@ -828,12 +828,12 @@ def handler(event: dict, context) -> dict:
 
         s3 = boto3.client(
             's3',
-            endpoint_url='https://bucket.poehali.dev',
+            endpoint_url=os.environ.get('S3_ENDPOINT', 'https://bucket.poehali.dev'),
             aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
             aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
         )
-        s3.put_object(Bucket='files', Key=key, Body=image_bytes, ContentType=content_type)
-        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        s3.put_object(Bucket=os.environ.get('S3_BUCKET', 'files'), Key=key, Body=image_bytes, ContentType=content_type)
+        cdn_url = (os.environ.get('FILES_PUBLIC_URL') or f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket").rstrip('/') + f"/{key}"
         print(f"[POSTS] uploaded photo: {cdn_url}")
         return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'ok': True, 'url': cdn_url})}
 

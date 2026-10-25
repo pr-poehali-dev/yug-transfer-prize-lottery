@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { ADMIN_AUTH_URL, POSTS_SESSION_KEY } from "@/components/admin/adminTypes";
 
-const BG = "https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/95ffefeb-bc16-4fb4-8928-92889e01b3ed.jpg";
+const BG = "/space-bg.jpg";
 
 export default function Index() {
   const [login, setLogin] = useState("");

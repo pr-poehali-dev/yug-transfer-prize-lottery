@@ -865,7 +865,7 @@ def send_admin_card(chat_id) -> None:
         tg_api('sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': MAIN_KEYBOARD})
 
 
-LOOKUP_URL = 'https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a'
+LOOKUP_URL = os.environ.get('TG_LOOKUP_URL', 'https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a')
 CARD_COLS = "list_type, name, username, phone, note, tg_id, photo_url, reason, removed_at, id, role"
 
 
@@ -1113,7 +1113,7 @@ def load_history(item_id) -> list:
         conn.close()
 
 
-NO_PHOTO_URL = 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/cc06515e-5e65-4cde-b02f-d24b1889abb4.jpg'
+NO_PHOTO_URL = os.environ.get('NO_PHOTO_URL') or 'https://cdn.poehali.dev/projects/c2bd1535-aa26-4a07-a3f6-51d547fc1da3/files/cc06515e-5e65-4cde-b02f-d24b1889abb4.jpg'
 
 
 def notify_moderated(item_id: int, preview_to: int = 0, preview_query: str = '') -> int:
@@ -1303,11 +1303,11 @@ def tg_download(file_id: str) -> bytes:
 def store_photo(raw: bytes) -> str:
     key = f"check-lists/scan-{uuid.uuid4().hex}.jpg"
     import boto3
-    s3 = boto3.client('s3', endpoint_url='https://bucket.poehali.dev',
+    s3 = boto3.client('s3', endpoint_url=os.environ.get('S3_ENDPOINT', 'https://bucket.poehali.dev'),
                       aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
                       aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
-    s3.put_object(Bucket='files', Key=key, Body=raw, ContentType='image/jpeg')
-    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+    s3.put_object(Bucket=os.environ.get('S3_BUCKET', 'files'), Key=key, Body=raw, ContentType='image/jpeg')
+    return (os.environ.get('FILES_PUBLIC_URL') or f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket").rstrip('/') + f"/{key}"
 
 
 def fetch_profile(tg_id: int) -> dict:

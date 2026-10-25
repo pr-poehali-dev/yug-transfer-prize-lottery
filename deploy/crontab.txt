@@ -1,0 +1,4 @@
+# crontab -e  (от пользователя www-data или root)
+* * * * *   cd /opt/baza && venv/bin/python server/cron.py every_minute >> /var/log/baza-cron.log 2>&1
+*/10 * * * * cd /opt/baza && venv/bin/python server/cron.py scan >> /var/log/baza-cron.log 2>&1
+0 6 * * *   cd /opt/baza && venv/bin/python server/cron.py daily >> /var/log/baza-cron.log 2>&1
