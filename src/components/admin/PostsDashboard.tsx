@@ -1,14 +1,17 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
+import { AdminPostsTab } from "./AdminPostsTab";
 import { AdminKnowledgeTab } from "./AdminKnowledgeTab";
 import SpaceBackground from "@/components/space/SpaceBackground";
 
 export function PostsDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  type Section = "kb";
+  const [postsTotal, setPostsTotal] = useState<number | null>(null);
+  type Section = "posts" | "kb";
   const [openSection, setOpenSection] = useState<Section | null>(null);
   const toggleSection = (s: Section) => setOpenSection((cur) => (cur === s ? null : s));
 
   const tiles: { key: Section; title: string; sub: string; icon: string; tone: string }[] = [
+    { key: "posts", title: "Посты в канал", sub: postsTotal != null ? `${postsTotal} постов` : "Публикация в группы", icon: "Send", tone: "violet" },
     { key: "kb", title: "База знаний", sub: "Списки, группы, подписки", icon: "BookOpen", tone: "emerald" },
   ];
   const toneCls: Record<string, { box: string; icon: string; text: string }> = {
@@ -43,6 +46,9 @@ export function PostsDashboard({ token, onLogout }: { token: string; onLogout: (
 
       {openSection ? (
         <div className="w-full px-3 md:px-8 py-4 md:py-6">
+          {openSection === "posts" && (
+            <AdminPostsTab token={token} onTotalChange={setPostsTotal} expanded onToggle={() => toggleSection("posts")} />
+          )}
           {openSection === "kb" && <AdminKnowledgeTab token={token} expanded onToggle={() => toggleSection("kb")} />}
         </div>
       ) : (
