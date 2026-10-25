@@ -2,30 +2,6 @@ export const ADMIN_AUTH_URL = "https://functions.poehali.dev/cc8cbc36-edde-42f3-
 export const SESSION_KEY = "admin_token";
 export const POSTS_SESSION_KEY = "posts_token";
 
-export const ADMIN_POSTS_URL = "https://functions.poehali.dev/0813e498-5f2e-4090-b643-15c885d057c8";
-export const ADMIN_BOT_POSTS_URL = "https://functions.poehali.dev/9578d639-08e5-479c-938a-de950926d149";
-export const SAIT_BOT_DAILY_URL = "https://functions.poehali.dev/9f4c8475-f48d-4145-999c-e5cfdabf5d21";
 export const KNOWLEDGE_BASE_URL = "https://functions.poehali.dev/92d37448-fb0d-469a-8222-a627b1586394";
 export const KB_BOT_URL = "https://functions.poehali.dev/ed74936b-d187-466b-bd49-74818d8cceab";
 export const TG_LOOKUP_URL = "https://functions.poehali.dev/cc462dc8-83da-48a4-86f1-db3d0501d54a";
-
-export interface Post {
-  id: number;
-  title: string;
-  text: string;
-  photo_url: string;
-  button_text: string;
-  button_url: string;
-  button2_text: string;
-  button2_url: string;
-  status: "draft" | "scheduled" | "published" | "failed" | "expired";
-  scheduled_at: string | null;
-  published_at: string | null;
-  telegram_message_id: number | null;
-  created_at: string | null;
-  updated_at: string | null;
-  auto_expire_at?: string | null;
-  expired_at?: string | null;
-  message_ids?: number[];
-  chats?: string;
-}
